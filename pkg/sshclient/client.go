@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -14,6 +15,7 @@ type ConnectConfig struct {
 	Port     int
 	User     string
 	Password string
+	Bastion  *ConnectConfig
 }
 
 type Client struct {
@@ -21,6 +23,16 @@ type Client struct {
 }
 
 func NewClient(config *ConnectConfig) (*Client, error) {
+	// 递归建立 Bastion 连接
+	var bastionClient *ssh.Client
+	if config.Bastion != nil {
+		bastion, err := NewClient(config.Bastion)
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to bastion: %w", err)
+		}
+		bastionClient = bastion.client
+	}
+
 	authMethods := []ssh.AuthMethod{}
 	if config.Password != "" {
 		authMethods = append(authMethods, ssh.Password(config.Password))
@@ -34,9 +46,28 @@ func NewClient(config *ConnectConfig) (*Client, error) {
 	}
 
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
-	client, err := ssh.Dial("tcp", addr, sshConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to dial: %w", err)
+	
+	var client *ssh.Client
+	var err error
+
+	if bastionClient != nil {
+		// 通过 Bastion 建立连接
+		conn, err := bastionClient.Dial("tcp", addr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to dial via bastion: %w", err)
+		}
+		
+		ncc, chans, reqs, err := ssh.NewClientConn(conn, addr, sshConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create client conn: %w", err)
+		}
+		client = ssh.NewClient(ncc, chans, reqs)
+	} else {
+		// 直连
+		client, err = ssh.Dial("tcp", addr, sshConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to dial: %w", err)
+		}
 	}
 
 	return &Client{client: client}, nil
@@ -119,4 +150,69 @@ func (c *Client) StartShell(cols, rows int) (*ssh.Session, io.WriteCloser, io.Re
     combinedReader := io.MultiReader(stdout, stderr)
 
 	return session, stdin, combinedReader, nil
+}
+
+type SudoHandler struct {
+	RootPassword string
+	Stdin        io.Writer
+}
+
+func (h *SudoHandler) Handle(data []byte) {
+	if h.RootPassword == "" {
+		return
+	}
+	s := string(data)
+	// 简单的关键字匹配，可以根据需要优化正则
+	sLower := strings.ToLower(s)
+	if strings.Contains(s, "Password:") || strings.Contains(s, "密码：") || strings.Contains(sLower, "[sudo] password") {
+		// 写入密码 + 回车
+		h.Stdin.Write([]byte(h.RootPassword + "\n"))
+	}
+}
+
+// AutoSudoReader 是一个包装器，用于在读取数据时触发 SudoHandler
+type AutoSudoReader struct {
+	Reader  io.Reader
+	Handler *SudoHandler
+}
+
+func (r *AutoSudoReader) Read(p []byte) (n int, err error) {
+	n, err = r.Reader.Read(p)
+	if n > 0 {
+		// 异步处理，避免阻塞读取流
+		// 注意：这里可能会有并发写入 Stdin 的问题，但在当前简单场景下，
+		// StdinPipe 的 Write 是线程安全的（只要不是并发 Close）
+		// 为了更严谨，最好在 Handler 内部加锁，或者确保 Stdin 的 Write 是安全的。
+		// 在 ssh 包中，StdinPipe 返回的是一个 channel 包装的 writer，是并发安全的。
+		go r.Handler.Handle(p[:n])
+	}
+	return n, err
+}
+
+func (c *Client) StartShellWithSudo(cols, rows int, rootPassword string) (*ssh.Session, io.WriteCloser, io.Reader, error) {
+    session, stdin, stdout, err := c.StartShell(cols, rows)
+    if err != nil {
+        return nil, nil, nil, err
+    }
+    
+    if rootPassword != "" {
+        handler := &SudoHandler{
+            RootPassword: rootPassword,
+            Stdin:        stdin,
+        }
+        wrappedStdout := &AutoSudoReader{
+            Reader:  stdout,
+            Handler: handler,
+        }
+
+		// 自动发送 su -
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			stdin.Write([]byte("su -\n"))
+		}()
+
+        return session, stdin, wrappedStdout, nil
+    }
+    
+    return session, stdin, stdout, nil
 }

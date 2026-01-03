@@ -5,6 +5,8 @@ interface ConnectionConfig {
     port: number;
     user: string;
     password?: string;
+    rootPassword?: string;
+    bastion?: ConnectionConfig;
 }
 
 interface ConnectionModalProps {
@@ -18,14 +20,27 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
         host: '39.108.107.148',
         port: 22,
         user: 'root',
-        password: 'zhangyibo123.'
+        password: 'zhangyibo123.',
+        rootPassword: '',
+    });
+    
+    const [enableBastion, setEnableBastion] = useState(false);
+    const [bastionConfig, setBastionConfig] = useState<ConnectionConfig>({
+        host: '',
+        port: 22,
+        user: '',
+        password: ''
     });
 
     if (!isOpen) return null;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onConnect(config);
+        const finalConfig = { ...config };
+        if (enableBastion) {
+            finalConfig.bastion = bastionConfig;
+        }
+        onConnect(finalConfig);
         onClose();
     };
 
@@ -36,55 +51,154 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
             [name]: name === 'port' ? parseInt(value) || 22 : value
         }));
     };
+    
+    const handleBastionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setBastionConfig(prev => ({
+            ...prev,
+            [name]: name === 'port' ? parseInt(value) || 22 : value
+        }));
+    };
 
     return (
         <div style={styles.overlay}>
             <div style={styles.modal}>
                 <h2 style={styles.title}>New Connection</h2>
                 <form onSubmit={handleSubmit} style={styles.form}>
-                    <div style={styles.formGroup}>
-                        <label style={styles.label}>Host</label>
-                        <input
-                            type="text"
-                            name="host"
-                            value={config.host}
-                            onChange={handleChange}
-                            style={styles.input}
-                            required
-                        />
+                    {/* Main Connection */}
+                    <div style={styles.section}>
+                        <h3 style={styles.subtitle}>Target Host</h3>
+                        <div style={styles.formGroup}>
+                            <label style={styles.label} htmlFor="host">Host</label>
+                            <input
+                                id="host"
+                                type="text"
+                                name="host"
+                                value={config.host}
+                                onChange={handleChange}
+                                style={styles.input}
+                                required
+                            />
+                        </div>
+                        <div style={styles.row}>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label} htmlFor="port">Port</label>
+                                <input
+                                    id="port"
+                                    type="number"
+                                    name="port"
+                                    value={config.port}
+                                    onChange={handleChange}
+                                    style={styles.input}
+                                    required
+                                />
+                            </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label} htmlFor="user">User</label>
+                                <input
+                                    id="user"
+                                    type="text"
+                                    name="user"
+                                    value={config.user}
+                                    onChange={handleChange}
+                                    style={styles.input}
+                                    required
+                                />
+                            </div>
+                        </div>
+                        <div style={styles.formGroup}>
+                            <label style={styles.label} htmlFor="password">Password</label>
+                            <input
+                                id="password"
+                                type="password"
+                                name="password"
+                                value={config.password}
+                                onChange={handleChange}
+                                style={styles.input}
+                            />
+                        </div>
+                        <div style={styles.formGroup}>
+                            <label style={styles.label} htmlFor="rootPassword">Root Password (Optional)</label>
+                            <input
+                                id="rootPassword"
+                                type="password"
+                                name="rootPassword"
+                                value={config.rootPassword}
+                                onChange={handleChange}
+                                style={styles.input}
+                                placeholder="For auto-sudo"
+                            />
+                        </div>
                     </div>
-                    <div style={styles.formGroup}>
-                        <label style={styles.label}>Port</label>
-                        <input
-                            type="number"
-                            name="port"
-                            value={config.port}
-                            onChange={handleChange}
-                            style={styles.input}
-                            required
-                        />
+
+                    {/* Bastion Toggle */}
+                    <div style={styles.section}>
+                        <div style={styles.checkboxGroup}>
+                            <input 
+                                type="checkbox" 
+                                id="enableBastion"
+                                checked={enableBastion}
+                                onChange={e => setEnableBastion(e.target.checked)}
+                            />
+                            <label htmlFor="enableBastion" style={styles.subtitle}>Bastion Host (Optional)</label>
+                        </div>
+                        <span style={{fontSize: '0.8rem', color: '#888'}}>Enable Bastion</span>
+                        
+                        {enableBastion && (
+                            <div style={{marginTop: '10px', paddingLeft: '10px', borderLeft: '2px solid #444'}}>
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label} htmlFor="bastion-host">Host</label>
+                                    <input
+                                        id="bastion-host"
+                                        type="text"
+                                        name="host"
+                                        value={bastionConfig.host}
+                                        onChange={handleBastionChange}
+                                        style={styles.input}
+                                        required={enableBastion}
+                                    />
+                                </div>
+                                <div style={styles.row}>
+                                    <div style={styles.formGroup}>
+                                        <label style={styles.label} htmlFor="bastion-port">Port</label>
+                                        <input
+                                            id="bastion-port"
+                                            type="number"
+                                            name="port"
+                                            value={bastionConfig.port}
+                                            onChange={handleBastionChange}
+                                            style={styles.input}
+                                            required={enableBastion}
+                                        />
+                                    </div>
+                                    <div style={styles.formGroup}>
+                                        <label style={styles.label} htmlFor="bastion-user">User</label>
+                                        <input
+                                            id="bastion-user"
+                                            type="text"
+                                            name="user"
+                                            value={bastionConfig.user}
+                                            onChange={handleBastionChange}
+                                            style={styles.input}
+                                            required={enableBastion}
+                                        />
+                                    </div>
+                                </div>
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label} htmlFor="bastion-password">Password</label>
+                                    <input
+                                        id="bastion-password"
+                                        type="password"
+                                        name="password"
+                                        value={bastionConfig.password}
+                                        onChange={handleBastionChange}
+                                        style={styles.input}
+                                    />
+                                </div>
+                            </div>
+                        )}
                     </div>
-                    <div style={styles.formGroup}>
-                        <label style={styles.label}>User</label>
-                        <input
-                            type="text"
-                            name="user"
-                            value={config.user}
-                            onChange={handleChange}
-                            style={styles.input}
-                            required
-                        />
-                    </div>
-                    <div style={styles.formGroup}>
-                        <label style={styles.label}>Password</label>
-                        <input
-                            type="password"
-                            name="password"
-                            value={config.password}
-                            onChange={handleChange}
-                            style={styles.input}
-                        />
-                    </div>
+
                     <div style={styles.buttonGroup}>
                         <button type="button" onClick={onClose} style={styles.cancelButton}>Cancel</button>
                         <button type="submit" style={styles.submitButton}>Connect</button>
@@ -112,7 +226,9 @@ const styles = {
         backgroundColor: '#2d2d2d',
         padding: '24px',
         borderRadius: '8px',
-        width: '400px',
+        width: '500px',
+        maxHeight: '90vh',
+        overflowY: 'auto' as const,
         boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
         color: '#fff',
     },
@@ -120,6 +236,14 @@ const styles = {
         marginTop: 0,
         marginBottom: '20px',
         fontSize: '1.5rem',
+    },
+    subtitle: {
+        fontSize: '1.1rem',
+        margin: '0',
+        color: '#eee',
+    },
+    section: {
+        marginBottom: '16px',
     },
     form: {
         display: 'flex',
@@ -130,6 +254,12 @@ const styles = {
         display: 'flex',
         flexDirection: 'column' as const,
         gap: '8px',
+        marginBottom: '8px',
+        flex: 1,
+    },
+    row: {
+        display: 'flex',
+        gap: '16px',
     },
     label: {
         fontSize: '0.9rem',
@@ -143,6 +273,13 @@ const styles = {
         color: '#fff',
         fontSize: '1rem',
         outline: 'none',
+        width: '100%',
+        boxSizing: 'border-box' as const,
+    },
+    checkboxGroup: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
     },
     buttonGroup: {
         display: 'flex',
