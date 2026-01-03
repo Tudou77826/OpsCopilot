@@ -1,0 +1,46 @@
+# Binaries
+build/bin
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Wails
+build/windows/installer/project.nsi
+build/windows/installer/wails_tools.nsh
+wails.json.old
+
+# Go
+# go.sum # Keep go.sum
+go.work
+go.work.sum
+vendor/
+.DS_Store
+
+# Frontend
+frontend/node_modules
+frontend/dist
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
