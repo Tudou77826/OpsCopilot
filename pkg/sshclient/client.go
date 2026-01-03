@@ -11,11 +11,12 @@ import (
 )
 
 type ConnectConfig struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
-	Bastion  *ConnectConfig
+	Host         string         `json:"host"`
+	Port         int            `json:"port"`
+	User         string         `json:"user"`
+	Password     string         `json:"password"`
+	RootPassword string         `json:"root_password"`
+	Bastion      *ConnectConfig `json:"bastion"`
 }
 
 type Client struct {

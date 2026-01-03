@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"opscopilot/pkg/ai"
+	"opscopilot/pkg/config"
+	"opscopilot/pkg/llm"
 	"opscopilot/pkg/secretstore"
 	"opscopilot/pkg/session"
 	"opscopilot/pkg/sshclient"
@@ -16,13 +19,21 @@ type App struct {
 	ctx         context.Context
 	sessionMgr  *session.Manager
 	secretStore secretstore.SecretStore
+	aiService   *ai.AIService
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
+	// Initialize LLM provider
+	llmConfig := config.LoadLLMConfig()
+	// Use OpenAIProvider by default, fallback to DeepSeek compatible
+	provider := llm.NewOpenAIProvider(llmConfig.APIKey, llmConfig.BaseURL, llmConfig.Model)
+	aiService := ai.NewAIService(provider)
+
 	return &App{
 		sessionMgr:  session.NewManager(),
 		secretStore: secretstore.NewKeyringStore(),
+		aiService:   aiService,
 	}
 }
 
@@ -140,7 +151,34 @@ func (a *App) CloseSession(sessionID string) {
     a.sessionMgr.Remove(sessionID)
 }
 
-// Greet returns a greeting for the given name
-func (a *App) Greet(name string) string {
-	return fmt.Sprintf("Hello %s, It's show time!", name)
+func (a *App) ParseIntent(input string) ([]ConnectConfig, error) {
+	configs, err := a.aiService.ParseConnectIntent(input)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert pkg/sshclient.ConnectConfig to App.ConnectConfig
+	var result []ConnectConfig
+	for _, c := range configs {
+		appConfig := ConnectConfig{
+			Host:         c.Host,
+			Port:         c.Port,
+			User:         c.User,
+			Password:     c.Password,
+			RootPassword: c.RootPassword,
+		}
+		
+		if c.Bastion != nil {
+			appConfig.Bastion = &ConnectConfig{
+				Host:     c.Bastion.Host,
+				Port:     c.Bastion.Port,
+				User:     c.Bastion.User,
+				Password: c.Bastion.Password,
+			}
+		}
+		
+		result = append(result, appConfig)
+	}
+	
+	return result, nil
 }

@@ -4,15 +4,27 @@ import { TerminalRef } from './components/Terminal/Terminal';
 import ConnectionModal from './components/ConnectionModal/ConnectionModal';
 import LayoutManager from './components/LayoutManager/LayoutManager';
 import BroadcastBar from './components/BroadcastBar/BroadcastBar';
+import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal';
 
 interface TerminalSession {
     id: string;
     title: string;
 }
 
+interface ConnectionConfig {
+    name?: string;
+    host: string;
+    port: number;
+    user: string;
+    password?: string;
+    rootPassword?: string;
+    bastion?: ConnectionConfig;
+}
+
 function App() {
     const [status, setStatus] = useState("Ready");
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
     const [layoutMode, setLayoutMode] = useState<'tab' | 'grid'>('tab');
     
@@ -85,6 +97,19 @@ function App() {
         }
     };
 
+    const handleBatchConnect = (configs: ConnectionConfig[]) => {
+        configs.forEach(config => handleConnect(config));
+    };
+
+    const handleParseIntent = async (input: string): Promise<ConnectionConfig[]> => {
+        // @ts-ignore
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.ParseIntent) {
+             // @ts-ignore
+            return await window.go.main.App.ParseIntent(input);
+        }
+        throw new Error("Wails runtime not ready");
+    };
+
     const handleTerminalData = (id: string, data: string) => {
         // @ts-ignore
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.Write) {
@@ -138,6 +163,9 @@ function App() {
                     <span style={{fontSize: '0.9rem', color: status === 'Connected' ? '#4caf50' : '#aaa'}}>
                         {status}
                     </span>
+                    <button onClick={() => setIsSmartModalOpen(true)} style={{...styles.primaryBtn, backgroundColor: '#8e44ad'}}>
+                        🤖 AI Connect
+                    </button>
                     <button onClick={() => setIsModalOpen(true)} style={styles.primaryBtn}>
                         + New Connection
                     </button>
@@ -176,6 +204,13 @@ function App() {
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 onConnect={handleConnect}
+            />
+
+            <SmartConnectModal 
+                isOpen={isSmartModalOpen}
+                onClose={() => setIsSmartModalOpen(false)}
+                onConnect={handleBatchConnect}
+                onParse={handleParseIntent}
             />
         </div>
     );

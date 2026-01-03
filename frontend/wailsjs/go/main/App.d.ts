@@ -8,6 +8,6 @@ export function CloseSession(arg1:string):Promise<void>;
 
 export function Connect(arg1:main.ConnectConfig):Promise<main.ConnectResult>;
 
-export function Greet(arg1:string):Promise<string>;
+export function ParseIntent(arg1:string):Promise<Array<main.ConnectConfig>>;
 
 export function Write(arg1:string,arg2:string):Promise<void>;

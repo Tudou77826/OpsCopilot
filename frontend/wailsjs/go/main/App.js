@@ -14,8 +14,8 @@ export function Connect(arg1) {
   return window['go']['main']['App']['Connect'](arg1);
 }
 
-export function Greet(arg1) {
-  return window['go']['main']['App']['Greet'](arg1);
+export function ParseIntent(arg1) {
+  return window['go']['main']['App']['ParseIntent'](arg1);
 }
 
 export function Write(arg1, arg2) {
