@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 
 interface ConnectionConfig {
+    name?: string;
     host: string;
     port: number;
     user: string;
@@ -17,6 +18,7 @@ interface ConnectionModalProps {
 
 const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onConnect }) => {
     const [config, setConfig] = useState<ConnectionConfig>({
+        name: '',
         host: '39.108.107.148',
         port: 22,
         user: 'root',
@@ -24,6 +26,9 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
         rootPassword: '',
     });
     
+    // Track if name has been manually edited
+    const [nameEdited, setNameEdited] = useState(false);
+
     const [enableBastion, setEnableBastion] = useState(false);
     const [bastionConfig, setBastionConfig] = useState<ConnectionConfig>({
         host: '',
@@ -37,6 +42,12 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const finalConfig = { ...config };
+        
+        // Use host as name if name is empty
+        if (!finalConfig.name) {
+            finalConfig.name = finalConfig.host;
+        }
+
         if (enableBastion) {
             finalConfig.bastion = bastionConfig;
         }
@@ -46,10 +57,23 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
-        setConfig(prev => ({
-            ...prev,
-            [name]: name === 'port' ? parseInt(value) || 22 : value
-        }));
+        
+        if (name === 'name') {
+            setNameEdited(true);
+            setConfig(prev => ({ ...prev, name: value }));
+        } else if (name === 'host') {
+            setConfig(prev => ({
+                ...prev,
+                host: value,
+                // Sync name with host if not manually edited
+                name: !nameEdited ? value : prev.name
+            }));
+        } else {
+            setConfig(prev => ({
+                ...prev,
+                [name]: name === 'port' ? parseInt(value) || 22 : value
+            }));
+        }
     };
     
     const handleBastionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -68,6 +92,18 @@ const ConnectionModal: React.FC<ConnectionModalProps> = ({ isOpen, onClose, onCo
                     {/* Main Connection */}
                     <div style={styles.section}>
                         <h3 style={styles.subtitle}>Target Host</h3>
+                        <div style={styles.formGroup}>
+                            <label style={styles.label} htmlFor="name">Name (Optional)</label>
+                            <input
+                                id="name"
+                                type="text"
+                                name="name"
+                                value={config.name}
+                                onChange={handleChange}
+                                style={styles.input}
+                                placeholder="My Server"
+                            />
+                        </div>
                         <div style={styles.formGroup}>
                             <label style={styles.label} htmlFor="host">Host</label>
                             <input

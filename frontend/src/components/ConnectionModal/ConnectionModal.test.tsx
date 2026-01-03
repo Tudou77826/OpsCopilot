@@ -20,6 +20,60 @@ describe('ConnectionModal', () => {
     expect(screen.getByText('Bastion Host (Optional)')).toBeInTheDocument();
   });
 
+  it('renders Name field', () => {
+    render(<ConnectionModal isOpen={true} onClose={vi.fn()} onConnect={vi.fn()} />);
+    expect(screen.getByLabelText('Name (Optional)')).toBeInTheDocument();
+  });
+
+  it('syncs Name with Host if Name is untouched', () => {
+    render(<ConnectionModal isOpen={true} onClose={vi.fn()} onConnect={vi.fn()} />);
+    
+    const hostInput = screen.getByLabelText('Host');
+    const nameInput = screen.getByLabelText('Name (Optional)') as HTMLInputElement;
+
+    // Type in host
+    fireEvent.change(hostInput, { target: { value: '192.168.1.1' } });
+    expect(nameInput.value).toBe('192.168.1.1');
+
+    // Type more
+    fireEvent.change(hostInput, { target: { value: '192.168.1.100' } });
+    expect(nameInput.value).toBe('192.168.1.100');
+  });
+
+  it('does NOT sync Name with Host if Name has been manually edited', () => {
+    render(<ConnectionModal isOpen={true} onClose={vi.fn()} onConnect={vi.fn()} />);
+    
+    const hostInput = screen.getByLabelText('Host');
+    const nameInput = screen.getByLabelText('Name (Optional)') as HTMLInputElement;
+
+    // Manually edit name
+    fireEvent.change(nameInput, { target: { value: 'My Server' } });
+
+    // Type in host
+    fireEvent.change(hostInput, { target: { value: '192.168.1.1' } });
+    
+    // Name should remain 'My Server'
+    expect(nameInput.value).toBe('My Server');
+  });
+
+  it('submits Name in config', () => {
+    const onConnect = vi.fn();
+    render(<ConnectionModal isOpen={true} onClose={vi.fn()} onConnect={onConnect} />);
+
+    fireEvent.change(screen.getByLabelText('Name (Optional)'), { target: { value: 'Production DB' } });
+    fireEvent.change(screen.getByLabelText('Host'), { target: { value: '10.0.0.1' } });
+    
+    const form = screen.getByText('New Connection').closest('div')?.querySelector('form');
+    if (form) {
+        fireEvent.submit(form);
+    }
+
+    expect(onConnect).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'Production DB',
+        host: '10.0.0.1'
+    }));
+  });
+
   it('submits correct data structure with recursion', () => {
     const onConnect = vi.fn();
     render(<ConnectionModal isOpen={true} onClose={vi.fn()} onConnect={onConnect} />);

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"opscopilot/pkg/secretstore"
+	"opscopilot/pkg/session"
 	"opscopilot/pkg/sshclient"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -13,14 +14,14 @@ import (
 // App struct
 type App struct {
 	ctx         context.Context
-	client      *sshclient.Client
-	stdin       io.WriteCloser
+	sessionMgr  *session.Manager
 	secretStore secretstore.SecretStore
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
 	return &App{
+		sessionMgr:  session.NewManager(),
 		secretStore: secretstore.NewKeyringStore(),
 	}
 }
@@ -40,9 +41,14 @@ type ConnectConfig struct {
 	Bastion      *ConnectConfig `json:"bastion"`
 }
 
-func (a *App) Connect(config ConnectConfig) string {
+type ConnectResult struct {
+    Success   bool   `json:"success"`
+    SessionID string `json:"sessionId"`
+    Message   string `json:"message"`
+}
+
+func (a *App) Connect(config ConnectConfig) ConnectResult {
 	// 尝试从 SecretStore 保存密码（如果提供了）
-	// 注意：实际生产中可能需要更复杂的逻辑来决定何时保存
 	if config.Password != "" {
 		_ = a.secretStore.Set("OpsCopilot-SSH", config.Host+":"+config.User, config.Password)
 	}
@@ -70,12 +76,10 @@ func (a *App) Connect(config ConnectConfig) string {
 
 	client, err := sshclient.NewClient(clientConfig)
 	if err != nil {
-		return fmt.Sprintf("Error connecting: %v", err)
+		return ConnectResult{Success: false, Message: fmt.Sprintf("Error connecting: %v", err)}
 	}
-	a.client = client
 
 	// Start shell with default size
-	// 如果提供了 RootPassword，使用 StartShellWithSudo
 	var stdin io.WriteCloser
 	var stdout io.Reader
 
@@ -86,10 +90,12 @@ func (a *App) Connect(config ConnectConfig) string {
 	}
 
 	if err != nil {
-		return fmt.Sprintf("Error starting shell: %v", err)
+        client.Close()
+		return ConnectResult{Success: false, Message: fmt.Sprintf("Error starting shell: %v", err)}
 	}
 
-	a.stdin = stdin
+    // Add to session manager
+    sessionID := a.sessionMgr.Add(client, stdin)
 
 	// Read loop
 	go func() {
@@ -98,32 +104,40 @@ func (a *App) Connect(config ConnectConfig) string {
 			n, err := stdout.Read(buf)
 			if err != nil {
 				if err != io.EOF {
-					runtime.EventsEmit(a.ctx, "terminal-data", fmt.Sprintf("\r\nConnection Error: %v\r\n", err))
+					runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, fmt.Sprintf("\r\nConnection Error: %v\r\n", err))
 				} else {
-					runtime.EventsEmit(a.ctx, "terminal-data", "\r\nConnection Closed\r\n")
+					runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, "\r\nConnection Closed\r\n")
 				}
-				runtime.EventsEmit(a.ctx, "connection-status", "Disconnected")
-				a.stdin = nil
-				a.client = nil
+                // Notify session closed
+				runtime.EventsEmit(a.ctx, "session-closed", sessionID)
+                a.sessionMgr.Remove(sessionID)
 				break
 			}
 			if n > 0 {
-				// Convert to base64 if needed, but string is usually fine for utf8
-				runtime.EventsEmit(a.ctx, "terminal-data", string(buf[:n]))
+				runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, string(buf[:n]))
 			}
 		}
 	}()
 
-	return "Connected"
+	return ConnectResult{Success: true, SessionID: sessionID, Message: "Connected"}
 }
 
-func (a *App) Write(data string) {
-	if a.stdin != nil {
-		_, err := a.stdin.Write([]byte(data))
+func (a *App) Write(sessionID string, data string) {
+    sess, ok := a.sessionMgr.Get(sessionID)
+	if ok && sess.Stdin != nil {
+		_, err := sess.Stdin.Write([]byte(data))
 		if err != nil {
-			runtime.EventsEmit(a.ctx, "terminal-data", fmt.Sprintf("\r\nWrite Error: %v\r\n", err))
+			runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, fmt.Sprintf("\r\nWrite Error: %v\r\n", err))
 		}
 	}
+}
+
+func (a *App) Broadcast(sessionIDs []string, data string) {
+    a.sessionMgr.Broadcast(sessionIDs, data)
+}
+
+func (a *App) CloseSession(sessionID string) {
+    a.sessionMgr.Remove(sessionID)
 }
 
 // Greet returns a greeting for the given name

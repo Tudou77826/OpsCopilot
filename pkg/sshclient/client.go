@@ -42,7 +42,7 @@ func NewClient(config *ConnectConfig) (*Client, error) {
 		User: config.User,
 		Auth: authMethods,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // In production, use ssh.FixedHostKey or similar
-		Timeout:         10 * time.Second,
+		Timeout:         30 * time.Second, // 增加超时时间
 	}
 
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
