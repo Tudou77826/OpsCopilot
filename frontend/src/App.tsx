@@ -5,6 +5,7 @@ import ConnectionModal from './components/ConnectionModal/ConnectionModal';
 import LayoutManager from './components/LayoutManager/LayoutManager';
 import BroadcastBar from './components/BroadcastBar/BroadcastBar';
 import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal';
+import SettingsModal from './components/SettingsModal/SettingsModal';
 
 interface TerminalSession {
     id: string;
@@ -25,6 +26,7 @@ function App() {
     const [status, setStatus] = useState("Ready");
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
     const [layoutMode, setLayoutMode] = useState<'tab' | 'grid'>('tab');
     
@@ -169,6 +171,9 @@ function App() {
                     <button onClick={() => setIsModalOpen(true)} style={styles.primaryBtn}>
                         + New Connection
                     </button>
+                    <button onClick={() => setIsSettingsOpen(true)} style={styles.iconBtn} title="Settings">
+                        ⚙️
+                    </button>
                 </div>
                 
                 <div style={styles.toggleGroup}>
@@ -212,6 +217,11 @@ function App() {
                 onConnect={handleBatchConnect}
                 onParse={handleParseIntent}
             />
+
+            <SettingsModal 
+                isOpen={isSettingsOpen}
+                onClose={() => setIsSettingsOpen(false)}
+            />
         </div>
     );
 }
@@ -246,6 +256,17 @@ const styles = {
         color: 'white',
         border: 'none',
         cursor: 'pointer',
+    },
+    iconBtn: {
+        background: 'none',
+        border: 'none',
+        fontSize: '1.2rem',
+        cursor: 'pointer',
+        padding: '4px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: '8px',
     }
 };
 

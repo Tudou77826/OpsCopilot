@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
+	"os"
+	"path/filepath"
 	"opscopilot/pkg/ai"
 	"opscopilot/pkg/config"
 	"opscopilot/pkg/llm"
@@ -20,20 +23,27 @@ type App struct {
 	sessionMgr  *session.Manager
 	secretStore secretstore.SecretStore
 	aiService   *ai.AIService
+	configMgr   *config.Manager
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	// Initialize LLM provider
-	llmConfig := config.LoadLLMConfig()
+	configMgr := config.NewManager()
+	if err := configMgr.Load(); err != nil {
+		fmt.Printf("Warning: Failed to load config: %v\n", err)
+	}
+
+	// Initialize LLM provider using loaded config
+	llmConfig := configMgr.Config.LLM
 	// Use OpenAIProvider by default, fallback to DeepSeek compatible
 	provider := llm.NewOpenAIProvider(llmConfig.APIKey, llmConfig.BaseURL, llmConfig.Model)
-	aiService := ai.NewAIService(provider)
+	aiService := ai.NewAIService(provider, configMgr)
 
 	return &App{
 		sessionMgr:  session.NewManager(),
 		secretStore: secretstore.NewKeyringStore(),
 		aiService:   aiService,
+		configMgr:   configMgr,
 	}
 }
 
@@ -41,6 +51,27 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	
+	// 初始化日志文件
+	logDir := a.configMgr.Config.Log.Dir
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		fmt.Printf("Failed to create log directory: %v\n", err)
+		return
+	}
+
+	logFile := filepath.Join(logDir, "opscopilot.log")
+	f, err := os.OpenFile(logFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		fmt.Printf("Failed to open log file: %v\n", err)
+		return
+	}
+
+	// 同时输出到文件和控制台
+	multiWriter := io.MultiWriter(os.Stdout, f)
+	log.SetOutput(multiWriter)
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+	
+	log.Println("App started")
 }
 
 type ConnectConfig struct {
@@ -181,4 +212,25 @@ func (a *App) ParseIntent(input string) ([]ConnectConfig, error) {
 	}
 	
 	return result, nil
+}
+
+func (a *App) GetSettings() config.AppConfig {
+	return *a.configMgr.Config
+}
+
+func (a *App) SaveSettings(cfg config.AppConfig) string {
+	// Update config in memory
+	*a.configMgr.Config = cfg
+	
+	// Save to disk
+	if err := a.configMgr.Save(); err != nil {
+		return fmt.Sprintf("Failed to save settings: %v", err)
+	}
+	
+	// Update AI Service Provider
+	llmConfig := cfg.LLM
+	newProvider := llm.NewOpenAIProvider(llmConfig.APIKey, llmConfig.BaseURL, llmConfig.Model)
+	a.aiService.UpdateProvider(newProvider)
+
+	return ""
 }
