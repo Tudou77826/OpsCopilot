@@ -121,22 +121,63 @@ graph TD
 
 ---
 
-## 4. 任务拆解与 TDD 计划
+## 4. 任务拆解与子迭代计划
 
-### Phase 1: 知识加载器 (Backend)
-1.  **实现 Markdown Loader**：读取指定目录，合并文本。
-    *   *UT*: 给定多个 MD 文件，验证合并后的字符串是否包含所有关键信息。
-2.  **Prompt 组装器**：实现将 L1/L2/L3/L4 内容组装为最终 Prompt 的逻辑。
+为了确保开发过程逻辑清晰且能逐步交付验收，我们将 Iteration 5 拆分为 5 个详细的子迭代。
 
-### Phase 2: 会话实录系统 (Backend)
-1.  **实录数据流**：在 Terminal 执行 Hook 中增加记录。
-2.  **会话生命周期**：定义 Start/Stop 接口，以及用户输入 RootCause 的接口。
-3.  **文件存储**：实现 JSON 落盘。
+### **v0.5.1: 知识引擎核心 (Backend - Knowledge Engine)**
+**目标**: 构建“多源知识融合”的基础能力，使系统能理解本地文档。
+*   **任务**:
+    1.  **实现 Markdown Loader**:
+        *   创建 `pkg/knowledge` 包。
+        *   开发 `LoadAll(dir string)` 函数，读取 `documents/` 目录下所有 `.md` 文件并拼接。
+    2.  **实现 Prompt Assembler**:
+        *   在 `pkg/ai` 中升级 Prompt 构建逻辑。
+        *   实现 `L1 (Linux Base)` + `L2 (Local Docs)` 的上下文拼接逻辑。
+*   **验收标准**: 后端单元测试通过，能正确输出包含本地文档内容的完整 Prompt 字符串。
 
-### Phase 3: 前端适配 (Frontend)
-1.  **侧边栏 UI**：实现可折叠/展开的 AI 助手侧边栏，调整 LayoutManager 支持侧边布局。
-2.  **工作流控制**：实现“开始/结束”排查的按钮与状态管理，以及根因输入弹窗。
-3.  **命令卡片**：支持渲染 AI 返回的 JSON 命令。
+### **v0.5.2: 会话实录底层 (Backend - Session Recorder)**
+**目标**: 构建“实战闭环”的数据基础设施，支持会话的记录与持久化。
+*   **任务**:
+    1.  **定义数据结构**:
+        *   实现 `TroubleshootingSession` 结构体（包含 ID, Timeline, RootCause 等）。
+    2.  **实现生命周期管理**:
+        *   开发 `StartSession()`, `StopSession()`, `AddEvent()` 接口。
+        *   开发 `SaveSession()` 接口，支持将会话序列化为 JSON 文件存储。
+*   **验收标准**: 后端单元测试通过，模拟一次会话流程（开始->添加事件->结束），能生成符合规范的 JSON 文件。
+
+### **v0.5.3: 侧边栏 UI 框架 (Frontend - Sidebar UI)**
+**目标**: 完成交互界面的重构，支持“并排显示”模式。
+*   **任务**:
+    1.  **布局管理器升级**:
+        *   修改 `LayoutManager`，支持 `Split View` (左侧终端 + 右侧侧边栏)。
+        *   增加侧边栏的显示/隐藏控制逻辑。
+    2.  **开发 Sidebar 组件**:
+        *   实现基础容器 UI。
+        *   实现“对话流”区域（Message List）和“输入框”区域。
+*   **验收标准**: 启动应用后，侧边栏能正常展开/折叠，不遮挡终端，且界面布局美观。
+
+### **v0.5.4: 智能问答集成 (Full Stack - Chat Integration)**
+**目标**: 联调 v0.5.1 和 v0.5.3，实现带业务上下文的智能问答。
+*   **任务**:
+    1.  **前后端联调**:
+        *   前端 Sidebar 发送用户提问给后端 `AI Service`。
+        *   后端调用 LLM API 并返回结果。
+    2.  **Markdown 渲染**:
+        *   前端 Sidebar 支持渲染 AI 返回的 Markdown 格式建议。
+*   **验收标准**: 在 `documents/` 放入测试文档，在 Sidebar 提问相关内容，AI 能准确回答（证明上下文注入成功）。
+
+### **v0.5.5: 排查工作流闭环 (Full Stack - Workflow Loop)**
+**目标**: 联调 v0.5.2，实现完整的“排查 -> 记录 -> 总结 -> 归档”流程。
+*   **任务**:
+    1.  **工作流控制集成**:
+        *   前端“开始排查”按钮绑定后端 `session_recorder.StartSession`。
+        *   前端“结束排查”按钮触发“根因输入弹窗”，提交后调用 `StopSession`。
+    2.  **终端数据捕获**:
+        *   将 Terminal 的输入输出流实时 Hook 到 `session_recorder.AddEvent`。
+    3.  **AI 总结与归档**:
+        *   在 `StopSession` 流程中，自动触发 AI 生成总结报告。
+*   **验收标准**: 完成一次完整排查操作，检查本地生成的归档文件，内容包含：用户提问、AI 建议、终端执行的命令、用户输入的根因、AI 生成的总结。
 
 ---
 
