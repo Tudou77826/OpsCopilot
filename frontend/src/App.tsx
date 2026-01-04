@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import './App.css';
 import { TerminalRef } from './components/Terminal/Terminal';
-import ConnectionModal from './components/ConnectionModal/ConnectionModal';
 import LayoutManager from './components/LayoutManager/LayoutManager';
 import BroadcastBar from './components/BroadcastBar/BroadcastBar';
 import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal';
@@ -24,7 +23,6 @@ interface ConnectionConfig {
 
 function App() {
     const [status, setStatus] = useState("Ready");
-    const [isModalOpen, setIsModalOpen] = useState(false);
     const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
@@ -80,7 +78,7 @@ function App() {
                     };
                     
                     setTerminals(prev => [...prev, newTerminal]);
-
+                    
                     // Listen for data for this specific session
                     // @ts-ignore
                     const cancel = window.runtime.EventsOn(`terminal-data:${newSessionId}`, (data: string) => {
@@ -165,10 +163,7 @@ function App() {
                     <span style={{fontSize: '0.9rem', color: status === 'Connected' ? '#4caf50' : '#aaa'}}>
                         {status}
                     </span>
-                    <button onClick={() => setIsSmartModalOpen(true)} style={{...styles.primaryBtn, backgroundColor: '#8e44ad'}}>
-                        🤖 AI Connect
-                    </button>
-                    <button onClick={() => setIsModalOpen(true)} style={styles.primaryBtn}>
+                    <button onClick={() => setIsSmartModalOpen(true)} style={styles.primaryBtn}>
                         + New Connection
                     </button>
                     <button onClick={() => setIsSettingsOpen(true)} style={styles.iconBtn} title="Settings">
@@ -200,17 +195,12 @@ function App() {
                     terminalRefs={terminalRefs}
                     onCloseTerminal={handleCloseTerminal}
                     onRenameTerminal={handleRenameTerminal}
+                    onClose={() => {}}
                 />
             </div>
 
             <BroadcastBar onBroadcast={handleBroadcast} />
             
-            <ConnectionModal 
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                onConnect={handleConnect}
-            />
-
             <SmartConnectModal 
                 isOpen={isSmartModalOpen}
                 onClose={() => setIsSmartModalOpen(false)}

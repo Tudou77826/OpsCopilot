@@ -26,6 +26,7 @@ describe('LayoutManager', () => {
                 terminalRefs={mockTerminalRefs}
                 onCloseTerminal={mockOnCloseTerminal}
                 onRenameTerminal={mockOnRenameTerminal}
+                onClose={vi.fn()}
             />
         );
 

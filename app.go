@@ -111,6 +111,7 @@ func (a *App) startup(ctx context.Context) {
 }
 
 type ConnectConfig struct {
+	Name         string         `json:"name"`
 	Host         string         `json:"host"`
 	Port         int            `json:"port"`
 	User         string         `json:"user"`
@@ -228,6 +229,7 @@ func (a *App) ParseIntent(input string) ([]ConnectConfig, error) {
 	var result []ConnectConfig
 	for _, c := range configs {
 		appConfig := ConnectConfig{
+			Name:         c.Name,
 			Host:         c.Host,
 			Port:         c.Port,
 			User:         c.User,
@@ -237,6 +239,7 @@ func (a *App) ParseIntent(input string) ([]ConnectConfig, error) {
 		
 		if c.Bastion != nil {
 			appConfig.Bastion = &ConnectConfig{
+				Name:     c.Bastion.Name,
 				Host:     c.Bastion.Host,
 				Port:     c.Bastion.Port,
 				User:     c.Bastion.User,

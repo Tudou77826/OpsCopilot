@@ -14,6 +14,7 @@ interface LayoutManagerProps {
     terminalRefs: React.MutableRefObject<Map<string, TerminalRef>>;
     onCloseTerminal: (id: string) => void;
     onRenameTerminal: (id: string, newTitle: string) => void;
+    onClose?: () => void; // Optional onClose prop
 }
 
 const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTerminalData, terminalRefs, onCloseTerminal, onRenameTerminal }) => {

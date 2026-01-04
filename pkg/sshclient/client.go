@@ -11,6 +11,7 @@ import (
 )
 
 type ConnectConfig struct {
+	Name         string         `json:"name"`
 	Host         string         `json:"host"`
 	Port         int            `json:"port"`
 	User         string         `json:"user"`
@@ -37,6 +38,15 @@ func NewClient(config *ConnectConfig) (*Client, error) {
 	authMethods := []ssh.AuthMethod{}
 	if config.Password != "" {
 		authMethods = append(authMethods, ssh.Password(config.Password))
+		authMethods = append(authMethods, ssh.KeyboardInteractive(
+			func(user, instruction string, questions []string, echos []bool) (answers []string, err error) {
+				answers = make([]string, len(questions))
+				for i := range questions {
+					answers[i] = config.Password
+				}
+				return answers, nil
+			},
+		))
 	}
 
 	sshConfig := &ssh.ClientConfig{

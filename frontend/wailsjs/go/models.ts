@@ -69,6 +69,7 @@ export namespace config {
 export namespace main {
 	
 	export class ConnectConfig {
+	    name: string;
 	    host: string;
 	    port: number;
 	    user: string;
@@ -82,6 +83,7 @@ export namespace main {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
 	        this.host = source["host"];
 	        this.port = source["port"];
 	        this.user = source["user"];
