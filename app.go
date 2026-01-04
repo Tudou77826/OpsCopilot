@@ -54,21 +54,57 @@ func (a *App) startup(ctx context.Context) {
 	
 	// 初始化日志文件
 	logDir := a.configMgr.Config.Log.Dir
+	
+	// 如果配置的目录是相对路径，转换为绝对路径
+	if !filepath.IsAbs(logDir) {
+		// 优先尝试获取可执行文件所在目录
+		execPath, err := os.Executable()
+		var baseDir string
+		if err == nil {
+			baseDir = filepath.Dir(execPath)
+		} else {
+			// 回退到工作目录
+			baseDir, _ = os.Getwd()
+		}
+		logDir = filepath.Join(baseDir, logDir)
+	}
+	
+	// Debug print
+	fmt.Printf("[Startup] Initializing log in directory: %s\n", logDir)
+
 	if err := os.MkdirAll(logDir, 0755); err != nil {
-		fmt.Printf("Failed to create log directory: %v\n", err)
+		fmt.Printf("[Startup] Failed to create log directory: %v\n", err)
 		return
 	}
 
 	logFile := filepath.Join(logDir, "opscopilot.log")
+	fmt.Printf("[Startup] Log file path: %s\n", logFile)
+
 	f, err := os.OpenFile(logFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
-		fmt.Printf("Failed to open log file: %v\n", err)
+		fmt.Printf("[Startup] Failed to open log file: %v\n", err)
 		return
 	}
 
 	// 同时输出到文件和控制台
-	multiWriter := io.MultiWriter(os.Stdout, f)
-	log.SetOutput(multiWriter)
+	// 注意：在 Windows GUI 应用中（wails build），os.Stdout 可能不可见或无效
+	// 为了确保安全，我们先测试写入
+	if _, err := f.WriteString(fmt.Sprintf("[Startup] Log initialized at %s\n", logDir)); err != nil {
+		fmt.Printf("[Startup] Failed to write test log: %v\n", err)
+	}
+
+	// 根据环境变量判断是否启用控制台输出
+	// 在开发模式下 (OPSCOPILOT_DEV_MODE=true)，我们希望同时看到控制台和文件日志
+	// 在生产模式下 (build)，Stdout 可能无效，因此只输出到文件
+	if os.Getenv("OPSCOPILOT_DEV_MODE") == "true" {
+		fmt.Println("[Startup] Dev mode detected: Enabling console + file logging")
+		multiWriter := io.MultiWriter(os.Stdout, f)
+		log.SetOutput(multiWriter)
+	} else {
+		// 生产模式：仅文件
+		log.SetOutput(f)
+	}
+
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	
 	log.Println("App started")

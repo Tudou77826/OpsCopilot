@@ -14,6 +14,9 @@ set "LLM_BASE_URL=https://huazi.de5.net/v1"
 :: 设置 LLM 模型 (可选，默认 deepseek-chat)
 set "LLM_MODEL=gemini-2.5-flash"
 
+:: 开启开发模式日志 (同时输出到控制台和文件)
+set "OPSCOPILOT_DEV_MODE=true"
+
 echo [INFO] Environment variables set.
 echo [INFO] Starting OpsCopilot (Dev Mode)...
 
