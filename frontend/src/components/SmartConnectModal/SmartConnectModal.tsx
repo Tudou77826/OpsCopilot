@@ -46,7 +46,14 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
         setError('');
         setShowErrorDetails(false);
         try {
-            const configs = await onParse(input);
+            const result = await onParse(input);
+            // Prevent crash if result is null, and handle empty results
+            const configs = result || [];
+            
+            if (configs.length === 0) {
+                throw new Error("No connection details identified. Please try providing more specific information (e.g., 'Connect to 192.168.1.1 user root').");
+            }
+
             const configsWithName = configs.map(c => ({
                 ...c,
                 name: c.name || c.host
@@ -73,6 +80,14 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
         } catch (e: any) {
             let errorMsg = e.message || e.toString();
             errorMsg = errorMsg.replace(/^Error: /, '');
+            
+            // Friendly error messages
+            if (errorMsg.includes("TLS handshake timeout") || errorMsg.includes("timeout")) {
+                errorMsg = "Connection timeout: Unable to reach AI service. Please check your network.";
+            } else if (errorMsg.includes("Cannot read properties of null")) {
+                errorMsg = "Internal Error: Received invalid response from AI service.";
+            }
+            
             setError(errorMsg);
         } finally {
             setIsLoading(false);

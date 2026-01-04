@@ -164,4 +164,40 @@ describe('SmartConnectModal', () => {
             expect.objectContaining({ host: 'manual-host', name: 'manual-host' })
         ]);
     });
+
+    it('handles null response from onParse gracefully', async () => {
+        // Simulate backend returning null (which might happen on certain errors or empty results)
+        mockOnParse.mockResolvedValue(null);
+
+        render(<SmartConnectModal {...defaultProps} />);
+        
+        const input = screen.getByPlaceholderText(/AI Magic/i);
+        fireEvent.change(input, { target: { value: 'Connect to nowhere' } });
+        
+        const analyzeBtn = screen.getByText('Analyze');
+        fireEvent.click(analyzeBtn);
+
+        expect(mockOnParse).toHaveBeenCalledWith('Connect to nowhere');
+        
+        // Should show error message instead of crashing
+        await waitFor(() => {
+            expect(screen.getByText(/No connection details identified/i)).toBeInTheDocument();
+        });
+    });
+
+    it('handles TLS timeout error gracefully', async () => {
+        // Simulate backend network error
+        mockOnParse.mockRejectedValue(new Error('Post "https://...": net/http: TLS handshake timeout'));
+
+        render(<SmartConnectModal {...defaultProps} />);
+        
+        const input = screen.getByPlaceholderText(/AI Magic/i);
+        fireEvent.change(input, { target: { value: 'Connect to somewhere' } });
+        fireEvent.click(screen.getByText('Analyze'));
+
+        // Should show friendly error message
+        await waitFor(() => {
+            expect(screen.getByText(/Connection timeout: Unable to reach AI service/i)).toBeInTheDocument();
+        });
+    });
 });
