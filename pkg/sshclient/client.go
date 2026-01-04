@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net"
 	"strings"
 	"time"
 
@@ -56,7 +57,12 @@ func NewClient(config *ConnectConfig) (*Client, error) {
 		Timeout:         30 * time.Second, // 增加超时时间
 	}
 
-	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
+	// Handle IPv6 brackets if present
+	host := config.Host
+	if len(host) > 2 && host[0] == '[' && host[len(host)-1] == ']' {
+		host = host[1 : len(host)-1]
+	}
+ 	addr := net.JoinHostPort(host, fmt.Sprint(config.Port))
 	
 	var client *ssh.Client
 	var err error
