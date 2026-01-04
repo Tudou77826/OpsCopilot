@@ -80,3 +80,30 @@ func cleanJSONResponse(resp string) string {
     resp = re.ReplaceAllString(resp, "")
     return strings.TrimSpace(resp)
 }
+
+func (s *AIService) AskWithContext(question string, contextContent string) (string, error) {
+	prompt := s.cfgMgr.Config.Prompts["qa_agent"]
+	if prompt == "" {
+		prompt = config.DefaultQAPrompt
+	}
+
+	fullContent := fmt.Sprintf("Context:\n%s\n\nQuestion: %s", contextContent, question)
+
+	messages := []llm.ChatMessage{
+		{Role: "system", Content: prompt},
+		{Role: "user", Content: fullContent},
+	}
+
+	log.Printf("[AIService] Sending QA request to LLM")
+
+	resp, err := s.provider.ChatCompletion(context.Background(), messages)
+	if err != nil {
+		log.Printf("[AIService] QA Provider error: %v", err)
+		return "", fmt.Errorf("AI provider error: %w", err)
+	}
+
+	// Clean JSON response
+	cleanedResp := cleanJSONResponse(resp)
+
+	return cleanedResp, nil
+}

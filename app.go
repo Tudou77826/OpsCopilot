@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"opscopilot/pkg/ai"
 	"opscopilot/pkg/config"
+	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/llm"
 	"opscopilot/pkg/secretstore"
 	"opscopilot/pkg/session"
@@ -251,6 +252,32 @@ func (a *App) ParseIntent(input string) ([]ConnectConfig, error) {
 	}
 	
 	return result, nil
+}
+
+// AskAI handles the Q&A request from frontend
+func (a *App) AskAI(question string) string {
+	// 1. Load knowledge
+	// Default to "docs" directory, fallback to "knowledge" if exists
+	knowledgeDir := "docs"
+	if _, err := os.Stat(knowledgeDir); os.IsNotExist(err) {
+		knowledgeDir = "knowledge"
+	}
+
+	// We attempt to load knowledge. If it fails or dir doesn't exist, we pass empty context.
+	// The prompt handles "answer based on general knowledge" if context is missing.
+	contextContent, err := knowledge.LoadAll(knowledgeDir)
+	if err != nil {
+		log.Printf("[App] Warning: Failed to load knowledge from %s: %v", knowledgeDir, err)
+		contextContent = ""
+	}
+
+	// 2. Call AIService
+	answer, err := a.aiService.AskWithContext(question, contextContent)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+
+	return answer
 }
 
 func (a *App) GetSettings() config.AppConfig {

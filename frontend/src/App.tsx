@@ -4,6 +4,7 @@ import { TerminalRef } from './components/Terminal/Terminal';
 import LayoutManager from './components/LayoutManager/LayoutManager';
 import BroadcastBar from './components/BroadcastBar/BroadcastBar';
 import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal';
+import Sidebar from './components/Sidebar/Sidebar';
 import SettingsModal from './components/SettingsModal/SettingsModal';
 
 interface TerminalSession {
@@ -25,6 +26,7 @@ function App() {
     const [status, setStatus] = useState("就绪");
     const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
     const [layoutMode, setLayoutMode] = useState<'tab' | 'grid'>('tab');
     
@@ -148,6 +150,13 @@ function App() {
         ));
     };
 
+    // Force layout update when sidebar toggles
+    useEffect(() => {
+        setTimeout(() => {
+            terminalRefs.current.forEach(t => t.fit());
+        }, 300); // Wait for transition
+    }, [isSidebarOpen]);
+
     return (
         <div id="app" style={{height: '100vh', display: 'flex', flexDirection: 'column'}}>
             <div style={{
@@ -187,15 +196,21 @@ function App() {
                 </div>
             </div>
 
-            <div style={{flex: 1, position: 'relative', overflow: 'hidden'}}>
-                <LayoutManager 
-                    terminals={terminals}
-                    mode={layoutMode}
-                    onTerminalData={handleTerminalData}
-                    terminalRefs={terminalRefs}
-                    onCloseTerminal={handleCloseTerminal}
-                    onRenameTerminal={handleRenameTerminal}
-                    onClose={() => {}}
+            <div style={{flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'row'}}>
+                <div style={{flex: 1, position: 'relative', overflow: 'hidden'}}>
+                    <LayoutManager 
+                        terminals={terminals}
+                        mode={layoutMode}
+                        onTerminalData={handleTerminalData}
+                        terminalRefs={terminalRefs}
+                        onCloseTerminal={handleCloseTerminal}
+                        onRenameTerminal={handleRenameTerminal}
+                        onClose={() => {}}
+                    />
+                </div>
+                <Sidebar 
+                    isOpen={isSidebarOpen} 
+                    onToggle={() => setIsSidebarOpen(!isSidebarOpen)} 
                 />
             </div>
 

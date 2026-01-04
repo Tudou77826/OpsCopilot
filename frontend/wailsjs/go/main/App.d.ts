@@ -3,6 +3,8 @@
 import {main} from '../models';
 import {config} from '../models';
 
+export function AskAI(arg1:string):Promise<string>;
+
 export function Broadcast(arg1:Array<string>,arg2:string):Promise<void>;
 
 export function CloseSession(arg1:string):Promise<void>;

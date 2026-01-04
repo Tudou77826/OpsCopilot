@@ -79,3 +79,30 @@ func TestParseConnectIntent(t *testing.T) {
         t.Errorf("Expected empty name for second config, got %s", c2.Name)
     }
 }
+
+func TestAskWithContext(t *testing.T) {
+	// Mock response that follows the new format
+	expectedResponse := `## 排查思路
+Based on the context, the answer is 42.
+
+## 建议命令
+echo 42`
+	mockProvider := &llm.MockProvider{
+		Response: expectedResponse,
+	}
+
+	cfgMgr := config.NewManager()
+	service := NewAIService(mockProvider, cfgMgr)
+
+	contextContent := "The answer to everything is 42."
+	question := "What is the answer?"
+
+	resp, err := service.AskWithContext(question, contextContent)
+	if err != nil {
+		t.Fatalf("AskWithContext failed: %v", err)
+	}
+
+	if resp != expectedResponse {
+		t.Errorf("Expected response %q, got %q", expectedResponse, resp)
+	}
+}
