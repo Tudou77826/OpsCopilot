@@ -17,15 +17,15 @@ const BroadcastBar: React.FC<BroadcastBarProps> = ({ onBroadcast }) => {
 
     return (
         <form onSubmit={handleSubmit} style={styles.container}>
-            <span style={styles.label}>Broadcast:</span>
+            <span style={styles.label}>广播指令:</span>
             <input
                 type="text"
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}
-                placeholder="Type command to send to all active terminals..."
+                placeholder="输入命令以发送到所有活动终端..."
                 style={styles.input}
             />
-            <button type="submit" style={styles.button}>Send</button>
+            <button type="submit" style={styles.button}>发送</button>
         </form>
     );
 };

@@ -51,7 +51,7 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
             const configs = result || [];
             
             if (configs.length === 0) {
-                throw new Error("No connection details identified. Please try providing more specific information (e.g., 'Connect to 192.168.1.1 user root').");
+                throw new Error("未识别到连接信息。请尝试提供更详细的信息（例如：'连接到 192.168.1.1 用户 root'）。");
             }
 
             const configsWithName = configs.map(c => ({
@@ -83,9 +83,9 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
             
             // Friendly error messages
             if (errorMsg.includes("TLS handshake timeout") || errorMsg.includes("timeout")) {
-                errorMsg = "Connection timeout: Unable to reach AI service. Please check your network.";
+                errorMsg = "连接超时：无法连接到 AI 服务，请检查您的网络。";
             } else if (errorMsg.includes("Cannot read properties of null")) {
-                errorMsg = "Internal Error: Received invalid response from AI service.";
+                errorMsg = "内部错误：收到无效的 AI 服务响应。";
             }
             
             setError(errorMsg);
@@ -99,7 +99,7 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
             host: '',
             port: 22,
             user: 'root',
-            name: 'New Connection'
+            name: '新连接'
         };
         const newIndex = parsedConfigs.length;
         setParsedConfigs(prev => [...prev, newConfig]);
@@ -160,7 +160,7 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
             // Handle root level fields
             // Name sync logic: if editing Host, and Name equals old Host (or is empty), update Name too
             if (field === 'host') {
-                if (!config.name || config.name === config.host || config.name === 'New Connection') {
+                if (!config.name || config.name === config.host || config.name === '新连接') {
                     config.name = value;
                 }
             }
@@ -188,7 +188,7 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
     return (
         <div style={styles.overlay}>
             <div style={styles.modal}>
-                <h2 style={styles.title}>New Connection</h2>
+                <h2 style={styles.title}>新建连接</h2>
                 
                 {/* AI Input Section - Always visible but compact */}
                 <div style={styles.inputSection}>
@@ -196,7 +196,7 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
                         <textarea
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            placeholder="AI Magic: 'Connect to 192.168.1.10 using root'..."
+                            placeholder="你可以使用自然输入连接要求，如 '连接到 192.168.1.10 使用 root 用户， 密码是：xxx'..."
                             style={styles.textarea}
                             rows={2}
                         />
@@ -205,19 +205,19 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
                             style={styles.aiButton}
                             disabled={isLoading || !input.trim()}
                         >
-                            {isLoading ? '...' : 'Analyze'}
+                            {isLoading ? '分析中...' : '智能分析'}
                         </button>
                     </div>
                     {error && (
                         <div style={styles.errorContainer}>
                             <div style={styles.errorMessage}>
-                                <span>⚠️ {error.includes('Raw:') ? 'Parsing Error' : error}</span>
+                                <span>⚠️ {error.includes('Raw:') ? '解析错误' : error}</span>
                                 {error.includes('Raw:') && (
                                     <span 
                                         style={styles.detailsLink} 
                                         onClick={() => setShowErrorDetails(!showErrorDetails)}
                                     >
-                                        {showErrorDetails ? 'Hide Details' : 'Show Details'}
+                                        {showErrorDetails ? '隐藏详情' : '显示详情'}
                                     </span>
                                 )}
                             </div>
@@ -233,14 +233,14 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
                 {/* Results List */}
                 <div style={styles.resultSection}>
                     <div style={styles.resultHeader}>
-                        <h3 style={styles.subtitle}>Connections ({parsedConfigs.length})</h3>
+                        <h3 style={styles.subtitle}>连接列表 ({parsedConfigs.length})</h3>
                         {/* "New Search" removed as requested */}
                     </div>
                     
                     <div style={styles.list}>
                         {parsedConfigs.length === 0 && (
                             <div style={{textAlign: 'center', padding: '20px', color: '#666', border: '1px dashed #444', borderRadius: '4px'}}>
-                                No connections yet. Use AI above or add manually.
+                                暂无连接信息。请使用上方 AI 分析或手动添加。
                             </div>
                         )}
                         {parsedConfigs.map((config, i) => {
@@ -261,16 +261,16 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
                                                 style={styles.headerNameInput}
                                                 value={config.name || ''}
                                                 onChange={(e) => updateConfig(i, 'name', e.target.value)}
-                                                placeholder="Connection Name"
+                                                placeholder="连接名称"
                                                 onClick={(e) => e.stopPropagation()}
                                             />
                                             <span style={styles.headerHost}>{config.host}</span>
                                         </div>
                                         <div style={{display: 'flex', gap: '8px'}}>
-                                            <button onClick={() => toggleExpand(i)} style={styles.iconButton} title="Edit">
+                                            <button onClick={() => toggleExpand(i)} style={styles.iconButton} title="编辑">
                                                 {isExpanded ? '🔽' : '✏️'}
                                             </button>
-                                            <button onClick={() => handleRemoveConfig(i)} style={styles.iconButton} title="Remove">
+                                            <button onClick={() => handleRemoveConfig(i)} style={styles.iconButton} title="移除">
                                                 🗑️
                                             </button>
                                         </div>
@@ -280,15 +280,15 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
                                     {isExpanded && (
                                         <div style={styles.cardBody}>
                                             <div style={styles.row}>
-                                                <div style={{flex: 2}}>{renderField("Host", config.host, (v) => updateConfig(i, 'host', v), "text", "", `host-${i}`)}</div>
-                                                <div style={{flex: 1}}>{renderField("Port", config.port, (v) => updateConfig(i, 'port', parseInt(v) || 22), "number", "", `port-${i}`)}</div>
+                                                <div style={{flex: 2}}>{renderField("主机地址", config.host, (v) => updateConfig(i, 'host', v), "text", "", `host-${i}`)}</div>
+                                                <div style={{flex: 1}}>{renderField("端口", config.port, (v) => updateConfig(i, 'port', parseInt(v) || 22), "number", "", `port-${i}`)}</div>
                                             </div>
                                             <div style={styles.row}>
-                                                <div style={{flex: 1}}>{renderField("User", config.user, (v) => updateConfig(i, 'user', v), "text", "", `user-${i}`)}</div>
-                                                <div style={{flex: 1}}>{renderField("Password", config.password || '', (v) => updateConfig(i, 'password', v), "password", "", `password-${i}`)}</div>
+                                                <div style={{flex: 1}}>{renderField("用户名", config.user, (v) => updateConfig(i, 'user', v), "text", "", `user-${i}`)}</div>
+                                                <div style={{flex: 1}}>{renderField("密码", config.password || '', (v) => updateConfig(i, 'password', v), "password", "", `password-${i}`)}</div>
                                             </div>
                                             <div style={styles.row}>
-                                                <div style={{flex: 1}}>{renderField("Root Password", config.rootPassword || '', (v) => updateConfig(i, 'rootPassword', v), "password", "Optional (for sudo)", `root-password-${i}`)}</div>
+                                                <div style={{flex: 1}}>{renderField("Root 密码", config.rootPassword || '', (v) => updateConfig(i, 'rootPassword', v), "password", "可选 (用于 sudo)", `root-password-${i}`)}</div>
                                             </div>
 
                                             {/* Bastion Config */}
@@ -308,17 +308,17 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
                                                         }}
                                                         style={{marginRight: '8px'}}
                                                     />
-                                                    <span>Use Bastion Host</span>
+                                                    <span>使用跳板机 (Bastion)</span>
                                                 </label>
                                                 {config.bastion && (
                                                     <div style={styles.bastionBody}>
                                                         <div style={styles.row}>
-                                                            <div style={{flex: 2}}>{renderField("Bastion Host", config.bastion.host, (v) => updateConfig(i, 'bastion.host', v), "text", "", `bastion-host-${i}`)}</div>
-                                                            <div style={{flex: 1}}>{renderField("Bastion Port", config.bastion.port, (v) => updateConfig(i, 'bastion.port', parseInt(v) || 22), "number", "", `bastion-port-${i}`)}</div>
+                                                            <div style={{flex: 2}}>{renderField("跳板机主机", config.bastion.host, (v) => updateConfig(i, 'bastion.host', v), "text", "", `bastion-host-${i}`)}</div>
+                                                            <div style={{flex: 1}}>{renderField("跳板机端口", config.bastion.port, (v) => updateConfig(i, 'bastion.port', parseInt(v) || 22), "number", "", `bastion-port-${i}`)}</div>
                                                         </div>
                                                         <div style={styles.row}>
-                                                            <div style={{flex: 1}}>{renderField("Bastion User", config.bastion.user, (v) => updateConfig(i, 'bastion.user', v), "text", "", `bastion-user-${i}`)}</div>
-                                                            <div style={{flex: 1}}>{renderField("Bastion Password", config.bastion.password || '', (v) => updateConfig(i, 'bastion.password', v), "password", "", `bastion-password-${i}`)}</div>
+                                                            <div style={{flex: 1}}>{renderField("跳板机用户", config.bastion.user, (v) => updateConfig(i, 'bastion.user', v), "text", "", `bastion-user-${i}`)}</div>
+                                                            <div style={{flex: 1}}>{renderField("跳板机密码", config.bastion.password || '', (v) => updateConfig(i, 'bastion.password', v), "password", "", `bastion-password-${i}`)}</div>
                                                         </div>
                                                     </div>
                                                 )}
@@ -331,15 +331,15 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
                     </div>
                     
                     <div style={styles.buttonGroup}>
-                        <button onClick={handleAddManual} style={styles.secondaryButton}>+ Add Manual Entry</button>
+                        <button onClick={handleAddManual} style={styles.secondaryButton}>+ 手动添加</button>
                         <div style={{flex: 1}}></div>
-                        <button onClick={onClose} style={styles.cancelButton}>Cancel</button>
+                        <button onClick={onClose} style={styles.cancelButton}>取消</button>
                         <button 
                             onClick={handleConnect} 
                             style={styles.submitButton}
                             disabled={selectedIndices.size === 0}
                         >
-                            Connect Selected ({selectedIndices.size})
+                            连接选中项 ({selectedIndices.size})
                         </button>
                     </div>
                 </div>

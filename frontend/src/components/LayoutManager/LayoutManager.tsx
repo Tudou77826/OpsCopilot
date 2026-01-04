@@ -47,7 +47,7 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
     }, [terminals.length, mode, terminalRefs]);
 
     if (terminals.length === 0) {
-        return <div style={styles.emptyState}>No active connections. Click "New Connection" to start.</div>;
+        return <div style={styles.emptyState}>暂无活动连接。请点击右上角 “+ 新建连接” 开始使用。</div>;
     }
 
     const getGridStyle = () => {

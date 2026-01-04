@@ -43,7 +43,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
             }
         } catch (e) {
             console.error(e);
-            setMsg('Failed to load settings');
+            setMsg('加载设置失败');
         } finally {
             setLoading(false);
         }
@@ -56,16 +56,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
             // @ts-ignore
             const err = await window.go.main.App.SaveSettings(config);
             if (err) {
-                setMsg('Error: ' + err);
+                setMsg('错误: ' + err);
             } else {
-                setMsg('Settings saved!');
+                setMsg('设置已保存！');
                 setTimeout(() => {
                     setMsg('');
                     onClose();
                 }, 1000);
             }
         } catch (e: any) {
-            setMsg('Error: ' + e.toString());
+            setMsg('错误: ' + e.toString());
         } finally {
             setLoading(false);
         }
@@ -99,7 +99,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         <div style={styles.overlay}>
             <div style={styles.modal}>
                 <div style={styles.header}>
-                    <h2 style={styles.title}>Settings</h2>
+                    <h2 style={styles.title}>系统设置</h2>
                     <button onClick={onClose} style={styles.closeBtn}>×</button>
                 </div>
 
@@ -108,19 +108,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                         style={activeTab === 'llm' ? styles.activeTab : styles.tab}
                         onClick={() => setActiveTab('llm')}
                     >
-                        LLM Provider
+                        模型服务
                     </button>
                     <button 
                         style={activeTab === 'prompts' ? styles.activeTab : styles.tab}
                         onClick={() => setActiveTab('prompts')}
                     >
-                        AI Prompts
+                        AI 提示词
                     </button>
                     <button 
                         style={activeTab === 'system' ? styles.activeTab : styles.tab}
                         onClick={() => setActiveTab('system')}
                     >
-                        System
+                        系统选项
                     </button>
                 </div>
 
@@ -128,7 +128,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                     {activeTab === 'llm' && (
                         <div style={styles.formSection}>
                             <div style={styles.formGroup}>
-                                <label style={styles.label}>Base URL</label>
+                                <label style={styles.label}>API 地址 (Base URL)</label>
                                 <input 
                                     style={styles.input}
                                     value={config.llm.BaseURL}
@@ -137,7 +137,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                                 />
                             </div>
                             <div style={styles.formGroup}>
-                                <label style={styles.label}>API Key</label>
+                                <label style={styles.label}>API 密钥 (API Key)</label>
                                 <input 
                                     style={styles.input}
                                     type="password"
@@ -146,7 +146,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                                 />
                             </div>
                             <div style={styles.formGroup}>
-                                <label style={styles.label}>Model</label>
+                                <label style={styles.label}>模型名称 (Model)</label>
                                 <input 
                                     style={styles.input}
                                     value={config.llm.Model}
@@ -160,7 +160,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                     {activeTab === 'prompts' && (
                         <div style={styles.formSection}>
                             <div style={styles.formGroup}>
-                                <label style={styles.label}>Smart Connect System Prompt</label>
+                                <label style={styles.label}>智能连接系统提示词</label>
                                 <textarea 
                                     style={styles.textarea}
                                     value={config.prompts['smart_connect'] || ''}
@@ -174,7 +174,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                     {activeTab === 'system' && (
                         <div style={styles.formSection}>
                             <div style={styles.formGroup}>
-                                <label style={styles.label}>Log Directory</label>
+                                <label style={styles.label}>日志存储目录</label>
                                 <input 
                                     style={styles.input}
                                     value={config.log.dir}
@@ -188,7 +188,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                 <div style={styles.footer}>
                     <div style={styles.statusMsg}>{msg}</div>
                     <button onClick={handleSave} style={styles.saveBtn} disabled={loading}>
-                        {loading ? 'Saving...' : 'Save Settings'}
+                        {loading ? '正在保存...' : '保存设置'}
                     </button>
                 </div>
             </div>

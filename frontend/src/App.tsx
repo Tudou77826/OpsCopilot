@@ -22,7 +22,7 @@ interface ConnectionConfig {
 }
 
 function App() {
-    const [status, setStatus] = useState("Ready");
+    const [status, setStatus] = useState("就绪");
     const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
@@ -62,7 +62,7 @@ function App() {
     };
 
     const handleConnect = async (config: any) => {
-        setStatus("Connecting...");
+        setStatus("正在连接...");
         try {
             // @ts-ignore
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.Connect) {
@@ -70,7 +70,7 @@ function App() {
                 const result = await window.go.main.App.Connect(config);
                 
                 if (result.success) {
-                    setStatus("Connected");
+                    setStatus("已连接");
                     const newSessionId = result.sessionId;
                     const newTerminal: TerminalSession = {
                         id: newSessionId,
@@ -87,13 +87,13 @@ function App() {
                     unlisteners.current.set(newSessionId, cancel);
 
                 } else {
-                    setStatus("Error: " + result.message);
+                    setStatus("错误: " + result.message);
                 }
             } else {
-                setStatus("Wails runtime not ready");
+                setStatus("Wails 运行时未就绪");
             }
         } catch (e) {
-            setStatus("Error: " + e);
+            setStatus("错误: " + e);
         }
     };
 
@@ -107,7 +107,7 @@ function App() {
              // @ts-ignore
             return await window.go.main.App.ParseIntent(input);
         }
-        throw new Error("Wails runtime not ready");
+        throw new Error("Wails 运行时未就绪");
     };
 
     const handleTerminalData = (id: string, data: string) => {
@@ -160,13 +160,13 @@ function App() {
                 justifyContent: 'space-between'
             }}>
                 <div style={{display: 'flex', gap: '16px', alignItems: 'center'}}>
-                    <span style={{fontSize: '0.9rem', color: status === 'Connected' ? '#4caf50' : '#aaa'}}>
+                    <span style={{fontSize: '0.9rem', color: status === '已连接' ? '#4caf50' : '#aaa'}}>
                         {status}
                     </span>
                     <button onClick={() => setIsSmartModalOpen(true)} style={styles.primaryBtn}>
-                        + New Connection
+                        + 新建连接
                     </button>
-                    <button onClick={() => setIsSettingsOpen(true)} style={styles.iconBtn} title="Settings">
+                    <button onClick={() => setIsSettingsOpen(true)} style={styles.iconBtn} title="设置">
                         ⚙️
                     </button>
                 </div>
@@ -176,13 +176,13 @@ function App() {
                         style={layoutMode === 'tab' ? styles.activeToggle : styles.toggle}
                         onClick={() => setLayoutMode('tab')}
                     >
-                        Tab Mode
+                        标签模式
                     </button>
                     <button 
                         style={layoutMode === 'grid' ? styles.activeToggle : styles.toggle}
                         onClick={() => setLayoutMode('grid')}
                     >
-                        Grid Mode
+                        网格模式
                     </button>
                 </div>
             </div>
