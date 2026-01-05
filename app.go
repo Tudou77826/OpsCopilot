@@ -2,18 +2,20 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
-	"os"
-	"path/filepath"
 	"opscopilot/pkg/ai"
 	"opscopilot/pkg/config"
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/llm"
 	"opscopilot/pkg/secretstore"
 	"opscopilot/pkg/session"
+	"opscopilot/pkg/session_recorder"
 	"opscopilot/pkg/sshclient"
+	"os"
+	"path/filepath"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -25,6 +27,7 @@ type App struct {
 	secretStore secretstore.SecretStore
 	aiService   *ai.AIService
 	configMgr   *config.Manager
+	recorder    *session_recorder.Recorder
 }
 
 // NewApp creates a new App application struct
@@ -40,11 +43,15 @@ func NewApp() *App {
 	provider := llm.NewOpenAIProvider(llmConfig.APIKey, llmConfig.BaseURL, llmConfig.Model)
 	aiService := ai.NewAIService(provider, configMgr)
 
+	// Initialize Recorder
+	recorder := session_recorder.NewRecorder("sessions")
+
 	return &App{
 		sessionMgr:  session.NewManager(),
 		secretStore: secretstore.NewKeyringStore(),
 		aiService:   aiService,
 		configMgr:   configMgr,
+		recorder:    recorder,
 	}
 }
 
@@ -52,10 +59,10 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	
+
 	// 初始化日志文件
 	logDir := a.configMgr.Config.Log.Dir
-	
+
 	// 如果配置的目录是相对路径，转换为绝对路径
 	if !filepath.IsAbs(logDir) {
 		// 优先尝试获取可执行文件所在目录
@@ -69,7 +76,7 @@ func (a *App) startup(ctx context.Context) {
 		}
 		logDir = filepath.Join(baseDir, logDir)
 	}
-	
+
 	// Debug print
 	fmt.Printf("[Startup] Initializing log in directory: %s\n", logDir)
 
@@ -107,7 +114,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
-	
+
 	log.Println("App started")
 }
 
@@ -122,9 +129,9 @@ type ConnectConfig struct {
 }
 
 type ConnectResult struct {
-    Success   bool   `json:"success"`
-    SessionID string `json:"sessionId"`
-    Message   string `json:"message"`
+	Success   bool   `json:"success"`
+	SessionID string `json:"sessionId"`
+	Message   string `json:"message"`
 }
 
 func (a *App) Connect(config ConnectConfig) ConnectResult {
@@ -170,12 +177,12 @@ func (a *App) Connect(config ConnectConfig) ConnectResult {
 	}
 
 	if err != nil {
-        client.Close()
+		client.Close()
 		return ConnectResult{Success: false, Message: fmt.Sprintf("Error starting shell: %v", err)}
 	}
 
-    // Add to session manager
-    sessionID := a.sessionMgr.Add(client, stdin)
+	// Add to session manager
+	sessionID := a.sessionMgr.Add(client, stdin)
 
 	// Read loop
 	go func() {
@@ -188,13 +195,21 @@ func (a *App) Connect(config ConnectConfig) ConnectResult {
 				} else {
 					runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, "\r\nConnection Closed\r\n")
 				}
-                // Notify session closed
+				// Notify session closed
 				runtime.EventsEmit(a.ctx, "session-closed", sessionID)
-                a.sessionMgr.Remove(sessionID)
+				a.sessionMgr.Remove(sessionID)
 				break
 			}
 			if n > 0 {
-				runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, string(buf[:n]))
+				dataStr := string(buf[:n])
+				runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, dataStr)
+
+				// Record output
+				if a.recorder != nil {
+					a.recorder.AddEvent("terminal_output", dataStr, map[string]interface{}{
+						"session_id": sessionID,
+					})
+				}
 			}
 		}
 	}()
@@ -203,21 +218,62 @@ func (a *App) Connect(config ConnectConfig) ConnectResult {
 }
 
 func (a *App) Write(sessionID string, data string) {
-    sess, ok := a.sessionMgr.Get(sessionID)
+	sess, ok := a.sessionMgr.Get(sessionID)
 	if ok && sess.Stdin != nil {
 		_, err := sess.Stdin.Write([]byte(data))
 		if err != nil {
 			runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, fmt.Sprintf("\r\nWrite Error: %v\r\n", err))
 		}
+
+		// Record input
+		if a.recorder != nil {
+			a.recorder.AddEvent("terminal_input", data, map[string]interface{}{
+				"session_id": sessionID,
+			})
+		}
 	}
 }
 
+// StartSession starts a new troubleshooting session
+func (a *App) StartSession(problem string) string {
+	// TODO: Get list of active context files if available
+	contextFiles := []string{}
+	session := a.recorder.StartSession(problem, contextFiles)
+	return session.ID
+}
+
+// StopSession stops the current troubleshooting session, generates conclusion, and saves it
+func (a *App) StopSession(rootCause string) string {
+	currentSession := a.recorder.GetCurrentSession()
+	if currentSession == nil {
+		return "Error: No active session"
+	}
+
+	// Serialize timeline for AI
+	timelineBytes, _ := json.Marshal(currentSession.Timeline)
+	timelineStr := string(timelineBytes)
+
+	// Generate Conclusion using AI
+	conclusion, err := a.aiService.GenerateConclusion(timelineStr, rootCause)
+	if err != nil {
+		log.Printf("Failed to generate conclusion: %v", err)
+		conclusion = "Failed to generate conclusion via AI."
+	}
+
+	// Stop and Save
+	if err := a.recorder.StopSession(rootCause, conclusion); err != nil {
+		return fmt.Sprintf("Error saving session: %v", err)
+	}
+
+	return conclusion
+}
+
 func (a *App) Broadcast(sessionIDs []string, data string) {
-    a.sessionMgr.Broadcast(sessionIDs, data)
+	a.sessionMgr.Broadcast(sessionIDs, data)
 }
 
 func (a *App) CloseSession(sessionID string) {
-    a.sessionMgr.Remove(sessionID)
+	a.sessionMgr.Remove(sessionID)
 }
 
 func (a *App) ParseIntent(input string) ([]ConnectConfig, error) {
@@ -237,7 +293,7 @@ func (a *App) ParseIntent(input string) ([]ConnectConfig, error) {
 			Password:     c.Password,
 			RootPassword: c.RootPassword,
 		}
-		
+
 		if c.Bastion != nil {
 			appConfig.Bastion = &ConnectConfig{
 				Name:     c.Bastion.Name,
@@ -247,10 +303,10 @@ func (a *App) ParseIntent(input string) ([]ConnectConfig, error) {
 				Password: c.Bastion.Password,
 			}
 		}
-		
+
 		result = append(result, appConfig)
 	}
-	
+
 	return result, nil
 }
 
@@ -287,16 +343,54 @@ func (a *App) GetSettings() config.AppConfig {
 func (a *App) SaveSettings(cfg config.AppConfig) string {
 	// Update config in memory
 	*a.configMgr.Config = cfg
-	
+
 	// Save to disk
 	if err := a.configMgr.Save(); err != nil {
 		return fmt.Sprintf("Failed to save settings: %v", err)
 	}
-	
+
 	// Update AI Service Provider
 	llmConfig := cfg.LLM
 	newProvider := llm.NewOpenAIProvider(llmConfig.APIKey, llmConfig.BaseURL, llmConfig.Model)
 	a.aiService.UpdateProvider(newProvider)
 
 	return ""
+}
+
+// PolishRootCause polishes the root cause description
+func (a *App) PolishRootCause(input string) string {
+	polished, err := a.aiService.PolishContent(input)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	return polished
+}
+
+// GetSessionTimeline returns the current session data including timeline and problem
+func (a *App) GetSessionTimeline() *session_recorder.TroubleshootingSession {
+	session := a.recorder.GetCurrentSession()
+	if session == nil {
+		return nil
+	}
+	return session
+}
+
+// UpdateSessionTimeline updates the current session timeline
+func (a *App) UpdateSessionTimeline(events []session_recorder.TimelineEvent) string {
+	err := a.recorder.UpdateTimeline(events)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	return ""
+}
+
+// GenerateConclusionWithContext generates the conclusion using the provided context (e.g. edited markdown)
+func (a *App) GenerateConclusionWithContext(contextStr string, rootCause string) string {
+	// Generate Conclusion using AI with provided context
+	conclusion, err := a.aiService.GenerateConclusion(contextStr, rootCause)
+	if err != nil {
+		log.Printf("Failed to generate conclusion: %v", err)
+		return fmt.Sprintf("Error generating conclusion: %v", err)
+	}
+	return conclusion
 }

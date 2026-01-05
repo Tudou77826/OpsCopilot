@@ -59,25 +59,25 @@ func TestParseConnectIntent(t *testing.T) {
 	if c1.Host != "192.168.1.10" {
 		t.Errorf("Expected host 192.168.1.10, got %s", c1.Host)
 	}
-    if c1.Name != "Database Server" {
-        t.Errorf("Expected name 'Database Server', got %s", c1.Name)
-    }
+	if c1.Name != "Database Server" {
+		t.Errorf("Expected name 'Database Server', got %s", c1.Name)
+	}
 	if c1.Bastion == nil {
 		t.Fatal("Expected bastion config, got nil")
 	}
 	if c1.Bastion.Host != "10.0.0.1" {
 		t.Errorf("Expected bastion host 10.0.0.1, got %s", c1.Bastion.Host)
 	}
-    if c1.Bastion.Name != "Bastion Host" {
-        t.Errorf("Expected bastion name 'Bastion Host', got %s", c1.Bastion.Name)
-    }
+	if c1.Bastion.Name != "Bastion Host" {
+		t.Errorf("Expected bastion name 'Bastion Host', got %s", c1.Bastion.Name)
+	}
 
-    // Verify second config (no explicit name in JSON, so Name should be empty string or default depending on parsing)
-    // The struct parsing will leave it empty if not in JSON.
-    c2 := configs[1]
-    if c2.Name != "" {
-        t.Errorf("Expected empty name for second config, got %s", c2.Name)
-    }
+	// Verify second config (no explicit name in JSON, so Name should be empty string or default depending on parsing)
+	// The struct parsing will leave it empty if not in JSON.
+	c2 := configs[1]
+	if c2.Name != "" {
+		t.Errorf("Expected empty name for second config, got %s", c2.Name)
+	}
 }
 
 func TestAskWithContext(t *testing.T) {

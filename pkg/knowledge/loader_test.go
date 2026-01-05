@@ -17,9 +17,9 @@ func TestLoadAll(t *testing.T) {
 
 	// Create dummy MD files
 	files := map[string]string{
-		"doc1.md": "# Doc 1\nContent 1",
+		"doc1.md":     "# Doc 1\nContent 1",
 		"sub/doc2.md": "# Doc 2\nContent 2",
-		"ignore.txt": "Should be ignored",
+		"ignore.txt":  "Should be ignored",
 	}
 
 	for path, content := range files {

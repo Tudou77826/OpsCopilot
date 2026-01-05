@@ -59,7 +59,7 @@ func (r *Recorder) AddEvent(eventType, content string, metadata map[string]inter
 }
 
 // StopSession ends the current session and saves it
-func (r *Recorder) StopSession(rootCause string) error {
+func (r *Recorder) StopSession(rootCause string, conclusion string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -69,7 +69,8 @@ func (r *Recorder) StopSession(rootCause string) error {
 
 	r.currentSession.EndTime = time.Now()
 	r.currentSession.RootCause = rootCause
-	
+	r.currentSession.Conclusion = conclusion
+
 	// Save to disk
 	if err := r.saveSessionLocked(); err != nil {
 		return err
@@ -105,7 +106,20 @@ func (r *Recorder) saveSessionLocked() error {
 
 // GetCurrentSession returns the current session (thread-safe)
 func (r *Recorder) GetCurrentSession() *TroubleshootingSession {
-    r.mu.Lock()
-    defer r.mu.Unlock()
-    return r.currentSession
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.currentSession
+}
+
+// UpdateTimeline updates the timeline of the current session
+func (r *Recorder) UpdateTimeline(events []TimelineEvent) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.currentSession == nil {
+		return fmt.Errorf("no active session")
+	}
+
+	r.currentSession.Timeline = events
+	return nil
 }

@@ -52,4 +52,27 @@ Rules:
 3. Respond in the same language as the user's question (mostly Chinese or English).
 4. If the answer is not in the context, use general knowledge but mention it.
 `
+
+	DefaultConclusionPrompt = `
+You are a senior DevOps engineer. Review the provided troubleshooting timeline and the user's root cause.
+Generate a concise technical summary of the incident in Chinese.
+
+Input:
+- Timeline: A list of user queries, AI suggestions, and executed commands.
+- Root Cause: The user-provided reason for the issue.
+
+Output Format:
+A markdown formatted summary in Chinese including:
+1. **问题描述**: Brief summary of the initial issue.
+2. **排查过程**: Key steps taken.
+3. **根本原因**: Refined explanation of the cause.
+4. **解决方案**: What fixed it.
+`
+
+	DefaultPolishPrompt = `
+You are a technical writer. Polish the following troubleshooting root cause description to be more professional, concise, and clear in Chinese.
+Output only the polished text, no explanations.
+
+Input:
+`
 )

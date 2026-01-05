@@ -39,46 +39,46 @@ func (s *AIService) ParseConnectIntent(input string) ([]sshclient.ConnectConfig,
 		{Role: "user", Content: input},
 	}
 
-    log.Printf("[AIService] Sending request to LLM: %s", input)
+	log.Printf("[AIService] Sending request to LLM: %s", input)
 
 	resp, err := s.provider.ChatCompletion(context.Background(), messages)
 	if err != nil {
-        log.Printf("[AIService] Provider error: %v", err)
+		log.Printf("[AIService] Provider error: %v", err)
 		return nil, fmt.Errorf("AI provider error: %w", err)
 	}
 
-    log.Printf("[AIService] Raw response from LLM: %s", resp)
+	log.Printf("[AIService] Raw response from LLM: %s", resp)
 
 	// 尝试解析 JSON
 	var configs []sshclient.ConnectConfig
-	
-    // 清理 Markdown 代码块标记
-    cleanedResp := cleanJSONResponse(resp)
-    
+
+	// 清理 Markdown 代码块标记
+	cleanedResp := cleanJSONResponse(resp)
+
 	if err := json.Unmarshal([]byte(cleanedResp), &configs); err != nil {
-        log.Printf("[AIService] JSON parse error: %v. Cleaned response: %s", err, cleanedResp)
+		log.Printf("[AIService] JSON parse error: %v. Cleaned response: %s", err, cleanedResp)
 		return nil, fmt.Errorf("failed to parse AI response as JSON: %v. Raw: %s", err, resp)
 	}
 
-    // 校验配置完整性
-    for i, c := range configs {
-        if c.Host == "" {
-            return nil, fmt.Errorf("config #%d missing 'host'. AI response incomplete", i+1)
-        }
-        if c.User == "" {
-            return nil, fmt.Errorf("config #%d missing 'user' for host %s. Please provide a username", i+1, c.Host)
-        }
-    }
+	// 校验配置完整性
+	for i, c := range configs {
+		if c.Host == "" {
+			return nil, fmt.Errorf("config #%d missing 'host'. AI response incomplete", i+1)
+		}
+		if c.User == "" {
+			return nil, fmt.Errorf("config #%d missing 'user' for host %s. Please provide a username", i+1, c.Host)
+		}
+	}
 
 	return configs, nil
 }
 
 // cleanJSONResponse 移除可能存在的 Markdown 代码块标记
 func cleanJSONResponse(resp string) string {
-    // 移除 ```json 和 ``` 标记
-    re := regexp.MustCompile("```(?:json)?")
-    resp = re.ReplaceAllString(resp, "")
-    return strings.TrimSpace(resp)
+	// 移除 ```json 和 ``` 标记
+	re := regexp.MustCompile("```(?:json)?")
+	resp = re.ReplaceAllString(resp, "")
+	return strings.TrimSpace(resp)
 }
 
 func (s *AIService) AskWithContext(question string, contextContent string) (string, error) {
@@ -106,4 +106,48 @@ func (s *AIService) AskWithContext(question string, contextContent string) (stri
 	cleanedResp := cleanJSONResponse(resp)
 
 	return cleanedResp, nil
+}
+
+func (s *AIService) GenerateConclusion(timeline string, rootCause string) (string, error) {
+	prompt := s.cfgMgr.Config.Prompts["conclusion_agent"]
+	if prompt == "" {
+		prompt = config.DefaultConclusionPrompt
+	}
+
+	content := fmt.Sprintf("Timeline:\n%s\n\nRoot Cause:\n%s", timeline, rootCause)
+
+	messages := []llm.ChatMessage{
+		{Role: "system", Content: prompt},
+		{Role: "user", Content: content},
+	}
+
+	log.Printf("[AIService] Generating conclusion")
+
+	resp, err := s.provider.ChatCompletion(context.Background(), messages)
+	if err != nil {
+		return "", fmt.Errorf("AI provider error: %w", err)
+	}
+
+	return resp, nil
+}
+
+func (s *AIService) PolishContent(content string) (string, error) {
+	prompt := s.cfgMgr.Config.Prompts["polish_agent"]
+	if prompt == "" {
+		prompt = config.DefaultPolishPrompt
+	}
+
+	messages := []llm.ChatMessage{
+		{Role: "system", Content: prompt},
+		{Role: "user", Content: content},
+	}
+
+	log.Printf("[AIService] Polishing content")
+
+	resp, err := s.provider.ChatCompletion(context.Background(), messages)
+	if err != nil {
+		return "", fmt.Errorf("AI provider error: %w", err)
+	}
+
+	return strings.TrimSpace(resp), nil
 }

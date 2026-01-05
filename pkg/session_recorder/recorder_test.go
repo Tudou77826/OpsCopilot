@@ -33,7 +33,7 @@ func TestRecorderLifecycle(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to add event: %v", err)
 	}
-	
+
 	err = recorder.AddEvent("terminal_action", "systemctl status postgresql", map[string]interface{}{"exit_code": 0})
 	if err != nil {
 		t.Errorf("Failed to add event: %v", err)
@@ -47,7 +47,8 @@ func TestRecorderLifecycle(t *testing.T) {
 
 	// 3. Stop Session
 	rootCause := "Network firewall rule"
-	err = recorder.StopSession(rootCause)
+	conclusion := "Issue resolved by updating firewall rules."
+	err = recorder.StopSession(rootCause, conclusion)
 	if err != nil {
 		t.Fatalf("Failed to stop session: %v", err)
 	}

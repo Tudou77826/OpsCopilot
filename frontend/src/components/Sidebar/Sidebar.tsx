@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import TroubleshootingStep from './TroubleshootingStep';
 import CommandCard from './CommandCard';
+import SessionReviewModal from './SessionReviewModal';
 
 interface Message {
     role: 'user' | 'ai';
@@ -20,6 +21,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onStart, onStop }) 
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
     const [width, setWidth] = useState(350);
+    const [isStopping, setIsStopping] = useState(false);
+    const [rootCause, setRootCause] = useState('');
+    const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+    const [isPolishing, setIsPolishing] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const scrollToBottom = () => {
@@ -52,24 +57,79 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onStart, onStop }) 
         document.body.style.cursor = 'col-resize';
     };
 
-    const handleStart = () => {
+    const handleStart = async () => {
         setIsInvestigating(true);
         if (onStart) onStart();
+        
         setMessages([{
             role: 'ai',
             content: '已开始排查会话。请告诉我您遇到的问题现象。',
             timestamp: Date.now()
         }]);
+
+        // Backend Integration
+        // @ts-ignore
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.StartSession) {
+            // @ts-ignore
+            await window.go.main.App.StartSession("User initiated investigation");
+        }
     };
 
-    const handleStop = () => {
+    const handleStopClick = () => {
+        setIsStopping(true);
+    };
+
+    const handleConfirmStop = async () => {
+        console.log("Opening Review Modal");
+        // alert("Debug: Confirm Stop Clicked"); // User confirmed AI Polish works, so JS is running.
+        setIsReviewModalOpen(true);
+    };
+
+    const handleArchive = async (conclusion: string) => {
+        setIsReviewModalOpen(false);
+        setIsStopping(false);
         setIsInvestigating(false);
         if (onStop) onStop();
-        setMessages(prev => [...prev, {
-            role: 'ai',
-            content: '会话已结束。',
-            timestamp: Date.now()
-        }]);
+
+        // Backend Integration
+        // @ts-ignore
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.StopSession) {
+            // @ts-ignore
+            await window.go.main.App.StopSession(rootCause, conclusion);
+            
+            setMessages(prev => [...prev, {
+                role: 'ai',
+                content: conclusion || '会话已结束并归档。',
+                timestamp: Date.now()
+            }]);
+        } else {
+            setMessages(prev => [...prev, {
+                role: 'ai',
+                content: '会话已结束。',
+                timestamp: Date.now()
+            }]);
+        }
+        
+        setRootCause('');
+    };
+
+    const handlePolishRootCause = async () => {
+        if (!rootCause.trim()) return;
+        setIsPolishing(true);
+        try {
+            // @ts-ignore
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.PolishRootCause) {
+                // @ts-ignore
+                const polished = await window.go.main.App.PolishRootCause(rootCause);
+                if (polished && !polished.startsWith("Error")) {
+                    setRootCause(polished);
+                }
+            }
+        } catch (e) {
+            console.error("Polish failed", e);
+        } finally {
+            setIsPolishing(false);
+        }
     };
 
     const handleSend = async () => {
@@ -227,23 +287,58 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onStart, onStop }) 
             {/* Footer */}
             {isInvestigating && (
                 <div style={styles.footer}>
-                    <div style={styles.toolbar}>
-                        <button onClick={handleStop} style={styles.secondaryButton}>结束排查</button>
-                    </div>
-                    <div style={styles.inputBox}>
-                        <textarea
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            placeholder="输入问题或现象..."
-                            style={styles.textarea}
-                            className="hide-scrollbar"
-                            rows={1}
-                        />
-                        <button onClick={handleSend} style={styles.sendButton}>发送</button>
-                    </div>
+                    {isStopping ? (
+                        <div style={styles.stopContainer}>
+                            <div style={styles.inputWrapper}>
+                                <input 
+                                    type="text" 
+                                    value={rootCause}
+                                    onChange={(e) => setRootCause(e.target.value)}
+                                    placeholder="请输入根本原因 (Root Cause)..."
+                                    style={styles.rootCauseInput}
+                                    autoFocus
+                                />
+                                <button 
+                                    onClick={handlePolishRootCause} 
+                                    style={styles.magicButton}
+                                    title="AI 润色"
+                                    disabled={isPolishing}
+                                >
+                                    {isPolishing ? '...' : '✨'}
+                                </button>
+                            </div>
+                            <div style={styles.stopActions}>
+                                <button onClick={() => setIsStopping(false)} style={styles.secondaryButton}>取消</button>
+                                <button onClick={handleConfirmStop} style={styles.primaryButton}>确认结束</button>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <div style={styles.toolbar}>
+                                <button onClick={handleStopClick} style={styles.secondaryButton}>结束排查</button>
+                            </div>
+                            <div style={styles.inputBox}>
+                                <textarea
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    onKeyDown={handleKeyDown}
+                                    placeholder="输入问题或现象..."
+                                    style={styles.textarea}
+                                    className="hide-scrollbar"
+                                    rows={1}
+                                />
+                                <button onClick={handleSend} style={styles.sendButton}>发送</button>
+                            </div>
+                        </>
+                    )}
                 </div>
             )}
+            <SessionReviewModal 
+                isOpen={isReviewModalOpen}
+                onClose={() => setIsReviewModalOpen(false)}
+                rootCause={rootCause}
+                onArchive={handleArchive}
+            />
         </div>
     );
 };
@@ -412,6 +507,44 @@ const styles = {
         color: '#aaa',
         textTransform: 'uppercase' as const,
         letterSpacing: '0.5px',
+    },
+    stopContainer: {
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '8px',
+    },
+    inputWrapper: {
+        display: 'flex',
+        gap: '8px',
+        alignItems: 'center',
+    },
+    rootCauseInput: {
+        flex: 1,
+        padding: '8px',
+        backgroundColor: '#3c3c3c',
+        border: '1px solid #555',
+        borderRadius: '4px',
+        color: '#fff',
+        fontSize: '13px',
+        outline: 'none',
+        boxSizing: 'border-box' as const,
+    },
+    magicButton: {
+        background: 'none',
+        border: '1px solid #555',
+        borderRadius: '4px',
+        color: '#ffd700',
+        cursor: 'pointer',
+        fontSize: '16px',
+        padding: '6px 10px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    stopActions: {
+        display: 'flex',
+        justifyContent: 'flex-end',
+        gap: '8px',
     }
 };
 

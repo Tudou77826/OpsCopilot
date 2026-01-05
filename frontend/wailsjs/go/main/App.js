@@ -18,6 +18,14 @@ export function Connect(arg1) {
   return window['go']['main']['App']['Connect'](arg1);
 }
 
+export function GenerateConclusionWithContext(arg1, arg2) {
+  return window['go']['main']['App']['GenerateConclusionWithContext'](arg1, arg2);
+}
+
+export function GetSessionTimeline() {
+  return window['go']['main']['App']['GetSessionTimeline']();
+}
+
 export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
 }
@@ -26,8 +34,24 @@ export function ParseIntent(arg1) {
   return window['go']['main']['App']['ParseIntent'](arg1);
 }
 
+export function PolishRootCause(arg1) {
+  return window['go']['main']['App']['PolishRootCause'](arg1);
+}
+
 export function SaveSettings(arg1) {
   return window['go']['main']['App']['SaveSettings'](arg1);
+}
+
+export function StartSession(arg1) {
+  return window['go']['main']['App']['StartSession'](arg1);
+}
+
+export function StopSession(arg1) {
+  return window['go']['main']['App']['StopSession'](arg1);
+}
+
+export function UpdateSessionTimeline(arg1) {
+  return window['go']['main']['App']['UpdateSessionTimeline'](arg1);
 }
 
 export function Write(arg1, arg2) {
