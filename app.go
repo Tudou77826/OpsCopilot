@@ -310,14 +310,42 @@ func (a *App) ParseIntent(input string) ([]ConnectConfig, error) {
 	return result, nil
 }
 
+// resolveKnowledgeBase finds the knowledge base directory
+// Priority:
+// 1. "docs" in Executable Directory
+// 2. "docs" in Working Directory
+// 3. "knowledge" in Executable Directory
+// 4. "knowledge" in Working Directory
+func (a *App) resolveKnowledgeBase() string {
+	candidates := []string{"docs", "knowledge"}
+	pathsToCheck := []string{}
+
+	// 1. Executable Directory
+	if execPath, err := os.Executable(); err == nil {
+		pathsToCheck = append(pathsToCheck, filepath.Dir(execPath))
+	}
+
+	// 2. Working Directory
+	if wd, err := os.Getwd(); err == nil {
+		pathsToCheck = append(pathsToCheck, wd)
+	}
+
+	for _, dirName := range candidates {
+		for _, basePath := range pathsToCheck {
+			fullPath := filepath.Join(basePath, dirName)
+			if info, err := os.Stat(fullPath); err == nil && info.IsDir() {
+				return fullPath
+			}
+		}
+	}
+
+	return "docs"
+}
+
 // AskAI handles the Q&A request from frontend
 func (a *App) AskAI(question string) string {
 	// 1. Load knowledge
-	// Default to "docs" directory, fallback to "knowledge" if exists
-	knowledgeDir := "docs"
-	if _, err := os.Stat(knowledgeDir); os.IsNotExist(err) {
-		knowledgeDir = "knowledge"
-	}
+	knowledgeDir := a.resolveKnowledgeBase()
 
 	// We attempt to load knowledge. If it fails or dir doesn't exist, we pass empty context.
 	// The prompt handles "answer based on general knowledge" if context is missing.

@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 
@@ -56,6 +57,10 @@ func (p *OpenAIProvider) ChatCompletion(ctx context.Context, messages []ChatMess
 		}
 	}
 
+	// Logging Request
+	reqBytes, _ := json.MarshalIndent(reqMessages, "", "  ")
+	log.Printf("\n========== [LLM Request] ==========\nModel: %s\nMessages:\n%s\n===================================", p.model, string(reqBytes))
+
 	resp, err := p.client.CreateChatCompletion(
 		ctx,
 		openai.ChatCompletionRequest{
@@ -65,7 +70,7 @@ func (p *OpenAIProvider) ChatCompletion(ctx context.Context, messages []ChatMess
 	)
 
 	if err != nil {
-        log.Printf("[OpenAIProvider] CreateChatCompletion error: %v", err)
+		log.Printf("[OpenAIProvider] CreateChatCompletion error: %v", err)
 		return "", err
 	}
 
@@ -73,5 +78,10 @@ func (p *OpenAIProvider) ChatCompletion(ctx context.Context, messages []ChatMess
 		return "", errors.New("no choices in response")
 	}
 
-	return resp.Choices[0].Message.Content, nil
+	content := resp.Choices[0].Message.Content
+
+	// Logging Response
+	log.Printf("\n========== [LLM Response] ==========\nContent:\n%s\n====================================", content)
+
+	return content, nil
 }
