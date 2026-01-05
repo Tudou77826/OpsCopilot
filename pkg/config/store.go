@@ -24,7 +24,7 @@ type Manager struct {
 func NewManager() *Manager {
 	// 默认配置
 	defaultLLM := LoadLLMConfig()
-	
+
 	cwd, _ := os.Getwd()
 	defaultLogDir := filepath.Join(cwd, "logs")
 
@@ -59,7 +59,7 @@ func (m *Manager) Load() error {
 	if err := json.Unmarshal(data, m.Config); err != nil {
 		return err
 	}
-	
+
 	// 确保 Prompts map 初始化
 	if m.Config.Prompts == nil {
 		m.Config.Prompts = make(map[string]string)

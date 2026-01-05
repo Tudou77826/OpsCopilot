@@ -1,5 +1,17 @@
 export namespace config {
 	
+	export class SSHConfig {
+	    fallback_methods: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SSHConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.fallback_methods = source["fallback_methods"];
+	    }
+	}
 	export class LogConfig {
 	    dir: string;
 	
@@ -32,6 +44,7 @@ export namespace config {
 	    llm: LLMConfig;
 	    prompts: Record<string, string>;
 	    log: LogConfig;
+	    ssh_config: SSHConfig;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppConfig(source);
@@ -42,6 +55,7 @@ export namespace config {
 	        this.llm = this.convertValues(source["llm"], LLMConfig);
 	        this.prompts = source["prompts"];
 	        this.log = this.convertValues(source["log"], LogConfig);
+	        this.ssh_config = this.convertValues(source["ssh_config"], SSHConfig);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -62,6 +76,7 @@ export namespace config {
 		    return a;
 		}
 	}
+	
 	
 
 }

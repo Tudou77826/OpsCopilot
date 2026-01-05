@@ -27,13 +27,13 @@ type Client struct {
 
 func NewClient(config *ConnectConfig) (*Client, error) {
 	// 递归建立 Bastion 连接
-	var bastionClient *ssh.Client
+	var bastionClient *Client // Change type to *Client to use dialViaNetcat
 	if config.Bastion != nil {
 		bastion, err := NewClient(config.Bastion)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to bastion: %w", err)
 		}
-		bastionClient = bastion.client
+		bastionClient = bastion
 	}
 
 	authMethods := []ssh.AuthMethod{}
@@ -51,10 +51,10 @@ func NewClient(config *ConnectConfig) (*Client, error) {
 	}
 
 	sshConfig := &ssh.ClientConfig{
-		User: config.User,
-		Auth: authMethods,
+		User:            config.User,
+		Auth:            authMethods,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // In production, use ssh.FixedHostKey or similar
-		Timeout:         30 * time.Second, // 增加超时时间
+		Timeout:         30 * time.Second,            // 增加超时时间
 	}
 
 	// Handle IPv6 brackets if present
@@ -62,20 +62,27 @@ func NewClient(config *ConnectConfig) (*Client, error) {
 	if len(host) > 2 && host[0] == '[' && host[len(host)-1] == ']' {
 		host = host[1 : len(host)-1]
 	}
- 	addr := net.JoinHostPort(host, fmt.Sprint(config.Port))
-	
+	addr := net.JoinHostPort(host, fmt.Sprint(config.Port))
+
 	var client *ssh.Client
 	var err error
 
 	if bastionClient != nil {
 		// 通过 Bastion 建立连接
-		conn, err := bastionClient.Dial("tcp", addr)
+		// 优先尝试 TCP Forwarding (Dial)
+		conn, err := bastionClient.client.Dial("tcp", addr)
 		if err != nil {
-			return nil, fmt.Errorf("failed to dial via bastion: %w", err)
+			// 如果 Dial 失败（可能是 AllowTcpForwarding=no），尝试 netcat 模式
+			// fmt.Printf("Bastion dial failed: %v. Retrying with netcat...\n", err)
+			conn, err = bastionClient.dialViaConsole("tcp", addr)
+			if err != nil {
+				return nil, fmt.Errorf("failed to dial via bastion: %w", err)
+			}
 		}
-		
+
 		ncc, chans, reqs, err := ssh.NewClientConn(conn, addr, sshConfig)
 		if err != nil {
+			conn.Close()
 			return nil, fmt.Errorf("failed to create client conn: %w", err)
 		}
 		client = ssh.NewClient(ncc, chans, reqs)
@@ -150,21 +157,21 @@ func (c *Client) StartShell(cols, rows int) (*ssh.Session, io.WriteCloser, io.Re
 		session.Close()
 		return nil, nil, nil, fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
-    
-    // Also capture stderr
-    stderr, err := session.StderrPipe()
-    if err != nil {
-        session.Close()
-        return nil, nil, nil, fmt.Errorf("failed to create stderr pipe: %w", err)
-    }
+
+	// Also capture stderr
+	stderr, err := session.StderrPipe()
+	if err != nil {
+		session.Close()
+		return nil, nil, nil, fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
 
 	if err := session.Shell(); err != nil {
 		session.Close()
 		return nil, nil, nil, fmt.Errorf("failed to start shell: %w", err)
 	}
-    
-    // Combine stdout and stderr for simplicity in this reader
-    combinedReader := io.MultiReader(stdout, stderr)
+
+	// Combine stdout and stderr for simplicity in this reader
+	combinedReader := io.MultiReader(stdout, stderr)
 
 	return session, stdin, combinedReader, nil
 }
@@ -207,20 +214,20 @@ func (r *AutoSudoReader) Read(p []byte) (n int, err error) {
 }
 
 func (c *Client) StartShellWithSudo(cols, rows int, rootPassword string) (*ssh.Session, io.WriteCloser, io.Reader, error) {
-    session, stdin, stdout, err := c.StartShell(cols, rows)
-    if err != nil {
-        return nil, nil, nil, err
-    }
-    
-    if rootPassword != "" {
-        handler := &SudoHandler{
-            RootPassword: rootPassword,
-            Stdin:        stdin,
-        }
-        wrappedStdout := &AutoSudoReader{
-            Reader:  stdout,
-            Handler: handler,
-        }
+	session, stdin, stdout, err := c.StartShell(cols, rows)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if rootPassword != "" {
+		handler := &SudoHandler{
+			RootPassword: rootPassword,
+			Stdin:        stdin,
+		}
+		wrappedStdout := &AutoSudoReader{
+			Reader:  stdout,
+			Handler: handler,
+		}
 
 		// 自动发送 su -
 		go func() {
@@ -228,8 +235,110 @@ func (c *Client) StartShellWithSudo(cols, rows int, rootPassword string) (*ssh.S
 			stdin.Write([]byte("su -\n"))
 		}()
 
-        return session, stdin, wrappedStdout, nil
-    }
-    
-    return session, stdin, stdout, nil
+		return session, stdin, wrappedStdout, nil
+	}
+
+	return session, stdin, stdout, nil
+}
+
+// ncConn implements net.Conn via ssh session and nc command
+type ncConn struct {
+	session *ssh.Session
+	stdin   io.WriteCloser
+	stdout  io.Reader
+	addr    string
+}
+
+func (c *ncConn) Read(b []byte) (int, error) {
+	return c.stdout.Read(b)
+}
+
+func (c *ncConn) Write(b []byte) (int, error) {
+	return c.stdin.Write(b)
+}
+
+func (c *ncConn) Close() error {
+	return c.session.Close()
+}
+
+func (c *ncConn) LocalAddr() net.Addr {
+	return &addr{"127.0.0.1:0"}
+}
+
+func (c *ncConn) RemoteAddr() net.Addr {
+	return &addr{c.addr}
+}
+
+func (c *ncConn) SetDeadline(t time.Time) error {
+	return nil
+}
+
+func (c *ncConn) SetReadDeadline(t time.Time) error {
+	return nil
+}
+
+func (c *ncConn) SetWriteDeadline(t time.Time) error {
+	return nil
+}
+
+type addr struct {
+	s string
+}
+
+func (a *addr) Network() string { return "tcp" }
+func (a *addr) String() string  { return a.s }
+
+// dialViaConsole attempts to establish a connection by executing commands on the remote server.
+// It tries multiple tools in order: nc, ncat, netcat, and finally bash's /dev/tcp feature.
+func (c *Client) dialViaConsole(network, addr string) (net.Conn, error) {
+	if c.client == nil {
+		return nil, fmt.Errorf("client is not connected")
+	}
+
+	session, err := c.client.NewSession()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create session: %w", err)
+	}
+
+	host, port, _ := net.SplitHostPort(addr)
+
+	// Robust command chain:
+	// 1. nc (standard netcat)
+	// 2. ncat (Nmap's netcat)
+	// 3. netcat (Alternative name)
+	// 4. bash /dev/tcp (Bash built-in networking)
+	// 5. python3 (Standard library socket)
+	// We use || to try the next one if the previous fails (command not found or execution error).
+	cmd := fmt.Sprintf(
+		"(nc %s %s 2>/dev/null) || (ncat %s %s 2>/dev/null) || (netcat %s %s 2>/dev/null) || (bash -c 'exec 3<>/dev/tcp/%s/%s; cat <&3 & cat >&3') || (python3 -c 'import sys,socket,select;s=socket.socket();s.connect((\"%s\",%s));\nwhile True:\n r,_,_=select.select([sys.stdin,s],[],[]);\n if s in r:d=s.recv(4096);(sys.stdout.buffer.write(d) if hasattr(sys.stdout,\"buffer\") else sys.stdout.write(d));sys.stdout.flush();\n if not d:break;\n if sys.stdin in r:d=(sys.stdin.buffer.read(4096) if hasattr(sys.stdin,\"buffer\") else sys.stdin.read(4096));s.send(d);\n if not d:break')",
+		host, port,
+		host, port,
+		host, port,
+		host, port,
+		host, port,
+	)
+
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		session.Close()
+		return nil, err
+	}
+
+	stdout, err := session.StdoutPipe()
+	if err != nil {
+		session.Close()
+		return nil, err
+	}
+
+	if err := session.Start(cmd); err != nil {
+		session.Close()
+		return nil, err
+	}
+
+	return &ncConn{
+		session: session,
+		stdin:   stdin,
+		stdout:  stdout,
+		addr:    addr,
+	}, nil
 }
