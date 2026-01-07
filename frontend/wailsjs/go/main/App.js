@@ -18,8 +18,16 @@ export function Connect(arg1) {
   return window['go']['main']['App']['Connect'](arg1);
 }
 
+export function DeleteSavedSession(arg1) {
+  return window['go']['main']['App']['DeleteSavedSession'](arg1);
+}
+
 export function GenerateConclusionWithContext(arg1, arg2) {
   return window['go']['main']['App']['GenerateConclusionWithContext'](arg1, arg2);
+}
+
+export function GetSavedSessions() {
+  return window['go']['main']['App']['GetSavedSessions']();
 }
 
 export function GetSessionTimeline() {
@@ -36,6 +44,10 @@ export function ParseIntent(arg1) {
 
 export function PolishRootCause(arg1) {
   return window['go']['main']['App']['PolishRootCause'](arg1);
+}
+
+export function RenameSavedSession(arg1, arg2) {
+  return window['go']['main']['App']['RenameSavedSession'](arg1, arg2);
 }
 
 export function SaveSettings(arg1) {

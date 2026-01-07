@@ -13,6 +13,7 @@ import (
 	"opscopilot/pkg/secretstore"
 	"opscopilot/pkg/session"
 	"opscopilot/pkg/session_recorder"
+	"opscopilot/pkg/sessionmanager"
 	"opscopilot/pkg/sshclient"
 	"os"
 	"path/filepath"
@@ -23,12 +24,13 @@ import (
 
 // App struct
 type App struct {
-	ctx         context.Context
-	sessionMgr  *session.Manager
-	secretStore secretstore.SecretStore
-	aiService   *ai.AIService
-	configMgr   *config.Manager
-	recorder    *session_recorder.Recorder
+	ctx             context.Context
+	sessionMgr      *session.Manager
+	savedSessionMgr *sessionmanager.Manager
+	secretStore     secretstore.SecretStore
+	aiService       *ai.AIService
+	configMgr       *config.Manager
+	recorder        *session_recorder.Recorder
 }
 
 // NewApp creates a new App application struct
@@ -47,12 +49,19 @@ func NewApp() *App {
 	// Initialize Recorder
 	recorder := session_recorder.NewRecorder("sessions")
 
+	// Initialize Saved Session Manager
+	savedMgr := sessionmanager.NewManager()
+	if err := savedMgr.Load(); err != nil {
+		fmt.Printf("Warning: Failed to load saved sessions: %v\n", err)
+	}
+
 	return &App{
-		sessionMgr:  session.NewManager(),
-		secretStore: secretstore.NewKeyringStore(),
-		aiService:   aiService,
-		configMgr:   configMgr,
-		recorder:    recorder,
+		sessionMgr:      session.NewManager(),
+		savedSessionMgr: savedMgr,
+		secretStore:     secretstore.NewKeyringStore(),
+		aiService:       aiService,
+		configMgr:       configMgr,
+		recorder:        recorder,
 	}
 }
 
@@ -127,6 +136,7 @@ type ConnectConfig struct {
 	Password     string         `json:"password"`
 	RootPassword string         `json:"rootPassword"`
 	Bastion      *ConnectConfig `json:"bastion"`
+	Group        string         `json:"group"`
 }
 
 type ConnectResult struct {
@@ -146,6 +156,7 @@ func (a *App) Connect(config ConnectConfig) ConnectResult {
 		Port:     config.Port,
 		User:     config.User,
 		Password: config.Password,
+		Group:    config.Group,
 	}
 
 	// 递归构建 Bastion 配置
@@ -184,6 +195,11 @@ func (a *App) Connect(config ConnectConfig) ConnectResult {
 
 	// Add to session manager
 	sessionID := a.sessionMgr.Add(client, stdin)
+
+	// Auto-save session to persistent storage
+	if err := a.savedSessionMgr.Upsert(*clientConfig, config.Group); err != nil {
+		fmt.Printf("Warning: Failed to auto-save session: %v\n", err)
+	}
 
 	// Read loop
 	go func() {
@@ -469,4 +485,24 @@ func (a *App) GenerateConclusionWithContext(contextStr string, rootCause string)
 		return fmt.Sprintf("Error generating conclusion: %v", err)
 	}
 	return conclusion
+}
+
+// --- Saved Session Management ---
+
+func (a *App) GetSavedSessions() []*sessionmanager.Session {
+	return a.savedSessionMgr.GetSessions()
+}
+
+func (a *App) DeleteSavedSession(id string) string {
+	if err := a.savedSessionMgr.DeleteSession(id); err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	return ""
+}
+
+func (a *App) RenameSavedSession(id, newName string) string {
+	if err := a.savedSessionMgr.RenameSession(id, newName); err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	return ""
 }

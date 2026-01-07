@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import TroubleshootingStep from './TroubleshootingStep';
 import CommandCard from './CommandCard';
 import SessionReviewModal from './SessionReviewModal';
+import SessionManager from './SessionManager';
+import { ConnectionConfig } from '../../types';
 
 interface Message {
     role: 'user' | 'ai';
@@ -11,12 +13,15 @@ interface Message {
 
 interface SidebarProps {
     isOpen: boolean;
+    activeTab: 'sessions' | 'ai';
     onToggle: () => void;
     onStart?: () => void;
     onStop?: () => void;
+    onConnect: (config: ConnectionConfig) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onStart, onStop }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart, onStop, onConnect }) => {
+    // const [activeTab, setActiveTab] = useState<'ai' | 'sessions'>('sessions'); // Now controlled by prop
     const [isInvestigating, setIsInvestigating] = useState(false);
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
@@ -39,7 +44,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onStart, onStop }) 
         mouseDownEvent.preventDefault();
 
         const doDrag = (mouseMoveEvent: MouseEvent) => {
-             // Calculate width from right edge: Body Width - Mouse X
+             // Calculate width from right edge: Window Width - Mouse X
              const newWidth = document.body.clientWidth - mouseMoveEvent.clientX;
              if (newWidth > 250 && newWidth < 800) {
                  setWidth(newWidth);
@@ -70,32 +75,26 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onStart, onStop }) 
         setIsInvestigating(true);
         if (onStart) onStart();
         
-        // Use user's input as the problem description
         const problem = input;
         
-        // Add user message to chat
         setMessages(prev => [...prev, {
             role: 'user',
             content: problem,
             timestamp: Date.now()
         }]);
         
-        // Add AI welcome message
         setMessages(prev => [...prev, {
             role: 'ai',
             content: `已开始排查会话。问题描述：${problem}\n正在为您分析...`,
             timestamp: Date.now()
         }]);
 
-        // Backend Integration
         // @ts-ignore
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.StartSession) {
             // @ts-ignore
             await window.go.main.App.StartSession(problem);
         }
 
-        // Trigger AI analysis for the initial problem
-        // ... (existing logic for AI response)
         try {
             // @ts-ignore
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskAI) {
@@ -111,7 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onStart, onStop }) 
             console.error("Initial AI analysis failed", e);
         }
         
-        setInput(''); // Clear input
+        setInput('');
     };
 
     const handleStopClick = () => {
@@ -119,8 +118,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onStart, onStop }) 
     };
 
     const handleConfirmStop = async () => {
-        console.log("Opening Review Modal");
-        // alert("Debug: Confirm Stop Clicked"); // User confirmed AI Polish works, so JS is running.
         setIsReviewModalOpen(true);
     };
 
@@ -130,7 +127,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onStart, onStop }) 
         setIsInvestigating(false);
         if (onStop) onStop();
 
-        // Backend Integration
         // @ts-ignore
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.StopSession) {
             // @ts-ignore
@@ -183,9 +179,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onStart, onStop }) 
         setMessages(prev => [...prev, userMsg]);
         setInput('');
 
-        // Integration: Call Backend AskAI
         try {
-            // @ts-ignore - access wails runtime
+            // @ts-ignore
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskAI) {
                 // @ts-ignore
                 const response = await window.go.main.App.AskAI(userMsg.content);
@@ -196,10 +191,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onStart, onStop }) 
                     timestamp: Date.now()
                 }]);
             } else {
-                 // Fallback for UI development without backend
                  setMessages(prev => [...prev, {
                     role: 'ai',
-                    content: "Error: Backend not connected (AskAI method missing). Please rebuild Wails app.",
+                    content: "Error: Backend not connected.",
                     timestamp: Date.now()
                 }]);
             }
@@ -250,24 +244,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onStart, onStop }) 
                 );
             }
         } catch (e) {
-            // Not JSON, fall through to text render
         }
         return <div style={styles.messageContent}>{content}</div>;
     };
 
     if (!isOpen) {
-        return (
-            <div style={styles.collapsedContainer}>
-                <button 
-                    onClick={onToggle}
-                    style={styles.toggleButton}
-                    title="Toggle Sidebar"
-                    aria-label="Toggle Sidebar"
-                >
-                    🤖
-                </button>
-            </div>
-        );
+        // Return null or empty div because App.tsx handles the collapsed view icons now
+        return null;
     }
 
     return (
@@ -288,51 +271,61 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onStart, onStop }) 
 
             {/* Header */}
             <div style={styles.header}>
-                <h3 style={styles.title}>AI 助手</h3>
+                <h3 style={styles.title}>
+                    {activeTab === 'ai' ? 'AI 助手' : '会话管理'}
+                </h3>
                 <button onClick={onToggle} style={styles.closeButton} aria-label="Toggle Sidebar">×</button>
             </div>
 
-            {/* Content */}
-            <div style={styles.content}>
-                {!isInvestigating ? (
-                    <div style={styles.emptyState}>
-                        <div style={styles.icon}>🔍</div>
-                        <p style={styles.emptyText}>请输入您遇到的问题，并点击“开始排查”</p>
-                        <div style={{width: '100%', padding: '0 20px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: '10px'}}>
-                            <textarea
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                placeholder="例如：服务器 CPU 占用率过高..."
-                                style={{...styles.textarea, minHeight: '80px', backgroundColor: '#333'}}
-                            />
-                            <button onClick={handleStart} style={styles.primaryButton}>
-                                开始排查
-                            </button>
-                        </div>
-                    </div>
+            <div style={styles.mainArea}>
+                {/* Content Area */}
+                <div style={styles.content}>
+                {activeTab === 'sessions' ? (
+                    <SessionManager onConnect={onConnect} />
                 ) : (
-                    <div style={styles.chatContainer}>
-                        <div style={styles.messageList}>
-                            {messages.map((msg, idx) => (
-                                <div key={idx} style={{
-                                    ...styles.messageItem,
-                                    alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                                    backgroundColor: msg.role === 'user' ? '#007acc' : '#333',
-                                    maxWidth: msg.role === 'user' ? '85%' : '95%'
-                                }}>
-                                    {msg.role === 'ai' ? renderMessageContent(msg.content) : (
-                                        <div style={styles.messageContent}>{msg.content}</div>
-                                    )}
+                    <>
+                        {!isInvestigating ? (
+                            <div style={styles.emptyState}>
+                                <div style={styles.icon}>🔍</div>
+                                <p style={styles.emptyText}>请输入您遇到的问题，并点击“开始排查”</p>
+                                <div style={{width: '100%', padding: '0 20px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: '10px'}}>
+                                    <textarea
+                                        value={input}
+                                        onChange={(e) => setInput(e.target.value)}
+                                        placeholder="例如：服务器 CPU 占用率过高..."
+                                        style={{...styles.textarea, minHeight: '80px', backgroundColor: '#333'}}
+                                    />
+                                    <button onClick={handleStart} style={styles.primaryButton}>
+                                        开始排查
+                                    </button>
                                 </div>
-                            ))}
-                            <div ref={messagesEndRef} />
-                        </div>
-                    </div>
+                            </div>
+                        ) : (
+                            <div style={styles.chatContainer}>
+                                <div style={styles.messageList}>
+                                    {messages.map((msg, idx) => (
+                                        <div key={idx} style={{
+                                            ...styles.messageItem,
+                                            alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                                            backgroundColor: msg.role === 'user' ? '#007acc' : '#333',
+                                            maxWidth: msg.role === 'user' ? '85%' : '95%'
+                                        }}>
+                                            {msg.role === 'ai' ? renderMessageContent(msg.content) : (
+                                                <div style={styles.messageContent}>{msg.content}</div>
+                                            )}
+                                        </div>
+                                    ))}
+                                    <div ref={messagesEndRef} />
+                                </div>
+                            </div>
+                        )}
+                    </>
                 )}
+                </div>
             </div>
 
-            {/* Footer */}
-            {isInvestigating && (
+            {/* Footer - Only for AI Tab when investigating */}
+            {activeTab === 'ai' && isInvestigating && (
                 <div style={styles.footer}>
                     {isStopping ? (
                         <div style={styles.stopContainer}>
@@ -380,6 +373,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onStart, onStop }) 
                     )}
                 </div>
             )}
+
             <SessionReviewModal 
                 isOpen={isReviewModalOpen}
                 onClose={() => setIsReviewModalOpen(false)}
@@ -401,7 +395,6 @@ const styles = {
         paddingTop: '10px',
     },
     container: {
-        // Width is handled by inline style
         backgroundColor: '#252526',
         borderLeft: '1px solid #333',
         display: 'flex',
@@ -421,10 +414,15 @@ const styles = {
     header: {
         padding: '10px 16px',
         backgroundColor: '#252526',
-        borderBottom: '1px solid #333',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
+        borderBottom: '1px solid #333',
+    },
+    mainArea: {
+        display: 'flex',
+        flex: 1,
+        overflow: 'hidden',
     },
     title: {
         margin: 0,

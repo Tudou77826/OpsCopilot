@@ -1,14 +1,5 @@
 import React, { useState, useEffect } from 'react';
-
-interface ConnectionConfig {
-    name?: string;
-    host: string;
-    port: number;
-    user: string;
-    password?: string;
-    rootPassword?: string;
-    bastion?: ConnectionConfig;
-}
+import { ConnectionConfig } from '../../types';
 
 interface SmartConnectModalProps {
     isOpen: boolean;
@@ -120,7 +111,27 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
     };
 
     const handleConnect = () => {
-        const toConnect = parsedConfigs.filter((_, i) => selectedIndices.has(i));
+        // Clone selected configs to avoid mutating state directly
+        const toConnect = parsedConfigs
+            .filter((_, i) => selectedIndices.has(i))
+            .map(c => ({ ...c }));
+        
+        // Grouping Logic for multiple connections
+        if (toConnect.length > 1) {
+            let groupName = `Batch-${new Date().toISOString().slice(0, 10)}`; // Default: Batch-YYYY-MM-DD
+            
+            // User requirement: Use Bastion IP if available
+            const withBastion = toConnect.find(c => c.bastion && c.bastion.host);
+            if (withBastion && withBastion.bastion) {
+                groupName = withBastion.bastion.host;
+            }
+            
+            // Assign group to all
+            toConnect.forEach(c => {
+                c.group = groupName;
+            });
+        }
+
         onConnect(toConnect);
         onClose();
     };

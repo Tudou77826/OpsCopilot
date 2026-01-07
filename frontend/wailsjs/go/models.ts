@@ -91,6 +91,7 @@ export namespace main {
 	    password: string;
 	    rootPassword: string;
 	    bastion?: ConnectConfig;
+	    group: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ConnectConfig(source);
@@ -105,6 +106,7 @@ export namespace main {
 	        this.password = source["password"];
 	        this.rootPassword = source["rootPassword"];
 	        this.bastion = this.convertValues(source["bastion"], ConnectConfig);
+	        this.group = source["group"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -209,6 +211,98 @@ export namespace session_recorder {
 	        this.timeline = this.convertValues(source["timeline"], TimelineEvent);
 	        this.root_cause = source["root_cause"];
 	        this.conclusion = source["conclusion"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
+export namespace sessionmanager {
+	
+	export class Session {
+	    id: string;
+	    name: string;
+	    type: string;
+	    children?: Session[];
+	    config?: sshclient.ConnectConfig;
+	
+	    static createFrom(source: any = {}) {
+	        return new Session(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.type = source["type"];
+	        this.children = this.convertValues(source["children"], Session);
+	        this.config = this.convertValues(source["config"], sshclient.ConnectConfig);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
+export namespace sshclient {
+	
+	export class ConnectConfig {
+	    name: string;
+	    host: string;
+	    port: number;
+	    user: string;
+	    password: string;
+	    root_password: string;
+	    bastion?: ConnectConfig;
+	    group?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConnectConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.host = source["host"];
+	        this.port = source["port"];
+	        this.user = source["user"];
+	        this.password = source["password"];
+	        this.root_password = source["root_password"];
+	        this.bastion = this.convertValues(source["bastion"], ConnectConfig);
+	        this.group = source["group"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

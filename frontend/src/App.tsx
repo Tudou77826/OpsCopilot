@@ -6,20 +6,11 @@ import BroadcastBar from './components/BroadcastBar/BroadcastBar';
 import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal';
 import Sidebar from './components/Sidebar/Sidebar';
 import SettingsModal from './components/SettingsModal/SettingsModal';
+import { ConnectionConfig } from './types';
 
 interface TerminalSession {
     id: string;
     title: string;
-}
-
-interface ConnectionConfig {
-    name?: string;
-    host: string;
-    port: number;
-    user: string;
-    password?: string;
-    rootPassword?: string;
-    bastion?: ConnectionConfig;
 }
 
 function App() {
@@ -27,6 +18,7 @@ function App() {
     const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [sidebarTab, setSidebarTab] = useState<'sessions' | 'ai'>('sessions');
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
     const [layoutMode, setLayoutMode] = useState<'tab' | 'grid'>('tab');
     
@@ -157,6 +149,17 @@ function App() {
         }, 300); // Wait for transition
     }, [isSidebarOpen]);
 
+    const toggleSidebar = (tab: 'sessions' | 'ai') => {
+        if (isSidebarOpen && sidebarTab === tab) {
+            // If clicking the active tab, close it
+            setIsSidebarOpen(false);
+        } else {
+            // Open and switch tab
+            setIsSidebarOpen(true);
+            setSidebarTab(tab);
+        }
+    };
+
     return (
         <div id="app" style={{height: '100vh', display: 'flex', flexDirection: 'column'}}>
             <div style={{
@@ -208,10 +211,39 @@ function App() {
                         onClose={() => {}}
                     />
                 </div>
+                
                 <Sidebar 
                     isOpen={isSidebarOpen} 
+                    activeTab={sidebarTab}
                     onToggle={() => setIsSidebarOpen(!isSidebarOpen)} 
+                    onConnect={(config) => handleBatchConnect([config])}
                 />
+
+                {/* Right Nav (Icon Bar) */}
+                <div style={styles.rightNav}>
+                     <div 
+                        style={{
+                            ...styles.navIcon,
+                            backgroundColor: (isSidebarOpen && sidebarTab === 'sessions') ? '#333' : 'transparent',
+                            borderRight: (isSidebarOpen && sidebarTab === 'sessions') ? '2px solid #007acc' : '2px solid transparent'
+                        }}
+                        onClick={() => toggleSidebar('sessions')}
+                        title="会话管理"
+                    >
+                        🖥️
+                    </div>
+                    <div 
+                        style={{
+                            ...styles.navIcon,
+                            backgroundColor: (isSidebarOpen && sidebarTab === 'ai') ? '#333' : 'transparent',
+                            borderRight: (isSidebarOpen && sidebarTab === 'ai') ? '2px solid #007acc' : '2px solid transparent'
+                        }}
+                        onClick={() => toggleSidebar('ai')}
+                        title="AI 助手"
+                    >
+                        🤖
+                    </div>
+                </div>
             </div>
 
             <BroadcastBar onBroadcast={handleBroadcast} />
@@ -272,6 +304,26 @@ const styles = {
         alignItems: 'center',
         justifyContent: 'center',
         marginLeft: '8px',
+    },
+    rightNav: {
+        width: '48px',
+        backgroundColor: '#252526',
+        display: 'flex',
+        flexDirection: 'column' as const,
+        alignItems: 'center',
+        borderLeft: '1px solid #333',
+        paddingTop: '10px',
+    },
+    navIcon: {
+        width: '100%',
+        height: '48px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        fontSize: '24px',
+        marginBottom: '4px',
+        transition: 'background-color 0.2s',
     }
 };
 

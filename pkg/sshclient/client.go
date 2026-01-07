@@ -19,6 +19,7 @@ type ConnectConfig struct {
 	Password     string         `json:"password"`
 	RootPassword string         `json:"root_password"`
 	Bastion      *ConnectConfig `json:"bastion"`
+	Group        string         `json:"group,omitempty"` // UI Grouping
 }
 
 type Client struct {

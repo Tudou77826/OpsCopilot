@@ -10,22 +10,20 @@ describe('Sidebar Component', () => {
     });
 
     it('renders closed state correctly', () => {
-        render(<Sidebar isOpen={false} onToggle={() => {}} />);
-        // When closed, it might just show a toggle button or be hidden depending on implementation.
-        // Assuming it renders a toggle button at least.
-        const toggleBtn = screen.getByRole('button', { name: /toggle sidebar/i });
-        expect(toggleBtn).toBeInTheDocument();
+        const { container } = render(<Sidebar isOpen={false} activeTab="ai" onToggle={() => {}} onConnect={() => {}} />);
+        // When closed, it should return null now
+        expect(container.firstChild).toBeNull();
     });
 
     it('renders open state with start button', () => {
-        render(<Sidebar isOpen={true} onToggle={() => {}} />);
+        render(<Sidebar isOpen={true} activeTab="ai" onToggle={() => {}} onConnect={() => {}} />);
         expect(screen.getByText('AI 助手')).toBeInTheDocument();
         expect(screen.getByText('开始排查')).toBeInTheDocument();
     });
 
     it('switches to investigation mode when start is clicked', () => {
         const onStartMock = vi.fn();
-        render(<Sidebar isOpen={true} onToggle={() => {}} onStart={onStartMock} />);
+        render(<Sidebar isOpen={true} activeTab="ai" onToggle={() => {}} onStart={onStartMock} onConnect={() => {}} />);
         
         const startBtn = screen.getByText('开始排查');
         fireEvent.click(startBtn);
@@ -37,7 +35,7 @@ describe('Sidebar Component', () => {
     });
 
     it('handles message input', () => {
-        render(<Sidebar isOpen={true} onToggle={() => {}} />);
+        render(<Sidebar isOpen={true} activeTab="ai" onToggle={() => {}} onConnect={() => {}} />);
         
         // Enter investigation mode
         fireEvent.click(screen.getByText('开始排查'));

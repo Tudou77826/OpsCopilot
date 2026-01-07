@@ -1,0 +1,16 @@
+[
+  {
+    "id": "47c6cb8b-9c71-4334-9c04-9bfc375680a6",
+    "name": "39.108.107.148",
+    "type": "session",
+    "config": {
+      "name": "",
+      "host": "39.108.107.148",
+      "port": 22,
+      "user": "root",
+      "password": "zhangyibo123.",
+      "root_password": "",
+      "bastion": null
+    }
+  }
+]
