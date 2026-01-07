@@ -18,7 +18,7 @@ function App() {
     const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [sidebarTab, setSidebarTab] = useState<'sessions' | 'ai'>('sessions');
+    const [sidebarTab, setSidebarTab] = useState<'sessions' | 'troubleshoot' | 'chat'>('sessions');
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
     const [layoutMode, setLayoutMode] = useState<'tab' | 'grid'>('tab');
     
@@ -149,7 +149,7 @@ function App() {
         }, 300); // Wait for transition
     }, [isSidebarOpen]);
 
-    const toggleSidebar = (tab: 'sessions' | 'ai') => {
+    const toggleSidebar = (tab: 'sessions' | 'troubleshoot' | 'chat') => {
         if (isSidebarOpen && sidebarTab === tab) {
             // If clicking the active tab, close it
             setIsSidebarOpen(false);
@@ -235,13 +235,24 @@ function App() {
                     <div 
                         style={{
                             ...styles.navIcon,
-                            backgroundColor: (isSidebarOpen && sidebarTab === 'ai') ? '#333' : 'transparent',
-                            borderRight: (isSidebarOpen && sidebarTab === 'ai') ? '2px solid #007acc' : '2px solid transparent'
+                            backgroundColor: (isSidebarOpen && sidebarTab === 'troubleshoot') ? '#333' : 'transparent',
+                            borderRight: (isSidebarOpen && sidebarTab === 'troubleshoot') ? '2px solid #007acc' : '2px solid transparent'
                         }}
-                        onClick={() => toggleSidebar('ai')}
-                        title="AI 助手"
+                        onClick={() => toggleSidebar('troubleshoot')}
+                        title="定位助手"
                     >
-                        🤖
+                        🩺
+                    </div>
+                    <div 
+                        style={{
+                            ...styles.navIcon,
+                            backgroundColor: (isSidebarOpen && sidebarTab === 'chat') ? '#333' : 'transparent',
+                            borderRight: (isSidebarOpen && sidebarTab === 'chat') ? '2px solid #007acc' : '2px solid transparent'
+                        }}
+                        onClick={() => toggleSidebar('chat')}
+                        title="AI 问答"
+                    >
+                        💬
                     </div>
                 </div>
             </div>
