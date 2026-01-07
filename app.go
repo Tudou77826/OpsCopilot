@@ -16,6 +16,7 @@ import (
 	"opscopilot/pkg/sshclient"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -243,29 +244,66 @@ func (a *App) StartSession(problem string) string {
 }
 
 // StopSession stops the current troubleshooting session, generates conclusion, and saves it
-func (a *App) StopSession(rootCause string) string {
+func (a *App) StopSession(rootCause string, conclusion string) string {
 	currentSession := a.recorder.GetCurrentSession()
 	if currentSession == nil {
 		return "Error: No active session"
 	}
 
-	// Serialize timeline for AI
-	timelineBytes, _ := json.Marshal(currentSession.Timeline)
-	timelineStr := string(timelineBytes)
+	// If conclusion is empty, generate it using AI (legacy behavior or fallback)
+	if conclusion == "" {
+		// Serialize timeline for AI
+		timelineBytes, _ := json.Marshal(currentSession.Timeline)
+		timelineStr := string(timelineBytes)
 
-	// Generate Conclusion using AI
-	conclusion, err := a.aiService.GenerateConclusion(timelineStr, rootCause)
-	if err != nil {
-		log.Printf("Failed to generate conclusion: %v", err)
-		conclusion = "Failed to generate conclusion via AI."
+		// Generate Conclusion using AI
+		var err error
+		conclusion, err = a.aiService.GenerateConclusion(timelineStr, rootCause)
+		if err != nil {
+			log.Printf("Failed to generate conclusion: %v", err)
+			conclusion = "Failed to generate conclusion via AI."
+		}
 	}
 
-	// Stop and Save
+	// Stop and Save Session (JSON)
 	if err := a.recorder.StopSession(rootCause, conclusion); err != nil {
 		return fmt.Sprintf("Error saving session: %v", err)
 	}
 
+	// Append to troubleshooting_history.md in docs directory
+	if err := a.appendConclusionToDocs(conclusion); err != nil {
+		log.Printf("Failed to append conclusion to docs: %v", err)
+		return fmt.Sprintf("Session saved, but failed to update history docs: %v", err)
+	}
+
 	return conclusion
+}
+
+// appendConclusionToDocs appends the conclusion to the troubleshooting history markdown file
+func (a *App) appendConclusionToDocs(conclusion string) error {
+	docsDir := a.resolveKnowledgeBase()
+	historyFile := filepath.Join(docsDir, "troubleshooting_history.md")
+
+	// Ensure docs directory exists (it should, but just in case)
+	if err := os.MkdirAll(docsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create docs directory: %w", err)
+	}
+
+	f, err := os.OpenFile(historyFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open history file: %w", err)
+	}
+	defer f.Close()
+
+	// Add timestamp header
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	entry := fmt.Sprintf("\n\n## 故障记录 [%s]\n\n%s\n\n---\n", timestamp, conclusion)
+
+	if _, err := f.WriteString(entry); err != nil {
+		return fmt.Errorf("failed to write to history file: %w", err)
+	}
+
+	return nil
 }
 
 func (a *App) Broadcast(sessionIDs []string, data string) {
@@ -312,11 +350,21 @@ func (a *App) ParseIntent(input string) ([]ConnectConfig, error) {
 
 // resolveKnowledgeBase finds the knowledge base directory
 // Priority:
-// 1. "docs" in Executable Directory
-// 2. "docs" in Working Directory
-// 3. "knowledge" in Executable Directory
-// 4. "knowledge" in Working Directory
+// 1. Configured Directory (if set)
+// 2. "docs" in Executable Directory
+// 3. "docs" in Working Directory
+// 4. "knowledge" in Executable Directory
+// 5. "knowledge" in Working Directory
 func (a *App) resolveKnowledgeBase() string {
+	// 1. Configured Directory
+	if configuredDir := a.configMgr.Config.Docs.Dir; configuredDir != "" {
+		if _, err := os.Stat(configuredDir); err == nil {
+			return configuredDir
+		}
+		// If configured dir is invalid, fall through to auto-discovery
+		log.Printf("Configured docs directory not found: %s, falling back to auto-discovery", configuredDir)
+	}
+
 	candidates := []string{"docs", "knowledge"}
 	pathsToCheck := []string{}
 

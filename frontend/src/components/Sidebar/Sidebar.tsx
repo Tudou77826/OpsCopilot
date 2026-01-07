@@ -58,12 +58,32 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onStart, onStop }) 
     };
 
     const handleStart = async () => {
+        if (!input.trim()) {
+            setMessages([{
+                role: 'ai',
+                content: '请先在下方输入您遇到的问题，然后点击“发送”开始排查。',
+                timestamp: Date.now()
+            }]);
+            return;
+        }
+
         setIsInvestigating(true);
         if (onStart) onStart();
         
-        setMessages([{
+        // Use user's input as the problem description
+        const problem = input;
+        
+        // Add user message to chat
+        setMessages(prev => [...prev, {
+            role: 'user',
+            content: problem,
+            timestamp: Date.now()
+        }]);
+        
+        // Add AI welcome message
+        setMessages(prev => [...prev, {
             role: 'ai',
-            content: '已开始排查会话。请告诉我您遇到的问题现象。',
+            content: `已开始排查会话。问题描述：${problem}\n正在为您分析...`,
             timestamp: Date.now()
         }]);
 
@@ -71,8 +91,27 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onStart, onStop }) 
         // @ts-ignore
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.StartSession) {
             // @ts-ignore
-            await window.go.main.App.StartSession("User initiated investigation");
+            await window.go.main.App.StartSession(problem);
         }
+
+        // Trigger AI analysis for the initial problem
+        // ... (existing logic for AI response)
+        try {
+            // @ts-ignore
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskAI) {
+                // @ts-ignore
+                const response = await window.go.main.App.AskAI(problem);
+                setMessages(prev => [...prev, {
+                    role: 'ai',
+                    content: response,
+                    timestamp: Date.now()
+                }]);
+            }
+        } catch (e: any) {
+            console.error("Initial AI analysis failed", e);
+        }
+        
+        setInput(''); // Clear input
     };
 
     const handleStopClick = () => {
@@ -258,10 +297,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, onStart, onStop }) 
                 {!isInvestigating ? (
                     <div style={styles.emptyState}>
                         <div style={styles.icon}>🔍</div>
-                        <p style={styles.emptyText}>点击下方按钮开始智能排查</p>
-                        <button onClick={handleStart} style={styles.primaryButton}>
-                            开始排查
-                        </button>
+                        <p style={styles.emptyText}>请输入您遇到的问题，并点击“开始排查”</p>
+                        <div style={{width: '100%', padding: '0 20px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: '10px'}}>
+                            <textarea
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                placeholder="例如：服务器 CPU 占用率过高..."
+                                style={{...styles.textarea, minHeight: '80px', backgroundColor: '#333'}}
+                            />
+                            <button onClick={handleStart} style={styles.primaryButton}>
+                                开始排查
+                            </button>
+                        </div>
                     </div>
                 ) : (
                     <div style={styles.chatContainer}>

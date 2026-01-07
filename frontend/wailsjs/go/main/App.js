@@ -46,8 +46,8 @@ export function StartSession(arg1) {
   return window['go']['main']['App']['StartSession'](arg1);
 }
 
-export function StopSession(arg1) {
-  return window['go']['main']['App']['StopSession'](arg1);
+export function StopSession(arg1, arg2) {
+  return window['go']['main']['App']['StopSession'](arg1, arg2);
 }
 
 export function UpdateSessionTimeline(arg1) {

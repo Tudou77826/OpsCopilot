@@ -1,5 +1,17 @@
 export namespace config {
 	
+	export class DocsConfig {
+	    dir: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DocsConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.dir = source["dir"];
+	    }
+	}
 	export class LogConfig {
 	    dir: string;
 	
@@ -32,6 +44,7 @@ export namespace config {
 	    llm: LLMConfig;
 	    prompts: Record<string, string>;
 	    log: LogConfig;
+	    docs: DocsConfig;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppConfig(source);
@@ -42,6 +55,7 @@ export namespace config {
 	        this.llm = this.convertValues(source["llm"], LLMConfig);
 	        this.prompts = source["prompts"];
 	        this.log = this.convertValues(source["log"], LogConfig);
+	        this.docs = this.convertValues(source["docs"], DocsConfig);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -62,6 +76,7 @@ export namespace config {
 		    return a;
 		}
 	}
+	
 	
 
 }

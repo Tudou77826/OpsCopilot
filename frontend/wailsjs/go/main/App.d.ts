@@ -26,7 +26,7 @@ export function SaveSettings(arg1:config.AppConfig):Promise<string>;
 
 export function StartSession(arg1:string):Promise<string>;
 
-export function StopSession(arg1:string):Promise<string>;
+export function StopSession(arg1:string,arg2:string):Promise<string>;
 
 export function UpdateSessionTimeline(arg1:Array<session_recorder.TimelineEvent>):Promise<string>;
 

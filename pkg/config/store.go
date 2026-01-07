@@ -10,9 +10,14 @@ type AppConfig struct {
 	LLM     LLMConfig         `json:"llm"`
 	Prompts map[string]string `json:"prompts"`
 	Log     LogConfig         `json:"log"`
+	Docs    DocsConfig        `json:"docs"`
 }
 
 type LogConfig struct {
+	Dir string `json:"dir"`
+}
+
+type DocsConfig struct {
 	Dir string `json:"dir"`
 }
 
@@ -31,10 +36,16 @@ func NewManager() *Manager {
 	cfg := &AppConfig{
 		LLM: *defaultLLM,
 		Prompts: map[string]string{
-			"smart_connect": DefaultSmartConnectPrompt,
+			"smart_connect":     DefaultSmartConnectPrompt,
+			"qa_prompt":         DefaultQAPrompt,
+			"conclusion_prompt": DefaultConclusionPrompt,
+			"polish_prompt":     DefaultPolishPrompt,
 		},
 		Log: LogConfig{
 			Dir: defaultLogDir,
+		},
+		Docs: DocsConfig{
+			Dir: "", // Default to empty, will be resolved dynamically if empty
 		},
 	}
 
@@ -67,6 +78,15 @@ func (m *Manager) Load() error {
 	// 确保默认 Prompt 存在 (如果文件中没有)
 	if _, ok := m.Config.Prompts["smart_connect"]; !ok {
 		m.Config.Prompts["smart_connect"] = DefaultSmartConnectPrompt
+	}
+	if _, ok := m.Config.Prompts["qa_prompt"]; !ok {
+		m.Config.Prompts["qa_prompt"] = DefaultQAPrompt
+	}
+	if _, ok := m.Config.Prompts["conclusion_prompt"]; !ok {
+		m.Config.Prompts["conclusion_prompt"] = DefaultConclusionPrompt
+	}
+	if _, ok := m.Config.Prompts["polish_prompt"]; !ok {
+		m.Config.Prompts["polish_prompt"] = DefaultPolishPrompt
 	}
 
 	return nil

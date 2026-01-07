@@ -70,6 +70,9 @@ const SessionReviewModal: React.FC<SessionReviewModalProps> = ({ isOpen, onClose
                     md += `## 详细过程\n\n`;
                     
                     filtered.forEach((e: TimelineEvent) => {
+                        // Skip empty content
+                        if (!e.content || !e.content.trim()) return;
+
                         // No timestamp, just Type
                         md += `### ${translateType(e.type)}\n`;
                         md += `${e.content.trim()}\n\n`;
@@ -172,7 +175,6 @@ const SessionReviewModal: React.FC<SessionReviewModalProps> = ({ isOpen, onClose
                 <div style={styles.footer}>
                     {view === 'timeline' ? (
                         <>
-                            <button onClick={handleSaveDraft} style={styles.secondaryButton}>暂存</button>
                             <button 
                                 onClick={handleAnalyze} 
                                 style={styles.primaryButton}

@@ -82,7 +82,7 @@ func cleanJSONResponse(resp string) string {
 }
 
 func (s *AIService) AskWithContext(question string, contextContent string) (string, error) {
-	prompt := s.cfgMgr.Config.Prompts["qa_agent"]
+	prompt := s.cfgMgr.Config.Prompts["qa_prompt"]
 	if prompt == "" {
 		prompt = config.DefaultQAPrompt
 	}
@@ -109,7 +109,7 @@ func (s *AIService) AskWithContext(question string, contextContent string) (stri
 }
 
 func (s *AIService) GenerateConclusion(timeline string, rootCause string) (string, error) {
-	prompt := s.cfgMgr.Config.Prompts["conclusion_agent"]
+	prompt := s.cfgMgr.Config.Prompts["conclusion_prompt"]
 	if prompt == "" {
 		prompt = config.DefaultConclusionPrompt
 	}
@@ -132,7 +132,7 @@ func (s *AIService) GenerateConclusion(timeline string, rootCause string) (strin
 }
 
 func (s *AIService) PolishContent(content string) (string, error) {
-	prompt := s.cfgMgr.Config.Prompts["polish_agent"]
+	prompt := s.cfgMgr.Config.Prompts["polish_prompt"]
 	if prompt == "" {
 		prompt = config.DefaultPolishPrompt
 	}

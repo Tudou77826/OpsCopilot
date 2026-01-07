@@ -12,6 +12,9 @@ interface AppConfig {
     log: {
         dir: string;
     };
+    docs: {
+        dir: string;
+    };
 }
 
 interface SettingsModalProps {
@@ -160,12 +163,39 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                     {activeTab === 'prompts' && (
                         <div style={styles.formSection}>
                             <div style={styles.formGroup}>
-                                <label style={styles.label}>智能连接系统提示词</label>
+                                <label style={styles.label}>智能连接系统提示词 (Smart Connect)</label>
                                 <textarea 
                                     style={styles.textarea}
                                     value={config.prompts['smart_connect'] || ''}
                                     onChange={(e) => handlePromptChange('smart_connect', e.target.value)}
-                                    rows={15}
+                                    rows={10}
+                                />
+                            </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>问答系统提示词 (QA Agent)</label>
+                                <textarea 
+                                    style={styles.textarea}
+                                    value={config.prompts['qa_prompt'] || ''}
+                                    onChange={(e) => handlePromptChange('qa_prompt', e.target.value)}
+                                    rows={10}
+                                />
+                            </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>故障总结提示词 (Conclusion Agent)</label>
+                                <textarea 
+                                    style={styles.textarea}
+                                    value={config.prompts['conclusion_prompt'] || ''}
+                                    onChange={(e) => handlePromptChange('conclusion_prompt', e.target.value)}
+                                    rows={10}
+                                />
+                            </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>内容润色提示词 (Polishing Agent)</label>
+                                <textarea 
+                                    style={styles.textarea}
+                                    value={config.prompts['polish_prompt'] || ''}
+                                    onChange={(e) => handlePromptChange('polish_prompt', e.target.value)}
+                                    rows={10}
                                 />
                             </div>
                         </div>
@@ -179,6 +209,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                                     style={styles.input}
                                     value={config.log.dir}
                                     onChange={(e) => handleChange('log', 'dir', e.target.value)}
+                                />
+                            </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>业务文档&定位手册目录 (Docs Dir)</label>
+                                <input 
+                                    style={styles.input}
+                                    value={config.docs?.dir || ''}
+                                    onChange={(e) => handleChange('docs', 'dir', e.target.value)}
+                                    placeholder="默认使用程序同级目录下的 docs"
                                 />
                             </div>
                         </div>
