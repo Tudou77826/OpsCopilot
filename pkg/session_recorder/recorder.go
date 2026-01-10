@@ -3,6 +3,7 @@ package session_recorder
 import (
 	"encoding/json"
 	"fmt"
+	"opscopilot/pkg/terminal"
 	"os"
 	"path/filepath"
 	"sync"
@@ -14,12 +15,14 @@ import (
 type Recorder struct {
 	currentSession *TroubleshootingSession
 	storagePath    string
+	lineBuffers    map[string]*terminal.LineBuffer
 	mu             sync.Mutex
 }
 
 func NewRecorder(storagePath string) *Recorder {
 	return &Recorder{
 		storagePath: storagePath,
+		lineBuffers: make(map[string]*terminal.LineBuffer),
 	}
 }
 
@@ -36,6 +39,8 @@ func (r *Recorder) StartSession(problem string, context []string) *Troubleshooti
 		Timeline:  make([]TimelineEvent, 0),
 	}
 	r.currentSession = session
+	// Reset line buffers for new session
+	r.lineBuffers = make(map[string]*terminal.LineBuffer)
 	return session
 }
 
@@ -48,71 +53,38 @@ func (r *Recorder) AddEvent(eventType, content string, metadata map[string]inter
 		return fmt.Errorf("no active session")
 	}
 
-	// 优化：聚合连续的 terminal_input 事件，直到遇到回车符 (\r 或 \n)
-	// 即使中间夹杂了 terminal_output，我们也尝试向前查找最后一条 terminal_input 进行聚合
 	if eventType == "terminal_input" {
-		// 1. 过滤退格符 (\x7f 或 \b)
-		if content == "\x7f" || content == "\b" {
-			// 向前查找最近的一条 input
-			for i := len(r.currentSession.Timeline) - 1; i >= 0; i-- {
-				lastEvent := &r.currentSession.Timeline[i]
-				if lastEvent.Type == "terminal_input" {
-					if len(lastEvent.Content) > 0 {
-						// 移除最后一个字符
-						lastEvent.Content = lastEvent.Content[:len(lastEvent.Content)-1]
-						lastEvent.Timestamp = time.Now()
-					}
-					return nil // 找到了就处理并返回
-				}
-				// 如果遇到非 input/output 的事件（如 user_query），则停止回溯，不处理退格（或者认为退格无效）
-				if lastEvent.Type != "terminal_output" {
-					break
-				}
-			}
-			return nil // 没找到可删除的 input
+		sessionID, ok := metadata["session_id"].(string)
+		if !ok || sessionID == "" {
+			// If no session ID, treat as raw event (fallback)
+			r.appendEvent(eventType, content, metadata)
+			return nil
 		}
 
-		// 2. 尝试聚合
-		// 从后往前找最近的一条 terminal_input
-		var targetEvent *TimelineEvent
-
-		for i := len(r.currentSession.Timeline) - 1; i >= 0; i-- {
-			e := &r.currentSession.Timeline[i]
-			if e.Type == "terminal_input" {
-				targetEvent = e
-				break
-			}
-			// 如果遇到除了 terminal_output 之外的其他事件（例如 user_query, ai_suggestion），则打断聚合
-			// 这意味着上下文已经变了，不能把 input 聚合到“很久以前”的 input 上
-			if e.Type != "terminal_output" {
-				break
-			}
+		lb, exists := r.lineBuffers[sessionID]
+		if !exists {
+			lb = terminal.NewLineBuffer()
+			r.lineBuffers[sessionID] = lb
 		}
 
-		if targetEvent != nil {
-			// 检查该 input 是否已经包含回车
-			hasNewline := false
-			for _, c := range targetEvent.Content {
-				if c == '\r' || c == '\n' {
-					hasNewline = true
-					break
-				}
-			}
-
-			// 如果还没有回车，则追加到该记录
-			if !hasNewline {
-				targetEvent.Content += content
-				targetEvent.Timestamp = time.Now()
-				return nil
+		// Handle input through line buffer
+		// We iterate through the content (which might be a chunk of chars)
+		if committedLine, committed := lb.Handle(content); committed {
+			// If line is committed (Enter pressed), record the full line
+			if committedLine != "" {
+				r.appendEvent(eventType, committedLine, metadata)
 			}
 		}
-	}
-
-	// 忽略空内容的 terminal_input (除了回车)
-	if eventType == "terminal_input" && content == "" {
+		// If not committed, we just updated the buffer state, nothing to record yet.
 		return nil
 	}
 
+	// For non-input events, add directly
+	r.appendEvent(eventType, content, metadata)
+	return nil
+}
+
+func (r *Recorder) appendEvent(eventType, content string, metadata map[string]interface{}) {
 	event := TimelineEvent{
 		Timestamp: time.Now(),
 		Type:      eventType,
@@ -120,7 +92,6 @@ func (r *Recorder) AddEvent(eventType, content string, metadata map[string]inter
 		Metadata:  metadata,
 	}
 	r.currentSession.Timeline = append(r.currentSession.Timeline, event)
-	return nil
 }
 
 // StopSession ends the current session and saves it

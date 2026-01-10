@@ -15,7 +15,6 @@ import (
 	"opscopilot/pkg/session_recorder"
 	"opscopilot/pkg/sessionmanager"
 	"opscopilot/pkg/sshclient"
-	"opscopilot/pkg/terminal"
 	"os"
 	"path/filepath"
 	"time"
@@ -260,16 +259,8 @@ func (a *App) recordInput(sessionID string, data string) {
 		return
 	}
 
-	// Clean input to remove ANSI escape sequences (garbage)
-	cleaned := terminal.CleanInput(data)
-	if cleaned == "" && data != "" {
-		// If data was not empty but cleaned is empty, it means it was all garbage/control codes
-		// We skip recording this to keep the timeline clean.
-		// Exception: Enter key (\r) is preserved by CleanInput, so "Enter" is recorded.
-		return
-	}
-
-	a.recorder.AddEvent("terminal_input", cleaned, map[string]interface{}{
+	// Pass raw data to recorder, which now uses LineBuffer to handle ANSI codes and editing
+	a.recorder.AddEvent("terminal_input", data, map[string]interface{}{
 		"session_id": sessionID,
 	})
 }
