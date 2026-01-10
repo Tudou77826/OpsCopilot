@@ -67,14 +67,26 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
 
         try {
             // @ts-ignore
-            if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskAI) {
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskTroubleshoot) {
                 // @ts-ignore
-                const response = await window.go.main.App.AskAI(problem);
+                const response = await window.go.main.App.AskTroubleshoot(problem);
                 setMessages(prev => [...prev, {
                     role: 'ai',
                     content: response,
                     timestamp: Date.now()
                 }]);
+            } else {
+                 // Fallback to AskAI if AskTroubleshoot is not available (e.g. bindings not updated yet)
+                 // @ts-ignore
+                 if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskAI) {
+                    // @ts-ignore
+                    const response = await window.go.main.App.AskAI(problem);
+                    setMessages(prev => [...prev, {
+                        role: 'ai',
+                        content: response,
+                        timestamp: Date.now()
+                    }]);
+                }
             }
         } catch (e: any) {
             console.error("Initial AI analysis failed", e);
@@ -151,9 +163,9 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
 
         try {
             // @ts-ignore
-            if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskAI) {
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskTroubleshoot) {
                 // @ts-ignore
-                const response = await window.go.main.App.AskAI(userMsg.content);
+                const response = await window.go.main.App.AskTroubleshoot(userMsg.content);
                 
                 setMessages(prev => [...prev, {
                     role: 'ai',
@@ -161,11 +173,24 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                     timestamp: Date.now()
                 }]);
             } else {
-                 setMessages(prev => [...prev, {
-                    role: 'ai',
-                    content: "Error: Backend not connected.",
-                    timestamp: Date.now()
-                }]);
+                 // Fallback to AskAI if AskTroubleshoot is not available (e.g. bindings not updated yet)
+                 // @ts-ignore
+                 if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskAI) {
+                    // @ts-ignore
+                    const response = await window.go.main.App.AskAI(userMsg.content);
+                    
+                    setMessages(prev => [...prev, {
+                        role: 'ai',
+                        content: response,
+                        timestamp: Date.now()
+                    }]);
+                } else {
+                     setMessages(prev => [...prev, {
+                        role: 'ai',
+                        content: "Error: Backend not connected.",
+                        timestamp: Date.now()
+                    }]);
+                }
             }
         } catch (e: any) {
             setMessages(prev => [...prev, {
@@ -185,35 +210,47 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
 
     const renderMessageContent = (content: string) => {
         try {
-            const data = JSON.parse(content);
-            if (data && (data.steps || data.commands)) {
-                return (
-                    <div style={styles.structuredResponse}>
-                        {data.steps && data.steps.length > 0 && (
-                            <div style={styles.section}>
-                                <h4 style={styles.sectionTitle}>排查思路</h4>
-                                {data.steps.map((step: string, idx: number) => (
-                                    <TroubleshootingStep key={idx} step={step} index={idx} />
-                                ))}
-                            </div>
-                        )}
-                        
-                        {data.commands && data.commands.length > 0 && (
-                            <div style={styles.section}>
-                                <h4 style={styles.sectionTitle}>建议命令</h4>
-                                {data.commands.map((cmd: any, idx: number) => (
-                                    <CommandCard 
-                                        key={idx} 
-                                        command={cmd.command} 
-                                        description={cmd.description} 
-                                    />
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                );
+            // Check if content looks like JSON before parsing
+            let jsonContent = content.trim();
+            
+            // Try to strip Markdown code blocks if present (frontend fallback)
+            const markdownMatch = jsonContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+            if (markdownMatch) {
+                jsonContent = markdownMatch[1].trim();
+            }
+
+            if (jsonContent.startsWith('{')) {
+                const data = JSON.parse(jsonContent);
+                if (data && (Array.isArray(data.steps) || Array.isArray(data.commands))) {
+                    return (
+                        <div style={styles.structuredResponse}>
+                            {Array.isArray(data.steps) && data.steps.length > 0 && (
+                                <div style={styles.section}>
+                                    <h4 style={styles.sectionTitle}>排查思路</h4>
+                                    {data.steps.map((step: any, idx: number) => (
+                                        <TroubleshootingStep key={idx} step={step} index={idx} />
+                                    ))}
+                                </div>
+                            )}
+                            
+                            {Array.isArray(data.commands) && data.commands.length > 0 && (
+                                <div style={styles.section}>
+                                    <h4 style={styles.sectionTitle}>建议命令</h4>
+                                    {data.commands.map((cmd: any, idx: number) => (
+                                        <CommandCard 
+                                            key={idx} 
+                                            command={cmd.command} 
+                                            description={cmd.description} 
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    );
+                }
             }
         } catch (e) {
+            console.error("Failed to parse structured response:", e);
         }
         return <div style={styles.messageContent}>{content}</div>;
     };

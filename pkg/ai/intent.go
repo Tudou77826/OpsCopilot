@@ -75,9 +75,17 @@ func (s *AIService) ParseConnectIntent(input string) ([]sshclient.ConnectConfig,
 
 // cleanJSONResponse 移除可能存在的 Markdown 代码块标记
 func cleanJSONResponse(resp string) string {
-	// 移除 ```json 和 ``` 标记
-	re := regexp.MustCompile("```(?:json)?")
-	resp = re.ReplaceAllString(resp, "")
+	// 1. 移除 Markdown 代码块标记 ```json 或 ```
+	// (?s) 开启 dot-matches-newline 模式，确保能匹配多行
+	re := regexp.MustCompile("(?s)```(?:json)?(.*?)```")
+	matches := re.FindStringSubmatch(resp)
+	if len(matches) > 1 {
+		return strings.TrimSpace(matches[1])
+	}
+	
+	// 如果没有匹配到代码块，尝试移除单独的 ``` 标记（兼容性处理）
+	resp = strings.ReplaceAll(resp, "```json", "")
+	resp = strings.ReplaceAll(resp, "```", "")
 	return strings.TrimSpace(resp)
 }
 
@@ -104,6 +112,31 @@ func (s *AIService) AskWithContext(question string, contextContent string) (stri
 
 	// Don't clean the response, we want Markdown now
 	return resp, nil
+}
+
+func (s *AIService) AskTroubleshoot(problem string, contextContent string) (string, error) {
+	prompt := s.cfgMgr.Config.Prompts["troubleshoot_prompt"]
+	if prompt == "" {
+		prompt = config.DefaultTroubleshootPrompt
+	}
+
+	fullContent := fmt.Sprintf("Context:\n%s\n\nProblem: %s", contextContent, problem)
+
+	messages := []llm.ChatMessage{
+		{Role: "system", Content: prompt},
+		{Role: "user", Content: fullContent},
+	}
+
+	log.Printf("[AIService] Sending Troubleshoot request to LLM")
+
+	resp, err := s.provider.ChatCompletion(context.Background(), messages)
+	if err != nil {
+		log.Printf("[AIService] Troubleshoot Provider error: %v", err)
+		return "", fmt.Errorf("AI provider error: %w", err)
+	}
+
+	// Clean JSON response (remove markdown code blocks)
+	return cleanJSONResponse(resp), nil
 }
 
 func (s *AIService) GenerateConclusion(timeline string, rootCause string) (string, error) {

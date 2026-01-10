@@ -437,6 +437,25 @@ func (a *App) AskAI(question string) string {
 	return answer
 }
 
+// AskTroubleshoot handles the troubleshooting request from frontend and returns structured JSON
+func (a *App) AskTroubleshoot(problem string) string {
+	// 1. Load knowledge
+	knowledgeDir := a.resolveKnowledgeBase()
+	contextContent, err := knowledge.LoadAll(knowledgeDir)
+	if err != nil {
+		log.Printf("[App] Warning: Failed to load knowledge from %s: %v", knowledgeDir, err)
+		contextContent = ""
+	}
+
+	// 2. Call AIService
+	answer, err := a.aiService.AskTroubleshoot(problem, contextContent)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+
+	return answer
+}
+
 func (a *App) GetSettings() config.AppConfig {
 	return *a.configMgr.Config
 }

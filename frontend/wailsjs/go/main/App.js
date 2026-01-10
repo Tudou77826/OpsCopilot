@@ -6,6 +6,10 @@ export function AskAI(arg1) {
   return window['go']['main']['App']['AskAI'](arg1);
 }
 
+export function AskTroubleshoot(arg1) {
+  return window['go']['main']['App']['AskTroubleshoot'](arg1);
+}
+
 export function Broadcast(arg1, arg2) {
   return window['go']['main']['App']['Broadcast'](arg1, arg2);
 }
