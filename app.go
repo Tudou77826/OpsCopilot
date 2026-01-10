@@ -15,6 +15,7 @@ import (
 	"opscopilot/pkg/session_recorder"
 	"opscopilot/pkg/sessionmanager"
 	"opscopilot/pkg/sshclient"
+	"opscopilot/pkg/terminal"
 	"os"
 	"path/filepath"
 	"time"
@@ -249,12 +250,28 @@ func (a *App) Write(sessionID string, data string) {
 		}
 
 		// Record input
-		if a.recorder != nil {
-			a.recorder.AddEvent("terminal_input", data, map[string]interface{}{
-				"session_id": sessionID,
-			})
-		}
+		a.recordInput(sessionID, data)
 	}
+}
+
+// recordInput cleans and records terminal input
+func (a *App) recordInput(sessionID string, data string) {
+	if a.recorder == nil {
+		return
+	}
+
+	// Clean input to remove ANSI escape sequences (garbage)
+	cleaned := terminal.CleanInput(data)
+	if cleaned == "" && data != "" {
+		// If data was not empty but cleaned is empty, it means it was all garbage/control codes
+		// We skip recording this to keep the timeline clean.
+		// Exception: Enter key (\r) is preserved by CleanInput, so "Enter" is recorded.
+		return
+	}
+
+	a.recorder.AddEvent("terminal_input", cleaned, map[string]interface{}{
+		"session_id": sessionID,
+	})
 }
 
 // StartSession starts a new troubleshooting session
@@ -333,6 +350,11 @@ func (a *App) Broadcast(sessionIDs []string, data string) {
 		return
 	}
 	a.sessionMgr.Broadcast(sessionIDs, data)
+
+	// Record broadcast input for each session
+	for _, sessionID := range sessionIDs {
+		a.recordInput(sessionID, data)
+	}
 }
 
 func (a *App) CloseSession(sessionID string) {

@@ -1,12 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-
-interface TimelineEvent {
-    timestamp: string;
-    type: string;
-    content: string;
-    metadata?: any;
-}
+import { TimelineEvent, filterTimelineEvents, generateMarkdown } from '../../utils/timeline';
 
 interface SessionReviewModalProps {
     isOpen: boolean;
@@ -44,39 +38,14 @@ const SessionReviewModal: React.FC<SessionReviewModalProps> = ({ isOpen, onClose
                     const data = sessionData.timeline;
                     const problem = sessionData.problem || "未指定";
 
-                    // Filter out terminal_output as requested
-                    const filtered = data.filter((e: TimelineEvent) => {
-                        // 1. Filter out terminal_output
-                        if (e.type === 'terminal_output') return false;
-                        
-                        // 2. Filter out empty content
-                        if (!e.content || !e.content.trim()) return false;
-
-                        // 3. Filter out control characters/garbage
-                        // Check for common control char placeholders or very short non-alphanumeric garbage
-                        const trimmed = e.content.trim();
-                        if (trimmed === '' || trimmed === '^V') return false; // Ctrl+V artifact
-                        
-                        return true;
-                    });
+                    // Use utils to filter
+                    const filtered = filterTimelineEvents(data);
 
                     console.log("[SessionReviewModal] Filtered events:", filtered);
                     setEvents(filtered);
 
-                    // Generate Markdown
-                    let md = `# 排查会话记录\n\n`;
-                    md += `**排查目标:** ${problem}\n\n`;
-                    md += `**根本原因:** ${rootCause}\n\n`;
-                    md += `## 详细过程\n\n`;
-                    
-                    filtered.forEach((e: TimelineEvent) => {
-                        // Skip empty content
-                        if (!e.content || !e.content.trim()) return;
-
-                        // No timestamp, just Type
-                        md += `### ${translateType(e.type)}\n`;
-                        md += `${e.content.trim()}\n\n`;
-                    });
+                    // Use utils to generate Markdown
+                    const md = generateMarkdown(filtered, problem, rootCause);
                     setMarkdownContent(md);
 
                 } else {
@@ -194,15 +163,6 @@ const SessionReviewModal: React.FC<SessionReviewModalProps> = ({ isOpen, onClose
         </div>,
         document.body
     );
-};
-
-const translateType = (type: string) => {
-    switch (type) {
-        case 'user_query': return '用户提问';
-        case 'ai_suggestion': return 'AI 建议';
-        case 'terminal_input': return '终端执行';
-        default: return type;
-    }
 };
 
 const formatTime = (ts: string) => {
