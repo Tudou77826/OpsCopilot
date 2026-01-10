@@ -38,10 +38,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart,
         document.body.style.cursor = 'col-resize';
     };
 
-    if (!isOpen) {
-        return null;
-    }
-
     const getTitle = () => {
         switch (activeTab) {
             case 'sessions': return '会话管理';
@@ -52,7 +48,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart,
     };
 
     return (
-        <div style={{...styles.container, width: width, position: 'relative'}}>
+        <div style={{
+            ...styles.container, 
+            width: isOpen ? width : 0, 
+            position: 'relative',
+            // When closed, hide border and content but keep mounted
+            borderLeft: isOpen ? '1px solid #333' : 'none',
+        }}>
             <style>{`
                 .hide-scrollbar::-webkit-scrollbar {
                     display: none;
@@ -62,29 +64,45 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart,
                     scrollbar-width: none;
                 }
             `}</style>
-            <div
-                style={styles.resizeHandle}
-                onMouseDown={startResizing}
-            />
+            
+            {/* Only show resize handle when open */}
+            {isOpen && (
+                <div
+                    style={styles.resizeHandle}
+                    onMouseDown={startResizing}
+                />
+            )}
 
-            {/* Header */}
-            <div style={styles.header}>
-                <h3 style={styles.title}>{getTitle()}</h3>
-                <button onClick={onToggle} style={styles.closeButton} aria-label="Toggle Sidebar">×</button>
-            </div>
+            {/* Content Container - Hide when closed to avoid layout issues */}
+            <div style={{ 
+                display: isOpen ? 'flex' : 'none', 
+                flexDirection: 'column', 
+                height: '100%',
+                flex: 1 
+            }}>
+                {/* Header */}
+                <div style={styles.header}>
+                    <h3 style={styles.title}>{getTitle()}</h3>
+                    <button onClick={onToggle} style={styles.closeButton} aria-label="Toggle Sidebar">×</button>
+                </div>
 
-            <div style={styles.mainArea}>
-                {/* Content Area */}
-                <div style={styles.content}>
-                    {activeTab === 'sessions' && (
-                        <SessionManager onConnect={onConnect} />
-                    )}
-                    {activeTab === 'troubleshoot' && (
-                        <TroubleshootingPanel onStart={onStart} onStop={onStop} />
-                    )}
-                    {activeTab === 'chat' && (
-                        <AIChatPanel />
-                    )}
+                <div style={styles.mainArea}>
+                    {/* Content Area */}
+                    <div style={styles.content}>
+                        {/* SessionManager might not need persistence, but we can keep it consistent */}
+                        <div style={{ display: activeTab === 'sessions' ? 'flex' : 'none', flex: 1, flexDirection: 'column' }}>
+                             <SessionManager onConnect={onConnect} />
+                        </div>
+                        
+                        {/* Always mounted, toggled visibility */}
+                        <div style={{ display: activeTab === 'troubleshoot' ? 'flex' : 'none', flex: 1, flexDirection: 'column' }}>
+                            <TroubleshootingPanel onStart={onStart} onStop={onStop} />
+                        </div>
+
+                        <div style={{ display: activeTab === 'chat' ? 'flex' : 'none', flex: 1, flexDirection: 'column' }}>
+                            <AIChatPanel />
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

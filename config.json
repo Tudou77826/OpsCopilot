@@ -15,5 +15,17 @@
   },
   "docs": {
     "dir": ""
-  }
+  },
+  "quick_commands": [
+    {
+      "id": "1767809549479",
+      "name": "New Command",
+      "content": "echo \"Hello\""
+    },
+    {
+      "id": "1767809553814",
+      "name": "New Command",
+      "content": "echo \"Hello\""
+    }
+  ]
 }

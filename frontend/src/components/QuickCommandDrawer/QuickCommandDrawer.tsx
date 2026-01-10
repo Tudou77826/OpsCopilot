@@ -1,0 +1,333 @@
+import React, { useState, useEffect } from 'react';
+
+export interface QuickCommand {
+    id: string;
+    name: string;
+    content: string;
+}
+
+interface QuickCommandDrawerProps {
+    onExecute: (content: string) => void;
+}
+
+const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [commands, setCommands] = useState<QuickCommand[]>([]);
+    const [contextMenu, setContextMenu] = useState<{ x: number, y: number, cmdId: string } | null>(null);
+    const [editingCmd, setEditingCmd] = useState<QuickCommand | null>(null);
+    const [loaded, setLoaded] = useState(false);
+
+    // Load from backend on mount
+    useEffect(() => {
+        // @ts-ignore
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.LoadQuickCommands) {
+            // @ts-ignore
+            window.go.main.App.LoadQuickCommands().then((cmds: QuickCommand[]) => {
+                 if (cmds) {
+                     setCommands(cmds);
+                 } else {
+                     setCommands([]);
+                 }
+                 setLoaded(true);
+            }).catch((err: any) => {
+                console.error("Failed to load quick commands", err);
+                setLoaded(true);
+            });
+        } else {
+            setLoaded(true);
+        }
+    }, []);
+
+    // Save to backend on change
+    useEffect(() => {
+        if (!loaded) return;
+
+        // @ts-ignore
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.SaveQuickCommands) {
+             // @ts-ignore
+            window.go.main.App.SaveQuickCommands(commands);
+        }
+    }, [commands, loaded]);
+
+    const handleAdd = () => {
+        const newCmd: QuickCommand = {
+            id: Date.now().toString(),
+            name: 'New Command',
+            content: 'echo "Hello"'
+        };
+        setCommands(prev => [...prev, newCmd]);
+        setEditingCmd(newCmd); // Immediately edit
+    };
+
+    const handleDelete = (id: string) => {
+        setCommands(prev => prev.filter(c => c.id !== id));
+        setContextMenu(null);
+    };
+
+    const handleSaveEdit = () => {
+        if (!editingCmd) return;
+        setCommands(prev => prev.map(c => c.id === editingCmd.id ? editingCmd : c));
+        setEditingCmd(null);
+    };
+
+    return (
+        <>
+            <div 
+                style={{
+                    ...styles.container,
+                    transform: isOpen ? 'translateY(0)' : 'translateY(100%)',
+                    opacity: isOpen ? 1 : 0.8,
+                }}
+            >
+                {/* Handle */}
+                <div 
+                    style={styles.handle} 
+                    onClick={() => setIsOpen(!isOpen)}
+                    title="展开/收起"
+                >
+                    {isOpen ? '▼ 快捷命令' : '▲ 快捷命令'}
+                </div>
+
+                {/* Content */}
+                <div style={styles.content}>
+                    <div style={styles.grid}>
+                        {commands.map(cmd => (
+                            <div 
+                                key={cmd.id}
+                                style={styles.card}
+                                onClick={() => onExecute(cmd.content)}
+                                onContextMenu={(e) => {
+                                    e.preventDefault();
+                                    setContextMenu({ x: e.clientX, y: e.clientY, cmdId: cmd.id });
+                                }}
+                                title={cmd.content}
+                            >
+                                {cmd.name}
+                            </div>
+                        ))}
+                        <div style={styles.addCard} onClick={handleAdd}>+</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Context Menu */}
+            {contextMenu && (
+                <>
+                    <div style={styles.backdrop} onClick={() => setContextMenu(null)} />
+                    <div style={{...styles.menu, top: contextMenu.y - 80, left: contextMenu.x}}>
+                        <div style={styles.menuItem} onClick={() => {
+                            const cmd = commands.find(c => c.id === contextMenu.cmdId);
+                            if (cmd) setEditingCmd(cmd);
+                            setContextMenu(null);
+                        }}>编辑</div>
+                        <div style={styles.menuItem} onClick={() => handleDelete(contextMenu.cmdId)}>删除</div>
+                    </div>
+                </>
+            )}
+
+            {/* Edit Modal */}
+            {editingCmd && (
+                <div style={styles.modalOverlay}>
+                    <div style={styles.modal}>
+                        <h3 style={styles.modalTitle}>编辑命令</h3>
+                        <div style={styles.formGroup}>
+                            <label style={styles.label}>名称</label>
+                            <input 
+                                style={styles.input}
+                                value={editingCmd.name}
+                                onChange={e => setEditingCmd({...editingCmd, name: e.target.value})}
+                            />
+                        </div>
+                        <div style={styles.formGroup}>
+                            <label style={styles.label}>命令内容</label>
+                            <textarea 
+                                style={styles.textarea}
+                                value={editingCmd.content}
+                                onChange={e => setEditingCmd({...editingCmd, content: e.target.value})}
+                            />
+                        </div>
+                        <div style={styles.modalActions}>
+                            <button onClick={() => setEditingCmd(null)} style={styles.secondaryBtn}>取消</button>
+                            <button onClick={handleSaveEdit} style={styles.primaryBtn}>保存</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
+    );
+};
+
+const styles = {
+    container: {
+        position: 'fixed' as const,
+        bottom: 0,
+        left: 0,
+        right: 0, // Will be constrained by parent or adjusted manually
+        backgroundColor: '#252526',
+        borderTop: '1px solid #333',
+        transition: 'transform 0.3s ease',
+        zIndex: 900, // Below modal but above terminal
+        display: 'flex',
+        flexDirection: 'column' as const,
+        maxHeight: '300px',
+    },
+    handle: {
+        position: 'absolute' as const,
+        top: -24,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        backgroundColor: '#252526',
+        color: '#ccc',
+        padding: '2px 12px',
+        borderTopLeftRadius: '4px',
+        borderTopRightRadius: '4px',
+        borderTop: '1px solid #333',
+        borderLeft: '1px solid #333',
+        borderRight: '1px solid #333',
+        cursor: 'pointer',
+        fontSize: '12px',
+        userSelect: 'none' as const,
+    },
+    content: {
+        flex: 1,
+        padding: '10px',
+        overflowY: 'auto' as const,
+    },
+    grid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
+        gap: '6px',
+    },
+    card: {
+        backgroundColor: '#333',
+        color: '#fff',
+        padding: '4px 6px',
+        borderRadius: '3px',
+        cursor: 'pointer',
+        fontSize: '11px',
+        textAlign: 'center' as const,
+        border: '1px solid #444',
+        whiteSpace: 'nowrap' as const,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        userSelect: 'none' as const,
+        ':hover': {
+            backgroundColor: '#444',
+            borderColor: '#007acc',
+        }
+    },
+    addCard: {
+        backgroundColor: 'transparent',
+        color: '#888',
+        padding: '4px 6px',
+        borderRadius: '3px',
+        cursor: 'pointer',
+        fontSize: '12px',
+        textAlign: 'center' as const,
+        border: '1px dashed #555',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    backdrop: {
+        position: 'fixed' as const,
+        top: 0, left: 0, right: 0, bottom: 0,
+        zIndex: 998,
+    },
+    menu: {
+        position: 'fixed' as const,
+        backgroundColor: '#252526',
+        border: '1px solid #454545',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+        borderRadius: '4px',
+        zIndex: 999,
+        minWidth: '100px',
+        padding: '4px 0',
+    },
+    menuItem: {
+        padding: '6px 12px',
+        cursor: 'pointer',
+        fontSize: '13px',
+        color: '#ccc',
+        ':hover': {
+            backgroundColor: '#094771',
+            color: '#fff',
+        }
+    },
+    modalOverlay: {
+        position: 'fixed' as const,
+        top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000,
+    },
+    modal: {
+        backgroundColor: '#252526',
+        padding: '20px',
+        borderRadius: '8px',
+        width: '300px',
+        border: '1px solid #454545',
+    },
+    modalTitle: {
+        color: '#fff',
+        marginTop: 0,
+        marginBottom: '16px',
+        fontSize: '16px',
+    },
+    formGroup: {
+        marginBottom: '12px',
+    },
+    label: {
+        display: 'block',
+        color: '#ccc',
+        marginBottom: '4px',
+        fontSize: '12px',
+    },
+    input: {
+        width: '100%',
+        padding: '6px',
+        backgroundColor: '#3c3c3c',
+        border: '1px solid #555',
+        color: '#fff',
+        borderRadius: '4px',
+        boxSizing: 'border-box' as const,
+    },
+    textarea: {
+        width: '100%',
+        height: '80px',
+        padding: '6px',
+        backgroundColor: '#3c3c3c',
+        border: '1px solid #555',
+        color: '#fff',
+        borderRadius: '4px',
+        resize: 'none' as const,
+        boxSizing: 'border-box' as const,
+        fontFamily: 'monospace',
+    },
+    modalActions: {
+        display: 'flex',
+        justifyContent: 'flex-end',
+        gap: '8px',
+        marginTop: '20px',
+    },
+    primaryBtn: {
+        padding: '6px 12px',
+        backgroundColor: '#007acc',
+        color: 'white',
+        border: 'none',
+        borderRadius: '4px',
+        cursor: 'pointer',
+    },
+    secondaryBtn: {
+        padding: '6px 12px',
+        backgroundColor: '#333',
+        color: '#ccc',
+        border: '1px solid #555',
+        borderRadius: '4px',
+        cursor: 'pointer',
+    }
+};
+
+export default QuickCommandDrawer;

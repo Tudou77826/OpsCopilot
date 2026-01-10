@@ -3,6 +3,7 @@ import './App.css';
 import { TerminalRef } from './components/Terminal/Terminal';
 import LayoutManager from './components/LayoutManager/LayoutManager';
 import BroadcastBar from './components/BroadcastBar/BroadcastBar';
+import QuickCommandDrawer from './components/QuickCommandDrawer/QuickCommandDrawer';
 import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal';
 import Sidebar from './components/Sidebar/Sidebar';
 import SettingsModal from './components/SettingsModal/SettingsModal';
@@ -21,6 +22,7 @@ function App() {
     const [sidebarTab, setSidebarTab] = useState<'sessions' | 'troubleshoot' | 'chat'>('sessions');
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
     const [layoutMode, setLayoutMode] = useState<'tab' | 'grid'>('tab');
+    const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
     
     // Store refs to all terminal instances
     const terminalRefs = useRef(new Map<string, TerminalRef>());
@@ -125,6 +127,20 @@ function App() {
         }
     };
 
+    const handleQuickCommand = (command: string) => {
+        if (!activeTerminalId) {
+            alert("请先选择一个激活的终端");
+            return;
+        }
+
+        // @ts-ignore
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.Write) {
+            const payload = command.endsWith('\n') ? command : command + '\n';
+             // @ts-ignore
+            window.go.main.App.Write(activeTerminalId, payload);
+        }
+    };
+
     const handleCloseTerminal = (id: string) => {
         // Close session in backend
         // @ts-ignore
@@ -208,6 +224,7 @@ function App() {
                         terminalRefs={terminalRefs}
                         onCloseTerminal={handleCloseTerminal}
                         onRenameTerminal={handleRenameTerminal}
+                        onActiveTerminalChange={setActiveTerminalId}
                         onClose={() => {}}
                     />
                 </div>
@@ -259,6 +276,8 @@ function App() {
 
             <BroadcastBar onBroadcast={handleBroadcast} />
             
+            <QuickCommandDrawer onExecute={handleQuickCommand} />
+
             <SmartConnectModal 
                 isOpen={isSmartModalOpen}
                 onClose={() => setIsSmartModalOpen(false)}

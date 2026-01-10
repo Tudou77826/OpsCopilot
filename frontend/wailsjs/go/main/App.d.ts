@@ -23,11 +23,15 @@ export function GetSessionTimeline():Promise<session_recorder.TroubleshootingSes
 
 export function GetSettings():Promise<config.AppConfig>;
 
+export function LoadQuickCommands():Promise<Array<config.QuickCommand>>;
+
 export function ParseIntent(arg1:string):Promise<Array<main.ConnectConfig>>;
 
 export function PolishRootCause(arg1:string):Promise<string>;
 
 export function RenameSavedSession(arg1:string,arg2:string):Promise<string>;
+
+export function SaveQuickCommands(arg1:Array<config.QuickCommand>):Promise<string>;
 
 export function SaveSettings(arg1:config.AppConfig):Promise<string>;
 

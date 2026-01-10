@@ -7,10 +7,17 @@ import (
 )
 
 type AppConfig struct {
-	LLM     LLMConfig         `json:"llm"`
-	Prompts map[string]string `json:"prompts"`
-	Log     LogConfig         `json:"log"`
-	Docs    DocsConfig        `json:"docs"`
+	LLM           LLMConfig         `json:"llm"`
+	Prompts       map[string]string `json:"prompts"`
+	Log           LogConfig         `json:"log"`
+	Docs          DocsConfig        `json:"docs"`
+	QuickCommands []QuickCommand    `json:"quick_commands"`
+}
+
+type QuickCommand struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Content string `json:"content"`
 }
 
 type LogConfig struct {
@@ -115,4 +122,8 @@ func (m *Manager) SetPrompt(key, content string) {
 
 func (m *Manager) SetLogDir(dir string) {
 	m.Config.Log.Dir = dir
+}
+
+func (m *Manager) SetQuickCommands(cmds []QuickCommand) {
+	m.Config.QuickCommands = cmds
 }

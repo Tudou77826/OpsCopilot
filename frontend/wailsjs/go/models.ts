@@ -1,5 +1,21 @@
 export namespace config {
 	
+	export class QuickCommand {
+	    id: string;
+	    name: string;
+	    content: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new QuickCommand(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.content = source["content"];
+	    }
+	}
 	export class DocsConfig {
 	    dir: string;
 	
@@ -45,6 +61,7 @@ export namespace config {
 	    prompts: Record<string, string>;
 	    log: LogConfig;
 	    docs: DocsConfig;
+	    quick_commands: QuickCommand[];
 	
 	    static createFrom(source: any = {}) {
 	        return new AppConfig(source);
@@ -56,6 +73,7 @@ export namespace config {
 	        this.prompts = source["prompts"];
 	        this.log = this.convertValues(source["log"], LogConfig);
 	        this.docs = this.convertValues(source["docs"], DocsConfig);
+	        this.quick_commands = this.convertValues(source["quick_commands"], QuickCommand);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -76,6 +94,7 @@ export namespace config {
 		    return a;
 		}
 	}
+	
 	
 	
 

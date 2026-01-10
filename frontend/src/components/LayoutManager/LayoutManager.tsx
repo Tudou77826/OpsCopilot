@@ -15,9 +15,10 @@ interface LayoutManagerProps {
     onCloseTerminal: (id: string) => void;
     onRenameTerminal: (id: string, newTitle: string) => void;
     onClose?: () => void; // Optional onClose prop
+    onActiveTerminalChange?: (id: string | null) => void;
 }
 
-const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTerminalData, terminalRefs, onCloseTerminal, onRenameTerminal }) => {
+const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTerminalData, terminalRefs, onCloseTerminal, onRenameTerminal, onActiveTerminalChange }) => {
     const [activeTab, setActiveTab] = useState<string>(terminals[0]?.id || '');
     const [editingTab, setEditingTab] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
@@ -25,9 +26,19 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
     // Ensure active tab is valid
     React.useEffect(() => {
         if (terminals.length > 0 && !terminals.find(t => t.id === activeTab)) {
-            setActiveTab(terminals[terminals.length - 1].id);
+            const nextActive = terminals[terminals.length - 1].id;
+            setActiveTab(nextActive);
+        } else if (terminals.length === 0) {
+            setActiveTab('');
         }
     }, [terminals, activeTab]);
+
+    // Notify active terminal change
+    React.useEffect(() => {
+        if (onActiveTerminalChange) {
+            onActiveTerminalChange(activeTab || null);
+        }
+    }, [activeTab, onActiveTerminalChange]);
 
     const handleTabClick = (id: string) => {
         setActiveTab(id);
@@ -152,8 +163,10 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
                             style={{
                                 ...styles.terminalWrapper,
                                 display: isVisible ? 'flex' : 'none',
-                                flexDirection: 'column'
+                                flexDirection: 'column',
+                                border: (mode === 'grid' && activeTab === term.id) ? '1px solid #007acc' : '1px solid transparent'
                             }}
+                            onClick={() => handleTabClick(term.id)}
                         >
                             {mode === 'grid' && (
                                 <div style={styles.gridTitle}>

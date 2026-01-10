@@ -10,9 +10,10 @@ describe('Sidebar Component', () => {
     });
 
     it('renders closed state correctly', () => {
-        const { container } = render(<Sidebar isOpen={false} activeTab="ai" onToggle={() => {}} onConnect={() => {}} />);
-        // When closed, it should return null now
-        expect(container.firstChild).toBeNull();
+        const { container } = render(<Sidebar isOpen={false} activeTab="troubleshoot" onToggle={() => {}} onConnect={() => {}} />);
+        // When closed, it should return a hidden div, not null
+        expect(container.firstChild).not.toBeNull();
+        expect(container.firstChild).toHaveStyle({ display: 'none' });
     });
 
     it('renders TroubleshootingPanel when activeTab is troubleshoot', () => {

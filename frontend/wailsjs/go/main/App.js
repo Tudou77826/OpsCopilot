@@ -38,6 +38,10 @@ export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
 }
 
+export function LoadQuickCommands() {
+  return window['go']['main']['App']['LoadQuickCommands']();
+}
+
 export function ParseIntent(arg1) {
   return window['go']['main']['App']['ParseIntent'](arg1);
 }
@@ -48,6 +52,10 @@ export function PolishRootCause(arg1) {
 
 export function RenameSavedSession(arg1, arg2) {
   return window['go']['main']['App']['RenameSavedSession'](arg1, arg2);
+}
+
+export function SaveQuickCommands(arg1) {
+  return window['go']['main']['App']['SaveQuickCommands'](arg1);
 }
 
 export function SaveSettings(arg1) {

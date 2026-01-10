@@ -449,6 +449,20 @@ func (a *App) SaveSettings(cfg config.AppConfig) string {
 	return ""
 }
 
+// LoadQuickCommands returns the list of quick commands from config
+func (a *App) LoadQuickCommands() []config.QuickCommand {
+	return a.configMgr.Config.QuickCommands
+}
+
+// SaveQuickCommands updates and saves quick commands
+func (a *App) SaveQuickCommands(commands []config.QuickCommand) string {
+	a.configMgr.SetQuickCommands(commands)
+	if err := a.configMgr.Save(); err != nil {
+		return fmt.Sprintf("Error saving config: %v", err)
+	}
+	return ""
+}
+
 // PolishRootCause polishes the root cause description
 func (a *App) PolishRootCause(input string) string {
 	polished, err := a.aiService.PolishContent(input)
