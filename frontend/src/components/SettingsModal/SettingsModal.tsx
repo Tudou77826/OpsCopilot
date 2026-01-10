@@ -20,13 +20,15 @@ interface AppConfig {
 interface SettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
+    isBroadcastMode?: boolean;
+    onToggleBroadcast?: (enabled: boolean) => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadcastMode, onToggleBroadcast }) => {
     const [config, setConfig] = useState<AppConfig | null>(null);
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
-    const [activeTab, setActiveTab] = useState<'llm' | 'prompts' | 'system'>('llm');
+    const [activeTab, setActiveTab] = useState<'llm' | 'prompts' | 'system' | 'app'>('llm');
 
     useEffect(() => {
         if (isOpen) {
@@ -100,6 +102,23 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
 
     return (
         <div style={styles.overlay}>
+             <style>{`
+                input:checked + span {
+                    background-color: #2196F3 !important;
+                }
+                input:focus + span {
+                    box-shadow: 0 0 1px #2196F3;
+                }
+                input:checked + span:before {
+                    transform: translateX(20px);
+                }
+                /* Hide default checkbox */
+                label input {
+                    opacity: 0;
+                    width: 0;
+                    height: 0;
+                }
+            `}</style>
             <div style={styles.modal}>
                 <div style={styles.header}>
                     <h2 style={styles.title}>系统设置</h2>
@@ -124,6 +143,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                         onClick={() => setActiveTab('system')}
                     >
                         系统选项
+                    </button>
+                    <button 
+                        style={activeTab === 'app' ? styles.activeTab : styles.tab}
+                        onClick={() => setActiveTab('app')}
+                    >
+                        应用选项
                     </button>
                 </div>
 
@@ -219,6 +244,34 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                                     onChange={(e) => handleChange('docs', 'dir', e.target.value)}
                                     placeholder="默认使用程序同级目录下的 docs"
                                 />
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'app' && (
+                        <div style={styles.formSection}>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>多窗口广播模式</label>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <label style={styles.switch}>
+                                        <input 
+                                            type="checkbox" 
+                                            checked={!!isBroadcastMode}
+                                            onChange={(e) => {
+                                                if (onToggleBroadcast) {
+                                                    onToggleBroadcast(e.target.checked);
+                                                }
+                                            }}
+                                        />
+                                        <span style={styles.slider}></span>
+                                    </label>
+                                    <span style={{ color: '#ccc', fontSize: '0.9rem' }}>
+                                        {isBroadcastMode ? '已开启 (输入将同步到所有广播组终端)' : '已关闭'}
+                                    </span>
+                                </div>
+                                <div style={{ color: '#888', fontSize: '0.8rem', marginTop: '4px' }}>
+                                    开启后，默认将当前所有打开的终端加入广播组。您可以在标签页上单独切换每个终端的广播状态。
+                                </div>
                             </div>
                         </div>
                     )}
@@ -365,6 +418,38 @@ const styles = {
         cursor: 'pointer',
         fontWeight: 'bold' as const,
     },
+    switch: {
+        position: 'relative' as const,
+        display: 'inline-block',
+        width: '40px',
+        height: '20px',
+    },
+    slider: {
+        position: 'absolute' as const,
+        cursor: 'pointer',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: '#ccc',
+        transition: '.4s',
+        borderRadius: '20px',
+        ':before': {
+            position: 'absolute' as const,
+            content: '""',
+            height: '16px',
+            width: '16px',
+            left: '2px',
+            bottom: '2px',
+            backgroundColor: 'white',
+            transition: '.4s',
+            borderRadius: '50%',
+        }
+    }
 };
+
+// Add style for checked state using a style tag in component since we can't use pseudo-classes easily in inline styles
+// Or we can use conditional styling in render.
+// Let's use a simple <style> tag in the component return.
 
 export default SettingsModal;

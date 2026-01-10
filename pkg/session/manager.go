@@ -48,7 +48,7 @@ func (m *Manager) Get(id string) (*Session, bool) {
 func (m *Manager) Remove(id string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	if sess, ok := m.sessions[id]; ok {
 		// Ensure resources are closed
 		if sess.Client != nil {
@@ -61,7 +61,7 @@ func (m *Manager) Remove(id string) {
 func (m *Manager) List() []*Session {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	list := make([]*Session, 0, len(m.sessions))
 	for _, s := range m.sessions {
 		list = append(list, s)
@@ -79,10 +79,10 @@ func (m *Manager) Broadcast(ids []string, data string) {
 	for _, id := range ids {
 		if sess, ok := m.sessions[id]; ok && sess.Stdin != nil {
 			wg.Add(1)
-			go func(w io.Writer) {
+			go func(w io.Writer, sid string) {
 				defer wg.Done()
 				w.Write(payload)
-			}(sess.Stdin)
+			}(sess.Stdin, id)
 		}
 	}
 	wg.Wait()

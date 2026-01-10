@@ -329,6 +329,9 @@ func (a *App) appendConclusionToDocs(conclusion string) error {
 }
 
 func (a *App) Broadcast(sessionIDs []string, data string) {
+	if len(sessionIDs) == 0 {
+		return
+	}
 	a.sessionMgr.Broadcast(sessionIDs, data)
 }
 

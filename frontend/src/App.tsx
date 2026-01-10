@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import './App.css';
 import { TerminalRef } from './components/Terminal/Terminal';
 import LayoutManager from './components/LayoutManager/LayoutManager';
-import BroadcastBar from './components/BroadcastBar/BroadcastBar';
 import QuickCommandDrawer from './components/QuickCommandDrawer/QuickCommandDrawer';
 import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal';
 import Sidebar from './components/Sidebar/Sidebar';
@@ -23,8 +22,21 @@ function App() {
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
     const [layoutMode, setLayoutMode] = useState<'tab' | 'grid'>('tab');
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
+    const [isBroadcastMode, setIsBroadcastMode] = useState(false);
+    const [broadcastIds, setBroadcastIds] = useState<string[]>([]);
     
-    // Store refs to all terminal instances
+    // Refs to hold latest state for callbacks
+    const isBroadcastModeRef = useRef(isBroadcastMode);
+    const broadcastIdsRef = useRef(broadcastIds);
+
+    // Update refs when state changes
+    useEffect(() => {
+        isBroadcastModeRef.current = isBroadcastMode;
+    }, [isBroadcastMode]);
+
+    useEffect(() => {
+        broadcastIdsRef.current = broadcastIds;
+    }, [broadcastIds]);
     const terminalRefs = useRef(new Map<string, TerminalRef>());
     // Store unlisten functions for events
     const unlisteners = useRef(new Map<string, () => void>());
@@ -49,6 +61,7 @@ function App() {
 
     const removeTerminal = (id: string) => {
         setTerminals(prev => prev.filter(t => t.id !== id));
+        setBroadcastIds(prev => prev.filter(bid => bid !== id));
         // Remove listener
         if (unlisteners.current.has(id)) {
             unlisteners.current.get(id)?.();
@@ -107,24 +120,52 @@ function App() {
     };
 
     const handleTerminalData = (id: string, data: string) => {
-        // @ts-ignore
-        if (window.go && window.go.main && window.go.main.App && window.go.main.App.Write) {
-             // @ts-ignore
-            window.go.main.App.Write(id, data);
+        // Use Refs to get latest state inside callback closure
+        const currentBroadcastMode = isBroadcastModeRef.current;
+        const currentBroadcastIds = broadcastIdsRef.current;
+
+        // If broadcast mode is on AND current terminal is in broadcast group
+        if (currentBroadcastMode && currentBroadcastIds.includes(id)) {
+            // @ts-ignore
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.Broadcast) {
+                // Ensure broadcastIds is an array of strings
+                const targetIds = Array.from(currentBroadcastIds);
+                    
+                // @ts-ignore
+                window.go.main.App.Broadcast(targetIds, data);
+            }
+        } else {
+            // Standard single terminal write
+            // @ts-ignore
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.Write) {
+                    // @ts-ignore
+                window.go.main.App.Write(id, data);
+            }
         }
     };
 
-    const handleBroadcast = (command: string) => {
-        const ids = terminals.map(t => t.id);
-        if (ids.length === 0) return;
-        
-        // @ts-ignore
-        if (window.go && window.go.main && window.go.main.App && window.go.main.App.Broadcast) {
-            // Send command + newline
-            const payload = command.endsWith('\n') ? command : command + '\n';
-             // @ts-ignore
-            window.go.main.App.Broadcast(ids, payload);
+    const handleToggleBroadcast = (enabled: boolean) => {
+        setIsBroadcastMode(enabled);
+        if (enabled) {
+            // Add all current terminals to broadcast group
+            const allIds = terminals.map(t => t.id);
+            setBroadcastIds(allIds);
+        } else {
+            // Clear broadcast group
+            setBroadcastIds([]);
         }
+    };
+
+    const handleToggleTerminalBroadcast = (id: string) => {
+        if (!isBroadcastMode) return;
+        
+        setBroadcastIds(prev => {
+            if (prev.includes(id)) {
+                return prev.filter(bid => bid !== id);
+            } else {
+                return [...prev, id];
+            }
+        });
     };
 
     const handleQuickCommand = (command: string) => {
@@ -292,6 +333,9 @@ function App() {
                         onDuplicateTerminal={handleDuplicateTerminal}
                         onActiveTerminalChange={setActiveTerminalId}
                         onClose={() => {}}
+                        isBroadcastMode={isBroadcastMode}
+                        broadcastIds={broadcastIds}
+                        onToggleTerminalBroadcast={handleToggleTerminalBroadcast}
                     />
                 </div>
                 
@@ -340,10 +384,8 @@ function App() {
                 </div>
             </div>
 
-            <BroadcastBar onBroadcast={handleBroadcast} />
-            
             <QuickCommandDrawer onExecute={handleQuickCommand} />
-
+            
             <SmartConnectModal 
                 isOpen={isSmartModalOpen}
                 onClose={() => setIsSmartModalOpen(false)}
@@ -354,6 +396,8 @@ function App() {
             <SettingsModal 
                 isOpen={isSettingsOpen}
                 onClose={() => setIsSettingsOpen(false)}
+                isBroadcastMode={isBroadcastMode}
+                onToggleBroadcast={handleToggleBroadcast}
             />
         </div>
     );

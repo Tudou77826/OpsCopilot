@@ -17,9 +17,12 @@ interface LayoutManagerProps {
     onDuplicateTerminal?: (id: string) => void;
     onClose?: () => void; // Optional onClose prop
     onActiveTerminalChange?: (id: string | null) => void;
+    isBroadcastMode?: boolean;
+    broadcastIds?: string[];
+    onToggleTerminalBroadcast?: (id: string) => void;
 }
 
-const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTerminalData, terminalRefs, onCloseTerminal, onRenameTerminal, onDuplicateTerminal, onActiveTerminalChange }) => {
+const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTerminalData, terminalRefs, onCloseTerminal, onRenameTerminal, onDuplicateTerminal, onActiveTerminalChange, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast }) => {
     const [activeTab, setActiveTab] = useState<string>(terminals[0]?.id || '');
     const [editingTab, setEditingTab] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
@@ -143,7 +146,25 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
                                 />
                             ) : (
                                 <div style={styles.tabContentInner}>
-                                    <span style={styles.tabTitle}>{term.title}</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+                                        {isBroadcastMode && (
+                                            <span 
+                                                style={{
+                                                    ...styles.broadcastIcon,
+                                                    color: broadcastIds?.includes(term.id) ? '#4caf50' : '#666',
+                                                    marginRight: '6px'
+                                                }}
+                                                title={broadcastIds?.includes(term.id) ? "广播已开启 (点击关闭)" : "广播已关闭 (点击开启)"}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onToggleTerminalBroadcast && onToggleTerminalBroadcast(term.id);
+                                                }}
+                                            >
+                                                📡
+                                            </span>
+                                        )}
+                                        <span style={styles.tabTitle}>{term.title}</span>
+                                    </div>
                                     <span 
                                         style={styles.closeBtn}
                                         onClick={(e) => {
@@ -178,7 +199,28 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
                         >
                             {mode === 'grid' && (
                                 <div style={styles.gridTitle}>
-                                    {term.title}
+                                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                                        {isBroadcastMode && (
+                                            <span 
+                                                style={{
+                                                    ...styles.broadcastIcon,
+                                                    color: broadcastIds?.includes(term.id) ? '#4caf50' : '#666',
+                                                    marginRight: '6px',
+                                                    fontSize: '0.8rem'
+                                                }}
+                                                title={broadcastIds?.includes(term.id) ? "广播已开启 (点击关闭)" : "广播已关闭 (点击开启)"}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onToggleTerminalBroadcast && onToggleTerminalBroadcast(term.id);
+                                                }}
+                                            >
+                                                📡
+                                            </span>
+                                        )}
+                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {term.title}
+                                        </span>
+                                    </div>
                                 </div>
                             )}
                             <div style={{flex: 1, position: 'relative', overflow: 'hidden'}}>
@@ -193,6 +235,37 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
                                         }
                                     }}
                                 />
+                                {/* Internal Broadcast Control Overlay */}
+                                {isBroadcastMode && (
+                                    <div 
+                                        style={{
+                                            position: 'absolute',
+                                            top: '10px',
+                                            right: '20px',
+                                            zIndex: 10,
+                                            backgroundColor: broadcastIds?.includes(term.id) ? 'rgba(76, 175, 80, 0.9)' : 'rgba(60, 60, 60, 0.8)',
+                                            color: '#fff',
+                                            padding: '4px 8px',
+                                            borderRadius: '4px',
+                                            fontSize: '12px',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                                            transition: 'all 0.2s',
+                                            userSelect: 'none',
+                                            border: broadcastIds?.includes(term.id) ? '1px solid #45a049' : '1px solid #555'
+                                        }}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onToggleTerminalBroadcast && onToggleTerminalBroadcast(term.id);
+                                        }}
+                                        title={broadcastIds?.includes(term.id) ? "点击退出广播组" : "点击加入广播组"}
+                                    >
+                                        <span>{broadcastIds?.includes(term.id) ? '📡 广播中' : '🔇 已静音'}</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     );
@@ -283,6 +356,17 @@ const styles = {
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap' as const,
         marginRight: '8px',
+    },
+    broadcastIcon: {
+        cursor: 'pointer',
+        fontSize: '0.9rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'color 0.2s',
+        ':hover': {
+            opacity: 0.8,
+        }
     },
     closeBtn: {
         borderRadius: '50%',
