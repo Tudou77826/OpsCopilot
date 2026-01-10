@@ -47,7 +47,28 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
     const loadSessions = async () => {
         try {
             const data = await window.go.main.App.GetSavedSessions();
-            setSessions(data || []);
+            
+            // Helper to normalize config keys (snake_case to camelCase)
+            const normalizeConfig = (cfg: any): ConnectionConfig => {
+                if (!cfg) return cfg;
+                return {
+                    ...cfg,
+                    rootPassword: cfg.rootPassword || cfg.root_password, // Map root_password to rootPassword
+                    bastion: cfg.bastion ? normalizeConfig(cfg.bastion) : undefined
+                };
+            };
+
+            // Recursive helper to process nodes
+            const processNode = (node: any): SessionNode => {
+                return {
+                    ...node,
+                    config: node.config ? normalizeConfig(node.config) : undefined,
+                    children: node.children ? node.children.map(processNode) : undefined
+                };
+            };
+
+            const processedData = data ? data.map(processNode) : [];
+            setSessions(processedData);
         } catch (e) {
             console.error("Failed to load sessions:", e);
         }

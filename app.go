@@ -152,11 +152,12 @@ func (a *App) Connect(config ConnectConfig) ConnectResult {
 	}
 
 	clientConfig := &sshclient.ConnectConfig{
-		Host:     config.Host,
-		Port:     config.Port,
-		User:     config.User,
-		Password: config.Password,
-		Group:    config.Group,
+		Host:         config.Host,
+		Port:         config.Port,
+		User:         config.User,
+		Password:     config.Password,
+		RootPassword: config.RootPassword,
+		Group:        config.Group,
 	}
 
 	// 递归构建 Bastion 配置
