@@ -102,10 +102,8 @@ func (s *AIService) AskWithContext(question string, contextContent string) (stri
 		return "", fmt.Errorf("AI provider error: %w", err)
 	}
 
-	// Clean JSON response
-	cleanedResp := cleanJSONResponse(resp)
-
-	return cleanedResp, nil
+	// Don't clean the response, we want Markdown now
+	return resp, nil
 }
 
 func (s *AIService) GenerateConclusion(timeline string, rootCause string) (string, error) {
