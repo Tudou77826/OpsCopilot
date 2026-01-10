@@ -158,6 +158,71 @@ function App() {
         ));
     };
 
+    const handleDuplicateTerminal = (id: string) => {
+        const term = terminals.find(t => t.id === id);
+        if (!term) return;
+
+        // Note: We can't actually clone the SSH session easily without re-authenticating.
+        // But for now, we can prompt the user or just reuse the config if we had it stored.
+        // Since we don't store the full config in TerminalSession, we might need to fetch it from backend or SessionManager.
+        // However, looking at handleConnect, we only store id and title.
+        
+        // A better approach for "Duplicate" in this context might be:
+        // 1. Get the session details from backend (if possible) or
+        // 2. Just create a new UI tab that *points* to the same session? No, that's weird.
+        // 3. We actually need to reconnect.
+        
+        // Given the constraints and current architecture, "Duplicate" implies starting a NEW session with SAME config.
+        // But we don't have the config here.
+        
+        // WORKAROUND: Ask backend to duplicate session?
+        // Or better: Let's assume the user wants to clone the *view* for now, or we just alert "Not implemented" if we can't reconnect.
+        
+        // Wait, if we use `window.go.main.App.GetSessionConfig(id)`, we could get it.
+        // Let's assume we can implement a backend method `DuplicateSession(id)` which returns a new session ID.
+        
+        // For this task, I'll implement the UI wiring. The actual backend duplication might be complex.
+        // Let's try to find if we can get the config.
+        
+        // Actually, checking SessionManager.tsx, we have `GetSavedSessions`.
+        // If this was a saved session, we could find it. If it was an ad-hoc connection, we might not have it.
+        
+        // Let's try to call a backend method. If not exists, we'll alert.
+        // But wait, the user just asked for the UI feature.
+        // "给tab页的标签加一个右键菜单，支持重命名和复制一个标签的功能"
+        
+        // I will implement the handler in App.tsx that calls backend to Duplicate.
+        // I'll add `DuplicateSession` to backend later if needed, or mock it for now.
+        
+        // Let's try to add the method to backend first? Or just implement UI flow.
+        // Since I'm in "App.tsx", I'll add the call.
+        
+        // @ts-ignore
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.DuplicateSession) {
+             // @ts-ignore
+            window.go.main.App.DuplicateSession(id).then(result => {
+                if (result.success) {
+                    const newTerminal: TerminalSession = {
+                        id: result.sessionId,
+                        title: `${term.title} (Copy)`
+                    };
+                    setTerminals(prev => [...prev, newTerminal]);
+                    
+                    // Listen
+                    // @ts-ignore
+                    const cancel = window.runtime.EventsOn(`terminal-data:${result.sessionId}`, (data: string) => {
+                        terminalRefs.current.get(result.sessionId)?.write(data);
+                    });
+                    unlisteners.current.set(result.sessionId, cancel);
+                } else {
+                    alert("复制失败: " + result.message);
+                }
+            });
+        } else {
+            alert("后端不支持复制会话 (DuplicateSession not implemented)");
+        }
+    };
+
     // Force layout update when sidebar toggles
     useEffect(() => {
         setTimeout(() => {
@@ -224,6 +289,7 @@ function App() {
                         terminalRefs={terminalRefs}
                         onCloseTerminal={handleCloseTerminal}
                         onRenameTerminal={handleRenameTerminal}
+                        onDuplicateTerminal={handleDuplicateTerminal}
                         onActiveTerminalChange={setActiveTerminalId}
                         onClose={() => {}}
                     />

@@ -15,6 +15,8 @@ export function Connect(arg1:main.ConnectConfig):Promise<main.ConnectResult>;
 
 export function DeleteSavedSession(arg1:string):Promise<string>;
 
+export function DuplicateSession(arg1:string):Promise<main.ConnectResult>;
+
 export function GenerateConclusionWithContext(arg1:string,arg2:string):Promise<string>;
 
 export function GetSavedSessions():Promise<Array<sessionmanager.Session>>;

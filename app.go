@@ -31,6 +31,7 @@ type App struct {
 	aiService       *ai.AIService
 	configMgr       *config.Manager
 	recorder        *session_recorder.Recorder
+	activeConfigs   map[string]ConnectConfig
 }
 
 // NewApp creates a new App application struct
@@ -62,6 +63,7 @@ func NewApp() *App {
 		aiService:       aiService,
 		configMgr:       configMgr,
 		recorder:        recorder,
+		activeConfigs:   make(map[string]ConnectConfig),
 	}
 }
 
@@ -196,6 +198,9 @@ func (a *App) Connect(config ConnectConfig) ConnectResult {
 
 	// Add to session manager
 	sessionID := a.sessionMgr.Add(client, stdin)
+
+	// Store config mapping for duplication
+	a.activeConfigs[sessionID] = config
 
 	// Auto-save session to persistent storage
 	if err := a.savedSessionMgr.Upsert(*clientConfig, config.Group); err != nil {
@@ -513,6 +518,25 @@ func (a *App) DeleteSavedSession(id string) string {
 		return fmt.Sprintf("Error: %v", err)
 	}
 	return ""
+}
+
+func (a *App) DuplicateSession(sessionID string) ConnectResult {
+	// 1. Get original session to ensure it exists
+	_, ok := a.sessionMgr.Get(sessionID)
+	if !ok {
+		return ConnectResult{Success: false, Message: "Original session not found"}
+	}
+
+	// 2. Retrieve config
+	config, ok := a.activeConfigs[sessionID]
+	if !ok {
+		return ConnectResult{Success: false, Message: "Session configuration not found"}
+	}
+
+	// 3. Connect using the same config
+	// Note: This will prompt for password again if it wasn't saved in config (e.g. keyboard interactive),
+	// but our ConnectConfig stores Password.
+	return a.Connect(config)
 }
 
 func (a *App) RenameSavedSession(id, newName string) string {

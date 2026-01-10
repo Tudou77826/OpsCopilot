@@ -22,6 +22,10 @@ export function DeleteSavedSession(arg1) {
   return window['go']['main']['App']['DeleteSavedSession'](arg1);
 }
 
+export function DuplicateSession(arg1) {
+  return window['go']['main']['App']['DuplicateSession'](arg1);
+}
+
 export function GenerateConclusionWithContext(arg1, arg2) {
   return window['go']['main']['App']['GenerateConclusionWithContext'](arg1, arg2);
 }

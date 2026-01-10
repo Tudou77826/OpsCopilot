@@ -14,14 +14,16 @@ interface LayoutManagerProps {
     terminalRefs: React.MutableRefObject<Map<string, TerminalRef>>;
     onCloseTerminal: (id: string) => void;
     onRenameTerminal: (id: string, newTitle: string) => void;
+    onDuplicateTerminal?: (id: string) => void;
     onClose?: () => void; // Optional onClose prop
     onActiveTerminalChange?: (id: string | null) => void;
 }
 
-const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTerminalData, terminalRefs, onCloseTerminal, onRenameTerminal, onActiveTerminalChange }) => {
+const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTerminalData, terminalRefs, onCloseTerminal, onRenameTerminal, onDuplicateTerminal, onActiveTerminalChange }) => {
     const [activeTab, setActiveTab] = useState<string>(terminals[0]?.id || '');
     const [editingTab, setEditingTab] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
+    const [contextMenu, setContextMenu] = useState<{ x: number, y: number, id: string } | null>(null);
 
     // Ensure active tab is valid
     React.useEffect(() => {
@@ -107,8 +109,13 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
         }
     };
 
+    const handleContextMenu = (e: React.MouseEvent, id: string) => {
+        e.preventDefault();
+        setContextMenu({ x: e.clientX, y: e.clientY, id });
+    };
+
     return (
-        <div style={styles.container}>
+        <div style={styles.container} onClick={() => setContextMenu(null)}>
             {mode === 'tab' && (
                 <div style={styles.tabHeader} role="tablist">
                     {terminals.map(term => (
@@ -122,6 +129,7 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
                             }}
                             onClick={() => handleTabClick(term.id)}
                             onDoubleClick={() => handleTabDoubleClick(term.id, term.title)}
+                            onContextMenu={(e) => handleContextMenu(e, term.id)}
                         >
                             {editingTab === term.id ? (
                                 <input
@@ -190,6 +198,41 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
                     );
                 })}
             </div>
+
+            {/* Context Menu */}
+            {contextMenu && (
+                <div 
+                    style={{
+                        ...styles.contextMenu, 
+                        top: contextMenu.y, 
+                        left: contextMenu.x
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div 
+                        style={styles.menuItem} 
+                        onClick={() => {
+                            const term = terminals.find(t => t.id === contextMenu.id);
+                            if (term) {
+                                setEditingTab(contextMenu.id);
+                                setEditValue(term.title);
+                            }
+                            setContextMenu(null);
+                        }}
+                    >
+                        重命名
+                    </div>
+                    <div 
+                        style={styles.menuItem} 
+                        onClick={() => {
+                            if (onDuplicateTerminal) onDuplicateTerminal(contextMenu.id);
+                            setContextMenu(null);
+                        }}
+                    >
+                        复制标签
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -303,6 +346,27 @@ const styles = {
         whiteSpace: 'nowrap' as const,
         overflow: 'hidden',
         textOverflow: 'ellipsis',
+    },
+    contextMenu: {
+        position: 'fixed' as const,
+        backgroundColor: '#252526',
+        border: '1px solid #454545',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+        borderRadius: '4px',
+        zIndex: 2000,
+        minWidth: '120px',
+        padding: '4px 0',
+    },
+    menuItem: {
+        padding: '6px 12px',
+        cursor: 'pointer',
+        fontSize: '13px',
+        color: '#ccc',
+        transition: 'background-color 0.1s',
+        ':hover': {
+            backgroundColor: '#094771',
+            color: '#fff',
+        }
     }
 };
 
