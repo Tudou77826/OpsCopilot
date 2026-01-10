@@ -197,11 +197,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                                 />
                             </div>
                             <div style={styles.formGroup}>
-                                <label style={styles.label}>问答系统提示词 (QA Agent)</label>
+                                <label style={styles.label}>AI 问答提示词 (AI Chat Agent)</label>
                                 <textarea 
                                     style={styles.textarea}
                                     value={config.prompts['qa_prompt'] || ''}
                                     onChange={(e) => handlePromptChange('qa_prompt', e.target.value)}
+                                    rows={10}
+                                />
+                            </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>问题排查提示词 (Troubleshooting Agent)</label>
+                                <textarea 
+                                    style={styles.textarea}
+                                    value={config.prompts['troubleshoot_prompt'] || ''}
+                                    onChange={(e) => handlePromptChange('troubleshoot_prompt', e.target.value)}
                                     rows={10}
                                 />
                             </div>

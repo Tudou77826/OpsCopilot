@@ -95,6 +95,9 @@ func (m *Manager) Load() error {
 	if _, ok := m.Config.Prompts["polish_prompt"]; !ok {
 		m.Config.Prompts["polish_prompt"] = DefaultPolishPrompt
 	}
+	if _, ok := m.Config.Prompts["troubleshoot_prompt"]; !ok {
+		m.Config.Prompts["troubleshoot_prompt"] = DefaultTroubleshootPrompt
+	}
 
 	return nil
 }

@@ -100,6 +100,6 @@ Rules:
 1. Analyze the problem based on provided context (if any) and general DevOps knowledge.
 2. Provide logical, step-by-step troubleshooting instructions in the "steps" array.
 3. Provide executable Linux/Shell commands ONLY in the "commands" array. DO NOT include commands inside the "steps" objects.
-4. The "commands" array should list all useful commands mentioned in the analysis.
+4. The "commands" array should list top 10 useful commands mentioned in the analysis.
 `
 )
