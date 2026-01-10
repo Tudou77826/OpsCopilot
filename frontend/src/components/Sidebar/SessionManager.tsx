@@ -293,6 +293,7 @@ const styles = {
         flex: 1,
         overflowY: 'auto' as const,
         padding: '10px 0',
+        minHeight: 0, // Critical for nested flex scrolling
     },
     nodeRow: {
         display: 'flex',

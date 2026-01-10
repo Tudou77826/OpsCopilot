@@ -359,6 +359,7 @@ const styles = {
         flex: 1,
         overflowY: 'auto' as const,
         padding: '10px',
+        minHeight: 0, // Critical for nested flex scrolling
     },
     messageList: {
         display: 'flex',

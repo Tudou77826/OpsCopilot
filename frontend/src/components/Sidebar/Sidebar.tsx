@@ -90,16 +90,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart,
                     {/* Content Area */}
                     <div style={styles.content}>
                         {/* SessionManager might not need persistence, but we can keep it consistent */}
-                        <div style={{ display: activeTab === 'sessions' ? 'flex' : 'none', flex: 1, flexDirection: 'column' }}>
+                        <div style={{ display: activeTab === 'sessions' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
                              <SessionManager onConnect={onConnect} />
                         </div>
                         
                         {/* Always mounted, toggled visibility */}
-                        <div style={{ display: activeTab === 'troubleshoot' ? 'flex' : 'none', flex: 1, flexDirection: 'column' }}>
+                        <div style={{ display: activeTab === 'troubleshoot' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
                             <TroubleshootingPanel onStart={onStart} onStop={onStop} />
                         </div>
 
-                        <div style={{ display: activeTab === 'chat' ? 'flex' : 'none', flex: 1, flexDirection: 'column' }}>
+                        <div style={{ display: activeTab === 'chat' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
                             <AIChatPanel />
                         </div>
                     </div>
