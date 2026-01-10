@@ -342,9 +342,9 @@ func (a *App) Broadcast(sessionIDs []string, data string) {
 	}
 	a.sessionMgr.Broadcast(sessionIDs, data)
 
-	// Record broadcast input for each session
-	for _, sessionID := range sessionIDs {
-		a.recordInput(sessionID, data)
+	// Record broadcast input using specialized method for deduplication
+	if a.recorder != nil {
+		a.recorder.AddBroadcastInput(sessionIDs, data)
 	}
 }
 

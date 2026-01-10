@@ -84,6 +84,44 @@ func (r *Recorder) AddEvent(eventType, content string, metadata map[string]inter
 	return nil
 }
 
+// AddBroadcastInput handles broadcast input for multiple sessions, deduplicating the recording
+func (r *Recorder) AddBroadcastInput(sessionIDs []string, content string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.currentSession == nil {
+		return fmt.Errorf("no active session")
+	}
+
+	// Map to group sessions by the line they committed
+	committedLines := make(map[string][]string)
+
+	for _, sessionID := range sessionIDs {
+		lb, exists := r.lineBuffers[sessionID]
+		if !exists {
+			lb = terminal.NewLineBuffer()
+			r.lineBuffers[sessionID] = lb
+		}
+
+		if line, ok := lb.Handle(content); ok {
+			if line != "" {
+				committedLines[line] = append(committedLines[line], sessionID)
+			}
+		}
+	}
+
+	// Record events for unique committed lines
+	for line, sids := range committedLines {
+		metadata := map[string]interface{}{
+			"session_ids": sids,
+			"broadcast":   true,
+		}
+		r.appendEvent("terminal_input", line, metadata)
+	}
+
+	return nil
+}
+
 func (r *Recorder) appendEvent(eventType, content string, metadata map[string]interface{}) {
 	event := TimelineEvent{
 		Timestamp: time.Now(),
