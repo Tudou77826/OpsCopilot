@@ -30,6 +30,10 @@ export function DuplicateSession(arg1) {
   return window['go']['main']['App']['DuplicateSession'](arg1);
 }
 
+export function ForceQuit() {
+  return window['go']['main']['App']['ForceQuit']();
+}
+
 export function GenerateConclusionWithContext(arg1, arg2) {
   return window['go']['main']['App']['GenerateConclusionWithContext'](arg1, arg2);
 }
@@ -44,6 +48,10 @@ export function GetSessionTimeline() {
 
 export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
+}
+
+export function HasActiveWork() {
+  return window['go']['main']['App']['HasActiveWork']();
 }
 
 export function LoadQuickCommands() {

@@ -6,6 +6,7 @@ import QuickCommandDrawer from './components/QuickCommandDrawer/QuickCommandDraw
 import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal';
 import Sidebar from './components/Sidebar/Sidebar';
 import SettingsModal from './components/SettingsModal/SettingsModal';
+import ConfirmCloseModal from './components/ConfirmCloseModal/ConfirmCloseModal';
 import { ConnectionConfig } from './types';
 
 interface TerminalSession {
@@ -24,6 +25,8 @@ function App() {
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
     const [isBroadcastMode, setIsBroadcastMode] = useState(false);
     const [broadcastIds, setBroadcastIds] = useState<string[]>([]);
+    const [isConfirmCloseOpen, setIsConfirmCloseOpen] = useState(false);
+    const [confirmCloseMessage, setConfirmCloseMessage] = useState("");
     
     // Refs to hold latest state for callbacks
     const isBroadcastModeRef = useRef(isBroadcastMode);
@@ -44,15 +47,26 @@ function App() {
     useEffect(() => {
         // Listen for session closed events from backend
         let cancelClose: (() => void) | undefined;
+        let cancelConfirmClose: (() => void) | undefined;
+        
         // @ts-ignore
         if (window.runtime && window.runtime.EventsOn) {
             // @ts-ignore
             cancelClose = window.runtime.EventsOn("session-closed", (id: string) => {
                 removeTerminal(id);
             });
+
+            // Listen for confirm-close event from backend
+            // @ts-ignore
+            cancelConfirmClose = window.runtime.EventsOn("confirm-close", (data: any) => {
+                console.log("[App] Received confirm-close event:", data);
+                setConfirmCloseMessage(data.message || "确定要关闭应用吗？");
+                setIsConfirmCloseOpen(true);
+            });
         }
         return () => {
             if (cancelClose) cancelClose();
+            if (cancelConfirmClose) cancelConfirmClose();
             // Cleanup all terminal listeners
             unlisteners.current.forEach(u => u());
             unlisteners.current.clear();
@@ -282,6 +296,22 @@ function App() {
         }
     };
 
+    const handleConfirmClose = () => {
+        console.log("[App] User confirmed close");
+        setIsConfirmCloseOpen(false);
+        // Call backend to force quit
+        // @ts-ignore
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.ForceQuit) {
+            // @ts-ignore
+            window.go.main.App.ForceQuit();
+        }
+    };
+
+    const handleCancelClose = () => {
+        console.log("[App] User cancelled close");
+        setIsConfirmCloseOpen(false);
+    };
+
     return (
         <div id="app" style={{height: '100vh', display: 'flex', flexDirection: 'column'}}>
             <div style={{
@@ -398,6 +428,13 @@ function App() {
                 onClose={() => setIsSettingsOpen(false)}
                 isBroadcastMode={isBroadcastMode}
                 onToggleBroadcast={handleToggleBroadcast}
+            />
+
+            <ConfirmCloseModal
+                isOpen={isConfirmCloseOpen}
+                message={confirmCloseMessage}
+                onConfirm={handleConfirmClose}
+                onCancel={handleCancelClose}
             />
         </div>
     );

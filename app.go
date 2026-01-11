@@ -32,6 +32,7 @@ type App struct {
 	configMgr       *config.Manager
 	recorder        *session_recorder.Recorder
 	activeConfigs   map[string]ConnectConfig
+	isForceQuitting bool // Flag to skip confirmation on force quit
 }
 
 // NewApp creates a new App application struct
@@ -64,6 +65,7 @@ func NewApp() *App {
 		configMgr:       configMgr,
 		recorder:        recorder,
 		activeConfigs:   make(map[string]ConnectConfig),
+		isForceQuitting: false,
 	}
 }
 
@@ -128,6 +130,63 @@ func (a *App) startup(ctx context.Context) {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
 	log.Println("App started")
+}
+
+// beforeClose is called before the application closes
+// Returns true to prevent close, false to allow close
+func (a *App) beforeClose(ctx context.Context) (prevent bool) {
+	// If this is a forced quit, skip confirmation and allow close
+	if a.isForceQuitting {
+		log.Println("[beforeClose] Force quitting, allowing close")
+		return false
+	}
+
+	// Check if there are active terminal sessions
+	activeSessions := a.sessionMgr.List()
+	hasTerminals := len(activeSessions) > 0
+
+	// Check if there's an ongoing troubleshooting session
+	hasTroubleshooting := a.recorder.GetCurrentSession() != nil
+
+	// If there's any active work, we need to ask for confirmation
+	if hasTerminals || hasTroubleshooting {
+		log.Printf("[beforeClose] Active work detected: terminals=%d, troubleshooting=%v", len(activeSessions), hasTroubleshooting)
+		
+		// Emit event to frontend to show custom confirmation dialog
+		var message string
+		if hasTerminals && hasTroubleshooting {
+			message = fmt.Sprintf("您有 %d 个活跃的终端连接和一个正在进行的问题排查会话。关闭应用将断开所有连接并丢失未保存的排查记录。", len(activeSessions))
+		} else if hasTerminals {
+			message = fmt.Sprintf("您有 %d 个活跃的终端连接。关闭应用将断开所有连接。", len(activeSessions))
+		} else {
+			message = "您有一个正在进行的问题排查会话。关闭应用将丢失未保存的排查记录。"
+		}
+
+		runtime.EventsEmit(ctx, "confirm-close", map[string]interface{}{
+			"message":            message,
+			"hasTerminals":       hasTerminals,
+			"terminalCount":      len(activeSessions),
+			"hasTroubleshooting": hasTroubleshooting,
+		})
+
+		// Always prevent close, let frontend handle confirmation
+		return true
+	}
+
+	log.Println("[beforeClose] No active work, allowing close")
+	// No active work, allow close
+	return false
+}
+
+// ForceQuit forces the application to quit without confirmation
+func (a *App) ForceQuit() {
+	log.Println("[ForceQuit] Setting force quit flag and calling runtime.Quit()")
+	
+	// Set flag to skip confirmation on next beforeClose call
+	a.isForceQuitting = true
+	
+	// Trigger quit
+	runtime.Quit(a.ctx)
 }
 
 type ConnectConfig struct {
@@ -579,4 +638,16 @@ func (a *App) RenameSavedSession(id, newName string) string {
 		return fmt.Sprintf("Error: %v", err)
 	}
 	return ""
+}
+
+// HasActiveWork checks if there are active terminal sessions or ongoing troubleshooting session
+func (a *App) HasActiveWork() map[string]interface{} {
+	hasTerminals := len(a.sessionMgr.List()) > 0
+	hasTroubleshooting := a.recorder.GetCurrentSession() != nil
+
+	return map[string]interface{}{
+		"hasActiveTerminals":        hasTerminals,
+		"hasTroubleshootingSession": hasTroubleshooting,
+		"hasAnyWork":                hasTerminals || hasTroubleshooting,
+	}
 }

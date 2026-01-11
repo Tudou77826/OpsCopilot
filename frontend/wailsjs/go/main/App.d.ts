@@ -19,6 +19,8 @@ export function DeleteSavedSession(arg1:string):Promise<string>;
 
 export function DuplicateSession(arg1:string):Promise<main.ConnectResult>;
 
+export function ForceQuit():Promise<void>;
+
 export function GenerateConclusionWithContext(arg1:string,arg2:string):Promise<string>;
 
 export function GetSavedSessions():Promise<Array<sessionmanager.Session>>;
@@ -26,6 +28,8 @@ export function GetSavedSessions():Promise<Array<sessionmanager.Session>>;
 export function GetSessionTimeline():Promise<session_recorder.TroubleshootingSession>;
 
 export function GetSettings():Promise<config.AppConfig>;
+
+export function HasActiveWork():Promise<Record<string, any>>;
 
 export function LoadQuickCommands():Promise<Array<config.QuickCommand>>;
 
