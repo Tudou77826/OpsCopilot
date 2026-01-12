@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import MessageRenderer from './MessageRenderer';
 
 interface Message {
     role: 'user' | 'ai';
@@ -93,7 +94,7 @@ const AIChatPanel: React.FC = () => {
                                 backgroundColor: msg.role === 'user' ? '#007acc' : '#333',
                                 maxWidth: msg.role === 'user' ? '85%' : '95%'
                             }} data-testid="message-item">
-                                <div style={styles.messageContent}>{msg.content}</div>
+                                <MessageRenderer content={msg.content} role={msg.role} />
                             </div>
                         ))}
                         <div ref={messagesEndRef} />
@@ -180,10 +181,7 @@ const styles = {
         borderRadius: '8px',
         color: '#fff',
         wordBreak: 'break-word' as const,
-    },
-    messageContent: {
-        fontSize: '13px',
-        lineHeight: '1.4',
+        overflow: 'hidden',
     },
     footer: {
         padding: '10px',
