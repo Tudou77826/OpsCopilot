@@ -5,6 +5,7 @@ import 'xterm/css/xterm.css';
 
 interface TerminalProps {
     id: string;
+    sessionID?: string;  // SSH session ID for backend PTY resize
     onData?: (data: string) => void;
 }
 
@@ -13,10 +14,25 @@ export interface TerminalRef {
     fit: () => void;
 }
 
-const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, onData }, ref) => {
+const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionID, onData }, ref) => {
     const terminalRef = useRef<HTMLDivElement>(null);
     const xtermRef = useRef<Terminal | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
+
+    // Helper function to sync terminal size to backend PTY
+    const syncSizeToBackend = () => {
+        if (!sessionID || !xtermRef.current) return;
+        
+        const cols = xtermRef.current.cols;
+        const rows = xtermRef.current.rows;
+        
+        // Call backend to resize PTY
+        // @ts-ignore
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.ResizeTerminal) {
+            // @ts-ignore
+            window.go.main.App.ResizeTerminal(sessionID, cols, rows);
+        }
+    };
 
     useImperativeHandle(ref, () => ({
         write: (data: string) => {
@@ -24,6 +40,8 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, onData }
         },
         fit: () => {
             fitAddonRef.current?.fit();
+            // Sync size to backend after fit
+            setTimeout(() => syncSizeToBackend(), 10);
         }
     }));
 
@@ -44,6 +62,9 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, onData }
         
         fitAddonRef.current = fitAddon;
         xtermRef.current = term;
+
+        // Sync initial size to backend PTY
+        setTimeout(() => syncSizeToBackend(), 100);
 
         term.onData((data) => {
             onData?.(data);
@@ -113,6 +134,8 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, onData }
         // Handle resize
         const handleResize = () => {
             fitAddon.fit();
+            // Sync size to backend after window resize
+            setTimeout(() => syncSizeToBackend(), 10);
         };
         window.addEventListener('resize', handleResize);
 

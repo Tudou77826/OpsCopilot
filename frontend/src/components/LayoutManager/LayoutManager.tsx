@@ -225,7 +225,8 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
                             )}
                             <div style={{flex: 1, position: 'relative', overflow: 'hidden'}}>
                                 <TerminalComponent 
-                                    id={term.id} 
+                                    id={term.id}
+                                    sessionID={term.id}
                                     onData={(data) => onTerminalData(term.id, data)}
                                     ref={(el) => {
                                         if (el) {

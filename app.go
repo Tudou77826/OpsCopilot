@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"golang.org/x/crypto/ssh"
 )
 
 // App struct
@@ -241,13 +242,14 @@ func (a *App) Connect(config ConnectConfig) ConnectResult {
 	}
 
 	// Start shell with default size
+	var sshSession *ssh.Session
 	var stdin io.WriteCloser
 	var stdout io.Reader
 
 	if config.RootPassword != "" {
-		_, stdin, stdout, err = client.StartShellWithSudo(120, 30, config.RootPassword)
+		sshSession, stdin, stdout, err = client.StartShellWithSudo(120, 30, config.RootPassword)
 	} else {
-		_, stdin, stdout, err = client.StartShell(120, 30)
+		sshSession, stdin, stdout, err = client.StartShell(120, 30)
 	}
 
 	if err != nil {
@@ -255,8 +257,8 @@ func (a *App) Connect(config ConnectConfig) ConnectResult {
 		return ConnectResult{Success: false, Message: fmt.Sprintf("Error starting shell: %v", err)}
 	}
 
-	// Add to session manager
-	sessionID := a.sessionMgr.Add(client, stdin)
+	// Add to session manager (with SSH session for resizing)
+	sessionID := a.sessionMgr.Add(client, stdin, sshSession)
 
 	// Store config mapping for duplication
 	a.activeConfigs[sessionID] = config
@@ -297,6 +299,13 @@ func (a *App) Connect(config ConnectConfig) ConnectResult {
 	}()
 
 	return ConnectResult{Success: true, SessionID: sessionID, Message: "Connected"}
+}
+
+// ResizeTerminal resizes the PTY for a given session
+func (a *App) ResizeTerminal(sessionID string, cols int, rows int) {
+	if err := a.sessionMgr.Resize(sessionID, cols, rows); err != nil {
+		log.Printf("[ResizeTerminal] Failed to resize session %s: %v", sessionID, err)
+	}
 }
 
 func (a *App) Write(sessionID string, data string) {

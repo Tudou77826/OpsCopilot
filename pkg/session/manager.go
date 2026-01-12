@@ -6,12 +6,14 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/ssh"
 )
 
 type Session struct {
-	ID     string
-	Client *sshclient.Client
-	Stdin  io.WriteCloser
+	ID         string
+	Client     *sshclient.Client
+	Stdin      io.WriteCloser
+	SSHSession *ssh.Session  // Keep reference to SSH session for resizing
 }
 
 type Manager struct {
@@ -25,15 +27,16 @@ func NewManager() *Manager {
 	}
 }
 
-func (m *Manager) Add(client *sshclient.Client, stdin io.WriteCloser) string {
+func (m *Manager) Add(client *sshclient.Client, stdin io.WriteCloser, sshSession *ssh.Session) string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	id := uuid.New().String()
 	m.sessions[id] = &Session{
-		ID:     id,
-		Client: client,
-		Stdin:  stdin,
+		ID:         id,
+		Client:     client,
+		Stdin:      stdin,
+		SSHSession: sshSession,
 	}
 	return id
 }
@@ -86,4 +89,22 @@ func (m *Manager) Broadcast(ids []string, data string) {
 		}
 	}
 	wg.Wait()
+}
+
+// Resize resizes the terminal PTY for a given session
+func (m *Manager) Resize(id string, cols, rows int) error {
+	m.mu.RLock()
+	sess, ok := m.sessions[id]
+	m.mu.RUnlock()
+
+	if !ok {
+		return nil // Session not found, ignore silently
+	}
+
+	if sess.SSHSession == nil {
+		return nil // No SSH session, ignore
+	}
+
+	// Send window change request to the PTY
+	return sess.SSHSession.WindowChange(rows, cols)
 }
