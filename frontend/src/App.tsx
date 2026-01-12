@@ -27,7 +27,7 @@ function App() {
     const [broadcastIds, setBroadcastIds] = useState<string[]>([]);
     const [isConfirmCloseOpen, setIsConfirmCloseOpen] = useState(false);
     const [confirmCloseMessage, setConfirmCloseMessage] = useState("");
-    
+
     // Refs to hold latest state for callbacks
     const isBroadcastModeRef = useRef(isBroadcastMode);
     const broadcastIdsRef = useRef(broadcastIds);
@@ -48,7 +48,7 @@ function App() {
         // Listen for session closed events from backend
         let cancelClose: (() => void) | undefined;
         let cancelConfirmClose: (() => void) | undefined;
-        
+
         // @ts-ignore
         if (window.runtime && window.runtime.EventsOn) {
             // @ts-ignore
@@ -89,9 +89,9 @@ function App() {
         try {
             // @ts-ignore
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.Connect) {
-                 // @ts-ignore
+                // @ts-ignore
                 const result = await window.go.main.App.Connect(config);
-                
+
                 if (result.success) {
                     setStatus("已连接");
                     const newSessionId = result.sessionId;
@@ -99,9 +99,9 @@ function App() {
                         id: newSessionId,
                         title: config.name || `${config.user}@${config.host}`
                     };
-                    
+
                     setTerminals(prev => [...prev, newTerminal]);
-                    
+
                     // Listen for data for this specific session
                     // @ts-ignore
                     const cancel = window.runtime.EventsOn(`terminal-data:${newSessionId}`, (data: string) => {
@@ -127,7 +127,7 @@ function App() {
     const handleParseIntent = async (input: string): Promise<ConnectionConfig[]> => {
         // @ts-ignore
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.ParseIntent) {
-             // @ts-ignore
+            // @ts-ignore
             return await window.go.main.App.ParseIntent(input);
         }
         throw new Error("Wails 运行时未就绪");
@@ -144,7 +144,7 @@ function App() {
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.Broadcast) {
                 // Ensure broadcastIds is an array of strings
                 const targetIds = Array.from(currentBroadcastIds);
-                    
+
                 // @ts-ignore
                 window.go.main.App.Broadcast(targetIds, data);
             }
@@ -152,7 +152,7 @@ function App() {
             // Standard single terminal write
             // @ts-ignore
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.Write) {
-                    // @ts-ignore
+                // @ts-ignore
                 window.go.main.App.Write(id, data);
             }
         }
@@ -172,7 +172,7 @@ function App() {
 
     const handleToggleTerminalBroadcast = (id: string) => {
         if (!isBroadcastMode) return;
-        
+
         setBroadcastIds(prev => {
             if (prev.includes(id)) {
                 return prev.filter(bid => bid !== id);
@@ -191,7 +191,7 @@ function App() {
         // @ts-ignore
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.Write) {
             const payload = command.endsWith('\n') ? command : command + '\n';
-             // @ts-ignore
+            // @ts-ignore
             window.go.main.App.Write(activeTerminalId, payload);
         }
     };
@@ -200,7 +200,7 @@ function App() {
         // Close session in backend
         // @ts-ignore
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.CloseSession) {
-             // @ts-ignore
+            // @ts-ignore
             window.go.main.App.CloseSession(id);
         }
         // Remove from UI
@@ -208,7 +208,7 @@ function App() {
     };
 
     const handleRenameTerminal = (id: string, newTitle: string) => {
-        setTerminals(prev => prev.map(t => 
+        setTerminals(prev => prev.map(t =>
             t.id === id ? { ...t, title: newTitle } : t
         ));
     };
@@ -221,40 +221,40 @@ function App() {
         // But for now, we can prompt the user or just reuse the config if we had it stored.
         // Since we don't store the full config in TerminalSession, we might need to fetch it from backend or SessionManager.
         // However, looking at handleConnect, we only store id and title.
-        
+
         // A better approach for "Duplicate" in this context might be:
         // 1. Get the session details from backend (if possible) or
         // 2. Just create a new UI tab that *points* to the same session? No, that's weird.
         // 3. We actually need to reconnect.
-        
+
         // Given the constraints and current architecture, "Duplicate" implies starting a NEW session with SAME config.
         // But we don't have the config here.
-        
+
         // WORKAROUND: Ask backend to duplicate session?
         // Or better: Let's assume the user wants to clone the *view* for now, or we just alert "Not implemented" if we can't reconnect.
-        
+
         // Wait, if we use `window.go.main.App.GetSessionConfig(id)`, we could get it.
         // Let's assume we can implement a backend method `DuplicateSession(id)` which returns a new session ID.
-        
+
         // For this task, I'll implement the UI wiring. The actual backend duplication might be complex.
         // Let's try to find if we can get the config.
-        
+
         // Actually, checking SessionManager.tsx, we have `GetSavedSessions`.
         // If this was a saved session, we could find it. If it was an ad-hoc connection, we might not have it.
-        
+
         // Let's try to call a backend method. If not exists, we'll alert.
         // But wait, the user just asked for the UI feature.
         // "给tab页的标签加一个右键菜单，支持重命名和复制一个标签的功能"
-        
+
         // I will implement the handler in App.tsx that calls backend to Duplicate.
         // I'll add `DuplicateSession` to backend later if needed, or mock it for now.
-        
+
         // Let's try to add the method to backend first? Or just implement UI flow.
         // Since I'm in "App.tsx", I'll add the call.
-        
+
         // @ts-ignore
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.DuplicateSession) {
-             // @ts-ignore
+            // @ts-ignore
             window.go.main.App.DuplicateSession(id).then(result => {
                 if (result.success) {
                     const newTerminal: TerminalSession = {
@@ -262,7 +262,7 @@ function App() {
                         title: `${term.title} (Copy)`
                     };
                     setTerminals(prev => [...prev, newTerminal]);
-                    
+
                     // Listen
                     // @ts-ignore
                     const cancel = window.runtime.EventsOn(`terminal-data:${result.sessionId}`, (data: string) => {
@@ -284,6 +284,15 @@ function App() {
             terminalRefs.current.forEach(t => t.fit());
         }, 300); // Wait for transition
     }, [isSidebarOpen]);
+
+    const [isQuickCommandDrawerOpen, setIsQuickCommandDrawerOpen] = useState(false);
+
+    // Force terminal resize when QuickCommandDrawer toggles
+    useEffect(() => {
+        setTimeout(() => {
+            terminalRefs.current.forEach(t => t.fit());
+        }, 350); // Wait for transition (300ms)
+    }, [isQuickCommandDrawerOpen]);
 
     const toggleSidebar = (tab: 'sessions' | 'troubleshoot' | 'chat') => {
         if (isSidebarOpen && sidebarTab === tab) {
@@ -313,18 +322,18 @@ function App() {
     };
 
     return (
-        <div id="app" style={{height: '100vh', display: 'flex', flexDirection: 'column'}}>
+        <div id="app" style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
             <div style={{
-                padding: '8px 16px', 
-                background: '#333', 
-                color: '#fff', 
-                display: 'flex', 
-                gap: '16px', 
+                padding: '8px 16px',
+                background: '#333',
+                color: '#fff',
+                display: 'flex',
+                gap: '16px',
                 alignItems: 'center',
                 justifyContent: 'space-between'
             }}>
-                <div style={{display: 'flex', gap: '16px', alignItems: 'center'}}>
-                    <span style={{fontSize: '0.9rem', color: status === '已连接' ? '#4caf50' : '#aaa'}}>
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.9rem', color: status === '已连接' ? '#4caf50' : '#aaa' }}>
                         {status}
                     </span>
                     <button onClick={() => setIsSmartModalOpen(true)} style={styles.primaryBtn}>
@@ -334,15 +343,15 @@ function App() {
                         ⚙️
                     </button>
                 </div>
-                
+
                 <div style={styles.toggleGroup}>
-                    <button 
+                    <button
                         style={layoutMode === 'tab' ? styles.activeToggle : styles.toggle}
                         onClick={() => setLayoutMode('tab')}
                     >
                         标签模式
                     </button>
-                    <button 
+                    <button
                         style={layoutMode === 'grid' ? styles.activeToggle : styles.toggle}
                         onClick={() => setLayoutMode('grid')}
                     >
@@ -351,9 +360,9 @@ function App() {
                 </div>
             </div>
 
-            <div style={{flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'row'}}>
-                <div style={{flex: 1, position: 'relative', overflow: 'hidden'}}>
-                    <LayoutManager 
+            <div style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'row' }}>
+                <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+                    <LayoutManager
                         terminals={terminals}
                         mode={layoutMode}
                         onTerminalData={handleTerminalData}
@@ -362,23 +371,23 @@ function App() {
                         onRenameTerminal={handleRenameTerminal}
                         onDuplicateTerminal={handleDuplicateTerminal}
                         onActiveTerminalChange={setActiveTerminalId}
-                        onClose={() => {}}
+                        onClose={() => { }}
                         isBroadcastMode={isBroadcastMode}
                         broadcastIds={broadcastIds}
                         onToggleTerminalBroadcast={handleToggleTerminalBroadcast}
                     />
                 </div>
-                
-                <Sidebar 
-                    isOpen={isSidebarOpen} 
+
+                <Sidebar
+                    isOpen={isSidebarOpen}
                     activeTab={sidebarTab}
-                    onToggle={() => setIsSidebarOpen(!isSidebarOpen)} 
+                    onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
                     onConnect={(config) => handleBatchConnect([config])}
                 />
 
                 {/* Right Nav (Icon Bar) */}
                 <div style={styles.rightNav}>
-                     <div 
+                    <div
                         style={{
                             ...styles.navIcon,
                             backgroundColor: (isSidebarOpen && sidebarTab === 'sessions') ? '#333' : 'transparent',
@@ -389,7 +398,7 @@ function App() {
                     >
                         🖥️
                     </div>
-                    <div 
+                    <div
                         style={{
                             ...styles.navIcon,
                             backgroundColor: (isSidebarOpen && sidebarTab === 'troubleshoot') ? '#333' : 'transparent',
@@ -400,7 +409,7 @@ function App() {
                     >
                         🩺
                     </div>
-                    <div 
+                    <div
                         style={{
                             ...styles.navIcon,
                             backgroundColor: (isSidebarOpen && sidebarTab === 'chat') ? '#333' : 'transparent',
@@ -414,16 +423,20 @@ function App() {
                 </div>
             </div>
 
-            <QuickCommandDrawer onExecute={handleQuickCommand} />
-            
-            <SmartConnectModal 
+            <QuickCommandDrawer
+                onExecute={handleQuickCommand}
+                isOpen={isQuickCommandDrawerOpen}
+                onToggle={() => setIsQuickCommandDrawerOpen(!isQuickCommandDrawerOpen)}
+            />
+
+            <SmartConnectModal
                 isOpen={isSmartModalOpen}
                 onClose={() => setIsSmartModalOpen(false)}
                 onConnect={handleBatchConnect}
                 onParse={handleParseIntent}
             />
 
-            <SettingsModal 
+            <SettingsModal
                 isOpen={isSettingsOpen}
                 onClose={() => setIsSettingsOpen(false)}
                 isBroadcastMode={isBroadcastMode}

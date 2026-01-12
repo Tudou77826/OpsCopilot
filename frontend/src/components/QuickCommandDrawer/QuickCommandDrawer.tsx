@@ -8,10 +8,12 @@ export interface QuickCommand {
 
 interface QuickCommandDrawerProps {
     onExecute: (content: string) => void;
+    isOpen: boolean;
+    onToggle: () => void;
 }
 
-const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute }) => {
-    const [isOpen, setIsOpen] = useState(false);
+const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute, isOpen, onToggle }) => {
+    // const [isOpen, setIsOpen] = useState(false); // Removed local state
     const [commands, setCommands] = useState<QuickCommand[]>([]);
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, cmdId: string } | null>(null);
     const [editingCmd, setEditingCmd] = useState<QuickCommand | null>(null);
@@ -23,12 +25,12 @@ const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute }) =>
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.LoadQuickCommands) {
             // @ts-ignore
             window.go.main.App.LoadQuickCommands().then((cmds: QuickCommand[]) => {
-                 if (cmds) {
-                     setCommands(cmds);
-                 } else {
-                     setCommands([]);
-                 }
-                 setLoaded(true);
+                if (cmds) {
+                    setCommands(cmds);
+                } else {
+                    setCommands([]);
+                }
+                setLoaded(true);
             }).catch((err: any) => {
                 console.error("Failed to load quick commands", err);
                 setLoaded(true);
@@ -44,7 +46,7 @@ const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute }) =>
 
         // @ts-ignore
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.SaveQuickCommands) {
-             // @ts-ignore
+            // @ts-ignore
             window.go.main.App.SaveQuickCommands(commands);
         }
     }, [commands, loaded]);
@@ -72,17 +74,16 @@ const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute }) =>
 
     return (
         <>
-            <div 
+            <div
                 style={{
                     ...styles.container,
-                    transform: isOpen ? 'translateY(0)' : 'translateY(100%)',
-                    opacity: isOpen ? 1 : 0.8,
+                    maxHeight: isOpen ? '300px' : '24px',
                 }}
             >
                 {/* Handle */}
-                <div 
-                    style={styles.handle} 
-                    onClick={() => setIsOpen(!isOpen)}
+                <div
+                    style={styles.handle}
+                    onClick={onToggle}
                     title="展开/收起"
                 >
                     {isOpen ? '▼ 快捷命令' : '▲ 快捷命令'}
@@ -92,7 +93,7 @@ const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute }) =>
                 <div style={styles.content}>
                     <div style={styles.grid}>
                         {commands.map(cmd => (
-                            <div 
+                            <div
                                 key={cmd.id}
                                 style={styles.card}
                                 onClick={() => onExecute(cmd.content)}
@@ -114,7 +115,7 @@ const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute }) =>
             {contextMenu && (
                 <>
                     <div style={styles.backdrop} onClick={() => setContextMenu(null)} />
-                    <div style={{...styles.menu, top: contextMenu.y - 80, left: contextMenu.x}}>
+                    <div style={{ ...styles.menu, top: contextMenu.y - 80, left: contextMenu.x }}>
                         <div style={styles.menuItem} onClick={() => {
                             const cmd = commands.find(c => c.id === contextMenu.cmdId);
                             if (cmd) setEditingCmd(cmd);
@@ -132,18 +133,18 @@ const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute }) =>
                         <h3 style={styles.modalTitle}>编辑命令</h3>
                         <div style={styles.formGroup}>
                             <label style={styles.label}>名称</label>
-                            <input 
+                            <input
                                 style={styles.input}
                                 value={editingCmd.name}
-                                onChange={e => setEditingCmd({...editingCmd, name: e.target.value})}
+                                onChange={e => setEditingCmd({ ...editingCmd, name: e.target.value })}
                             />
                         </div>
                         <div style={styles.formGroup}>
                             <label style={styles.label}>命令内容</label>
-                            <textarea 
+                            <textarea
                                 style={styles.textarea}
                                 value={editingCmd.content}
-                                onChange={e => setEditingCmd({...editingCmd, content: e.target.value})}
+                                onChange={e => setEditingCmd({ ...editingCmd, content: e.target.value })}
                             />
                         </div>
                         <div style={styles.modalActions}>
@@ -159,34 +160,27 @@ const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute }) =>
 
 const styles = {
     container: {
-        position: 'fixed' as const,
-        bottom: 0,
-        left: 0,
-        right: 0, // Will be constrained by parent or adjusted manually
-        backgroundColor: '#252526',
-        borderTop: '1px solid #333',
-        transition: 'transform 0.3s ease',
-        zIndex: 900, // Below modal but above terminal
         display: 'flex',
         flexDirection: 'column' as const,
-        maxHeight: '300px',
+        width: '100%',
+        backgroundColor: '#252526',
+        borderTop: '1px solid #333',
+        flexShrink: 0,
+        transition: 'max-height 0.3s ease',
+        overflow: 'hidden',
     },
     handle: {
-        position: 'absolute' as const,
-        top: -24,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        backgroundColor: '#252526',
+        height: '24px',
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#2e2e2e',
         color: '#ccc',
-        padding: '2px 12px',
-        borderTopLeftRadius: '4px',
-        borderTopRightRadius: '4px',
-        borderTop: '1px solid #333',
-        borderLeft: '1px solid #333',
-        borderRight: '1px solid #333',
         cursor: 'pointer',
         fontSize: '12px',
         userSelect: 'none' as const,
+        borderBottom: '1px solid #333',
     },
     content: {
         flex: 1,
