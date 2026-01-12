@@ -1,0 +1,13 @@
+{
+  "llm": {
+    "APIKey": "",
+    "BaseURL": "https://api.deepseek.com/v1",
+    "Model": "deepseek-chat"
+  },
+  "log": {
+    "dir": "d:\\dev\\workspace-go\\OpsCopilot\\pkg\\config\\logs"
+  },
+  "docs": {
+    "dir": ""
+  }
+}

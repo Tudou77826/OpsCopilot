@@ -29,8 +29,10 @@ type DocsConfig struct {
 }
 
 type Manager struct {
-	configPath string
-	Config     *AppConfig
+	configPath        string
+	promptsPath       string
+	quickCommandsPath string
+	Config            *AppConfig
 }
 
 func NewManager() *Manager {
@@ -43,10 +45,11 @@ func NewManager() *Manager {
 	cfg := &AppConfig{
 		LLM: *defaultLLM,
 		Prompts: map[string]string{
-			"smart_connect":     DefaultSmartConnectPrompt,
-			"qa_prompt":         DefaultQAPrompt,
-			"conclusion_prompt": DefaultConclusionPrompt,
-			"polish_prompt":     DefaultPolishPrompt,
+			"smart_connect":       DefaultSmartConnectPrompt,
+			"qa_prompt":           DefaultQAPrompt,
+			"conclusion_prompt":   DefaultConclusionPrompt,
+			"polish_prompt":       DefaultPolishPrompt,
+			"troubleshoot_prompt": DefaultTroubleshootPrompt,
 		},
 		Log: LogConfig{
 			Dir: defaultLogDir,
@@ -54,16 +57,20 @@ func NewManager() *Manager {
 		Docs: DocsConfig{
 			Dir: "", // Default to empty, will be resolved dynamically if empty
 		},
+		QuickCommands: []QuickCommand{},
 	}
 
 	return &Manager{
-		configPath: "config.json", // 默认在当前目录
-		Config:     cfg,
+		configPath:        "config.json",         // 默认在当前目录
+		promptsPath:       "prompts.json",        // prompts 配置文件
+		quickCommandsPath: "quick_commands.json", // quick_commands 配置文件
+		Config:            cfg,
 	}
 }
 
 // Load reads config from file, creating it with defaults if not exists
 func (m *Manager) Load() error {
+	// 加载主配置文件
 	data, err := os.ReadFile(m.configPath)
 	if os.IsNotExist(err) {
 		// 文件不存在，保存默认配置
@@ -78,10 +85,48 @@ func (m *Manager) Load() error {
 		return err
 	}
 
+	// 加载 prompts 配置
+	if err := m.loadPrompts(); err != nil {
+		return err
+	}
+
+	// 加载 quick_commands 配置
+	if err := m.loadQuickCommands(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// loadPrompts 从独立文件加载提示词配置
+func (m *Manager) loadPrompts() error {
 	// 确保 Prompts map 初始化
 	if m.Config.Prompts == nil {
 		m.Config.Prompts = make(map[string]string)
 	}
+
+	// 读取 prompts.json 文件
+	data, err := os.ReadFile(m.promptsPath)
+	if os.IsNotExist(err) {
+		// 文件不存在，使用默认值并保存
+		m.Config.Prompts = map[string]string{
+			"smart_connect":       DefaultSmartConnectPrompt,
+			"qa_prompt":           DefaultQAPrompt,
+			"conclusion_prompt":   DefaultConclusionPrompt,
+			"polish_prompt":       DefaultPolishPrompt,
+			"troubleshoot_prompt": DefaultTroubleshootPrompt,
+		}
+		return m.savePrompts()
+	}
+	if err != nil {
+		return err
+	}
+
+	// 解析 JSON 到 Prompts map
+	if err := json.Unmarshal(data, &m.Config.Prompts); err != nil {
+		return err
+	}
+
 	// 确保默认 Prompt 存在 (如果文件中没有)
 	if _, ok := m.Config.Prompts["smart_connect"]; !ok {
 		m.Config.Prompts["smart_connect"] = DefaultSmartConnectPrompt
@@ -102,12 +147,83 @@ func (m *Manager) Load() error {
 	return nil
 }
 
-func (m *Manager) Save() error {
-	data, err := json.MarshalIndent(m.Config, "", "  ")
+// loadQuickCommands 从独立文件加载快捷命令配置
+func (m *Manager) loadQuickCommands() error {
+	// 读取 quick_commands.json 文件
+	data, err := os.ReadFile(m.quickCommandsPath)
+	if os.IsNotExist(err) {
+		// 文件不存在，初始化为空数组并保存
+		m.Config.QuickCommands = []QuickCommand{}
+		return m.saveQuickCommands()
+	}
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(m.configPath, data, 0644)
+
+	// 解析 JSON 到 QuickCommands
+	if err := json.Unmarshal(data, &m.Config.QuickCommands); err != nil {
+		return err
+	}
+
+	// 确保不为 nil
+	if m.Config.QuickCommands == nil {
+		m.Config.QuickCommands = []QuickCommand{}
+	}
+
+	return nil
+}
+
+func (m *Manager) Save() error {
+	// 保存主配置（不包含 prompts 和 quick_commands）
+	type ConfigForSave struct {
+		LLM  LLMConfig  `json:"llm"`
+		Log  LogConfig  `json:"log"`
+		Docs DocsConfig `json:"docs"`
+	}
+
+	cfg := ConfigForSave{
+		LLM:  m.Config.LLM,
+		Log:  m.Config.Log,
+		Docs: m.Config.Docs,
+	}
+
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(m.configPath, data, 0644); err != nil {
+		return err
+	}
+
+	// 保存 prompts 到独立文件
+	if err := m.savePrompts(); err != nil {
+		return err
+	}
+
+	// 保存 quick_commands 到独立文件
+	if err := m.saveQuickCommands(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// savePrompts 保存提示词配置到独立文件
+func (m *Manager) savePrompts() error {
+	data, err := json.MarshalIndent(m.Config.Prompts, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(m.promptsPath, data, 0644)
+}
+
+// saveQuickCommands 保存快捷命令配置到独立文件
+func (m *Manager) saveQuickCommands() error {
+	data, err := json.MarshalIndent(m.Config.QuickCommands, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(m.quickCommandsPath, data, 0644)
 }
 
 func (m *Manager) SetLLMConfig(apiKey, baseURL, model string) {
@@ -121,6 +237,8 @@ func (m *Manager) SetPrompt(key, content string) {
 		m.Config.Prompts = make(map[string]string)
 	}
 	m.Config.Prompts[key] = content
+	// 立即保存到独立文件
+	m.savePrompts()
 }
 
 func (m *Manager) SetLogDir(dir string) {
@@ -129,4 +247,6 @@ func (m *Manager) SetLogDir(dir string) {
 
 func (m *Manager) SetQuickCommands(cmds []QuickCommand) {
 	m.Config.QuickCommands = cmds
+	// 立即保存到独立文件
+	m.saveQuickCommands()
 }
