@@ -62,6 +62,7 @@ export namespace config {
 	    log: LogConfig;
 	    docs: DocsConfig;
 	    quick_commands: QuickCommand[];
+	    completion_delay: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppConfig(source);
@@ -74,6 +75,7 @@ export namespace config {
 	        this.log = this.convertValues(source["log"], LogConfig);
 	        this.docs = this.convertValues(source["docs"], DocsConfig);
 	        this.quick_commands = this.convertValues(source["quick_commands"], QuickCommand);
+	        this.completion_delay = source["completion_delay"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

@@ -20,9 +20,10 @@ interface LayoutManagerProps {
     isBroadcastMode?: boolean;
     broadcastIds?: string[];
     onToggleTerminalBroadcast?: (id: string) => void;
+    completionDelay?: number;
 }
 
-const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTerminalData, terminalRefs, onCloseTerminal, onRenameTerminal, onDuplicateTerminal, onActiveTerminalChange, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast }) => {
+const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTerminalData, terminalRefs, onCloseTerminal, onRenameTerminal, onDuplicateTerminal, onActiveTerminalChange, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast, completionDelay }) => {
     const [activeTab, setActiveTab] = useState<string>(terminals[0]?.id || '');
     const [editingTab, setEditingTab] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
@@ -228,6 +229,7 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
                                     id={term.id}
                                     sessionID={term.id}
                                     onData={(data) => onTerminalData(term.id, data)}
+                                    completionDelay={completionDelay}
                                     ref={(el) => {
                                         if (el) {
                                             terminalRefs.current.set(term.id, el);

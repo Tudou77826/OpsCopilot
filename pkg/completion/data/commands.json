@@ -1,0 +1,712 @@
+[
+  {
+    "name": "ls",
+    "description": "列出目录内容",
+    "category": "file",
+    "options": [
+      { "flag": "-l", "description": "使用长格式显示详细信息" },
+      { "flag": "-a", "description": "显示所有文件，包括以.开头的隐藏文件" },
+      { "flag": "-h", "description": "人类可读的文件大小（如 1K, 234M, 2G）" },
+      { "flag": "-t", "description": "按修改时间排序" },
+      { "flag": "-r", "description": "反向排序" },
+      { "flag": "-R", "description": "递归列出子目录" },
+      { "flag": "--color", "description": "颜色化输出（always/never/auto）", "requires_value": true }
+    ],
+    "examples": ["ls -la", "ls -lh /var/log", "ls -t | head -10"],
+    "aliases": ["dir"]
+  },
+  {
+    "name": "cd",
+    "description": "切换当前工作目录",
+    "category": "file",
+    "options": [
+      { "flag": "-", "description": "返回上一个目录" },
+      { "flag": "~", "description": "切换到用户主目录" }
+    ],
+    "examples": ["cd /var/log", "cd ~", "cd -"]
+  },
+  {
+    "name": "pwd",
+    "description": "显示当前工作目录的完整路径",
+    "category": "file",
+    "options": [
+      { "flag": "-P", "description": "显示物理路径，不跟随符号链接" }
+    ],
+    "examples": ["pwd"]
+  },
+  {
+    "name": "cp",
+    "description": "复制文件或目录",
+    "category": "file",
+    "options": [
+      { "flag": "-r", "description": "递归复制目录" },
+      { "flag": "-i", "description": "覆盖前提示确认" },
+      { "flag": "-v", "description": "显示复制过程" },
+      { "flag": "-p", "description": "保留文件属性" },
+      { "flag": "-a", "description": "归档模式，保留所有属性" }
+    ],
+    "examples": ["cp file1.txt file2.txt", "cp -r dir1 dir2", "cp -av src/ dst/"]
+  },
+  {
+    "name": "mv",
+    "description": "移动或重命名文件或目录",
+    "category": "file",
+    "options": [
+      { "flag": "-i", "description": "覆盖前提示确认" },
+      { "flag": "-v", "description": "显示移动过程" },
+      { "flag": "-n", "description": "不覆盖已存在的文件" }
+    ],
+    "examples": ["mv old.txt new.txt", "mv file.txt /tmp/"]
+  },
+  {
+    "name": "rm",
+    "description": "删除文件或目录",
+    "category": "file",
+    "options": [
+      { "flag": "-r", "description": "递归删除目录" },
+      { "flag": "-f", "description": "强制删除，不提示确认" },
+      { "flag": "-i", "description": "删除前提示确认" },
+      { "flag": "-v", "description": "显示删除过程" }
+    ],
+    "examples": ["rm file.txt", "rm -rf directory/"]
+  },
+  {
+    "name": "mkdir",
+    "description": "创建目录",
+    "category": "file",
+    "options": [
+      { "flag": "-p", "description": "递归创建父目录" },
+      { "flag": "-v", "description": "显示创建过程" },
+      { "flag": "-m", "description": "设置目录权限", "requires_value": true }
+    ],
+    "examples": ["mkdir newdir", "mkdir -p /path/to/nested/dir"]
+  },
+  {
+    "name": "rmdir",
+    "description": "删除空目录",
+    "category": "file",
+    "options": [
+      { "flag": "-p", "description": "递归删除空父目录" }
+    ],
+    "examples": ["rmdir emptydir"]
+  },
+  {
+    "name": "touch",
+    "description": "创建空文件或更新文件时间戳",
+    "category": "file",
+    "options": [
+      { "flag": "-a", "description": "只更新访问时间" },
+      { "flag": "-m", "description": "只更新修改时间" },
+      { "flag": "-c", "description": "不创建文件" },
+      { "flag": "-d", "description": "设置指定时间", "requires_value": true }
+    ],
+    "examples": ["touch newfile.txt", "touch -d '2024-01-01' file.txt"]
+  },
+  {
+    "name": "find",
+    "description": "在目录树中搜索文件",
+    "category": "file",
+    "options": [
+      { "flag": "-name", "description": "按文件名搜索", "requires_value": true },
+      { "flag": "-type", "description": "按文件类型搜索（f/d/l）", "requires_value": true },
+      { "flag": "-size", "description": "按文件大小搜索", "requires_value": true },
+      { "flag": "-mtime", "description": "按修改时间搜索（天）", "requires_value": true },
+      { "flag": "-exec", "description": "对搜索结果执行命令", "requires_value": true }
+    ],
+    "examples": ["find / -name '*.log'", "find . -type f -mtime +7", "find . -size +100M"]
+  },
+  {
+    "name": "locate",
+    "description": "快速查找文件（使用数据库）",
+    "category": "file",
+    "options": [
+      { "flag": "-i", "description": "忽略大小写" },
+      { "flag": "-c", "description": "只显示匹配数量" }
+    ],
+    "examples": ["locate filename", "locate -i '*.conf'"]
+  },
+  {
+    "name": "cat",
+    "description": "连接文件并打印到标准输出",
+    "category": "text",
+    "options": [
+      { "flag": "-n", "description": "显示行号" },
+      { "flag": "-b", "description": "对非空行编号" },
+      { "flag": "-s", "description": "压缩多个空行为一行" }
+    ],
+    "examples": ["cat file.txt", "cat -n file.txt", "cat file1.txt file2.txt"]
+  },
+  {
+    "name": "less",
+    "description": "分页显示文件内容（可向前翻页）",
+    "category": "text",
+    "options": [
+      { "flag": "-N", "description": "显示行号" },
+      { "flag": "+F", "description": "类似 tail -f 的效果" },
+      { "flag": "-S", "description": "不换行长行" }
+    ],
+    "examples": ["less file.txt", "less +F /var/log/syslog"]
+  },
+  {
+    "name": "more",
+    "description": "分页显示文件内容",
+    "category": "text",
+    "options": [
+      { "flag": "-n", "description": "指定每屏行数", "requires_value": true }
+    ],
+    "examples": ["more file.txt", "ls -l | more"]
+  },
+  {
+    "name": "head",
+    "description": "显示文件开头部分",
+    "category": "text",
+    "options": [
+      { "flag": "-n", "description": "显示前 n 行", "requires_value": true },
+      { "flag": "-c", "description": "显示前 n 字节", "requires_value": true }
+    ],
+    "examples": ["head file.txt", "head -n 20 file.txt"]
+  },
+  {
+    "name": "tail",
+    "description": "显示文件结尾部分",
+    "category": "text",
+    "options": [
+      { "flag": "-n", "description": "显示后 n 行", "requires_value": true },
+      { "flag": "-f", "description": "实时跟踪文件新增内容" },
+      { "flag": "-F", "description": "跟踪文件名（文件轮转时继续跟踪）" }
+    ],
+    "examples": ["tail -f /var/log/syslog", "tail -n 100 file.txt"]
+  },
+  {
+    "name": "grep",
+    "description": "在文件中搜索文本模式",
+    "category": "text",
+    "options": [
+      { "flag": "-i", "description": "忽略大小写" },
+      { "flag": "-r", "description": "递归搜索目录" },
+      { "flag": "-n", "description": "显示行号" },
+      { "flag": "-v", "description": "反向匹配（显示不匹配的行）" },
+      { "flag": "-c", "description": "只显示匹配行数" },
+      { "flag": "--color", "description": "高亮显示匹配", "requires_value": true },
+      { "flag": "-E", "description": "使用扩展正则表达式" }
+    ],
+    "examples": ["grep 'error' log.txt", "grep -r 'TODO' ./src", "ps aux | grep nginx"]
+  },
+  {
+    "name": "sed",
+    "description": "流编辑器，用于文本转换",
+    "category": "text",
+    "options": [
+      { "flag": "-i", "description": "直接修改文件" },
+      { "flag": "-n", "description": "禁止自动打印" },
+      { "flag": "-e", "description": "执行脚本", "requires_value": true }
+    ],
+    "examples": ["sed 's/old/new/g' file.txt", "sed -i 's/foo/bar/g' *.txt"]
+  },
+  {
+    "name": "awk",
+    "description": "模式扫描和处理语言",
+    "category": "text",
+    "options": [
+      { "flag": "-F", "description": "指定字段分隔符", "requires_value": true },
+      { "flag": "-v", "description": "赋值变量", "requires_value": true }
+    ],
+    "examples": ["awk '{print $1}' file.txt", "awk -F: '{print $1}' /etc/passwd"]
+  },
+  {
+    "name": "sort",
+    "description": "对文本行进行排序",
+    "category": "text",
+    "options": [
+      { "flag": "-r", "description": "反向排序" },
+      { "flag": "-n", "description": "按数值排序" },
+      { "flag": "-u", "description": "去重" },
+      { "flag": "-k", "description": "指定排序字段", "requires_value": true },
+      { "flag": "-t", "description": "指定字段分隔符", "requires_value": true }
+    ],
+    "examples": ["sort file.txt", "sort -nr numbers.txt", "sort -u names.txt"]
+  },
+  {
+    "name": "uniq",
+    "description": "报告或忽略重复的行",
+    "category": "text",
+    "options": [
+      { "flag": "-c", "description": "显示重复次数" },
+      { "flag": "-d", "description": "只显示重复行" },
+      { "flag": "-u", "description": "只显示唯一行" },
+      { "flag": "-i", "description": "忽略大小写" }
+    ],
+    "examples": ["sort file.txt | uniq -c", "uniq -d file.txt"]
+  },
+  {
+    "name": "wc",
+    "description": "统计文件的行数、字数、字节数",
+    "category": "text",
+    "options": [
+      { "flag": "-l", "description": "只统计行数" },
+      { "flag": "-w", "description": "只统计字数" },
+      { "flag": "-c", "description": "只统计字节数" },
+      { "flag": "-m", "description": "只统计字符数" }
+    ],
+    "examples": ["wc file.txt", "wc -l file.txt", "ls | wc -l"]
+  },
+  {
+    "name": "ps",
+    "description": "显示当前运行的进程",
+    "category": "system",
+    "options": [
+      { "flag": "aux", "description": "显示所有用户的所有进程" },
+      { "flag": "-ef", "description": "显示所有进程信息" },
+      { "flag": "-e", "description": "显示所有进程" },
+      { "flag": "-f", "description": "完整格式显示" },
+      { "flag": "--forest", "description": "以树形结构显示" }
+    ],
+    "examples": ["ps aux", "ps -ef | grep nginx", "ps aux --forest"]
+  },
+  {
+    "name": "top",
+    "description": "实时显示系统进程和资源使用",
+    "category": "system",
+    "options": [],
+    "examples": ["top"]
+  },
+  {
+    "name": "htop",
+    "description": "交互式进程查看器（top 的增强版）",
+    "category": "system",
+    "options": [],
+    "examples": ["htop"]
+  },
+  {
+    "name": "kill",
+    "description": "向进程发送信号",
+    "category": "system",
+    "options": [
+      { "flag": "-9", "description": "强制杀死进程（SIGKILL）" },
+      { "flag": "-15", "description": "优雅终止进程（SIGTERM）" },
+      { "flag": "-l", "description": "列出所有信号" }
+    ],
+    "examples": ["kill 1234", "kill -9 1234", "kill -l"]
+  },
+  {
+    "name": "killall",
+    "description": "按名称杀死进程",
+    "category": "system",
+    "options": [
+      { "flag": "-9", "description": "强制杀死进程" },
+      { "flag": "-i", "description": "杀死前询问确认" }
+    ],
+    "examples": ["killall nginx", "killall -9 firefox"]
+  },
+  {
+    "name": "systemctl",
+    "description": "控制系统和服务",
+    "category": "system",
+    "options": [
+      { "flag": "start", "description": "启动服务" },
+      { "flag": "stop", "description": "停止服务" },
+      { "flag": "restart", "description": "重启服务" },
+      { "flag": "status", "description": "查看服务状态" },
+      { "flag": "enable", "description": "设置开机自启" },
+      { "flag": "disable", "description": "取消开机自启" },
+      { "flag": "reload", "description": "重新加载配置" },
+      { "flag": "-l", "description": "列出所有服务" }
+    ],
+    "examples": ["systemctl start nginx", "systemctl status docker", "systemctl enable sshd"]
+  },
+  {
+    "name": "service",
+    "description": "运行 System V init 脚本",
+    "category": "system",
+    "options": [
+      { "flag": "start", "description": "启动服务" },
+      { "flag": "stop", "description": "停止服务" },
+      { "flag": "restart", "description": "重启服务" },
+      { "flag": "status", "description": "查看服务状态" }
+    ],
+    "examples": ["service nginx status", "service mysql restart"]
+  },
+  {
+    "name": "uname",
+    "description": "显示系统信息",
+    "category": "system",
+    "options": [
+      { "flag": "-a", "description": "显示所有信息" },
+      { "flag": "-r", "description": "显示内核版本" },
+      { "flag": "-m", "description": "显示机器硬件" },
+      { "flag": "-n", "description": "显示主机名" }
+    ],
+    "examples": ["uname -a", "uname -r"]
+  },
+  {
+    "name": "df",
+    "description": "显示磁盘空间使用情况",
+    "category": "system",
+    "options": [
+      { "flag": "-h", "description": "人类可读格式" },
+      { "flag": "-H", "description": "1000 而非 1024 为单位" },
+      { "flag": "-i", "description": "显示 inode 使用情况" },
+      { "flag": "-T", "description": "显示文件系统类型" }
+    ],
+    "examples": ["df -h", "df -i"]
+  },
+  {
+    "name": "du",
+    "description": "显示目录或文件的磁盘使用量",
+    "category": "system",
+    "options": [
+      { "flag": "-h", "description": "人类可读格式" },
+      { "flag": "-s", "description": "只显示总计" },
+      { "flag": "-a", "description": "显示所有文件" },
+      { "flag": "--max-depth", "description": "限制显示深度", "requires_value": true }
+    ],
+    "examples": ["du -sh *", "du -h --max-depth=1 /var"]
+  },
+  {
+    "name": "free",
+    "description": "显示内存使用情况",
+    "category": "system",
+    "options": [
+      { "flag": "-h", "description": "人类可读格式" },
+      { "flag": "-m", "description": "以 MB 为单位显示" },
+      { "flag": "-g", "description": "以 GB 为单位显示" },
+      { "flag": "-s", "description": "持续监控", "requires_value": true }
+    ],
+    "examples": ["free -h", "free -m"]
+  },
+  {
+    "name": "uptime",
+    "description": "显示系统运行时间和负载",
+    "category": "system",
+    "options": [],
+    "examples": ["uptime"]
+  },
+  {
+    "name": "ssh",
+    "description": "安全 Shell 客户端",
+    "category": "network",
+    "options": [
+      { "flag": "-i", "description": "指定身份文件（密钥）", "requires_value": true },
+      { "flag": "-p", "description": "指定端口", "requires_value": true },
+      { "flag": "-l", "description": "指定登录用户", "requires_value": true },
+      { "flag": "-L", "description": "本地端口转发" },
+      { "flag": "-R", "description": "远程端口转发" }
+    ],
+    "examples": ["ssh user@host", "ssh -p 2222 user@host", "ssh -i ~/.ssh/key.pem user@host"]
+  },
+  {
+    "name": "scp",
+    "description": "通过 SSH 安全复制文件",
+    "category": "network",
+    "options": [
+      { "flag": "-r", "description": "递归复制目录" },
+      { "flag": "-p", "description": "保留文件属性" },
+      { "flag": "-P", "description": "指定端口", "requires_value": true },
+      { "flag": "-i", "description": "指定身份文件", "requires_value": true }
+    ],
+    "examples": ["scp file.txt user@host:/path/", "scp -r dir/ user@host:/path/"]
+  },
+  {
+    "name": "rsync",
+    "description": "远程同步工具",
+    "category": "network",
+    "options": [
+      { "flag": "-a", "description": "归档模式，保留所有属性" },
+      { "flag": "-v", "description": "显示详细信息" },
+      { "flag": "-z", "description": "压缩传输" },
+      { "flag": "--progress", "description": "显示传输进度" },
+      { "flag": "--delete", "description": "删除目标中源没有的文件" },
+      { "flag": "-e", "description": "指定远程 Shell", "requires_value": true }
+    ],
+    "examples": ["rsync -avz src/ dest/", "rsync -avz --progress dir/ user@host:/path/"]
+  },
+  {
+    "name": "curl",
+    "description": "传输数据到服务器或从服务器获取数据",
+    "category": "network",
+    "options": [
+      { "flag": "-O", "description": "保存到本地文件（使用远程文件名）" },
+      { "flag": "-o", "description": "指定输出文件", "requires_value": true },
+      { "flag": "-I", "description": "只显示响应头" },
+      { "flag": "-v", "description": "显示详细通信过程" },
+      { "flag": "-X", "description": "指定请求方法", "requires_value": true },
+      { "flag": "-H", "description": "添加自定义头", "requires_value": true },
+      { "flag": "-d", "description": "发送 POST 数据", "requires_value": true }
+    ],
+    "examples": ["curl https://example.com", "curl -O https://example.com/file.zip", "curl -X POST -d 'data' url"]
+  },
+  {
+    "name": "wget",
+    "description": "从网络下载文件",
+    "category": "network",
+    "options": [
+      { "flag": "-O", "description": "指定输出文件名", "requires_value": true },
+      { "flag": "-P", "description": "指定下载目录", "requires_value": true },
+      { "flag": "-c", "description": "断点续传" },
+      { "flag": "-b", "description": "后台下载" },
+      { "flag": "-r", "description": "递归下载" }
+    ],
+    "examples": ["wget https://example.com/file.zip", "wget -c url", "wget -r https://example.com/"]
+  },
+  {
+    "name": "ping",
+    "description": "向主机发送 ICMP 回显请求",
+    "category": "network",
+    "options": [
+      { "flag": "-c", "description": "指定发送次数", "requires_value": true },
+      { "flag": "-i", "description": "指定间隔秒数", "requires_value": true },
+      { "flag": "-W", "description": "指定超时秒数", "requires_value": true }
+    ],
+    "examples": ["ping google.com", "ping -c 4 192.168.1.1"]
+  },
+  {
+    "name": "netstat",
+    "description": "显示网络连接、路由表、接口统计",
+    "category": "network",
+    "options": [
+      { "flag": "-t", "description": "显示 TCP 连接" },
+      { "flag": "-u", "description": "显示 UDP 连接" },
+      { "flag": "-l", "description": "只显示监听端口" },
+      { "flag": "-n", "description": "以数字形式显示地址" },
+      { "flag": "-p", "description": "显示进程 PID 和名称" },
+      { "flag": "-r", "description": "显示路由表" }
+    ],
+    "examples": ["netstat -tlnp", "netstat -an | grep 3306"]
+  },
+  {
+    "name": "ss",
+    "description": "另一个查看套接字统计的工具（netstat 的现代替代）",
+    "category": "network",
+    "options": [
+      { "flag": "-t", "description": "显示 TCP 套接字" },
+      { "flag": "-u", "description": "显示 UDP 套接字" },
+      { "flag": "-l", "description": "只显示监听套接字" },
+      { "flag": "-n", "description": "不解析服务名" },
+      { "flag": "-p", "description": "显示进程信息" }
+    ],
+    "examples": ["ss -tlnp", "ss -s"]
+  },
+  {
+    "name": "iptables",
+    "description": "IPv4 数据包过滤和 NAT 管理",
+    "category": "network",
+    "options": [
+      { "flag": "-L", "description": "列出规则" },
+      { "flag": "-A", "description": "追加规则", "requires_value": true },
+      { "flag": "-D", "description": "删除规则", "requires_value": true },
+      { "flag": "-I", "description": "插入规则", "requires_value": true },
+      { "flag": "-F", "description": "清除规则" },
+      { "flag": "-j", "description": "指定目标动作", "requires_value": true }
+    ],
+    "examples": ["iptables -L -n", "iptables -A INPUT -p tcp --dport 22 -j ACCEPT"]
+  },
+  {
+    "name": "tar",
+    "description": "归档工具",
+    "category": "compression",
+    "options": [
+      { "flag": "-c", "description": "创建归档" },
+      { "flag": "-x", "description": "提取归档" },
+      { "flag": "-v", "description": "显示过程" },
+      { "flag": "-f", "description": "指定文件名", "requires_value": true },
+      { "flag": "-z", "description": "使用 gzip 压缩" },
+      { "flag": "-j", "description": "使用 bzip2 压缩" },
+      { "flag": "-C", "description": "指定解压目录", "requires_value": true }
+    ],
+    "examples": ["tar -czvf archive.tar.gz dir/", "tar -xzvf archive.tar.gz", "tar -xzvf archive.tar.gz -C /path/"]
+  },
+  {
+    "name": "gzip",
+    "description": "压缩或解压文件",
+    "category": "compression",
+    "options": [
+      { "flag": "-d", "description": "解压" },
+      { "flag": "-k", "description": "保留原文件" },
+      { "flag": "-v", "description": "显示详细信息" },
+      { "flag": "-r", "description": "递归压缩目录" }
+    ],
+    "examples": ["gzip file.txt", "gzip -d file.txt.gz", "gzip -kr directory/"]
+  },
+  {
+    "name": "gunzip",
+    "description": "解压 gzip 文件",
+    "category": "compression",
+    "options": [],
+    "examples": ["gunzip file.txt.gz"]
+  },
+  {
+    "name": "zip",
+    "description": "打包和压缩文件",
+    "category": "compression",
+    "options": [
+      { "flag": "-r", "description": "递归处理目录" },
+      { "flag": "-q", "description": "安静模式" },
+      { "flag": "-e", "description": "加密" }
+    ],
+    "examples": ["zip -r archive.zip dir/", "zip archive.zip file1 file2"]
+  },
+  {
+    "name": "unzip",
+    "description": "解压 zip 文件",
+    "category": "compression",
+    "options": [
+      { "flag": "-l", "description": "列出内容不解压" },
+      { "flag": "-d", "description": "指定解压目录", "requires_value": true },
+      { "flag": "-o", "description": "覆盖已存在文件" }
+    ],
+    "examples": ["unzip archive.zip", "unzip archive.zip -d /path/"]
+  },
+  {
+    "name": "chmod",
+    "description": "更改文件权限",
+    "category": "permission",
+    "options": [
+      { "flag": "-R", "description": "递归更改" },
+      { "flag": "-v", "description": "显示更改过程" },
+      { "flag": "-c", "description": "只显示实际更改的文件" }
+    ],
+    "examples": ["chmod 755 script.sh", "chmod +x file.txt", "chmod -R 644 dir/"]
+  },
+  {
+    "name": "chown",
+    "description": "更改文件所有者",
+    "category": "permission",
+    "options": [
+      { "flag": "-R", "description": "递归更改" },
+      { "flag": "-v", "description": "显示更改过程" }
+    ],
+    "examples": ["chown user:group file.txt", "chown -R user directory/"]
+  },
+  {
+    "name": "chgrp",
+    "description": "更改文件组",
+    "category": "permission",
+    "options": [
+      { "flag": "-R", "description": "递归更改" },
+      { "flag": "-v", "description": "显示更改过程" }
+    ],
+    "examples": ["chgrp group file.txt", "chgrp -R group directory/"]
+  },
+  {
+    "name": "sudo",
+    "description": "以超级用户权限执行命令",
+    "category": "permission",
+    "options": [
+      { "flag": "-i", "description": "以目标用户登录（类似 su）" },
+      { "flag": "-u", "description": "指定用户", "requires_value": true },
+      { "flag": "-l", "description": "列出当前用户的权限" }
+    ],
+    "examples": ["sudo apt update", "sudo -u user command", "sudo -i"]
+  },
+  {
+    "name": "su",
+    "description": "切换用户",
+    "category": "permission",
+    "options": [
+      { "flag": "-", "description": "登录式 Shell" },
+      { "flag": "-c", "description": "执行命令", "requires_value": true }
+    ],
+    "examples": ["su -", "su - username", "su -c 'command' user"]
+  },
+  {
+    "name": "git",
+    "description": "版本控制系统",
+    "category": "development",
+    "options": [
+      { "flag": "clone", "description": "克隆仓库" },
+      { "flag": "init", "description": "初始化仓库" },
+      { "flag": "add", "description": "添加文件到暂存区" },
+      { "flag": "commit", "description": "提交更改" },
+      { "flag": "push", "description": "推送到远程" },
+      { "flag": "pull", "description": "拉取并合并" },
+      { "flag": "status", "description": "查看状态" },
+      { "flag": "log", "description": "查看提交历史" },
+      { "flag": "branch", "description": "管理分支" },
+      { "flag": "checkout", "description": "切换分支或恢复文件" },
+      { "flag": "merge", "description": "合并分支" },
+      { "flag": "-m", "description": "提交信息", "requires_value": true },
+      { "flag": "-a", "description": "所有文件" },
+      { "flag": "--amend", "description": "修改最后一次提交" }
+    ],
+    "examples": ["git status", "git add .", "git commit -m 'Fix bug'", "git push origin main"]
+  },
+  {
+    "name": "docker",
+    "description": "容器管理平台",
+    "category": "development",
+    "options": [
+      { "flag": "ps", "description": "列出容器" },
+      { "flag": "images", "description": "列出镜像" },
+      { "flag": "run", "description": "运行容器" },
+      { "flag": "exec", "description": "在运行容器中执行命令" },
+      { "flag": "build", "description": "构建镜像" },
+      { "flag": "compose", "description": "多容器应用" },
+      { "flag": "-it", "description": "交互式终端" },
+      { "flag": "-d", "description": "后台运行" },
+      { "flag": "-p", "description": "端口映射", "requires_value": true },
+      { "flag": "-v", "description": "挂载卷", "requires_value": true }
+    ],
+    "examples": ["docker ps -a", "docker run -it ubuntu bash", "docker exec -it container bash"]
+  },
+  {
+    "name": "kubectl",
+    "description": "Kubernetes 命令行工具",
+    "category": "kubernetes",
+    "options": [
+      { "flag": "get", "description": "列出一个或多个资源" },
+      { "flag": "apply", "description": "通过文件应用配置" },
+      { "flag": "create", "description": "从文件创建资源" },
+      { "flag": "delete", "description": "通过文件或标准输入删除资源" },
+      { "flag": "describe", "description": "显示资源详细信息" },
+      { "flag": "logs", "description": "查看 Pod 日志" },
+      { "flag": "exec", "description": "在容器中执行命令" },
+      { "flag": "-n", "description": "指定命名空间", "short_flag": "--namespace", "requires_value": true },
+      { "flag": "-f", "description": "指定文件", "requires_value": true },
+      { "flag": "-o", "description": "输出格式", "requires_value": true }
+    ],
+    "examples": ["kubectl get pods -n kube-system", "kubectl apply -f deployment.yaml", "kubectl logs -f pod-name"]
+  },
+  {
+    "name": "npm",
+    "description": "Node.js 包管理器",
+    "category": "development",
+    "options": [
+      { "flag": "install", "description": "安装包" },
+      { "flag": "uninstall", "description": "卸载包" },
+      { "flag": "update", "description": "更新包" },
+      { "flag": "start", "description": "启动应用" },
+      { "flag": "build", "description": "构建应用" },
+      { "flag": "run", "description": "运行脚本" },
+      { "flag": "-g", "description": "全局安装" },
+      { "flag": "--save", "description": "保存为依赖" },
+      { "flag": "--save-dev", "description": "保存为开发依赖" }
+    ],
+    "examples": ["npm install", "npm install -g package", "npm run dev"]
+  },
+  {
+    "name": "vim",
+    "description": "高级文本编辑器",
+    "category": "editor",
+    "options": [],
+    "examples": ["vim file.txt"]
+  },
+  {
+    "name": "nano",
+    "description": "简单易用的文本编辑器",
+    "category": "editor",
+    "options": [],
+    "examples": ["nano file.txt"]
+  },
+  {
+    "name": "zgrep",
+    "description": "在压缩文件中搜索正则表达式",
+    "category": "file",
+    "options": [
+      { "flag": "-i", "description": "忽略大小写" },
+      { "flag": "-c", "description": "只显示匹配行数" },
+      { "flag": "-l", "description": "只显示匹配的文件名" },
+      { "flag": "-n", "description": "显示行号" }
+    ],
+    "examples": ["zgrep 'error' log.gz", "zgrep -i 'fail' *.gz"]
+  }
+]

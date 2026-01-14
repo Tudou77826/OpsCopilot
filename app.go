@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"opscopilot/pkg/ai"
+	"opscopilot/pkg/completion"
 	"opscopilot/pkg/config"
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/llm"
@@ -25,15 +26,16 @@ import (
 
 // App struct
 type App struct {
-	ctx             context.Context
-	sessionMgr      *session.Manager
-	savedSessionMgr *sessionmanager.Manager
-	secretStore     secretstore.SecretStore
-	aiService       *ai.AIService
-	configMgr       *config.Manager
-	recorder        *session_recorder.Recorder
-	activeConfigs   map[string]ConnectConfig
-	isForceQuitting bool // Flag to skip confirmation on force quit
+	ctx               context.Context
+	sessionMgr        *session.Manager
+	savedSessionMgr   *sessionmanager.Manager
+	secretStore       secretstore.SecretStore
+	aiService         *ai.AIService
+	configMgr         *config.Manager
+	recorder          *session_recorder.Recorder
+	completionService *completion.Service
+	activeConfigs     map[string]ConnectConfig
+	isForceQuitting   bool // Flag to skip confirmation on force quit
 }
 
 // NewApp creates a new App application struct
@@ -58,15 +60,23 @@ func NewApp() *App {
 		fmt.Printf("Warning: Failed to load saved sessions: %v\n", err)
 	}
 
+	// Initialize Completion Service
+	completionDB, err := completion.NewDatabase()
+	if err != nil {
+		fmt.Printf("Warning: Failed to initialize completion database: %v\n", err)
+	}
+	completionService := completion.NewService(completionDB)
+
 	return &App{
-		sessionMgr:      session.NewManager(),
-		savedSessionMgr: savedMgr,
-		secretStore:     secretstore.NewKeyringStore(),
-		aiService:       aiService,
-		configMgr:       configMgr,
-		recorder:        recorder,
-		activeConfigs:   make(map[string]ConnectConfig),
-		isForceQuitting: false,
+		sessionMgr:        session.NewManager(),
+		savedSessionMgr:   savedMgr,
+		secretStore:       secretstore.NewKeyringStore(),
+		aiService:         aiService,
+		configMgr:         configMgr,
+		recorder:          recorder,
+		completionService: completionService,
+		activeConfigs:     make(map[string]ConnectConfig),
+		isForceQuitting:   false,
 	}
 }
 
@@ -659,4 +669,31 @@ func (a *App) HasActiveWork() map[string]interface{} {
 		"hasTroubleshootingSession": hasTroubleshooting,
 		"hasAnyWork":                hasTerminals || hasTroubleshooting,
 	}
+}
+
+// GetCompletions returns command completion suggestions
+func (a *App) GetCompletions(input string, cursor int) string {
+	if a.completionService == nil {
+		return "[]" // Return empty if service not initialized
+	}
+
+	req := completion.CompletionRequest{
+		Input:  input,
+		Cursor: cursor,
+	}
+
+	resp, err := a.completionService.GetCompletions(req)
+	if err != nil {
+		log.Printf("[GetCompletions] Error: %v", err)
+		return "[]"
+	}
+
+	// Convert to JSON
+	data, err := json.Marshal(resp)
+	if err != nil {
+		log.Printf("[GetCompletions] JSON error: %v", err)
+		return "[]"
+	}
+
+	return string(data)
 }

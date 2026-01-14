@@ -7,11 +7,12 @@ import (
 )
 
 type AppConfig struct {
-	LLM           LLMConfig         `json:"llm"`
-	Prompts       map[string]string `json:"prompts"`
-	Log           LogConfig         `json:"log"`
-	Docs          DocsConfig        `json:"docs"`
-	QuickCommands []QuickCommand    `json:"quick_commands"`
+	LLM             LLMConfig         `json:"llm"`
+	Prompts         map[string]string `json:"prompts"`
+	Log             LogConfig         `json:"log"`
+	Docs            DocsConfig        `json:"docs"`
+	QuickCommands   []QuickCommand    `json:"quick_commands"`
+	CompletionDelay int               `json:"completion_delay"`
 }
 
 type QuickCommand struct {
@@ -57,7 +58,8 @@ func NewManager() *Manager {
 		Docs: DocsConfig{
 			Dir: "", // Default to empty, will be resolved dynamically if empty
 		},
-		QuickCommands: []QuickCommand{},
+		QuickCommands:   []QuickCommand{},
+		CompletionDelay: 150, // Default 150ms
 	}
 
 	return &Manager{
@@ -176,15 +178,17 @@ func (m *Manager) loadQuickCommands() error {
 func (m *Manager) Save() error {
 	// 保存主配置（不包含 prompts 和 quick_commands）
 	type ConfigForSave struct {
-		LLM  LLMConfig  `json:"llm"`
-		Log  LogConfig  `json:"log"`
-		Docs DocsConfig `json:"docs"`
+		LLM             LLMConfig  `json:"llm"`
+		Log             LogConfig  `json:"log"`
+		Docs            DocsConfig `json:"docs"`
+		CompletionDelay int        `json:"completion_delay"`
 	}
 
 	cfg := ConfigForSave{
-		LLM:  m.Config.LLM,
-		Log:  m.Config.Log,
-		Docs: m.Config.Docs,
+		LLM:             m.Config.LLM,
+		Log:             m.Config.Log,
+		Docs:            m.Config.Docs,
+		CompletionDelay: m.Config.CompletionDelay,
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")

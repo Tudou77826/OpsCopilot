@@ -15,6 +15,7 @@ interface AppConfig {
     docs: {
         dir: string;
     };
+    completion_delay: number;
 }
 
 interface SettingsModalProps {
@@ -22,9 +23,10 @@ interface SettingsModalProps {
     onClose: () => void;
     isBroadcastMode?: boolean;
     onToggleBroadcast?: (enabled: boolean) => void;
+    onCompletionDelayChange?: (delay: number) => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadcastMode, onToggleBroadcast }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadcastMode, onToggleBroadcast, onCompletionDelayChange }) => {
     const [config, setConfig] = useState<AppConfig | null>(null);
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
@@ -64,6 +66,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                 setMsg('错误: ' + err);
             } else {
                 setMsg('设置已保存！');
+                if (onCompletionDelayChange && config.completion_delay !== undefined) {
+                    onCompletionDelayChange(config.completion_delay);
+                }
                 setTimeout(() => {
                     setMsg('');
                     onClose();
@@ -78,12 +83,23 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
 
     const handleChange = (section: keyof AppConfig, key: string, value: string) => {
         if (!config) return;
+        const sectionValue = config[section];
+        if (typeof sectionValue === 'object' && sectionValue !== null) {
+            setConfig({
+                ...config,
+                [section]: {
+                    ...sectionValue,
+                    [key]: value
+                }
+            });
+        }
+    };
+
+    const handleCompletionDelayChange = (value: number) => {
+        if (!config) return;
         setConfig({
             ...config,
-            [section]: {
-                ...config[section],
-                [key]: value
-            }
+            completion_delay: value
         });
     };
 
@@ -259,6 +275,27 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
 
                     {activeTab === 'app' && (
                         <div style={styles.formSection}>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>命令补全延迟时间 (毫秒)</label>
+                                <input 
+                                    style={styles.input}
+                                    type="number"
+                                    min="0"
+                                    max="2000"
+                                    step="50"
+                                    value={config.completion_delay || 150}
+                                    onChange={(e) => {
+                                        const value = parseInt(e.target.value) || 150;
+                                        setConfig({
+                                            ...config,
+                                            completion_delay: Math.max(0, Math.min(2000, value))
+                                        });
+                                    }}
+                                />
+                                <div style={{ color: '#888', fontSize: '0.8rem', marginTop: '4px' }}>
+                                    设置命令自动补全的触发延迟时间（毫秒）。设置为 0 表示立即触发，设置为 2000 表示延迟 2 秒触发。
+                                </div>
+                            </div>
                             <div style={styles.formGroup}>
                                 <label style={styles.label}>多窗口广播模式</label>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

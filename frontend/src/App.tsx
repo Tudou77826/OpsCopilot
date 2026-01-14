@@ -27,6 +27,7 @@ function App() {
     const [broadcastIds, setBroadcastIds] = useState<string[]>([]);
     const [isConfirmCloseOpen, setIsConfirmCloseOpen] = useState(false);
     const [confirmCloseMessage, setConfirmCloseMessage] = useState("");
+    const [completionDelay, setCompletionDelay] = useState(150);
 
     // Refs to hold latest state for callbacks
     const isBroadcastModeRef = useRef(isBroadcastMode);
@@ -71,6 +72,25 @@ function App() {
             unlisteners.current.forEach(u => u());
             unlisteners.current.clear();
         };
+    }, []);
+
+    // Load completion delay from settings on mount
+    useEffect(() => {
+        const loadCompletionDelay = async () => {
+            try {
+                // @ts-ignore
+                if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSettings) {
+                    // @ts-ignore
+                    const cfg = await window.go.main.App.GetSettings();
+                    if (cfg && cfg.completion_delay !== undefined) {
+                        setCompletionDelay(cfg.completion_delay);
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load completion delay:', e);
+            }
+        };
+        loadCompletionDelay();
     }, []);
 
     const removeTerminal = (id: string) => {
@@ -375,6 +395,7 @@ function App() {
                         isBroadcastMode={isBroadcastMode}
                         broadcastIds={broadcastIds}
                         onToggleTerminalBroadcast={handleToggleTerminalBroadcast}
+                        completionDelay={completionDelay}
                     />
                 </div>
 
@@ -441,6 +462,7 @@ function App() {
                 onClose={() => setIsSettingsOpen(false)}
                 isBroadcastMode={isBroadcastMode}
                 onToggleBroadcast={handleToggleBroadcast}
+                onCompletionDelayChange={setCompletionDelay}
             />
 
             <ConfirmCloseModal
