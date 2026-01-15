@@ -136,6 +136,21 @@ func (s *Service) completeOptions(beforeCursor, currentWord string, startIdx, cu
 	// If we're not typing a flag (currentWord doesn't start with -), suggest all options
 	if !strings.HasPrefix(currentWord, "-") {
 		var suggestions []CompletionSuggestion
+		for _, combo := range cmd.Combos {
+			if combo.Text == "" {
+				continue
+			}
+			display := combo.Text
+			if combo.Description != "" {
+				display = combo.Text + " " + combo.Description
+			}
+			suggestions = append(suggestions, CompletionSuggestion{
+				Type:        "option",
+				Text:        " " + combo.Text,
+				DisplayText: display,
+				Description: combo.Description,
+			})
+		}
 		for _, opt := range cmd.Options {
 			suggestions = append(suggestions, CompletionSuggestion{
 				Type:        "option",
@@ -153,6 +168,23 @@ func (s *Service) completeOptions(beforeCursor, currentWord string, startIdx, cu
 
 	// We're typing a flag, complete it
 	var suggestions []CompletionSuggestion
+	for _, combo := range cmd.Combos {
+		if combo.Text == "" {
+			continue
+		}
+		if strings.HasPrefix(combo.Text, currentWord) {
+			display := combo.Text
+			if combo.Description != "" {
+				display = combo.Text + " " + combo.Description
+			}
+			suggestions = append(suggestions, CompletionSuggestion{
+				Type:        "option",
+				Text:        combo.Text,
+				DisplayText: display,
+				Description: combo.Description,
+			})
+		}
+	}
 	for _, opt := range cmd.Options {
 		flag := opt.Flag
 		if strings.HasPrefix(flag, currentWord) {
