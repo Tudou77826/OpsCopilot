@@ -48,8 +48,20 @@ func NewApp() *App {
 	// Initialize LLM provider using loaded config
 	llmConfig := configMgr.Config.LLM
 	// Use OpenAIProvider by default, fallback to DeepSeek compatible
-	provider := llm.NewOpenAIProvider(llmConfig.APIKey, llmConfig.BaseURL, llmConfig.Model)
-	aiService := ai.NewAIService(provider, configMgr)
+	fastModel := llmConfig.FastModel
+	if fastModel == "" {
+		fastModel = llmConfig.Model
+	}
+	if fastModel == "" {
+		fastModel = "deepseek-chat"
+	}
+	complexModel := llmConfig.ComplexModel
+	if complexModel == "" {
+		complexModel = "glm46"
+	}
+	fastProvider := llm.NewOpenAIProvider(llmConfig.APIKey, llmConfig.BaseURL, fastModel)
+	complexProvider := llm.NewOpenAIProvider(llmConfig.APIKey, llmConfig.BaseURL, complexModel)
+	aiService := ai.NewAIService(fastProvider, complexProvider, configMgr)
 
 	// Initialize Recorder
 	recorder := session_recorder.NewRecorder("sessions")
@@ -562,8 +574,20 @@ func (a *App) SaveSettings(cfg config.AppConfig) string {
 
 	// Update AI Service Provider
 	llmConfig := cfg.LLM
-	newProvider := llm.NewOpenAIProvider(llmConfig.APIKey, llmConfig.BaseURL, llmConfig.Model)
-	a.aiService.UpdateProvider(newProvider)
+	fastModel := llmConfig.FastModel
+	if fastModel == "" {
+		fastModel = llmConfig.Model
+	}
+	if fastModel == "" {
+		fastModel = "deepseek-chat"
+	}
+	complexModel := llmConfig.ComplexModel
+	if complexModel == "" {
+		complexModel = "glm46"
+	}
+	fastProvider := llm.NewOpenAIProvider(llmConfig.APIKey, llmConfig.BaseURL, fastModel)
+	complexProvider := llm.NewOpenAIProvider(llmConfig.APIKey, llmConfig.BaseURL, complexModel)
+	a.aiService.UpdateProviders(fastProvider, complexProvider)
 
 	return ""
 }

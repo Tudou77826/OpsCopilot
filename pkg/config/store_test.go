@@ -54,5 +54,6 @@ func TestConfigLoad(t *testing.T) {
 	t.Logf("配置加载成功!")
 	t.Logf("- Prompts 数量: %d", len(mgr.Config.Prompts))
 	t.Logf("- QuickCommands 数量: %d", len(mgr.Config.QuickCommands))
-	t.Logf("- LLM Model: %s", mgr.Config.LLM.Model)
+	t.Logf("- LLM FastModel: %s", mgr.Config.LLM.FastModel)
+	t.Logf("- LLM ComplexModel: %s", mgr.Config.LLM.ComplexModel)
 }

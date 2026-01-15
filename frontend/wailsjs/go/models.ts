@@ -43,7 +43,9 @@ export namespace config {
 	export class LLMConfig {
 	    APIKey: string;
 	    BaseURL: string;
-	    Model: string;
+	    FastModel: string;
+	    ComplexModel: string;
+	    Model?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new LLMConfig(source);
@@ -53,6 +55,8 @@ export namespace config {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.APIKey = source["APIKey"];
 	        this.BaseURL = source["BaseURL"];
+	        this.FastModel = source["FastModel"];
+	        this.ComplexModel = source["ComplexModel"];
 	        this.Model = source["Model"];
 	    }
 	}

@@ -4,7 +4,9 @@ interface AppConfig {
     llm: {
         APIKey: string;
         BaseURL: string;
-        Model: string;
+        FastModel: string;
+        ComplexModel: string;
+        Model?: string;
     };
     prompts: {
         [key: string]: string;
@@ -46,7 +48,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSettings) {
                 // @ts-ignore
                 const cfg = await window.go.main.App.GetSettings();
-                setConfig(cfg);
+                const llmCfg = cfg.llm || {};
+                const fastModel = llmCfg.FastModel || llmCfg.Model || '';
+                const complexModel = llmCfg.ComplexModel || '';
+                setConfig({
+                    ...cfg,
+                    llm: {
+                        ...llmCfg,
+                        FastModel: fastModel,
+                        ComplexModel: complexModel,
+                    }
+                });
             }
         } catch (e) {
             console.error(e);
@@ -190,12 +202,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                                 />
                             </div>
                             <div style={styles.formGroup}>
-                                <label style={styles.label}>模型名称 (Model)</label>
+                                <label style={styles.label}>快速模型（简单任务）</label>
                                 <input 
                                     style={styles.input}
-                                    value={config.llm.Model}
-                                    onChange={(e) => handleChange('llm', 'Model', e.target.value)}
-                                    placeholder="gpt-3.5-turbo"
+                                    value={config.llm.FastModel}
+                                    onChange={(e) => handleChange('llm', 'FastModel', e.target.value)}
+                                    placeholder="deepseek-chat"
+                                />
+                            </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>复杂模型（长上下文任务）</label>
+                                <input 
+                                    style={styles.input}
+                                    value={config.llm.ComplexModel}
+                                    onChange={(e) => handleChange('llm', 'ComplexModel', e.target.value)}
+                                    placeholder="glm46"
                                 />
                             </div>
                         </div>

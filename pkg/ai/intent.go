@@ -13,19 +13,22 @@ import (
 )
 
 type AIService struct {
-	provider llm.Provider
-	cfgMgr   *config.Manager
+	fastProvider    llm.Provider
+	complexProvider llm.Provider
+	cfgMgr          *config.Manager
 }
 
-func NewAIService(provider llm.Provider, cfgMgr *config.Manager) *AIService {
+func NewAIService(fastProvider llm.Provider, complexProvider llm.Provider, cfgMgr *config.Manager) *AIService {
 	return &AIService{
-		provider: provider,
-		cfgMgr:   cfgMgr,
+		fastProvider:    fastProvider,
+		complexProvider: complexProvider,
+		cfgMgr:          cfgMgr,
 	}
 }
 
-func (s *AIService) UpdateProvider(provider llm.Provider) {
-	s.provider = provider
+func (s *AIService) UpdateProviders(fastProvider llm.Provider, complexProvider llm.Provider) {
+	s.fastProvider = fastProvider
+	s.complexProvider = complexProvider
 }
 
 func (s *AIService) ParseConnectIntent(input string) ([]sshclient.ConnectConfig, error) {
@@ -41,7 +44,7 @@ func (s *AIService) ParseConnectIntent(input string) ([]sshclient.ConnectConfig,
 
 	log.Printf("[AIService] Sending request to LLM: %s", input)
 
-	resp, err := s.provider.ChatCompletion(context.Background(), messages)
+	resp, err := s.fastProvider.ChatCompletion(context.Background(), messages)
 	if err != nil {
 		log.Printf("[AIService] Provider error: %v", err)
 		return nil, fmt.Errorf("AI provider error: %w", err)
@@ -104,7 +107,7 @@ func (s *AIService) AskWithContext(question string, contextContent string) (stri
 
 	log.Printf("[AIService] Sending QA request to LLM")
 
-	resp, err := s.provider.ChatCompletion(context.Background(), messages)
+	resp, err := s.complexProvider.ChatCompletion(context.Background(), messages)
 	if err != nil {
 		log.Printf("[AIService] QA Provider error: %v", err)
 		return "", fmt.Errorf("AI provider error: %w", err)
@@ -129,7 +132,7 @@ func (s *AIService) AskTroubleshoot(problem string, contextContent string) (stri
 
 	log.Printf("[AIService] Sending Troubleshoot request to LLM")
 
-	resp, err := s.provider.ChatCompletion(context.Background(), messages)
+	resp, err := s.complexProvider.ChatCompletion(context.Background(), messages)
 	if err != nil {
 		log.Printf("[AIService] Troubleshoot Provider error: %v", err)
 		return "", fmt.Errorf("AI provider error: %w", err)
@@ -154,7 +157,7 @@ func (s *AIService) GenerateConclusion(timeline string, rootCause string) (strin
 
 	log.Printf("[AIService] Generating conclusion")
 
-	resp, err := s.provider.ChatCompletion(context.Background(), messages)
+	resp, err := s.fastProvider.ChatCompletion(context.Background(), messages)
 	if err != nil {
 		return "", fmt.Errorf("AI provider error: %w", err)
 	}
@@ -175,7 +178,7 @@ func (s *AIService) PolishContent(content string) (string, error) {
 
 	log.Printf("[AIService] Polishing content")
 
-	resp, err := s.provider.ChatCompletion(context.Background(), messages)
+	resp, err := s.fastProvider.ChatCompletion(context.Background(), messages)
 	if err != nil {
 		return "", fmt.Errorf("AI provider error: %w", err)
 	}

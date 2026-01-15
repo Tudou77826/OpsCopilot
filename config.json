@@ -2,7 +2,8 @@
   "llm": {
     "APIKey": "sk-BW5vqaJWdVTWabwQK9ORXekDA2a7RdC8bFULbTN2XS6KRQDC",
     "BaseURL": "https://huazi.de5.net/v1",
-    "Model": "gemini-2.5-flash"
+    "FastModel": "gemini-2.5-flash",
+    "ComplexModel": "glm46"
   },
   "log": {
     "dir": "D:\\dev\\log"

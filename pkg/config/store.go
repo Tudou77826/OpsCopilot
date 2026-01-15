@@ -82,9 +82,30 @@ func (m *Manager) Load() error {
 		return err
 	}
 
+	var raw map[string]any
+	_ = json.Unmarshal(data, &raw)
+	llmRaw, _ := raw["llm"].(map[string]any)
+	_, hasFastModel := llmRaw["FastModel"]
+	_, hasComplexModel := llmRaw["ComplexModel"]
+	_, hasOldModel := llmRaw["Model"]
+
 	// 解析配置
 	if err := json.Unmarshal(data, m.Config); err != nil {
 		return err
+	}
+
+	changed := false
+	if !hasFastModel && hasOldModel && m.Config.LLM.Model != "" {
+		m.Config.LLM.FastModel = m.Config.LLM.Model
+		changed = true
+	}
+	if !hasComplexModel {
+		m.Config.LLM.ComplexModel = "glm46"
+		changed = true
+	}
+	if hasOldModel && m.Config.LLM.Model != "" {
+		m.Config.LLM.Model = ""
+		changed = true
 	}
 
 	// 加载 prompts 配置
@@ -95,6 +116,12 @@ func (m *Manager) Load() error {
 	// 加载 quick_commands 配置
 	if err := m.loadQuickCommands(); err != nil {
 		return err
+	}
+
+	if changed {
+		if err := m.Save(); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -233,7 +260,7 @@ func (m *Manager) saveQuickCommands() error {
 func (m *Manager) SetLLMConfig(apiKey, baseURL, model string) {
 	m.Config.LLM.APIKey = apiKey
 	m.Config.LLM.BaseURL = baseURL
-	m.Config.LLM.Model = model
+	m.Config.LLM.FastModel = model
 }
 
 func (m *Manager) SetPrompt(key, content string) {

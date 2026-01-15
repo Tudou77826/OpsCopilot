@@ -42,7 +42,7 @@ func TestParseConnectIntent(t *testing.T) {
 	}
 
 	cfgMgr := config.NewManager()
-	service := NewAIService(mockProvider, cfgMgr)
+	service := NewAIService(mockProvider, mockProvider, cfgMgr)
 
 	input := "通过跳板机 10.0.0.1 (admin/abc) 连接 192.168.1.10 和 1.11，账号 root 密码 123"
 	configs, err := service.ParseConnectIntent(input)
@@ -92,7 +92,7 @@ echo 42`
 	}
 
 	cfgMgr := config.NewManager()
-	service := NewAIService(mockProvider, cfgMgr)
+	service := NewAIService(mockProvider, mockProvider, cfgMgr)
 
 	contextContent := "The answer to everything is 42."
 	question := "What is the answer?"

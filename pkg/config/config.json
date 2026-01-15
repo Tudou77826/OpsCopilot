@@ -2,12 +2,14 @@
   "llm": {
     "APIKey": "",
     "BaseURL": "https://api.deepseek.com/v1",
-    "Model": "deepseek-chat"
+    "FastModel": "deepseek-chat",
+    "ComplexModel": "glm46"
   },
   "log": {
     "dir": "d:\\dev\\workspace-go\\OpsCopilot\\pkg\\config\\logs"
   },
   "docs": {
     "dir": ""
-  }
+  },
+  "completion_delay": 150
 }
