@@ -308,26 +308,35 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             e.stopPropagation();
             const text = e.clipboardData?.getData('text');
             if (text) {
-                onData?.(text);
                 currentInputRef.current += text;
+                setCompletionVisible(false);
+                completionVisibleRef.current = false;
+                triggerCompletion();
+                term.paste(text);
             }
         };
         terminalRef.current.addEventListener('paste', handlePaste);
 
         // Middle click paste
-        terminalRef.current.addEventListener('auxclick', (e) => {
+        const handleAuxClick = (e: MouseEvent) => {
             if (e.button === 1) {
                 e.preventDefault();
                 navigator.clipboard.readText().then(text => {
-                    onData?.(text);
-                    currentInputRef.current += text;
+                    if (text) {
+                        currentInputRef.current += text;
+                        setCompletionVisible(false);
+                        completionVisibleRef.current = false;
+                        triggerCompletion();
+                        term.paste(text);
+                    }
                     term.focus();
                 });
             }
-        });
+        };
+        terminalRef.current.addEventListener('auxclick', handleAuxClick);
 
         // Right click context menu
-        terminalRef.current.addEventListener('contextmenu', (e) => {
+        const handleContextMenu = (e: MouseEvent) => {
             e.preventDefault();
             e.stopPropagation();
             const selection = term.getSelection();
@@ -336,12 +345,18 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                 term.clearSelection();
             } else {
                 navigator.clipboard.readText().then(text => {
-                    onData?.(text);
-                    currentInputRef.current += text;
+                    if (text) {
+                        currentInputRef.current += text;
+                        setCompletionVisible(false);
+                        completionVisibleRef.current = false;
+                        triggerCompletion();
+                        term.paste(text);
+                    }
                     term.focus();
                 });
             }
-        });
+        };
+        terminalRef.current.addEventListener('contextmenu', handleContextMenu);
 
         // Window resize
         const handleResize = () => {
@@ -356,6 +371,8 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             }
             window.removeEventListener('resize', handleResize);
             terminalRef.current?.removeEventListener('paste', handlePaste);
+            terminalRef.current?.removeEventListener('auxclick', handleAuxClick);
+            terminalRef.current?.removeEventListener('contextmenu', handleContextMenu);
             term.dispose();
         };
     }, [onData, sessionID, fetchCompletions, handleCompletionSelect]);
