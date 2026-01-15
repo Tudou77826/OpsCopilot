@@ -20,6 +20,9 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
     const terminalRef = useRef<HTMLDivElement>(null);
     const xtermRef = useRef<Terminal | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
+    const onDataRef = useRef<((data: string) => void) | undefined>(onData);
+    const sessionIDRef = useRef<string | undefined>(sessionID);
+    const completionDelayRef = useRef<number>(completionDelay);
 
     // Completion state
     const [completionVisible, setCompletionVisible] = useState(false);
@@ -45,9 +48,15 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         selectedIndexRef.current = selectedIndex;
     }, [completionVisible, completionData, selectedIndex]);
 
+    useEffect(() => {
+        onDataRef.current = onData;
+        sessionIDRef.current = sessionID;
+        completionDelayRef.current = completionDelay;
+    }, [onData, sessionID, completionDelay]);
+
     // Helper function to sync terminal size to backend PTY
     const syncSizeToBackend = () => {
-        if (!sessionID || !xtermRef.current) return;
+        if (!sessionIDRef.current || !xtermRef.current) return;
 
         const cols = xtermRef.current.cols;
         const rows = xtermRef.current.rows;
@@ -55,7 +64,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         // @ts-ignore
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.ResizeTerminal) {
             // @ts-ignore
-            window.go.main.App.ResizeTerminal(sessionID, cols, rows);
+            window.go.main.App.ResizeTerminal(sessionIDRef.current, cols, rows);
         }
     };
 
@@ -116,7 +125,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
 
     // Handle completion selection
     const handleCompletionSelect = useCallback((suggestion: CompletionSuggestion) => {
-        if (!onData) return;
+        if (!onDataRef.current) return;
 
         const { replace_from, replace_to } = completionDataRef.current;
 
@@ -125,18 +134,18 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
 
         // Send backspaces to delete the partial word
         for (let i = 0; i < charsToDelete; i++) {
-            onData('\x7f'); // Backspace
+            onDataRef.current('\x7f'); // Backspace
         }
 
         // Send the completion text
-        onData(suggestion.text);
+        onDataRef.current(suggestion.text);
 
         // Update our local tracking
         const before = currentInputRef.current.slice(0, replace_from);
         currentInputRef.current = before + suggestion.text;
 
         setCompletionVisible(false);
-    }, [onData]);
+    }, []);
 
     // Handle keyboard navigation
     const handleNavigate = useCallback((direction: 'up' | 'down') => {
@@ -184,7 +193,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
 
         term.onData((data) => {
             // Pass all data through to backend immediately
-            onData?.(data);
+            onDataRef.current?.(data);
 
             // Handle special keys for completion
             if (data === '\r' || data === '\n') {
@@ -250,7 +259,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                 } else {
                     setCompletionVisible(false);
                 }
-            }, completionDelay);
+            }, completionDelayRef.current);
         };
 
         // Add key handler for Tab
@@ -375,7 +384,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             terminalRef.current?.removeEventListener('contextmenu', handleContextMenu);
             term.dispose();
         };
-    }, [onData, sessionID, fetchCompletions, handleCompletionSelect]);
+    }, [fetchCompletions, handleCompletionSelect]);
 
     return (
         <>
