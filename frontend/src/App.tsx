@@ -197,6 +197,7 @@ function App() {
     const typeGeneratedCommand = () => {
         const cmd = commandQueryResult?.command?.trim();
         if (!cmd) return;
+        setIsCommandQueryOpen(false);
         handleQuickCommand(cmd);
     };
 
@@ -317,10 +318,13 @@ function App() {
 
         // @ts-ignore
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.Write) {
-            const payload = command.endsWith('\n') ? command : command + '\n';
+            const payload = command.replace(/[\r\n]+$/g, '');
             // @ts-ignore
             window.go.main.App.Write(activeTerminalId, payload);
         }
+        setTimeout(() => {
+            terminalRefs.current.get(activeTerminalId)?.focus();
+        }, 0);
     };
 
     const handleCloseTerminal = (id: string) => {

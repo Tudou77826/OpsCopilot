@@ -15,6 +15,7 @@ export interface TerminalRef {
     write: (data: string) => void;
     fit: () => void;
     getCursorScreenPosition: () => { x: number; y: number } | null;
+    focus: () => void;
 }
 
 const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionID, onData, completionDelay = 150 }, ref) => {
@@ -169,6 +170,9 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         fit: () => {
             fitAddonRef.current?.fit();
             setTimeout(() => syncSizeToBackend(), 10);
+        },
+        focus: () => {
+            xtermRef.current?.focus();
         },
         getCursorScreenPosition: () => {
             if (!xtermRef.current || !terminalRef.current) return null;
