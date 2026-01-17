@@ -20,14 +20,14 @@ describe('SmartConnectModal', () => {
 
     it('renders nothing when not open', () => {
         render(<SmartConnectModal {...defaultProps} isOpen={false} />);
-        expect(screen.queryByText('Smart Connect (AI)')).not.toBeInTheDocument();
+        expect(screen.queryByText('新建连接')).not.toBeInTheDocument();
     });
 
     it('renders input area when open and no results', () => {
         render(<SmartConnectModal {...defaultProps} />);
-        expect(screen.getByText('New Connection')).toBeInTheDocument();
-        expect(screen.getByPlaceholderText(/AI Magic/i)).toBeInTheDocument();
-        expect(screen.getByText('Analyze')).toBeInTheDocument();
+        expect(screen.getByText('新建连接')).toBeInTheDocument();
+        expect(screen.getByPlaceholderText(/你可以使用自然输入连接要求/i)).toBeInTheDocument();
+        expect(screen.getByText('智能分析')).toBeInTheDocument();
     });
 
     it('calls onParse when Analyze is clicked', async () => {
@@ -36,17 +36,16 @@ describe('SmartConnectModal', () => {
 
         render(<SmartConnectModal {...defaultProps} />);
         
-        const input = screen.getByPlaceholderText(/AI Magic/i);
+        const input = screen.getByPlaceholderText(/你可以使用自然输入连接要求/i);
         fireEvent.change(input, { target: { value: 'Connect to web server' } });
         
-        const analyzeBtn = screen.getByText('Analyze');
+        const analyzeBtn = screen.getByText('智能分析');
         fireEvent.click(analyzeBtn);
 
         expect(mockOnParse).toHaveBeenCalledWith('Connect to web server');
         
         await waitFor(() => {
-            // Note: Header changed to "Connections (1)"
-            expect(screen.getByText('Connections (1)')).toBeInTheDocument();
+            expect(screen.getByText('连接列表 (1)')).toBeInTheDocument();
         });
         
         // Verify result display
@@ -61,22 +60,16 @@ describe('SmartConnectModal', () => {
         render(<SmartConnectModal {...defaultProps} />);
         
         // Trigger parse flow
-        const input = screen.getByPlaceholderText(/AI Magic/i);
+        const input = screen.getByPlaceholderText(/你可以使用自然输入连接要求/i);
         fireEvent.change(input, { target: { value: 'Connect' } });
-        fireEvent.click(screen.getByText('Analyze'));
+        fireEvent.click(screen.getByText('智能分析'));
 
         await waitFor(() => {
-            expect(screen.getByText('Connections (1)')).toBeInTheDocument();
+            expect(screen.getByText('连接列表 (1)')).toBeInTheDocument();
         });
 
-        // For single result, it is auto-expanded, so we don't need to click Edit Details
-        // But the new UI uses an icon button for toggle (✏️)
-        // Actually, logic says: if (parsedConfigs.length === 0 && configsWithName.length === 1) { setExpandedIndices(new Set([0])); }
-        // So it should be expanded.
-
-        // Find Host input (it's inside the expanded card)
-        const hostInput = screen.getByLabelText('Host');
-        const nameInput = screen.getByPlaceholderText('Connection Name') as HTMLInputElement;
+        const hostInput = screen.getByLabelText('主机地址');
+        const nameInput = screen.getByPlaceholderText('连接名称') as HTMLInputElement;
 
         // Verify initial state
         expect(hostInput).toHaveValue('10.0.0.1');
@@ -95,14 +88,14 @@ describe('SmartConnectModal', () => {
         render(<SmartConnectModal {...defaultProps} />);
         
         // Trigger parse flow
-        fireEvent.change(screen.getByPlaceholderText(/AI Magic/i), { target: { value: 'Connect' } });
-        fireEvent.click(screen.getByText('Analyze'));
-        await waitFor(() => screen.getByText('Connections (1)'));
+        fireEvent.change(screen.getByPlaceholderText(/你可以使用自然输入连接要求/i), { target: { value: 'Connect' } });
+        fireEvent.click(screen.getByText('智能分析'));
+        await waitFor(() => screen.getByText('连接列表 (1)'));
 
         // Auto-expanded for single result
         
-        const hostInput = screen.getByLabelText('Host');
-        const nameInput = screen.getByPlaceholderText('Connection Name') as HTMLInputElement;
+        const hostInput = screen.getByLabelText('主机地址');
+        const nameInput = screen.getByPlaceholderText('连接名称') as HTMLInputElement;
 
         // Manually change Name
         fireEvent.change(nameInput, { target: { value: 'My Custom Server' } });
@@ -120,14 +113,14 @@ describe('SmartConnectModal', () => {
 
         render(<SmartConnectModal {...defaultProps} />);
         
-        fireEvent.change(screen.getByPlaceholderText(/AI Magic/i), { target: { value: 'Connect' } });
-        fireEvent.click(screen.getByText('Analyze'));
-        await waitFor(() => screen.getByText('Connections (1)'));
+        fireEvent.change(screen.getByPlaceholderText(/你可以使用自然输入连接要求/i), { target: { value: 'Connect' } });
+        fireEvent.click(screen.getByText('智能分析'));
+        await waitFor(() => screen.getByText('连接列表 (1)'));
 
         // Auto-expanded
 
         // Check bastion toggle
-        const bastionCheckbox = screen.getByLabelText('Use Bastion Host');
+        const bastionCheckbox = screen.getByLabelText(/使用跳板机/i);
         expect(bastionCheckbox).not.toBeChecked();
 
         // Enable bastion
@@ -135,29 +128,25 @@ describe('SmartConnectModal', () => {
         expect(bastionCheckbox).toBeChecked();
 
         // Check if bastion fields appear
-        expect(screen.getByLabelText('Bastion Host')).toBeInTheDocument();
-        expect(screen.getByLabelText('Bastion User')).toBeInTheDocument();
+        expect(screen.getByLabelText('跳板机主机')).toBeInTheDocument();
+        expect(screen.getByLabelText('跳板机用户')).toBeInTheDocument();
     });
 
     it('allows adding manual connection', async () => {
         render(<SmartConnectModal {...defaultProps} />);
         
-        // Initial state: empty list
-        // Note: With new UI, "Found 0 connections" might be visible or a "No connections yet" message.
-        // Let's check for the "Add Manual Entry" button
-        const addBtn = screen.getByText('+ Add Manual Entry');
+        const addBtn = screen.getByText('+ 手动添加');
         fireEvent.click(addBtn);
 
         // Should now have 1 item
-        // The item is auto-expanded, so we should see "Host" label
-        expect(screen.getByLabelText('Host')).toBeInTheDocument();
-        expect(screen.getByDisplayValue('New Connection')).toBeInTheDocument();
+        expect(screen.getByLabelText('主机地址')).toBeInTheDocument();
+        expect(screen.getByDisplayValue('新连接')).toBeInTheDocument();
         
         // Fill it out
-        fireEvent.change(screen.getByLabelText('Host'), { target: { value: 'manual-host' } });
+        fireEvent.change(screen.getByLabelText('主机地址'), { target: { value: 'manual-host' } });
         
         // Connect
-        const connectBtn = screen.getByText('Connect Selected (1)');
+        const connectBtn = screen.getByText('连接选中项 (1)');
         fireEvent.click(connectBtn);
 
         expect(mockOnConnect).toHaveBeenCalledWith([
@@ -171,17 +160,17 @@ describe('SmartConnectModal', () => {
 
         render(<SmartConnectModal {...defaultProps} />);
         
-        const input = screen.getByPlaceholderText(/AI Magic/i);
+        const input = screen.getByPlaceholderText(/你可以使用自然输入连接要求/i);
         fireEvent.change(input, { target: { value: 'Connect to nowhere' } });
         
-        const analyzeBtn = screen.getByText('Analyze');
+        const analyzeBtn = screen.getByText('智能分析');
         fireEvent.click(analyzeBtn);
 
         expect(mockOnParse).toHaveBeenCalledWith('Connect to nowhere');
         
         // Should show error message instead of crashing
         await waitFor(() => {
-            expect(screen.getByText(/No connection details identified/i)).toBeInTheDocument();
+            expect(screen.getByText(/未识别到连接信息/i)).toBeInTheDocument();
         });
     });
 
@@ -191,13 +180,13 @@ describe('SmartConnectModal', () => {
 
         render(<SmartConnectModal {...defaultProps} />);
         
-        const input = screen.getByPlaceholderText(/AI Magic/i);
+        const input = screen.getByPlaceholderText(/你可以使用自然输入连接要求/i);
         fireEvent.change(input, { target: { value: 'Connect to somewhere' } });
-        fireEvent.click(screen.getByText('Analyze'));
+        fireEvent.click(screen.getByText('智能分析'));
 
         // Should show friendly error message
         await waitFor(() => {
-            expect(screen.getByText(/Connection timeout: Unable to reach AI service/i)).toBeInTheDocument();
+            expect(screen.getByText(/连接超时：无法连接到 AI 服务/i)).toBeInTheDocument();
         });
     });
 });

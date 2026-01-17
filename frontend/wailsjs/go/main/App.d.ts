@@ -27,6 +27,8 @@ export function GenerateLinuxCommand(arg1:string):Promise<string>;
 
 export function GetCompletions(arg1:string,arg2:number):Promise<string>;
 
+export function GetJavaMonitorSnapshot(arg1:string,arg2:number):Promise<string>;
+
 export function GetSavedSessions():Promise<Array<sessionmanager.Session>>;
 
 export function GetSessionTimeline():Promise<session_recorder.TroubleshootingSession>;
@@ -34,6 +36,8 @@ export function GetSessionTimeline():Promise<session_recorder.TroubleshootingSes
 export function GetSettings():Promise<config.AppConfig>;
 
 export function HasActiveWork():Promise<Record<string, any>>;
+
+export function ListJavaProcesses(arg1:string):Promise<string>;
 
 export function LoadQuickCommands():Promise<Array<config.QuickCommand>>;
 

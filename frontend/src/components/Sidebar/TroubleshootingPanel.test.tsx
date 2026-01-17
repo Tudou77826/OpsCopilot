@@ -32,17 +32,21 @@ window.go = {
 } as any;
 
 describe('TroubleshootingPanel', () => {
+    beforeAll(() => {
+        Element.prototype.scrollIntoView = vi.fn();
+    });
+
     it('renders initial empty state correctly', () => {
         render(<TroubleshootingPanel onStart={vi.fn()} onStop={vi.fn()} />);
         expect(screen.getByText('开始排查')).toBeInTheDocument();
-        expect(screen.getByPlaceholderText(/输入问题/i)).toBeInTheDocument();
+        expect(screen.getByPlaceholderText(/例如：/i)).toBeInTheDocument();
     });
 
     it('starts investigation when clicking start button', async () => {
         const onStartMock = vi.fn();
         render(<TroubleshootingPanel onStart={onStartMock} onStop={vi.fn()} />);
 
-        const input = screen.getByPlaceholderText(/输入问题/i);
+        const input = screen.getByPlaceholderText(/例如：/i);
         fireEvent.change(input, { target: { value: 'CPU high' } });
         
         const startBtn = screen.getByText('开始排查');
@@ -64,7 +68,7 @@ describe('TroubleshootingPanel', () => {
         render(<TroubleshootingPanel onStart={vi.fn()} onStop={vi.fn()} />);
         
         // Start
-        fireEvent.change(screen.getByPlaceholderText(/输入问题/i), { target: { value: 'Issue' } });
+        fireEvent.change(screen.getByPlaceholderText(/例如：/i), { target: { value: 'Issue' } });
         fireEvent.click(screen.getByText('开始排查'));
 
         // Wait for async operations (using findBy which waits)
@@ -78,14 +82,14 @@ describe('TroubleshootingPanel', () => {
         render(<TroubleshootingPanel onStart={vi.fn()} onStop={onStopMock} />);
         
         // Start first
-        fireEvent.change(screen.getByPlaceholderText(/输入问题/i), { target: { value: 'Issue' } });
+        fireEvent.change(screen.getByPlaceholderText(/例如：/i), { target: { value: 'Issue' } });
         fireEvent.click(screen.getByText('开始排查'));
 
         // Click stop
         fireEvent.click(screen.getByText('结束排查'));
         
         // Input root cause (simulating the stop UI flow)
-        const rootCauseInput = screen.getByPlaceholderText(/根本原因/i);
+        const rootCauseInput = screen.getByPlaceholderText(/请输入根本原因/i);
         fireEvent.change(rootCauseInput, { target: { value: 'Bug in code' } });
         
         // Confirm stop

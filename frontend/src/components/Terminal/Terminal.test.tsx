@@ -20,6 +20,9 @@ vi.mock('xterm', () => {
                 write: vi.fn(),
                 dispose: vi.fn(),
                 onData: vi.fn(),
+                attachCustomKeyEventHandler: vi.fn(),
+                getSelection: vi.fn(() => ''),
+                paste: vi.fn(),
                 loadAddon: vi.fn(),
             }
         }

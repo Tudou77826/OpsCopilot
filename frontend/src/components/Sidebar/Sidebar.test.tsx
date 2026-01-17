@@ -10,20 +10,50 @@ describe('Sidebar Component', () => {
     });
 
     it('renders closed state correctly', () => {
-        const { container } = render(<Sidebar isOpen={false} activeTab="troubleshoot" onToggle={() => {}} onConnect={() => {}} />);
+        const { container } = render(
+            <Sidebar
+                isOpen={false}
+                activeTab="troubleshoot"
+                onToggle={() => { }}
+                onConnect={() => { }}
+                activeTerminalId={null}
+                terminals={[]}
+                experimentalMonitoringEnabled={false}
+            />
+        );
         // When closed, it should return a hidden div, not null
         expect(container.firstChild).not.toBeNull();
-        expect(container.firstChild).toHaveStyle({ display: 'none' });
+        expect(container.firstChild).toHaveStyle({ width: '0px' });
     });
 
     it('renders TroubleshootingPanel when activeTab is troubleshoot', () => {
-        render(<Sidebar isOpen={true} activeTab="troubleshoot" onToggle={() => {}} onConnect={() => {}} />);
+        render(
+            <Sidebar
+                isOpen={true}
+                activeTab="troubleshoot"
+                onToggle={() => { }}
+                onConnect={() => { }}
+                activeTerminalId={null}
+                terminals={[]}
+                experimentalMonitoringEnabled={false}
+            />
+        );
         // Assuming TroubleshootingPanel renders specific text
         expect(screen.getByText('开始排查')).toBeInTheDocument();
     });
 
     it('renders AIChatPanel when activeTab is chat', () => {
-        render(<Sidebar isOpen={true} activeTab="chat" onToggle={() => {}} onConnect={() => {}} />);
+        render(
+            <Sidebar
+                isOpen={true}
+                activeTab="chat"
+                onToggle={() => { }}
+                onConnect={() => { }}
+                activeTerminalId={null}
+                terminals={[]}
+                experimentalMonitoringEnabled={false}
+            />
+        );
         expect(screen.getByText('AI 问答')).toBeInTheDocument();
     });
 });

@@ -29,7 +29,7 @@ func TestSessionManager(t *testing.T) {
 	manager := NewManager()
 
 	// Test Add
-	sessionID := manager.Add(&sshclient.Client{}, &MockWriter{})
+	sessionID := manager.Add(&sshclient.Client{}, &MockWriter{}, nil)
 	if sessionID == "" {
 		t.Error("Expected session ID, got empty string")
 	}
@@ -67,7 +67,7 @@ func TestBroadcast(t *testing.T) {
 	
 	ids := []string{}
 	for _, w := range writers {
-		id := manager.Add(&sshclient.Client{}, w)
+		id := manager.Add(&sshclient.Client{}, w, nil)
 		ids = append(ids, id)
 	}
 

@@ -12,5 +12,8 @@
     "dir": ""
   },
   "completion_delay": 1500,
-  "command_query_shortcut": "Ctrl+K"
+  "command_query_shortcut": "Ctrl+K",
+  "experimental": {
+    "monitoring": true
+  }
 }

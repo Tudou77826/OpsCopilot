@@ -9,6 +9,7 @@ import (
 	"opscopilot/pkg/ai"
 	"opscopilot/pkg/completion"
 	"opscopilot/pkg/config"
+	"opscopilot/pkg/javamonitor"
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/llm"
 	"opscopilot/pkg/secretstore"
@@ -731,5 +732,43 @@ func (a *App) GetCompletions(input string, cursor int) string {
 		return "[]"
 	}
 
+	return string(data)
+}
+
+func (a *App) ListJavaProcesses(sessionID string) string {
+	sess, ok := a.sessionMgr.Get(sessionID)
+	if !ok || sess == nil || sess.Client == nil {
+		return "Error: Session not found"
+	}
+
+	procs, err := javamonitor.ListJavaProcesses(sess.Client)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+
+	data, err := json.Marshal(procs)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	return string(data)
+}
+
+func (a *App) GetJavaMonitorSnapshot(sessionID string, pid int) string {
+	sess, ok := a.sessionMgr.Get(sessionID)
+	if !ok || sess == nil || sess.Client == nil {
+		return "Error: Session not found"
+	}
+	if pid <= 0 {
+		return "Error: Invalid pid"
+	}
+
+	snap, err := javamonitor.GetSnapshot(sess.Client, pid)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	data, err := json.Marshal(snap)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
 	return string(data)
 }

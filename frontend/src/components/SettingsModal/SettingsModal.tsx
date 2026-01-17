@@ -18,6 +18,9 @@ interface AppConfig {
     docs: {
         dir: string;
     };
+    experimental?: {
+        monitoring?: boolean;
+    };
     completion_delay: number;
     command_query_shortcut: string;
 }
@@ -28,9 +31,10 @@ interface SettingsModalProps {
     isBroadcastMode?: boolean;
     onToggleBroadcast?: (enabled: boolean) => void;
     onCompletionDelayChange?: (delay: number) => void;
+    onExperimentalMonitoringChange?: (enabled: boolean) => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadcastMode, onToggleBroadcast, onCompletionDelayChange }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadcastMode, onToggleBroadcast, onCompletionDelayChange, onExperimentalMonitoringChange }) => {
     const [config, setConfig] = useState<AppConfig | null>(null);
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
@@ -60,6 +64,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                         FastModel: fastModel,
                         ComplexModel: complexModel,
                     },
+                    experimental: {
+                        monitoring: !!(cfg.experimental && cfg.experimental.monitoring),
+                    },
                     command_query_shortcut: cfg.command_query_shortcut || 'Ctrl+K',
                 });
             }
@@ -88,6 +95,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                 setMsg('设置已保存！');
                 if (onCompletionDelayChange && config.completion_delay !== undefined) {
                     onCompletionDelayChange(config.completion_delay);
+                }
+                if (onExperimentalMonitoringChange) {
+                    onExperimentalMonitoringChange(!!config.experimental?.monitoring);
                 }
                 setTimeout(() => {
                     setMsg('');
@@ -335,6 +345,33 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                                 />
                                 <div style={{ color: '#888', fontSize: '0.8rem', marginTop: '4px' }}>
                                     设置命令自动补全的触发延迟时间（毫秒）。设置为 0 表示立即触发，设置为 2000 表示延迟 2 秒触发。
+                                </div>
+                            </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>实验功能：Java 监控面板</label>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <label style={styles.switch}>
+                                        <input
+                                            type="checkbox"
+                                            checked={!!config.experimental?.monitoring}
+                                            onChange={(e) => {
+                                                setConfig({
+                                                    ...config,
+                                                    experimental: {
+                                                        ...(config.experimental || {}),
+                                                        monitoring: e.target.checked
+                                                    }
+                                                });
+                                            }}
+                                        />
+                                        <span style={styles.slider}></span>
+                                    </label>
+                                    <span style={{ color: '#ccc', fontSize: '0.9rem' }}>
+                                        {config.experimental?.monitoring ? '已开启 (将显示监控入口)' : '已关闭'}
+                                    </span>
+                                </div>
+                                <div style={{ color: '#888', fontSize: '0.8rem', marginTop: '4px' }}>
+                                    默认关闭。开启后会在右侧导航栏显示“监控”入口，用于收集少量用户反馈后迭代。
                                 </div>
                             </div>
                             <div style={styles.formGroup}>

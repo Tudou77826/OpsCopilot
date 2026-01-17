@@ -14,6 +14,10 @@ window.go = {
 } as any;
 
 describe('AIChatPanel', () => {
+    beforeAll(() => {
+        Element.prototype.scrollIntoView = vi.fn();
+    });
+
     it('renders empty chat state correctly', () => {
         render(<AIChatPanel />);
         expect(screen.getByPlaceholderText(/输入问题/i)).toBeInTheDocument();

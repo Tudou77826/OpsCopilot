@@ -46,6 +46,10 @@ export function GetCompletions(arg1, arg2) {
   return window['go']['main']['App']['GetCompletions'](arg1, arg2);
 }
 
+export function GetJavaMonitorSnapshot(arg1, arg2) {
+  return window['go']['main']['App']['GetJavaMonitorSnapshot'](arg1, arg2);
+}
+
 export function GetSavedSessions() {
   return window['go']['main']['App']['GetSavedSessions']();
 }
@@ -60,6 +64,10 @@ export function GetSettings() {
 
 export function HasActiveWork() {
   return window['go']['main']['App']['HasActiveWork']();
+}
+
+export function ListJavaProcesses(arg1) {
+  return window['go']['main']['App']['ListJavaProcesses'](arg1);
 }
 
 export function LoadQuickCommands() {

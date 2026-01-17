@@ -7,13 +7,18 @@ import (
 )
 
 type AppConfig struct {
-	LLM                  LLMConfig         `json:"llm"`
-	Prompts              map[string]string `json:"prompts"`
-	Log                  LogConfig         `json:"log"`
-	Docs                 DocsConfig        `json:"docs"`
-	QuickCommands        []QuickCommand    `json:"quick_commands"`
-	CompletionDelay      int               `json:"completion_delay"`
-	CommandQueryShortcut string            `json:"command_query_shortcut"`
+	LLM                  LLMConfig          `json:"llm"`
+	Prompts              map[string]string  `json:"prompts"`
+	Log                  LogConfig          `json:"log"`
+	Docs                 DocsConfig         `json:"docs"`
+	QuickCommands        []QuickCommand     `json:"quick_commands"`
+	CompletionDelay      int                `json:"completion_delay"`
+	CommandQueryShortcut string             `json:"command_query_shortcut"`
+	Experimental         ExperimentalConfig `json:"experimental"`
+}
+
+type ExperimentalConfig struct {
+	Monitoring bool `json:"monitoring"`
 }
 
 type QuickCommand struct {
@@ -63,6 +68,9 @@ func NewManager() *Manager {
 		QuickCommands:        []QuickCommand{},
 		CompletionDelay:      150, // Default 150ms
 		CommandQueryShortcut: "Ctrl+K",
+		Experimental: ExperimentalConfig{
+			Monitoring: false,
+		},
 	}
 
 	return &Manager{
@@ -217,11 +225,12 @@ func (m *Manager) loadQuickCommands() error {
 func (m *Manager) Save() error {
 	// 保存主配置（不包含 prompts 和 quick_commands）
 	type ConfigForSave struct {
-		LLM                  LLMConfig  `json:"llm"`
-		Log                  LogConfig  `json:"log"`
-		Docs                 DocsConfig `json:"docs"`
-		CompletionDelay      int        `json:"completion_delay"`
-		CommandQueryShortcut string     `json:"command_query_shortcut"`
+		LLM                  LLMConfig          `json:"llm"`
+		Log                  LogConfig          `json:"log"`
+		Docs                 DocsConfig         `json:"docs"`
+		CompletionDelay      int                `json:"completion_delay"`
+		CommandQueryShortcut string             `json:"command_query_shortcut"`
+		Experimental         ExperimentalConfig `json:"experimental"`
 	}
 
 	cfg := ConfigForSave{
@@ -230,6 +239,7 @@ func (m *Manager) Save() error {
 		Docs:                 m.Config.Docs,
 		CompletionDelay:      m.Config.CompletionDelay,
 		CommandQueryShortcut: m.Config.CommandQueryShortcut,
+		Experimental:         m.Config.Experimental,
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")

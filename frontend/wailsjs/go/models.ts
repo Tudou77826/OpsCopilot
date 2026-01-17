@@ -1,5 +1,17 @@
 export namespace config {
 	
+	export class ExperimentalConfig {
+	    monitoring: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExperimentalConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.monitoring = source["monitoring"];
+	    }
+	}
 	export class QuickCommand {
 	    id: string;
 	    name: string;
@@ -68,6 +80,7 @@ export namespace config {
 	    quick_commands: QuickCommand[];
 	    completion_delay: number;
 	    command_query_shortcut: string;
+	    experimental: ExperimentalConfig;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppConfig(source);
@@ -82,6 +95,7 @@ export namespace config {
 	        this.quick_commands = this.convertValues(source["quick_commands"], QuickCommand);
 	        this.completion_delay = source["completion_delay"];
 	        this.command_query_shortcut = source["command_query_shortcut"];
+	        this.experimental = this.convertValues(source["experimental"], ExperimentalConfig);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -102,6 +116,7 @@ export namespace config {
 		    return a;
 		}
 	}
+	
 	
 	
 	
