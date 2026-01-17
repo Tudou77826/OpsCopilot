@@ -12,6 +12,7 @@ interface KeysMapProps {
 }
 
 const KeysMap: React.FC<KeysMapProps> = ({ commandQueryShortcut }) => {
+    const disclaimer = '注意：部分 Ctrl 组合键由远端 Shell/应用解释，可能因 bash/zsh/readline 模式、tmux、vim、系统或终端配置不同而不生效或表现不同。';
     const items: KeyMapItem[] = [
         {
             keys: commandQueryShortcut || 'Ctrl+K',
@@ -49,6 +50,30 @@ const KeysMap: React.FC<KeysMapProps> = ({ commandQueryShortcut }) => {
             notes: '推荐使用鼠标右键粘贴/中键粘贴，或系统菜单粘贴',
         },
         {
+            keys: 'Ctrl+P',
+            scope: '远端 Shell/应用',
+            action: '上一条历史命令/上一行（常见行为）',
+            notes: '可能不生效或不同：由远端程序解释（如 bash/zsh 的 readline）；看起来像“粘贴”其实是调出历史输入',
+        },
+        {
+            keys: 'Ctrl+L',
+            scope: '远端 Shell/应用',
+            action: '清屏（常见行为）',
+            notes: '可能不生效或不同：由远端程序解释（如 bash/zsh）',
+        },
+        {
+            keys: 'Ctrl+M',
+            scope: '远端 Shell/应用',
+            action: '回车（CR，等同于 Enter，常见行为）',
+            notes: '可能不生效或不同：Ctrl+M 会发送回车字符 \\r，被远端当作执行/换行',
+        },
+        {
+            keys: 'Ctrl+D',
+            scope: '远端 Shell/应用',
+            action: 'EOF（可能退出当前程序/退出 shell）',
+            notes: '可能不生效或不同：发送 EOT(\\x04)，交给远端程序处理；在 shell 提示符下常表现为 exit',
+        },
+        {
             keys: 'Enter',
             scope: 'AI 问答/定位助手输入框',
             action: '发送消息/开始排查',
@@ -59,6 +84,7 @@ const KeysMap: React.FC<KeysMapProps> = ({ commandQueryShortcut }) => {
     return (
         <div style={styles.container}>
             <div style={styles.title}>快捷键说明（KeysMap）</div>
+            <div style={styles.disclaimer}>{disclaimer}</div>
             <div style={styles.table}>
                 <div style={styles.rowHeader}>
                     <div style={styles.cellKey}>快捷键</div>
@@ -92,6 +118,11 @@ const styles: Record<string, React.CSSProperties> = {
         color: '#fff',
         fontSize: '0.95rem',
         fontWeight: 600,
+    },
+    disclaimer: {
+        color: '#888',
+        fontSize: '0.8rem',
+        lineHeight: 1.4,
     },
     table: {
         border: '1px solid #3c3c3c',

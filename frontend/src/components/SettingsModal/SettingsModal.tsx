@@ -34,7 +34,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
     const [config, setConfig] = useState<AppConfig | null>(null);
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
-    const [activeTab, setActiveTab] = useState<'llm' | 'prompts' | 'system' | 'app'>('llm');
+    const [activeTab, setActiveTab] = useState<'llm' | 'prompts' | 'system' | 'app' | 'keys'>('llm');
 
     useEffect(() => {
         if (isOpen) {
@@ -175,6 +175,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                         AI 提示词
                     </button>
                     <button 
+                        style={activeTab === 'keys' ? styles.activeTab : styles.tab}
+                        onClick={() => setActiveTab('keys')}
+                    >
+                        快捷键
+                    </button>
+                    <button 
                         style={activeTab === 'system' ? styles.activeTab : styles.tab}
                         onClick={() => setActiveTab('system')}
                     >
@@ -302,9 +308,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                         </div>
                     )}
 
-                    {activeTab === 'app' && (
+                    {activeTab === 'keys' && (
                         <div style={styles.formSection}>
                             <KeysMap commandQueryShortcut={formatShortcutLabel(config.command_query_shortcut)} />
+                        </div>
+                    )}
+
+                    {activeTab === 'app' && (
+                        <div style={styles.formSection}>
                             <div style={styles.formGroup}>
                                 <label style={styles.label}>命令补全延迟时间 (毫秒)</label>
                                 <input 
