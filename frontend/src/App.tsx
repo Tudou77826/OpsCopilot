@@ -7,6 +7,7 @@ import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal'
 import Sidebar from './components/Sidebar/Sidebar';
 import SettingsModal from './components/SettingsModal/SettingsModal';
 import ConfirmCloseModal from './components/ConfirmCloseModal/ConfirmCloseModal';
+import CommandQueryOverlay, { CommandQueryResult } from './components/CommandQueryOverlay/CommandQueryOverlay';
 import { ConnectionConfig } from './types';
 
 interface TerminalSession {
@@ -28,6 +29,13 @@ function App() {
     const [isConfirmCloseOpen, setIsConfirmCloseOpen] = useState(false);
     const [confirmCloseMessage, setConfirmCloseMessage] = useState("");
     const [completionDelay, setCompletionDelay] = useState(150);
+    const [isCommandQueryOpen, setIsCommandQueryOpen] = useState(false);
+    const [commandQueryPosition, setCommandQueryPosition] = useState({ x: 120, y: 120 });
+    const [commandQueryText, setCommandQueryText] = useState('');
+    const [commandQueryLoading, setCommandQueryLoading] = useState(false);
+    const [commandQueryResult, setCommandQueryResult] = useState<CommandQueryResult | null>(null);
+    const [commandQueryError, setCommandQueryError] = useState('');
+    const commandQueryShortcut = 'Ctrl+K';
 
     // Refs to hold latest state for callbacks
     const isBroadcastModeRef = useRef(isBroadcastMode);
@@ -74,9 +82,9 @@ function App() {
         };
     }, []);
 
-    // Load completion delay from settings on mount
+    // Load settings on mount
     useEffect(() => {
-        const loadCompletionDelay = async () => {
+        const loadSettings = async () => {
             try {
                 // @ts-ignore
                 if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSettings) {
@@ -87,11 +95,110 @@ function App() {
                     }
                 }
             } catch (e) {
-                console.error('Failed to load completion delay:', e);
+                console.error('Failed to load settings:', e);
             }
         };
-        loadCompletionDelay();
+        loadSettings();
     }, []);
+
+    useEffect(() => {
+        const isEditableTarget = (target: EventTarget | null) => {
+            const el = target as HTMLElement | null;
+            if (!el) return false;
+            if (el.classList?.contains('xterm-helper-textarea')) return false;
+            if (el.closest?.('.xterm')) return false;
+            const tag = el.tagName?.toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+            if ((el as any).isContentEditable) return true;
+            return false;
+        };
+
+        const eventToShortcut = (e: KeyboardEvent) => {
+            const parts: string[] = [];
+            if (e.ctrlKey) parts.push('Ctrl');
+            if (e.altKey) parts.push('Alt');
+            if (e.shiftKey) parts.push('Shift');
+            if (e.metaKey) parts.push('Meta');
+
+            if (e.key === 'Control' || e.key === 'Alt' || e.key === 'Shift' || e.key === 'Meta') return '';
+            const mainKey = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+            parts.push(mainKey);
+            return parts.join('+');
+        };
+
+        const matchesShortcut = (e: KeyboardEvent, shortcut: string) => {
+            const normalized = (shortcut || '').trim();
+            if (!normalized) return false;
+            return eventToShortcut(e).toLowerCase() === normalized.toLowerCase();
+        };
+
+        const openCommandQuery = () => {
+            if (!activeTerminalId) {
+                alert("请先选择一个激活的终端");
+                return;
+            }
+            const pos = terminalRefs.current.get(activeTerminalId)?.getCursorScreenPosition();
+            if (pos) {
+                setCommandQueryPosition(pos);
+            } else {
+                setCommandQueryPosition({ x: window.innerWidth / 2 - 200, y: window.innerHeight / 2 - 120 });
+            }
+            setCommandQueryError('');
+            setCommandQueryResult(null);
+            setIsCommandQueryOpen(true);
+        };
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (isEditableTarget(e.target)) return;
+            if (matchesShortcut(e, commandQueryShortcut)) {
+                e.preventDefault();
+                e.stopPropagation();
+                openCommandQuery();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown, true);
+        return () => window.removeEventListener('keydown', handleKeyDown, true);
+    }, [activeTerminalId]);
+
+    const generateCommand = async () => {
+        if (!commandQueryText.trim()) return;
+        setCommandQueryLoading(true);
+        setCommandQueryError('');
+        try {
+            // @ts-ignore
+            if (!window.go || !window.go.main || !window.go.main.App || !window.go.main.App.GenerateLinuxCommand) {
+                setCommandQueryError('Wails 运行时未就绪');
+                return;
+            }
+            // @ts-ignore
+            const resp = await window.go.main.App.GenerateLinuxCommand(commandQueryText.trim());
+            if (typeof resp === 'string' && resp.startsWith('Error:')) {
+                setCommandQueryError(resp);
+                setCommandQueryResult(null);
+                return;
+            }
+            const parsed = JSON.parse(resp) as CommandQueryResult;
+            setCommandQueryResult(parsed);
+        } catch (e: any) {
+            setCommandQueryError(e?.toString?.() || '生成失败');
+            setCommandQueryResult(null);
+        } finally {
+            setCommandQueryLoading(false);
+        }
+    };
+
+    const copyGeneratedCommand = () => {
+        const cmd = commandQueryResult?.command?.trim();
+        if (!cmd) return;
+        navigator.clipboard.writeText(cmd);
+    };
+
+    const typeGeneratedCommand = () => {
+        const cmd = commandQueryResult?.command?.trim();
+        if (!cmd) return;
+        handleQuickCommand(cmd);
+    };
 
     const removeTerminal = (id: string) => {
         setTerminals(prev => prev.filter(t => t.id !== id));
@@ -470,6 +577,21 @@ function App() {
                 message={confirmCloseMessage}
                 onConfirm={handleConfirmClose}
                 onCancel={handleCancelClose}
+            />
+
+            <CommandQueryOverlay
+                visible={isCommandQueryOpen}
+                position={commandQueryPosition}
+                query={commandQueryText}
+                loading={commandQueryLoading}
+                result={commandQueryResult}
+                error={commandQueryError}
+                onQueryChange={setCommandQueryText}
+                onGenerate={generateCommand}
+                onRegenerate={generateCommand}
+                onCopy={copyGeneratedCommand}
+                onType={typeGeneratedCommand}
+                onClose={() => setIsCommandQueryOpen(false)}
             />
         </div>
     );

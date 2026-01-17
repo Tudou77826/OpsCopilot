@@ -106,3 +106,23 @@ echo 42`
 		t.Errorf("Expected response %q, got %q", expectedResponse, resp)
 	}
 }
+
+func TestGenerateLinuxCommand(t *testing.T) {
+	fastProvider := &llm.MockProvider{
+		Response: `{"command":"ls -la","explanation":"列出包含隐藏文件的详细信息"}`,
+	}
+	complexProvider := &llm.MockProvider{
+		Response: `{"command":"echo should-not-use","explanation":"x"}`,
+	}
+
+	cfgMgr := config.NewManager()
+	service := NewAIService(fastProvider, complexProvider, cfgMgr)
+
+	result, err := service.GenerateLinuxCommand("列出当前目录所有文件")
+	if err != nil {
+		t.Fatalf("GenerateLinuxCommand failed: %v", err)
+	}
+	if result.Command != "ls -la" {
+		t.Fatalf("Command = %q, want %q", result.Command, "ls -la")
+	}
+}

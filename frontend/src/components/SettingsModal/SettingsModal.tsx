@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import KeysMap from './KeysMap';
 
 interface AppConfig {
     llm: {
@@ -18,6 +19,7 @@ interface AppConfig {
         dir: string;
     };
     completion_delay: number;
+    command_query_shortcut: string;
 }
 
 interface SettingsModalProps {
@@ -57,7 +59,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                         ...llmCfg,
                         FastModel: fastModel,
                         ComplexModel: complexModel,
-                    }
+                    },
+                    command_query_shortcut: cfg.command_query_shortcut || 'Ctrl+K',
                 });
             }
         } catch (e) {
@@ -66,6 +69,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
         } finally {
             setLoading(false);
         }
+    };
+
+    const formatShortcutLabel = (shortcut: string) => {
+        const normalized = (shortcut || '').trim();
+        return normalized || 'Ctrl+K';
     };
 
     const handleSave = async () => {
@@ -296,6 +304,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
 
                     {activeTab === 'app' && (
                         <div style={styles.formSection}>
+                            <KeysMap commandQueryShortcut={formatShortcutLabel(config.command_query_shortcut)} />
                             <div style={styles.formGroup}>
                                 <label style={styles.label}>命令补全延迟时间 (毫秒)</label>
                                 <input 

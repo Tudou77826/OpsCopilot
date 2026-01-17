@@ -18,6 +18,11 @@ type AIService struct {
 	cfgMgr          *config.Manager
 }
 
+type CommandQueryResult struct {
+	Command     string `json:"command"`
+	Explanation string `json:"explanation"`
+}
+
 func NewAIService(fastProvider llm.Provider, complexProvider llm.Provider, cfgMgr *config.Manager) *AIService {
 	return &AIService{
 		fastProvider:    fastProvider,
@@ -29,6 +34,37 @@ func NewAIService(fastProvider llm.Provider, complexProvider llm.Provider, cfgMg
 func (s *AIService) UpdateProviders(fastProvider llm.Provider, complexProvider llm.Provider) {
 	s.fastProvider = fastProvider
 	s.complexProvider = complexProvider
+}
+
+func (s *AIService) GenerateLinuxCommand(request string) (*CommandQueryResult, error) {
+	prompt := s.cfgMgr.Config.Prompts["command_query_prompt"]
+	if prompt == "" {
+		prompt = config.DefaultCommandQueryPrompt
+	}
+
+	messages := []llm.ChatMessage{
+		{Role: "system", Content: prompt},
+		{Role: "user", Content: request},
+	}
+
+	resp, err := s.fastProvider.ChatCompletion(context.Background(), messages)
+	if err != nil {
+		return nil, fmt.Errorf("AI provider error: %w", err)
+	}
+
+	cleaned := cleanJSONResponse(resp)
+	var result CommandQueryResult
+	if err := json.Unmarshal([]byte(cleaned), &result); err != nil {
+		return nil, fmt.Errorf("failed to parse AI response as JSON: %v. Raw: %s", err, resp)
+	}
+
+	result.Command = strings.TrimSpace(result.Command)
+	result.Explanation = strings.TrimSpace(result.Explanation)
+	if result.Command == "" {
+		return nil, fmt.Errorf("AI response missing command. Raw: %s", resp)
+	}
+
+	return &result, nil
 }
 
 func (s *AIService) ParseConnectIntent(input string) ([]sshclient.ConnectConfig, error) {
@@ -85,7 +121,7 @@ func cleanJSONResponse(resp string) string {
 	if len(matches) > 1 {
 		return strings.TrimSpace(matches[1])
 	}
-	
+
 	// 如果没有匹配到代码块，尝试移除单独的 ``` 标记（兼容性处理）
 	resp = strings.ReplaceAll(resp, "```json", "")
 	resp = strings.ReplaceAll(resp, "```", "")

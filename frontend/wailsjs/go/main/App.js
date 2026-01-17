@@ -38,6 +38,10 @@ export function GenerateConclusionWithContext(arg1, arg2) {
   return window['go']['main']['App']['GenerateConclusionWithContext'](arg1, arg2);
 }
 
+export function GenerateLinuxCommand(arg1) {
+  return window['go']['main']['App']['GenerateLinuxCommand'](arg1);
+}
+
 export function GetCompletions(arg1, arg2) {
   return window['go']['main']['App']['GetCompletions'](arg1, arg2);
 }

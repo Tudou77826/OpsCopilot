@@ -50,5 +50,7 @@ func TestConfigMigration_OldLLMModelToFastAndComplex(t *testing.T) {
 	if mgr.Config.LLM.Model != "" {
 		t.Fatalf("Model = %q, want empty after migration", mgr.Config.LLM.Model)
 	}
+	if mgr.Config.CommandQueryShortcut != "Ctrl+K" {
+		t.Fatalf("CommandQueryShortcut = %q, want %q", mgr.Config.CommandQueryShortcut, "Ctrl+K")
+	}
 }
-

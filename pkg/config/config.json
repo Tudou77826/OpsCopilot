@@ -11,5 +11,6 @@
   "docs": {
     "dir": ""
   },
-  "completion_delay": 150
+  "completion_delay": 150,
+  "command_query_shortcut": "Ctrl+K"
 }

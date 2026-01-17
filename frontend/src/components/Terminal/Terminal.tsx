@@ -14,6 +14,7 @@ interface TerminalProps {
 export interface TerminalRef {
     write: (data: string) => void;
     fit: () => void;
+    getCursorScreenPosition: () => { x: number; y: number } | null;
 }
 
 const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionID, onData, completionDelay = 150 }, ref) => {
@@ -168,6 +169,26 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         fit: () => {
             fitAddonRef.current?.fit();
             setTimeout(() => syncSizeToBackend(), 10);
+        },
+        getCursorScreenPosition: () => {
+            if (!xtermRef.current || !terminalRef.current) return null;
+
+            const term = xtermRef.current;
+            const container = terminalRef.current;
+
+            const buffer = term.buffer.active;
+            const cursorY = buffer.cursorY;
+            const cursorX = buffer.cursorX;
+            const viewportY = buffer.viewportY;
+            const actualRow = cursorY - viewportY;
+
+            const containerRect = container.getBoundingClientRect();
+            const cellWidth = containerRect.width / term.cols;
+            const cellHeight = containerRect.height / term.rows;
+
+            const x = containerRect.left + cursorX * cellWidth;
+            const y = containerRect.top + actualRow * cellHeight + cellHeight;
+            return { x, y };
         }
     }));
 

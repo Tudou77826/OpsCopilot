@@ -7,12 +7,13 @@ import (
 )
 
 type AppConfig struct {
-	LLM             LLMConfig         `json:"llm"`
-	Prompts         map[string]string `json:"prompts"`
-	Log             LogConfig         `json:"log"`
-	Docs            DocsConfig        `json:"docs"`
-	QuickCommands   []QuickCommand    `json:"quick_commands"`
-	CompletionDelay int               `json:"completion_delay"`
+	LLM                  LLMConfig         `json:"llm"`
+	Prompts              map[string]string `json:"prompts"`
+	Log                  LogConfig         `json:"log"`
+	Docs                 DocsConfig        `json:"docs"`
+	QuickCommands        []QuickCommand    `json:"quick_commands"`
+	CompletionDelay      int               `json:"completion_delay"`
+	CommandQueryShortcut string            `json:"command_query_shortcut"`
 }
 
 type QuickCommand struct {
@@ -46,11 +47,12 @@ func NewManager() *Manager {
 	cfg := &AppConfig{
 		LLM: *defaultLLM,
 		Prompts: map[string]string{
-			"smart_connect":       DefaultSmartConnectPrompt,
-			"qa_prompt":           DefaultQAPrompt,
-			"conclusion_prompt":   DefaultConclusionPrompt,
-			"polish_prompt":       DefaultPolishPrompt,
-			"troubleshoot_prompt": DefaultTroubleshootPrompt,
+			"smart_connect":        DefaultSmartConnectPrompt,
+			"qa_prompt":            DefaultQAPrompt,
+			"conclusion_prompt":    DefaultConclusionPrompt,
+			"polish_prompt":        DefaultPolishPrompt,
+			"troubleshoot_prompt":  DefaultTroubleshootPrompt,
+			"command_query_prompt": DefaultCommandQueryPrompt,
 		},
 		Log: LogConfig{
 			Dir: defaultLogDir,
@@ -58,8 +60,9 @@ func NewManager() *Manager {
 		Docs: DocsConfig{
 			Dir: "", // Default to empty, will be resolved dynamically if empty
 		},
-		QuickCommands:   []QuickCommand{},
-		CompletionDelay: 150, // Default 150ms
+		QuickCommands:        []QuickCommand{},
+		CompletionDelay:      150, // Default 150ms
+		CommandQueryShortcut: "Ctrl+K",
 	}
 
 	return &Manager{
@@ -88,6 +91,7 @@ func (m *Manager) Load() error {
 	_, hasFastModel := llmRaw["FastModel"]
 	_, hasComplexModel := llmRaw["ComplexModel"]
 	_, hasOldModel := llmRaw["Model"]
+	_, hasCommandQueryShortcut := raw["command_query_shortcut"]
 
 	// 解析配置
 	if err := json.Unmarshal(data, m.Config); err != nil {
@@ -105,6 +109,10 @@ func (m *Manager) Load() error {
 	}
 	if hasOldModel && m.Config.LLM.Model != "" {
 		m.Config.LLM.Model = ""
+		changed = true
+	}
+	if !hasCommandQueryShortcut || m.Config.CommandQueryShortcut == "" {
+		m.Config.CommandQueryShortcut = "Ctrl+K"
 		changed = true
 	}
 
@@ -139,11 +147,12 @@ func (m *Manager) loadPrompts() error {
 	if os.IsNotExist(err) {
 		// 文件不存在，使用默认值并保存
 		m.Config.Prompts = map[string]string{
-			"smart_connect":       DefaultSmartConnectPrompt,
-			"qa_prompt":           DefaultQAPrompt,
-			"conclusion_prompt":   DefaultConclusionPrompt,
-			"polish_prompt":       DefaultPolishPrompt,
-			"troubleshoot_prompt": DefaultTroubleshootPrompt,
+			"smart_connect":        DefaultSmartConnectPrompt,
+			"qa_prompt":            DefaultQAPrompt,
+			"conclusion_prompt":    DefaultConclusionPrompt,
+			"polish_prompt":        DefaultPolishPrompt,
+			"troubleshoot_prompt":  DefaultTroubleshootPrompt,
+			"command_query_prompt": DefaultCommandQueryPrompt,
 		}
 		return m.savePrompts()
 	}
@@ -171,6 +180,9 @@ func (m *Manager) loadPrompts() error {
 	}
 	if _, ok := m.Config.Prompts["troubleshoot_prompt"]; !ok {
 		m.Config.Prompts["troubleshoot_prompt"] = DefaultTroubleshootPrompt
+	}
+	if _, ok := m.Config.Prompts["command_query_prompt"]; !ok {
+		m.Config.Prompts["command_query_prompt"] = DefaultCommandQueryPrompt
 	}
 
 	return nil
@@ -205,17 +217,19 @@ func (m *Manager) loadQuickCommands() error {
 func (m *Manager) Save() error {
 	// 保存主配置（不包含 prompts 和 quick_commands）
 	type ConfigForSave struct {
-		LLM             LLMConfig  `json:"llm"`
-		Log             LogConfig  `json:"log"`
-		Docs            DocsConfig `json:"docs"`
-		CompletionDelay int        `json:"completion_delay"`
+		LLM                  LLMConfig  `json:"llm"`
+		Log                  LogConfig  `json:"log"`
+		Docs                 DocsConfig `json:"docs"`
+		CompletionDelay      int        `json:"completion_delay"`
+		CommandQueryShortcut string     `json:"command_query_shortcut"`
 	}
 
 	cfg := ConfigForSave{
-		LLM:             m.Config.LLM,
-		Log:             m.Config.Log,
-		Docs:            m.Config.Docs,
-		CompletionDelay: m.Config.CompletionDelay,
+		LLM:                  m.Config.LLM,
+		Log:                  m.Config.Log,
+		Docs:                 m.Config.Docs,
+		CompletionDelay:      m.Config.CompletionDelay,
+		CommandQueryShortcut: m.Config.CommandQueryShortcut,
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")

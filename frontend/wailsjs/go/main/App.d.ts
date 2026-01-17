@@ -23,6 +23,8 @@ export function ForceQuit():Promise<void>;
 
 export function GenerateConclusionWithContext(arg1:string,arg2:string):Promise<string>;
 
+export function GenerateLinuxCommand(arg1:string):Promise<string>;
+
 export function GetCompletions(arg1:string,arg2:number):Promise<string>;
 
 export function GetSavedSessions():Promise<Array<sessionmanager.Session>>;

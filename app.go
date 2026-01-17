@@ -174,7 +174,7 @@ func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 	// If there's any active work, we need to ask for confirmation
 	if hasTerminals || hasTroubleshooting {
 		log.Printf("[beforeClose] Active work detected: terminals=%d, troubleshooting=%v", len(activeSessions), hasTroubleshooting)
-		
+
 		// Emit event to frontend to show custom confirmation dialog
 		var message string
 		if hasTerminals && hasTroubleshooting {
@@ -204,10 +204,10 @@ func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 // ForceQuit forces the application to quit without confirmation
 func (a *App) ForceQuit() {
 	log.Println("[ForceQuit] Setting force quit flag and calling runtime.Quit()")
-	
+
 	// Set flag to skip confirmation on next beforeClose call
 	a.isForceQuitting = true
-	
+
 	// Trigger quit
 	runtime.Quit(a.ctx)
 }
@@ -613,6 +613,18 @@ func (a *App) PolishRootCause(input string) string {
 		return fmt.Sprintf("Error: %v", err)
 	}
 	return polished
+}
+
+func (a *App) GenerateLinuxCommand(request string) string {
+	result, err := a.aiService.GenerateLinuxCommand(request)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	b, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	return string(b)
 }
 
 // GetSessionTimeline returns the current session data including timeline and problem
