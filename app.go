@@ -772,3 +772,41 @@ func (a *App) GetJavaMonitorSnapshot(sessionID string, pid int) string {
 	}
 	return string(data)
 }
+
+func (a *App) GetJavaTopCPUThreads(sessionID string, pid int) string {
+	sess, ok := a.sessionMgr.Get(sessionID)
+	if !ok || sess == nil || sess.Client == nil {
+		return "Error: Session not found"
+	}
+	if pid <= 0 {
+		return "Error: Invalid pid"
+	}
+	list, err := javamonitor.GetTopCPUThreads(sess.Client, pid, 3)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	data, err := json.Marshal(list)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	return string(data)
+}
+
+func (a *App) GetJavaThreadStateCounts(sessionID string, pid int) string {
+	sess, ok := a.sessionMgr.Get(sessionID)
+	if !ok || sess == nil || sess.Client == nil {
+		return "Error: Session not found"
+	}
+	if pid <= 0 {
+		return "Error: Invalid pid"
+	}
+	c, err := javamonitor.GetThreadStateCounts(sess.Client, pid)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	data, err := json.Marshal(c)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	return string(data)
+}

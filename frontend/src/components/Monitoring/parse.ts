@@ -44,3 +44,13 @@ export function parseNumberLoose(v?: string): number | null {
     if (Number.isFinite(n)) return n;
     return null;
 }
+
+export function formatBytesFromKB(kb?: number): string {
+    if (kb == null || !Number.isFinite(kb)) return '-';
+    const bytes = kb * 1024;
+    const gb = 1024 * 1024 * 1024;
+    const mb = 1024 * 1024;
+    if (bytes >= gb) return `${(bytes / gb).toFixed(2)} GB`;
+    if (bytes >= mb) return `${(bytes / mb).toFixed(0)} MB`;
+    return `${Math.max(0, Math.round(bytes / 1024))} KB`;
+}

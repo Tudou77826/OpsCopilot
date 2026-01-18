@@ -50,6 +50,14 @@ export function GetJavaMonitorSnapshot(arg1, arg2) {
   return window['go']['main']['App']['GetJavaMonitorSnapshot'](arg1, arg2);
 }
 
+export function GetJavaThreadStateCounts(arg1, arg2) {
+  return window['go']['main']['App']['GetJavaThreadStateCounts'](arg1, arg2);
+}
+
+export function GetJavaTopCPUThreads(arg1, arg2) {
+  return window['go']['main']['App']['GetJavaTopCPUThreads'](arg1, arg2);
+}
+
 export function GetSavedSessions() {
   return window['go']['main']['App']['GetSavedSessions']();
 }

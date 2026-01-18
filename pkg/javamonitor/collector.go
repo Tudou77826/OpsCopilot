@@ -145,6 +145,23 @@ func getProcessInfo(client *sshclient.Client, pid int) (ProcessInfo, error) {
 				v, _ := strconv.Atoi(parts[1])
 				info.Threads = v
 			}
+			continue
+		}
+		if strings.HasPrefix(line, "VmRSS:") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				v, _ := strconv.Atoi(parts[1])
+				info.VmRSSKB = v
+			}
+			continue
+		}
+		if strings.HasPrefix(line, "VmSize:") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				v, _ := strconv.Atoi(parts[1])
+				info.VmSizeKB = v
+			}
+			continue
 		}
 	}
 
@@ -152,6 +169,11 @@ func getProcessInfo(client *sshclient.Client, pid int) (ProcessInfo, error) {
 	fdOut, _ := client.Run(fdCmd)
 	fdCount, _ := strconv.Atoi(strings.TrimSpace(fdOut))
 	info.FdCount = fdCount
+
+	limitCmd := fmt.Sprintf("cat /proc/%d/limits 2>/dev/null | awk '/Max open files/ {print $4}' | head -n 1 || true", pid)
+	limitOut, _ := client.Run(limitCmd)
+	limit, _ := strconv.Atoi(strings.TrimSpace(limitOut))
+	info.FdLimit = limit
 
 	if info.User == "" && psErr != nil {
 		return ProcessInfo{}, fmt.Errorf("failed to inspect process %d: %w", pid, psErr)

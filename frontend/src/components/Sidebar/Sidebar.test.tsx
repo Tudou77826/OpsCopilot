@@ -7,6 +7,16 @@ describe('Sidebar Component', () => {
     // Mock scrollIntoView
     beforeAll(() => {
         Element.prototype.scrollIntoView = vi.fn();
+        // @ts-ignore
+        window.go = {
+            main: {
+                App: {
+                    GetSavedSessions: async () => [],
+                    DeleteSavedSession: async () => '',
+                    RenameSavedSession: async () => '',
+                }
+            }
+        };
     });
 
     it('renders closed state correctly', () => {

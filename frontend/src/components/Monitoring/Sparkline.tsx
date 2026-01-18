@@ -1,5 +1,11 @@
 import React, { useMemo } from 'react';
 
+export interface SparklineThreshold {
+    value: number;
+    color: string;
+    label?: string;
+}
+
 interface SparklineProps {
     data: Array<number | null | undefined>;
     height?: number;
@@ -8,6 +14,7 @@ interface SparklineProps {
     min?: number;
     max?: number;
     showArea?: boolean;
+    thresholds?: SparklineThreshold[];
 }
 
 export default function Sparkline({
@@ -17,7 +24,8 @@ export default function Sparkline({
     fill = 'rgba(77,163,255,0.18)',
     min,
     max,
-    showArea = true
+    showArea = true,
+    thresholds
 }: SparklineProps) {
     const width = 160;
     const padding = 4;
@@ -29,12 +37,13 @@ export default function Sparkline({
         const maxV = max != null ? max : Math.max(...vals);
         const span = maxV - minV || 1;
 
-        const stepX = (width - padding * 2) / Math.max(1, data.length - 1);
         const toY = (v: number) => {
             const ratio = (v - minV) / span;
             const y = padding + (1 - ratio) * (height - padding * 2);
             return Math.max(padding, Math.min(height - padding, y));
         };
+
+        const stepX = (width - padding * 2) / Math.max(1, data.length - 1);
 
         let lastValid: { x: number; y: number } | null = null;
         const segments: string[] = [];
@@ -65,11 +74,32 @@ export default function Sparkline({
             area = d.join(' ');
         }
 
-        return { line: segments.join(' '), area, minV, maxV };
-    }, [data, height, min, max]);
+        const thresholdLines = (thresholds || [])
+            .filter(th => Number.isFinite(th.value))
+            .map(th => ({
+                ...th,
+                y: toY(th.value)
+            }));
+
+        return { line: segments.join(' '), area, minV, maxV, thresholdLines };
+    }, [data, height, min, max, thresholds]);
 
     return (
         <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={styles.svg}>
+            {Array.isArray((points as any).thresholdLines) && (points as any).thresholdLines.map((th: any, idx: number) => (
+                <g key={idx}>
+                    <line
+                        x1={padding}
+                        x2={width - padding}
+                        y1={th.y}
+                        y2={th.y}
+                        stroke={th.color}
+                        strokeWidth="1"
+                        strokeDasharray="3 3"
+                        opacity="0.8"
+                    />
+                </g>
+            ))}
             {showArea && points.area && <path d={points.area} fill={fill} stroke="none" />}
             {points.line && <path d={points.line} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />}
         </svg>

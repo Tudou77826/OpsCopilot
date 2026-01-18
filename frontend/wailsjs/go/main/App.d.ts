@@ -29,6 +29,10 @@ export function GetCompletions(arg1:string,arg2:number):Promise<string>;
 
 export function GetJavaMonitorSnapshot(arg1:string,arg2:number):Promise<string>;
 
+export function GetJavaThreadStateCounts(arg1:string,arg2:number):Promise<string>;
+
+export function GetJavaTopCPUThreads(arg1:string,arg2:number):Promise<string>;
+
 export function GetSavedSessions():Promise<Array<sessionmanager.Session>>;
 
 export function GetSessionTimeline():Promise<session_recorder.TroubleshootingSession>;

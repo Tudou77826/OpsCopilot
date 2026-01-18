@@ -32,6 +32,9 @@ export interface Snapshot {
         etime?: string;
         threads?: number;
         fd_count?: number;
+        fd_limit?: number;
+        vm_rss_kb?: number;
+        vm_size_kb?: number;
         cmd?: string;
     };
     jvm: {
@@ -43,5 +46,24 @@ export interface Snapshot {
         uptime: CommandResult;
         meminfo: CommandResult;
     };
+}
+
+export interface TopThread {
+    tid: number;
+    tid_hex: string;
+    cpu: string;
+    java_name?: string;
+    java_state?: string;
+    stack_top?: string;
+}
+
+export interface ThreadStateCounts {
+    runnable: number;
+    blocked: number;
+    waiting: number;
+    timed_waiting: number;
+    new: number;
+    terminated: number;
+    unknown: number;
 }
 
