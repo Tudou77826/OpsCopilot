@@ -47,7 +47,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
     const loadSessions = async () => {
         try {
             const data = await window.go.main.App.GetSavedSessions();
-            
+
             // Helper to normalize config keys (snake_case to camelCase)
             const normalizeConfig = (cfg: any): ConnectionConfig => {
                 if (!cfg) return cfg;
@@ -67,8 +67,31 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                 };
             };
 
+            // Helper to sort sessions (folders first, then sessions, both alphabetically)
+            const sortSessions = (nodes: SessionNode[]): SessionNode[] => {
+                // Separate folders and sessions
+                const folders = nodes.filter(node => node.type === 'folder');
+                const sessions = nodes.filter(node => node.type === 'session');
+
+                // Sort folders alphabetically
+                folders.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN', { sensitivity: 'base' }));
+
+                // Sort sessions alphabetically
+                sessions.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN', { sensitivity: 'base' }));
+
+                // Recursively sort children in folders
+                const sortedFolders = folders.map(folder => ({
+                    ...folder,
+                    children: folder.children ? sortSessions(folder.children) : undefined
+                }));
+
+                // Return folders first, then sessions
+                return [...sortedFolders, ...sessions];
+            };
+
             const processedData = data ? data.map(processNode) : [];
-            setSessions(processedData);
+            const sortedData = sortSessions(processedData);
+            setSessions(sortedData);
         } catch (e) {
             console.error("Failed to load sessions:", e);
         }
