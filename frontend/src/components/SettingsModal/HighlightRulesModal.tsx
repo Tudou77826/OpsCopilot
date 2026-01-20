@@ -30,9 +30,13 @@ function isHighRiskPattern(pattern: string): boolean {
 
 export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }: HighlightRulesModalProps) {
     const [draft, setDraft] = useState<HighlightRule[]>(rules);
+    const [editingId, setEditingId] = useState<string | null>(null);
 
     React.useEffect(() => {
-        if (isOpen) setDraft(rules);
+        if (isOpen) {
+            setDraft(rules);
+            setEditingId(null);
+        }
     }, [isOpen, rules]);
 
     const sorted = useMemo(() => {
@@ -59,11 +63,13 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
             priority: sorted.length > 0 ? (sorted[sorted.length - 1].priority + 10) : 10,
             style: { background_color: '#1d3a5a', color: '#ffffff', font_weight: 'bold' }
         };
-        update([...sorted, r]);
+        setDraft([...sorted, r]);
+        setEditingId(r.id);
     };
 
     const removeRule = (id: string) => {
         update(sorted.filter(r => r.id !== id));
+        if (editingId === id) setEditingId(null);
     };
 
     const move = (id: string, dir: -1 | 1) => {
@@ -87,96 +93,224 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
         update(sorted.map(r => (r.id === id ? { ...r, style: { ...(r.style || {}), ...partial } } : r)));
     };
 
+    const isEditing = (id: string) => editingId === id;
+
     return (
         <div style={styles.backdrop} onClick={onClose}>
             <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
                 <div style={styles.header}>
-                    <div style={styles.title}>终端高亮规则</div>
+                    <div style={styles.title}>突出显示集</div>
                     <button style={styles.x} onClick={onClose}>×</button>
                 </div>
 
                 <div style={styles.body}>
                     <div style={styles.toolbar}>
-                        <button style={styles.btn} onClick={addRule}>+ 添加规则</button>
-                        <div style={styles.hint}>优先级越小越先匹配；高风险正则默认禁用。</div>
+                        <button style={styles.primary} onClick={addRule}>+ 新建规则</button>
+                        <div style={styles.hint}>优先级越小越先匹配；高风险正则自动禁用</div>
                     </div>
 
                     <div style={styles.list} className="hide-scrollbar">
-                        {sorted.length === 0 && <div style={styles.empty}>暂无规则</div>}
+                        {sorted.length === 0 && <div style={styles.empty}>暂无规则，点击上方按钮添加</div>}
                         {sorted.map((r, i) => {
                             const risky = isHighRiskPattern(r.pattern);
+                            const editing = isEditing(r.id);
+
                             return (
                                 <div key={r.id} style={styles.item}>
-                                    <div style={styles.itemTop}>
-                                        <label style={styles.check}>
-                                            <input
-                                                type="checkbox"
-                                                checked={!!r.is_enabled}
-                                                onChange={(e) => patch(r.id, { is_enabled: e.target.checked && !risky })}
-                                            />
-                                            <span style={styles.checkText}>{r.is_enabled ? '启用' : '禁用'}</span>
-                                        </label>
+                                    {/* 顶部栏：启用开关 + 操作按钮 */}
+                                    <div style={styles.itemHeader}>
+                                        <div style={styles.itemLeft}>
+                                            <label style={styles.switchLabel}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={!!r.is_enabled}
+                                                    onChange={(e) => patch(r.id, { is_enabled: e.target.checked && !risky })}
+                                                    style={styles.checkbox}
+                                                />
+                                                <span style={{
+                                                    ...styles.statusDot,
+                                                    backgroundColor: r.is_enabled ? '#4caf50' : '#555',
+                                                    boxShadow: r.is_enabled ? '0 0 0 3px rgba(76, 175, 80, 0.2)' : 'none'
+                                                }} />
+                                                <span style={styles.nameText}>{r.name || '未命名'}</span>
+                                                {risky && <span style={styles.riskBadge}>高风险</span>}
+                                            </label>
+                                        </div>
                                         <div style={styles.actions}>
-                                            <button style={styles.smallBtn} onClick={() => move(r.id, -1)} disabled={i === 0}>↑</button>
-                                            <button style={styles.smallBtn} onClick={() => move(r.id, 1)} disabled={i === sorted.length - 1}>↓</button>
-                                            <button style={styles.smallBtn} onClick={() => removeRule(r.id)}>删除</button>
+                                            <button
+                                                style={styles.iconBtn}
+                                                onClick={() => setEditingId(editing ? null : r.id)}
+                                                title={editing ? '收起' : '编辑'}
+                                            >
+                                                {editing ? '✕' : '✎'}
+                                            </button>
+                                            <button
+                                                style={styles.iconBtn}
+                                                onClick={() => move(r.id, -1)}
+                                                disabled={i === 0}
+                                                title="上移"
+                                            >
+                                                ↑
+                                            </button>
+                                            <button
+                                                style={styles.iconBtn}
+                                                onClick={() => move(r.id, 1)}
+                                                disabled={i === sorted.length - 1}
+                                                title="下移"
+                                            >
+                                                ↓
+                                            </button>
+                                            <button
+                                                style={styles.iconBtn}
+                                                onClick={() => {
+                                                    const idx = sorted.findIndex(x => x.id === r.id);
+                                                    if (idx <= 0) return;
+                                                    const target = sorted[0];
+                                                    const current = sorted[idx];
+                                                    const next = [...sorted];
+                                                    next[0] = { ...current, priority: target.priority };
+                                                    next[idx] = { ...target, priority: current.priority };
+                                                    for (let j = 1; j < idx; j++) {
+                                                        next[j].priority = next[j-1].priority + 1;
+                                                    }
+                                                    update(next);
+                                                }}
+                                                disabled={i === 0}
+                                                title="置顶"
+                                            >
+                                                ⇱
+                                            </button>
+                                            <button
+                                                style={styles.iconBtn}
+                                                onClick={() => {
+                                                    const idx = sorted.findIndex(x => x.id === r.id);
+                                                    if (idx < 0 || idx >= sorted.length - 1) return;
+                                                    const target = sorted[sorted.length - 1];
+                                                    const current = sorted[idx];
+                                                    const next = [...sorted];
+                                                    next[sorted.length - 1] = { ...current, priority: target.priority };
+                                                    next[idx] = { ...target, priority: current.priority };
+                                                    for (let j = idx + 1; j < sorted.length - 1; j++) {
+                                                        next[j].priority = next[j-1].priority + 1;
+                                                    }
+                                                    update(next);
+                                                }}
+                                                disabled={i === sorted.length - 1}
+                                                title="置底"
+                                            >
+                                                ⇲
+                                            </button>
+                                            <button
+                                                style={{ ...styles.iconBtn, ...styles.deleteBtn }}
+                                                onClick={() => removeRule(r.id)}
+                                                title="删除"
+                                            >
+                                                ×
+                                            </button>
                                         </div>
                                     </div>
 
-                                    <div style={styles.grid}>
-                                        <div style={styles.field}>
-                                            <div style={styles.label}>名称</div>
-                                            <input
-                                                value={r.name}
-                                                onChange={(e) => patch(r.id, { name: e.target.value })}
-                                                style={styles.input}
-                                            />
-                                        </div>
-                                        <div style={styles.field}>
-                                            <div style={styles.label}>优先级</div>
-                                            <input
-                                                value={String(r.priority ?? 0)}
-                                                onChange={(e) => patch(r.id, { priority: parseInt(e.target.value) || 0 })}
-                                                style={styles.input}
-                                            />
-                                        </div>
-                                    </div>
+                                    {/* 展开的编辑区域 */}
+                                    {editing && (
+                                        <div style={styles.expanded}>
+                                            <div style={styles.field}>
+                                                <label style={styles.fieldLabel}>规则名称</label>
+                                                <input
+                                                    value={r.name}
+                                                    onChange={(e) => patch(r.id, { name: e.target.value })}
+                                                    style={styles.input}
+                                                    placeholder="例如：错误信息"
+                                                />
+                                            </div>
 
-                                    <div style={styles.field}>
-                                        <div style={styles.label}>正则</div>
-                                        <input
-                                            value={r.pattern}
-                                            onChange={(e) => {
-                                                const v = e.target.value;
-                                                const riskyNow = isHighRiskPattern(v);
-                                                patch(r.id, { pattern: v, is_enabled: riskyNow ? false : r.is_enabled });
-                                            }}
-                                            style={styles.input}
-                                            placeholder="例如：(?i)\\b(error|fail|fatal)\\b"
-                                        />
-                                        {risky && <div style={styles.warn}>该正则可能有性能风险，已强制禁用（可修改后再启用）。</div>}
-                                    </div>
+                                            <div style={styles.field}>
+                                                <label style={styles.fieldLabel}>匹配模式（正则表达式）</label>
+                                                <input
+                                                    value={r.pattern}
+                                                    onChange={(e) => {
+                                                        const v = e.target.value;
+                                                        const riskyNow = isHighRiskPattern(v);
+                                                        patch(r.id, { pattern: v, is_enabled: riskyNow ? false : r.is_enabled });
+                                                    }}
+                                                    style={styles.input}
+                                                    placeholder="例如：(?i)\\b(error|fail)\\b"
+                                                />
+                                                {risky && <div style={styles.warnText}>该正则可能有性能风险，已自动禁用</div>}
+                                                {r.pattern && !risky && (
+                                                    <div style={styles.previewText}>
+                                                        预览：匹配 <code style={styles.code}>{r.pattern}</code>
+                                                    </div>
+                                                )}
+                                            </div>
 
-                                    <div style={styles.grid}>
-                                        <div style={styles.field}>
-                                            <div style={styles.label}>背景色</div>
-                                            <input
-                                                value={r.style?.background_color || ''}
-                                                onChange={(e) => patchStyle(r.id, { background_color: e.target.value })}
-                                                style={styles.input}
-                                                placeholder="#RRGGBB"
-                                            />
+                                            <div style={styles.row}>
+                                                <div style={styles.col}>
+                                                    <label style={styles.fieldLabel}>背景色</label>
+                                                    <div style={styles.colorInput}>
+                                                        <input
+                                                            type="color"
+                                                            value={r.style?.background_color || '#1d3a5a'}
+                                                            onChange={(e) => patchStyle(r.id, { background_color: e.target.value })}
+                                                            style={styles.colorPicker}
+                                                        />
+                                                        <input
+                                                            value={r.style?.background_color || ''}
+                                                            onChange={(e) => patchStyle(r.id, { background_color: e.target.value })}
+                                                            style={styles.input}
+                                                            placeholder="#RRGGBB"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div style={styles.col}>
+                                                    <label style={styles.fieldLabel}>文字颜色</label>
+                                                    <div style={styles.colorInput}>
+                                                        <input
+                                                            type="color"
+                                                            value={r.style?.color || '#ffffff'}
+                                                            onChange={(e) => patchStyle(r.id, { color: e.target.value })}
+                                                            style={styles.colorPicker}
+                                                        />
+                                                        <input
+                                                            value={r.style?.color || ''}
+                                                            onChange={(e) => patchStyle(r.id, { color: e.target.value })}
+                                                            style={styles.input}
+                                                            placeholder="#RRGGBB"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div style={styles.field}>
+                                                <label style={styles.fieldLabel}>字重</label>
+                                                <select
+                                                    value={r.style?.font_weight || 'normal'}
+                                                    onChange={(e) => patchStyle(r.id, { font_weight: e.target.value })}
+                                                    style={styles.select}
+                                                >
+                                                    <option value="normal">常规</option>
+                                                    <option value="bold">粗体</option>
+                                                </select>
+                                            </div>
+
+                                            {/* 效果预览 */}
+                                            {r.pattern && (
+                                                <div style={styles.previewBox}>
+                                                    <label style={styles.fieldLabel}>效果预览</label>
+                                                    <div style={styles.previewBg}>
+                                                        <span style={{
+                                                            backgroundColor: r.style?.background_color || '#1d3a5a',
+                                                            color: r.style?.color || '#ffffff',
+                                                            fontWeight: r.style?.font_weight as any || 'normal',
+                                                            padding: '2px 6px',
+                                                            borderRadius: '3px',
+                                                            whiteSpace: 'nowrap'
+                                                        }}>
+                                                            {r.name || '未命名'} 示例文本
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
-                                        <div style={styles.field}>
-                                            <div style={styles.label}>文字色</div>
-                                            <input
-                                                value={r.style?.color || ''}
-                                                onChange={(e) => patchStyle(r.id, { color: e.target.value })}
-                                                style={styles.input}
-                                                placeholder="#RRGGBB"
-                                            />
-                                        </div>
-                                    </div>
+                                    )}
                                 </div>
                             );
                         })}
@@ -184,8 +318,13 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
                 </div>
 
                 <div style={styles.footer}>
-                    <button style={styles.btn2} onClick={onClose}>取消</button>
-                    <button style={styles.primary} onClick={applyAndClose}>保存</button>
+                    <div style={styles.summary}>
+                        共 {sorted.length} 条规则，{sorted.filter(r => r.is_enabled).length} 条已启用
+                    </div>
+                    <div style={styles.footerBtns}>
+                        <button style={styles.cancelBtn} onClick={onClose}>取消</button>
+                        <button style={styles.primary} onClick={applyAndClose}>保存更改</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -196,42 +335,53 @@ const styles: Record<string, React.CSSProperties> = {
     backdrop: {
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(0,0,0,0.6)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 2000
     },
     modal: {
-        width: '860px',
-        maxWidth: '92vw',
-        height: '720px',
-        maxHeight: '92vh',
+        width: '900px',
+        maxWidth: '95vw',
+        height: '740px',
+        maxHeight: '95vh',
         backgroundColor: '#252526',
         border: '1px solid #1f1f1f',
         borderRadius: '12px',
         display: 'flex',
         flexDirection: 'column',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
     },
     header: {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '12px 14px',
-        borderBottom: '1px solid #1f1f1f'
+        padding: '16px 20px',
+        borderBottom: '1px solid #1f1f1f',
+        backgroundColor: '#1e1e1e'
     },
-    title: { color: '#fff', fontWeight: 800, fontSize: '14px' },
+    title: {
+        color: '#fff',
+        fontWeight: 600,
+        fontSize: '16px',
+        letterSpacing: '0.3px'
+    },
     x: {
         background: 'transparent',
-        color: '#aaa',
-        border: '1px solid #2a2a2a',
-        borderRadius: '8px',
-        width: '32px',
-        height: '28px',
+        color: '#999',
+        border: 'none',
+        borderRadius: '6px',
+        width: '36px',
+        height: '32px',
         cursor: 'pointer',
-        fontSize: '18px',
-        lineHeight: '18px'
+        fontSize: '24px',
+        lineHeight: '24px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'all 0.2s'
     },
     body: {
         flex: 1,
@@ -243,98 +393,240 @@ const styles: Record<string, React.CSSProperties> = {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '12px 14px',
-        borderBottom: '1px solid #1f1f1f'
+        padding: '16px 20px',
+        borderBottom: '1px solid #1f1f1f',
+        backgroundColor: '#1a1a1a'
     },
-    hint: { color: '#8a8a8a', fontSize: '12px' },
+    hint: {
+        color: '#8a8a8a',
+        fontSize: '12px'
+    },
     list: {
         flex: 1,
         minHeight: 0,
         overflow: 'auto',
-        padding: '14px',
+        padding: '16px 20px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '10px'
+        gap: '8px'
     },
-    empty: { color: '#8a8a8a', fontSize: '12px' },
+    empty: {
+        color: '#666',
+        fontSize: '13px',
+        textAlign: 'center',
+        padding: '40px 0'
+    },
     item: {
         border: '1px solid #2a2a2a',
-        borderRadius: '12px',
-        backgroundColor: '#141414',
-        padding: '12px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px'
+        borderRadius: '8px',
+        backgroundColor: '#1a1a1a',
+        overflow: 'hidden',
+        transition: 'all 0.2s'
     },
-    itemTop: {
+    itemHeader: {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
+        padding: '10px 12px',
+        gap: '12px',
+        backgroundColor: '#222'
+    },
+    itemLeft: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        flex: 1,
+        minWidth: 0
+    },
+    switchLabel: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        cursor: 'pointer',
+        flex: 1,
+        minWidth: 0
+    },
+    checkbox: {
+        width: '16px',
+        height: '16px',
+        cursor: 'pointer',
+        flexShrink: 0
+    },
+    statusDot: {
+        width: '12px',
+        height: '12px',
+        borderRadius: '50%',
+        flexShrink: 0,
+        transition: 'all 0.2s',
+        boxShadow: '0 0 0 2px transparent'
+    },
+    nameText: {
+        color: '#ddd',
+        fontSize: '13px',
+        fontWeight: 500,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        flex: 1
+    },
+    riskBadge: {
+        backgroundColor: '#5c2e2e',
+        color: '#ff9980',
+        fontSize: '11px',
+        padding: '2px 6px',
+        borderRadius: '4px',
+        fontWeight: 600,
+        flexShrink: 0
+    },
+    actions: {
+        display: 'flex',
+        gap: '4px',
+        flexShrink: 0
+    },
+    iconBtn: {
+        backgroundColor: '#333',
+        color: '#bbb',
+        border: '1px solid #444',
+        borderRadius: '4px',
+        width: '28px',
+        height: '26px',
+        cursor: 'pointer',
+        fontSize: '14px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'all 0.2s',
+        padding: 0
+    },
+    deleteBtn: {
+        color: '#ff8080',
+        borderColor: '#5c3a3a'
+    },
+    expanded: {
+        padding: '16px',
+        borderTop: '1px solid #2a2a2a',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+        backgroundColor: '#151515',
+        maxHeight: '400px',
+        overflowY: 'auto'
+    },
+    row: {
+        display: 'flex',
+        gap: '12px'
+    },
+    col: {
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px'
+    },
+    field: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px'
+    },
+    fieldLabel: {
+        color: '#999',
+        fontSize: '12px',
+        fontWeight: 500
+    },
+    input: {
+        backgroundColor: '#1e1e1e',
+        color: '#ddd',
+        border: '1px solid #3a3a3a',
+        borderRadius: '6px',
+        padding: '8px 10px',
+        outline: 'none',
+        fontSize: '13px',
+        transition: 'border-color 0.2s'
+    },
+    select: {
+        backgroundColor: '#1e1e1e',
+        color: '#ddd',
+        border: '1px solid #3a3a3a',
+        borderRadius: '6px',
+        padding: '8px 10px',
+        outline: 'none',
+        fontSize: '13px',
+        cursor: 'pointer'
+    },
+    colorInput: {
+        display: 'flex',
+        gap: '8px',
+        alignItems: 'center'
+    },
+    colorPicker: {
+        width: '40px',
+        height: '34px',
+        border: '1px solid #3a3a3a',
+        borderRadius: '6px',
+        cursor: 'pointer',
+        padding: '2px',
+        backgroundColor: '#1e1e1e'
+    },
+    warnText: {
+        color: '#ff9980',
+        fontSize: '12px'
+    },
+    previewText: {
+        color: '#8a8a8a',
+        fontSize: '12px'
+    },
+    code: {
+        backgroundColor: '#2a2a2a',
+        padding: '2px 6px',
+        borderRadius: '3px',
+        fontFamily: 'monospace',
+        fontSize: '11px'
+    },
+    previewBox: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px'
+    },
+    previewBg: {
+        backgroundColor: '#0d0d0d',
+        padding: '12px',
+        borderRadius: '6px',
+        border: '1px solid #2a2a2a'
+    },
+    footer: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '16px 20px',
+        borderTop: '1px solid #1f1f1f',
+        backgroundColor: '#1e1e1e'
+    },
+    summary: {
+        color: '#8a8a8a',
+        fontSize: '13px'
+    },
+    footerBtns: {
+        display: 'flex',
         gap: '10px'
     },
-    actions: { display: 'flex', gap: '6px' },
-    smallBtn: {
-        backgroundColor: '#202020',
+    cancelBtn: {
+        backgroundColor: '#3a3a3a',
         color: '#ddd',
-        border: '1px solid #2a2a2a',
-        borderRadius: '8px',
-        padding: '4px 10px',
+        border: '1px solid #4a4a4a',
+        borderRadius: '6px',
+        padding: '8px 20px',
         cursor: 'pointer',
-        fontSize: '12px'
-    },
-    btn: {
-        backgroundColor: '#202020',
-        color: '#ddd',
-        border: '1px solid #2a2a2a',
-        borderRadius: '8px',
-        padding: '6px 10px',
-        cursor: 'pointer',
-        fontSize: '12px'
-    },
-    btn2: {
-        backgroundColor: '#202020',
-        color: '#ddd',
-        border: '1px solid #2a2a2a',
-        borderRadius: '8px',
-        padding: '8px 14px',
-        cursor: 'pointer',
-        fontSize: '12px'
+        fontSize: '13px',
+        transition: 'all 0.2s'
     },
     primary: {
         backgroundColor: '#007acc',
         color: '#fff',
         border: 'none',
-        borderRadius: '8px',
-        padding: '8px 14px',
+        borderRadius: '6px',
+        padding: '8px 20px',
         cursor: 'pointer',
-        fontSize: '12px',
-        fontWeight: 700
-    },
-    footer: {
-        display: 'flex',
-        justifyContent: 'flex-end',
-        gap: '10px',
-        padding: '12px 14px',
-        borderTop: '1px solid #1f1f1f'
-    },
-    check: { display: 'flex', alignItems: 'center', gap: '8px' },
-    checkText: { color: '#ddd', fontSize: '12px' },
-    grid: {
-        display: 'grid',
-        gridTemplateColumns: '1fr 160px',
-        gap: '10px'
-    },
-    field: { display: 'flex', flexDirection: 'column', gap: '6px' },
-    label: { color: '#a8a8a8', fontSize: '12px' },
-    input: {
-        backgroundColor: '#202020',
-        color: '#ddd',
-        border: '1px solid #2a2a2a',
-        borderRadius: '8px',
-        padding: '8px 10px',
-        outline: 'none',
-        fontSize: '12px'
-    },
-    warn: { color: '#ffbf66', fontSize: '12px' }
+        fontSize: '13px',
+        fontWeight: 600,
+        transition: 'all 0.2s'
+    }
 };
-

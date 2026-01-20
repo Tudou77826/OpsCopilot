@@ -345,7 +345,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                         <div style={styles.formSection}>
                             <div style={styles.formGroup}>
                                 <label style={styles.label}>命令补全延迟时间 (毫秒)</label>
-                                <input 
+                                <input
                                     style={styles.input}
                                     type="number"
                                     min="0"
@@ -367,51 +367,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                             <div style={styles.formGroup}>
                                 <label style={styles.label}>终端搜索与高亮</label>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' as const }}>
-                                    <label style={styles.switch}>
-                                        <input
-                                            type="checkbox"
-                                            checked={!!(config.terminal?.search_enabled ?? true)}
-                                            onChange={(e) => {
-                                                setConfig({
-                                                    ...config,
-                                                    terminal: {
-                                                        ...(config.terminal || { scrollback: 5000, search_enabled: true, highlight_enabled: true }),
-                                                        search_enabled: e.target.checked
-                                                    }
-                                                });
-                                            }}
-                                        />
-                                        <span style={styles.slider}></span>
-                                    </label>
-                                    <span style={{ color: '#ccc', fontSize: '0.9rem', minWidth: '110px' }}>
-                                        {config.terminal?.search_enabled ?? true ? '搜索已开启' : '搜索已关闭'}
-                                    </span>
-                                    <label style={styles.switch}>
-                                        <input
-                                            type="checkbox"
-                                            checked={!!(config.terminal?.highlight_enabled ?? true)}
-                                            onChange={(e) => {
-                                                setConfig({
-                                                    ...config,
-                                                    terminal: {
-                                                        ...(config.terminal || { scrollback: 5000, search_enabled: true, highlight_enabled: true }),
-                                                        highlight_enabled: e.target.checked
-                                                    }
-                                                });
-                                            }}
-                                        />
-                                        <span style={styles.slider}></span>
-                                    </label>
-                                    <span style={{ color: '#ccc', fontSize: '0.9rem', minWidth: '110px' }}>
-                                        {config.terminal?.highlight_enabled ?? true ? '高亮已开启' : '高亮已关闭'}
-                                    </span>
                                     <button
                                         style={{ ...styles.saveBtn, padding: '8px 12px', height: '36px' }}
                                         onClick={() => setRulesModalOpen(true)}
                                         type="button"
                                     >
-                                        管理高亮规则
+                                        设置突出显示集
                                     </button>
+                                    <span style={{ color: '#888', fontSize: '0.85rem' }}>
+                                        {config.highlight_rules?.filter(r => r.is_enabled).length || 0} 条规则已启用
+                                    </span>
                                 </div>
                                 <div style={{ marginTop: '10px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' as const }}>
                                     <div style={{ color: '#ccc', fontSize: '0.9rem' }}>Scrollback 行数</div>
