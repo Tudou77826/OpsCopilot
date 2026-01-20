@@ -25,5 +25,25 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+:: 复制配置文件到输出目录
+echo [INFO] Copying configuration files to build/bin/...
+if exist "config.json" (
+    copy /Y "config.json" "build\bin\" >nul
+    echo [INFO]   - config.json
+)
+if exist "prompts.json" (
+    copy /Y "prompts.json" "build\bin\" >nul
+    echo [INFO]   - prompts.json
+)
+if exist "quick_commands.json" (
+    copy /Y "quick_commands.json" "build\bin\" >nul
+    echo [INFO]   - quick_commands.json
+)
+if exist "highlight_rules.json" (
+    copy /Y "highlight_rules.json" "build\bin\" >nul
+    echo [INFO]   - highlight_rules.json
+)
+
 echo [SUCCESS] Build complete. Executable is in build/bin/
+echo [INFO] Configuration files have been copied to build/bin/
 endlocal

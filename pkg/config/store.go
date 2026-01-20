@@ -61,11 +61,11 @@ type DocsConfig struct {
 }
 
 type Manager struct {
-	configPath        string
-	promptsPath       string
-	quickCommandsPath string
+	configPath         string
+	promptsPath        string
+	quickCommandsPath  string
 	highlightRulesPath string
-	Config            *AppConfig
+	Config             *AppConfig
 }
 
 func NewManager() *Manager {
@@ -106,11 +106,11 @@ func NewManager() *Manager {
 	}
 
 	return &Manager{
-		configPath:        "config.json",         // 默认在当前目录
-		promptsPath:       "prompts.json",        // prompts 配置文件
-		quickCommandsPath: "quick_commands.json", // quick_commands 配置文件
+		configPath:         "config.json",         // 默认在当前目录
+		promptsPath:        "prompts.json",        // prompts 配置文件
+		quickCommandsPath:  "quick_commands.json", // quick_commands 配置文件
 		highlightRulesPath: "highlight_rules.json",
-		Config:            cfg,
+		Config:             cfg,
 	}
 }
 

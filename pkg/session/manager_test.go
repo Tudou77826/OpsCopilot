@@ -59,12 +59,12 @@ func TestSessionManager(t *testing.T) {
 
 func TestBroadcast(t *testing.T) {
 	manager := NewManager()
-	
+
 	// Create 3 sessions
 	writers := []*MockWriter{
 		{}, {}, {},
 	}
-	
+
 	ids := []string{}
 	for _, w := range writers {
 		id := manager.Add(&sshclient.Client{}, w, nil)
@@ -80,7 +80,7 @@ func TestBroadcast(t *testing.T) {
 		w.mu.Lock()
 		got := string(w.data)
 		w.mu.Unlock()
-		
+
 		if got != msg {
 			t.Errorf("Session %d: expected %q, got %q", i, msg, got)
 		}

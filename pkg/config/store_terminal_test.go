@@ -44,4 +44,3 @@ func TestTerminalConfigDefaultAndSave(t *testing.T) {
 		t.Fatalf("unexpected terminal config: %+v", m2.Config.Terminal)
 	}
 }
-

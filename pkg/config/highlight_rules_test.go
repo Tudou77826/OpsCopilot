@@ -45,4 +45,3 @@ func TestHighlightRulesLoadSave(t *testing.T) {
 		t.Fatalf("expected terminal scrollback default")
 	}
 }
-
