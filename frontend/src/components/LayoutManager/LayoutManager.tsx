@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import TerminalComponent, { TerminalRef } from '../Terminal/Terminal';
+import { HighlightRule, TerminalConfig } from '../Terminal/highlightTypes';
 
 interface TerminalSession {
     id: string;
@@ -21,9 +22,11 @@ interface LayoutManagerProps {
     broadcastIds?: string[];
     onToggleTerminalBroadcast?: (id: string) => void;
     completionDelay?: number;
+    terminalConfig?: TerminalConfig;
+    highlightRules?: HighlightRule[];
 }
 
-const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTerminalData, terminalRefs, onCloseTerminal, onRenameTerminal, onDuplicateTerminal, onActiveTerminalChange, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast, completionDelay }) => {
+const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTerminalData, terminalRefs, onCloseTerminal, onRenameTerminal, onDuplicateTerminal, onActiveTerminalChange, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast, completionDelay, terminalConfig, highlightRules }) => {
     const [activeTab, setActiveTab] = useState<string>(terminals[0]?.id || '');
     const [editingTab, setEditingTab] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
@@ -230,6 +233,8 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
                                     sessionID={term.id}
                                     onData={(data) => onTerminalData(term.id, data)}
                                     completionDelay={completionDelay}
+                                    terminalConfig={terminalConfig}
+                                    highlightRules={highlightRules}
                                     ref={(el) => {
                                         if (el) {
                                             terminalRefs.current.set(term.id, el);

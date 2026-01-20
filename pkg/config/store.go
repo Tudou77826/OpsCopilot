@@ -15,10 +15,35 @@ type AppConfig struct {
 	CompletionDelay      int                `json:"completion_delay"`
 	CommandQueryShortcut string             `json:"command_query_shortcut"`
 	Experimental         ExperimentalConfig `json:"experimental"`
+	Terminal             TerminalConfig     `json:"terminal"`
+	HighlightRules       []HighlightRule    `json:"highlight_rules"`
 }
 
 type ExperimentalConfig struct {
 	Monitoring bool `json:"monitoring"`
+}
+
+type TerminalConfig struct {
+	Scrollback       int  `json:"scrollback"`
+	SearchEnabled    bool `json:"search_enabled"`
+	HighlightEnabled bool `json:"highlight_enabled"`
+}
+
+type HighlightRule struct {
+	ID        string         `json:"id"`
+	Name      string         `json:"name"`
+	Pattern   string         `json:"pattern"`
+	IsEnabled bool           `json:"is_enabled"`
+	Priority  int            `json:"priority"`
+	Style     HighlightStyle `json:"style"`
+}
+
+type HighlightStyle struct {
+	BackgroundColor string  `json:"background_color,omitempty"`
+	Color           string  `json:"color,omitempty"`
+	FontWeight      string  `json:"font_weight,omitempty"`
+	TextDecoration  string  `json:"text_decoration,omitempty"`
+	Opacity         float64 `json:"opacity,omitempty"`
 }
 
 type QuickCommand struct {
@@ -39,6 +64,7 @@ type Manager struct {
 	configPath        string
 	promptsPath       string
 	quickCommandsPath string
+	highlightRulesPath string
 	Config            *AppConfig
 }
 
@@ -71,12 +97,19 @@ func NewManager() *Manager {
 		Experimental: ExperimentalConfig{
 			Monitoring: false,
 		},
+		Terminal: TerminalConfig{
+			Scrollback:       5000,
+			SearchEnabled:    true,
+			HighlightEnabled: true,
+		},
+		HighlightRules: []HighlightRule{},
 	}
 
 	return &Manager{
 		configPath:        "config.json",         // 默认在当前目录
 		promptsPath:       "prompts.json",        // prompts 配置文件
 		quickCommandsPath: "quick_commands.json", // quick_commands 配置文件
+		highlightRulesPath: "highlight_rules.json",
 		Config:            cfg,
 	}
 }
@@ -100,6 +133,7 @@ func (m *Manager) Load() error {
 	_, hasComplexModel := llmRaw["ComplexModel"]
 	_, hasOldModel := llmRaw["Model"]
 	_, hasCommandQueryShortcut := raw["command_query_shortcut"]
+	_, hasTerminal := raw["terminal"]
 
 	// 解析配置
 	if err := json.Unmarshal(data, m.Config); err != nil {
@@ -123,6 +157,18 @@ func (m *Manager) Load() error {
 		m.Config.CommandQueryShortcut = "Ctrl+K"
 		changed = true
 	}
+	if !hasTerminal {
+		m.Config.Terminal = TerminalConfig{
+			Scrollback:       5000,
+			SearchEnabled:    true,
+			HighlightEnabled: true,
+		}
+		changed = true
+	}
+	if m.Config.Terminal.Scrollback <= 0 {
+		m.Config.Terminal.Scrollback = 5000
+		changed = true
+	}
 
 	// 加载 prompts 配置
 	if err := m.loadPrompts(); err != nil {
@@ -131,6 +177,11 @@ func (m *Manager) Load() error {
 
 	// 加载 quick_commands 配置
 	if err := m.loadQuickCommands(); err != nil {
+		return err
+	}
+
+	// 加载 highlight_rules 配置
+	if err := m.loadHighlightRules(); err != nil {
 		return err
 	}
 
@@ -231,6 +282,7 @@ func (m *Manager) Save() error {
 		CompletionDelay      int                `json:"completion_delay"`
 		CommandQueryShortcut string             `json:"command_query_shortcut"`
 		Experimental         ExperimentalConfig `json:"experimental"`
+		Terminal             TerminalConfig     `json:"terminal"`
 	}
 
 	cfg := ConfigForSave{
@@ -240,6 +292,7 @@ func (m *Manager) Save() error {
 		CompletionDelay:      m.Config.CompletionDelay,
 		CommandQueryShortcut: m.Config.CommandQueryShortcut,
 		Experimental:         m.Config.Experimental,
+		Terminal:             m.Config.Terminal,
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
@@ -257,6 +310,11 @@ func (m *Manager) Save() error {
 
 	// 保存 quick_commands 到独立文件
 	if err := m.saveQuickCommands(); err != nil {
+		return err
+	}
+
+	// 保存 highlight_rules 到独立文件
+	if err := m.saveHighlightRules(); err != nil {
 		return err
 	}
 
@@ -304,4 +362,38 @@ func (m *Manager) SetQuickCommands(cmds []QuickCommand) {
 	m.Config.QuickCommands = cmds
 	// 立即保存到独立文件
 	m.saveQuickCommands()
+}
+
+func (m *Manager) loadHighlightRules() error {
+	data, err := os.ReadFile(m.highlightRulesPath)
+	if os.IsNotExist(err) {
+		m.Config.HighlightRules = []HighlightRule{}
+		return m.saveHighlightRules()
+	}
+	if err != nil {
+		return err
+	}
+
+	var rules []HighlightRule
+	if err := json.Unmarshal(data, &rules); err != nil {
+		return err
+	}
+	if rules == nil {
+		rules = []HighlightRule{}
+	}
+	m.Config.HighlightRules = rules
+	return nil
+}
+
+func (m *Manager) saveHighlightRules() error {
+	data, err := json.MarshalIndent(m.Config.HighlightRules, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(m.highlightRulesPath, data, 0644)
+}
+
+func (m *Manager) SetHighlightRules(rules []HighlightRule) {
+	m.Config.HighlightRules = rules
+	m.saveHighlightRules()
 }

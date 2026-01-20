@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import KeysMap from './KeysMap';
+import HighlightRulesModal from './HighlightRulesModal';
+import { HighlightRule, TerminalConfig } from '../Terminal/highlightTypes';
 
 interface AppConfig {
     llm: {
@@ -21,6 +23,8 @@ interface AppConfig {
     experimental?: {
         monitoring?: boolean;
     };
+    terminal?: TerminalConfig;
+    highlight_rules?: HighlightRule[];
     completion_delay: number;
     command_query_shortcut: string;
 }
@@ -32,13 +36,16 @@ interface SettingsModalProps {
     onToggleBroadcast?: (enabled: boolean) => void;
     onCompletionDelayChange?: (delay: number) => void;
     onExperimentalMonitoringChange?: (enabled: boolean) => void;
+    onTerminalConfigChange?: (cfg: TerminalConfig) => void;
+    onHighlightRulesChange?: (rules: HighlightRule[]) => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadcastMode, onToggleBroadcast, onCompletionDelayChange, onExperimentalMonitoringChange }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadcastMode, onToggleBroadcast, onCompletionDelayChange, onExperimentalMonitoringChange, onTerminalConfigChange, onHighlightRulesChange }) => {
     const [config, setConfig] = useState<AppConfig | null>(null);
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
     const [activeTab, setActiveTab] = useState<'llm' | 'prompts' | 'system' | 'app' | 'keys'>('llm');
+    const [rulesModalOpen, setRulesModalOpen] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -57,6 +64,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                 const llmCfg = cfg.llm || {};
                 const fastModel = llmCfg.FastModel || llmCfg.Model || '';
                 const complexModel = llmCfg.ComplexModel || '';
+                const terminal: TerminalConfig = cfg.terminal || { scrollback: 5000, search_enabled: true, highlight_enabled: true };
+                const highlight_rules: HighlightRule[] = Array.isArray(cfg.highlight_rules) ? cfg.highlight_rules : [];
                 setConfig({
                     ...cfg,
                     llm: {
@@ -67,6 +76,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                     experimental: {
                         monitoring: !!(cfg.experimental && cfg.experimental.monitoring),
                     },
+                    terminal,
+                    highlight_rules,
                     command_query_shortcut: cfg.command_query_shortcut || 'Ctrl+K',
                 });
             }
@@ -98,6 +109,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                 }
                 if (onExperimentalMonitoringChange) {
                     onExperimentalMonitoringChange(!!config.experimental?.monitoring);
+                }
+                if (onTerminalConfigChange && config.terminal) {
+                    onTerminalConfigChange(config.terminal);
+                }
+                if (onHighlightRulesChange) {
+                    onHighlightRulesChange(config.highlight_rules || []);
                 }
                 setTimeout(() => {
                     setMsg('');
@@ -348,6 +365,80 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                                 </div>
                             </div>
                             <div style={styles.formGroup}>
+                                <label style={styles.label}>终端搜索与高亮</label>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' as const }}>
+                                    <label style={styles.switch}>
+                                        <input
+                                            type="checkbox"
+                                            checked={!!(config.terminal?.search_enabled ?? true)}
+                                            onChange={(e) => {
+                                                setConfig({
+                                                    ...config,
+                                                    terminal: {
+                                                        ...(config.terminal || { scrollback: 5000, search_enabled: true, highlight_enabled: true }),
+                                                        search_enabled: e.target.checked
+                                                    }
+                                                });
+                                            }}
+                                        />
+                                        <span style={styles.slider}></span>
+                                    </label>
+                                    <span style={{ color: '#ccc', fontSize: '0.9rem', minWidth: '110px' }}>
+                                        {config.terminal?.search_enabled ?? true ? '搜索已开启' : '搜索已关闭'}
+                                    </span>
+                                    <label style={styles.switch}>
+                                        <input
+                                            type="checkbox"
+                                            checked={!!(config.terminal?.highlight_enabled ?? true)}
+                                            onChange={(e) => {
+                                                setConfig({
+                                                    ...config,
+                                                    terminal: {
+                                                        ...(config.terminal || { scrollback: 5000, search_enabled: true, highlight_enabled: true }),
+                                                        highlight_enabled: e.target.checked
+                                                    }
+                                                });
+                                            }}
+                                        />
+                                        <span style={styles.slider}></span>
+                                    </label>
+                                    <span style={{ color: '#ccc', fontSize: '0.9rem', minWidth: '110px' }}>
+                                        {config.terminal?.highlight_enabled ?? true ? '高亮已开启' : '高亮已关闭'}
+                                    </span>
+                                    <button
+                                        style={{ ...styles.saveBtn, padding: '8px 12px', height: '36px' }}
+                                        onClick={() => setRulesModalOpen(true)}
+                                        type="button"
+                                    >
+                                        管理高亮规则
+                                    </button>
+                                </div>
+                                <div style={{ marginTop: '10px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' as const }}>
+                                    <div style={{ color: '#ccc', fontSize: '0.9rem' }}>Scrollback 行数</div>
+                                    <input
+                                        style={{ ...styles.input, width: '200px' }}
+                                        type="number"
+                                        min="500"
+                                        max="20000"
+                                        step="500"
+                                        value={config.terminal?.scrollback ?? 5000}
+                                        onChange={(e) => {
+                                            const v = Math.max(500, Math.min(20000, parseInt(e.target.value) || 5000));
+                                            setConfig({
+                                                ...config,
+                                                terminal: {
+                                                    ...(config.terminal || { scrollback: 5000, search_enabled: true, highlight_enabled: true }),
+                                                    scrollback: v
+                                                }
+                                            });
+                                        }}
+                                    />
+                                    <div style={{ color: '#888', fontSize: '0.8rem' }}>
+                                        影响可搜索与可高亮的历史行数；调整后建议重启应用使其完全生效。
+                                    </div>
+                                </div>
+                            </div>
+                            <div style={styles.formGroup}>
                                 <label style={styles.label}>实验功能：Java 监控面板</label>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                     <label style={styles.switch}>
@@ -400,6 +491,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                         </div>
                     )}
                 </div>
+                <HighlightRulesModal
+                    isOpen={rulesModalOpen}
+                    rules={config.highlight_rules || []}
+                    onChange={(rules) => {
+                        setConfig({
+                            ...config,
+                            highlight_rules: rules
+                        });
+                    }}
+                    onClose={() => setRulesModalOpen(false)}
+                />
 
                 <div style={styles.footer}>
                     <div style={styles.statusMsg}>{msg}</div>

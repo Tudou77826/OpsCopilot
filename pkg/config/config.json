@@ -12,5 +12,13 @@
     "dir": ""
   },
   "completion_delay": 150,
-  "command_query_shortcut": "Ctrl+K"
+  "command_query_shortcut": "Ctrl+K",
+  "experimental": {
+    "monitoring": false
+  },
+  "terminal": {
+    "scrollback": 5000,
+    "search_enabled": true,
+    "highlight_enabled": true
+  }
 }

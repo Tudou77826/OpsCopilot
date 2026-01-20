@@ -593,6 +593,18 @@ func (a *App) SaveSettings(cfg config.AppConfig) string {
 	return ""
 }
 
+func (a *App) GetHighlightRules() []config.HighlightRule {
+	return a.configMgr.Config.HighlightRules
+}
+
+func (a *App) SaveHighlightRules(rules []config.HighlightRule) string {
+	a.configMgr.SetHighlightRules(rules)
+	if err := a.configMgr.Save(); err != nil {
+		return fmt.Sprintf("Error saving config: %v", err)
+	}
+	return ""
+}
+
 // LoadQuickCommands returns the list of quick commands from config
 func (a *App) LoadQuickCommands() []config.QuickCommand {
 	return a.configMgr.Config.QuickCommands

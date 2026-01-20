@@ -1,5 +1,81 @@
 export namespace config {
 	
+	export class HighlightStyle {
+	    background_color?: string;
+	    color?: string;
+	    font_weight?: string;
+	    text_decoration?: string;
+	    opacity?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new HighlightStyle(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.background_color = source["background_color"];
+	        this.color = source["color"];
+	        this.font_weight = source["font_weight"];
+	        this.text_decoration = source["text_decoration"];
+	        this.opacity = source["opacity"];
+	    }
+	}
+	export class HighlightRule {
+	    id: string;
+	    name: string;
+	    pattern: string;
+	    is_enabled: boolean;
+	    priority: number;
+	    style: HighlightStyle;
+	
+	    static createFrom(source: any = {}) {
+	        return new HighlightRule(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.pattern = source["pattern"];
+	        this.is_enabled = source["is_enabled"];
+	        this.priority = source["priority"];
+	        this.style = this.convertValues(source["style"], HighlightStyle);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TerminalConfig {
+	    scrollback: number;
+	    search_enabled: boolean;
+	    highlight_enabled: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new TerminalConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.scrollback = source["scrollback"];
+	        this.search_enabled = source["search_enabled"];
+	        this.highlight_enabled = source["highlight_enabled"];
+	    }
+	}
 	export class ExperimentalConfig {
 	    monitoring: boolean;
 	
@@ -81,6 +157,8 @@ export namespace config {
 	    completion_delay: number;
 	    command_query_shortcut: string;
 	    experimental: ExperimentalConfig;
+	    terminal: TerminalConfig;
+	    highlight_rules: HighlightRule[];
 	
 	    static createFrom(source: any = {}) {
 	        return new AppConfig(source);
@@ -96,6 +174,8 @@ export namespace config {
 	        this.completion_delay = source["completion_delay"];
 	        this.command_query_shortcut = source["command_query_shortcut"];
 	        this.experimental = this.convertValues(source["experimental"], ExperimentalConfig);
+	        this.terminal = this.convertValues(source["terminal"], TerminalConfig);
+	        this.highlight_rules = this.convertValues(source["highlight_rules"], HighlightRule);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -116,6 +196,9 @@ export namespace config {
 		    return a;
 		}
 	}
+	
+	
+	
 	
 	
 	

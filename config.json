@@ -14,6 +14,11 @@
   "completion_delay": 1500,
   "command_query_shortcut": "Ctrl+K",
   "experimental": {
-    "monitoring": true
+    "monitoring": false
+  },
+  "terminal": {
+    "scrollback": 5000,
+    "search_enabled": true,
+    "highlight_enabled": true
   }
 }

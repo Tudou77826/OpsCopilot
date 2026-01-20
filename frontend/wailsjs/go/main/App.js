@@ -46,6 +46,10 @@ export function GetCompletions(arg1, arg2) {
   return window['go']['main']['App']['GetCompletions'](arg1, arg2);
 }
 
+export function GetHighlightRules() {
+  return window['go']['main']['App']['GetHighlightRules']();
+}
+
 export function GetJavaMonitorSnapshot(arg1, arg2) {
   return window['go']['main']['App']['GetJavaMonitorSnapshot'](arg1, arg2);
 }
@@ -96,6 +100,10 @@ export function RenameSavedSession(arg1, arg2) {
 
 export function ResizeTerminal(arg1, arg2, arg3) {
   return window['go']['main']['App']['ResizeTerminal'](arg1, arg2, arg3);
+}
+
+export function SaveHighlightRules(arg1) {
+  return window['go']['main']['App']['SaveHighlightRules'](arg1);
 }
 
 export function SaveQuickCommands(arg1) {

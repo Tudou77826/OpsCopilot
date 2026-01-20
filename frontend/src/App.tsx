@@ -9,6 +9,7 @@ import SettingsModal from './components/SettingsModal/SettingsModal';
 import ConfirmCloseModal from './components/ConfirmCloseModal/ConfirmCloseModal';
 import CommandQueryOverlay, { CommandQueryResult } from './components/CommandQueryOverlay/CommandQueryOverlay';
 import { ConnectionConfig } from './types';
+import { HighlightRule, TerminalConfig } from './components/Terminal/highlightTypes';
 
 interface TerminalSession {
     id: string;
@@ -30,6 +31,8 @@ function App() {
     const [confirmCloseMessage, setConfirmCloseMessage] = useState("");
     const [completionDelay, setCompletionDelay] = useState(150);
     const [experimentalMonitoringEnabled, setExperimentalMonitoringEnabled] = useState(false);
+    const [terminalConfig, setTerminalConfig] = useState<TerminalConfig>({ scrollback: 5000, search_enabled: true, highlight_enabled: true });
+    const [highlightRules, setHighlightRules] = useState<HighlightRule[]>([]);
     const [isCommandQueryOpen, setIsCommandQueryOpen] = useState(false);
     const [commandQueryPosition, setCommandQueryPosition] = useState({ x: 120, y: 120 });
     const [commandQueryText, setCommandQueryText] = useState('');
@@ -95,6 +98,12 @@ function App() {
                         setCompletionDelay(cfg.completion_delay);
                     }
                     setExperimentalMonitoringEnabled(!!(cfg && cfg.experimental && cfg.experimental.monitoring));
+                    if (cfg && cfg.terminal) {
+                        setTerminalConfig(cfg.terminal);
+                    }
+                    if (cfg && Array.isArray(cfg.highlight_rules)) {
+                        setHighlightRules(cfg.highlight_rules);
+                    }
                 }
             } catch (e) {
                 console.error('Failed to load settings:', e);
@@ -516,6 +525,8 @@ function App() {
                         broadcastIds={broadcastIds}
                         onToggleTerminalBroadcast={handleToggleTerminalBroadcast}
                         completionDelay={completionDelay}
+                        terminalConfig={terminalConfig}
+                        highlightRules={highlightRules}
                     />
                 </div>
 
@@ -600,6 +611,8 @@ function App() {
                 onToggleBroadcast={handleToggleBroadcast}
                 onCompletionDelayChange={setCompletionDelay}
                 onExperimentalMonitoringChange={setExperimentalMonitoringEnabled}
+                onTerminalConfigChange={setTerminalConfig}
+                onHighlightRulesChange={setHighlightRules}
             />
 
             <ConfirmCloseModal
