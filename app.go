@@ -970,7 +970,7 @@ func (a *App) FTCheck(sessionID string) string {
 	}
 
 	te := toTransferErr(sftpErr)
-	if te != nil && te.Code == filetransfer.ErrorCodeSFTPNotSupported {
+	if te != nil && (te.Code == filetransfer.ErrorCodeSFTPNotSupported || te.Code == filetransfer.ErrorCodeUnknown || te.Code == filetransfer.ErrorCodeNetwork) {
 		scpTr := filetransfer.NewSCPTransport(c)
 		ok, _, err := scpTr.Check(context.Background())
 		if err != nil {
@@ -982,7 +982,9 @@ func (a *App) FTCheck(sessionID string) string {
 			}
 			return mustJSON(ftResponse{OK: true, Message: "scp(login)"})
 		}
-		return mustJSON(ftResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeSFTPNotSupported, Message: "对端未开启 SFTP，且未安装 scp"}})
+		if te.Code == filetransfer.ErrorCodeSFTPNotSupported {
+			return mustJSON(ftResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeSFTPNotSupported, Message: "对端未开启 SFTP，且未安装 scp"}})
+		}
 	}
 	return mustJSON(ftResponse{OK: false, Error: te})
 }
@@ -1055,7 +1057,8 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 		}
 
 		if opErr != nil {
-			if te, ok := opErr.(*filetransfer.TransferError); ok && te.Code == filetransfer.ErrorCodeSFTPNotSupported {
+			te := toTransferErr(opErr)
+			if te != nil && (te.Code == filetransfer.ErrorCodeSFTPNotSupported || te.Code == filetransfer.ErrorCodeUnknown || te.Code == filetransfer.ErrorCodeNetwork) {
 				scpTr := filetransfer.NewSCPTransport(c)
 				ok, _, checkErr := scpTr.Check(ctx)
 				if checkErr == nil && ok {
@@ -1069,7 +1072,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 					} else {
 						usedTransport = "scp(login)"
 					}
-				} else if checkErr == nil && !ok {
+				} else if checkErr == nil && !ok && te.Code == filetransfer.ErrorCodeSFTPNotSupported {
 					opErr = &filetransfer.TransferError{Code: filetransfer.ErrorCodeSFTPNotSupported, Message: "对端未开启 SFTP，且未安装 scp"}
 				} else if checkErr != nil {
 					opErr = checkErr

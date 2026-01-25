@@ -265,6 +265,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals }) 
             }
             if (!resp.ok) {
                 setProtocol('');
+                setMsg(formatError(resp));
                 return;
             }
             setProtocol(resp.message || '');
@@ -514,6 +515,23 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals }) 
         }
         const baseDir = isSCPMode() ? (remotePathInput.trim() || remotePath) : remotePath;
         const dst = remoteJoin(baseDir, entry.name);
+
+        if (protocolRef.current.startsWith('sftp')) {
+            try {
+                // @ts-ignore
+                const raw = await window.go.main.App.FTStat(sessionIdRef.current, dst);
+                const resp = parseResp(raw);
+                if (resp && resp.ok) {
+                    const ok = confirm(`远端已存在同名文件：\n${dst}\n\n是否覆盖？`);
+                    if (!ok) return;
+                }
+            } catch {
+            }
+        } else if (protocolRef.current.startsWith('scp')) {
+            const ok = confirm(`SCP 模式无法检测远端是否存在同名文件：\n${dst}\n\n是否继续上传（可能覆盖）？`);
+            if (!ok) return;
+        }
+
         setLoading(true);
         setMsg('');
         try {
