@@ -30,6 +30,30 @@ export function DuplicateSession(arg1) {
   return window['go']['main']['App']['DuplicateSession'](arg1);
 }
 
+export function FTCancel(arg1) {
+  return window['go']['main']['App']['FTCancel'](arg1);
+}
+
+export function FTCheck(arg1) {
+  return window['go']['main']['App']['FTCheck'](arg1);
+}
+
+export function FTDownload(arg1, arg2, arg3) {
+  return window['go']['main']['App']['FTDownload'](arg1, arg2, arg3);
+}
+
+export function FTList(arg1, arg2) {
+  return window['go']['main']['App']['FTList'](arg1, arg2);
+}
+
+export function FTStat(arg1, arg2) {
+  return window['go']['main']['App']['FTStat'](arg1, arg2);
+}
+
+export function FTUpload(arg1, arg2, arg3) {
+  return window['go']['main']['App']['FTUpload'](arg1, arg2, arg3);
+}
+
 export function ForceQuit() {
   return window['go']['main']['App']['ForceQuit']();
 }

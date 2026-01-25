@@ -23,7 +23,8 @@ type AppConfig struct {
 }
 
 type ExperimentalConfig struct {
-	Monitoring bool `json:"monitoring"`
+	Monitoring   bool `json:"monitoring"`
+	FileTransfer bool `json:"file_transfer"`
 }
 
 type TerminalConfig struct {
@@ -100,7 +101,8 @@ func NewManager() *Manager {
 		CompletionDelay:      150, // Default 150ms
 		CommandQueryShortcut: "Ctrl+K",
 		Experimental: ExperimentalConfig{
-			Monitoring: false,
+			Monitoring:   false,
+			FileTransfer: false,
 		},
 		Terminal: TerminalConfig{
 			Scrollback:       5000,

@@ -21,7 +21,7 @@ function App() {
     const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [sidebarTab, setSidebarTab] = useState<'sessions' | 'troubleshoot' | 'chat' | 'monitoring'>('sessions');
+    const [sidebarTab, setSidebarTab] = useState<'sessions' | 'troubleshoot' | 'chat' | 'monitoring' | 'files'>('sessions');
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
     const [layoutMode, setLayoutMode] = useState<'tab' | 'grid'>('tab');
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
@@ -31,6 +31,7 @@ function App() {
     const [confirmCloseMessage, setConfirmCloseMessage] = useState("");
     const [completionDelay, setCompletionDelay] = useState(150);
     const [experimentalMonitoringEnabled, setExperimentalMonitoringEnabled] = useState(false);
+    const [experimentalFileTransferEnabled, setExperimentalFileTransferEnabled] = useState(false);
     const [terminalConfig, setTerminalConfig] = useState<TerminalConfig>({ scrollback: 5000, search_enabled: true, highlight_enabled: true });
     const [highlightRules, setHighlightRules] = useState<HighlightRule[]>([]);
     const [isCommandQueryOpen, setIsCommandQueryOpen] = useState(false);
@@ -98,6 +99,7 @@ function App() {
                         setCompletionDelay(cfg.completion_delay);
                     }
                     setExperimentalMonitoringEnabled(!!(cfg && cfg.experimental && cfg.experimental.monitoring));
+                    setExperimentalFileTransferEnabled(!!(cfg && cfg.experimental && cfg.experimental.file_transfer));
                     if (cfg && cfg.terminal) {
                         setTerminalConfig(cfg.terminal);
                     }
@@ -116,7 +118,10 @@ function App() {
         if (!experimentalMonitoringEnabled && sidebarTab === 'monitoring') {
             setSidebarTab('sessions');
         }
-    }, [experimentalMonitoringEnabled, sidebarTab]);
+        if (!experimentalFileTransferEnabled && sidebarTab === 'files') {
+            setSidebarTab('sessions');
+        }
+    }, [experimentalMonitoringEnabled, experimentalFileTransferEnabled, sidebarTab]);
 
     useEffect(() => {
         const isEditableTarget = (target: EventTarget | null) => {
@@ -442,8 +447,9 @@ function App() {
         }, 350); // Wait for transition (300ms)
     }, [isQuickCommandDrawerOpen]);
 
-    const toggleSidebar = (tab: 'sessions' | 'troubleshoot' | 'chat' | 'monitoring') => {
+    const toggleSidebar = (tab: 'sessions' | 'troubleshoot' | 'chat' | 'monitoring' | 'files') => {
         if (tab === 'monitoring' && !experimentalMonitoringEnabled) return;
+        if (tab === 'files' && !experimentalFileTransferEnabled) return;
         if (isSidebarOpen && sidebarTab === tab) {
             // If clicking the active tab, close it
             setIsSidebarOpen(false);
@@ -538,6 +544,7 @@ function App() {
                     activeTerminalId={activeTerminalId}
                     terminals={terminals}
                     experimentalMonitoringEnabled={experimentalMonitoringEnabled}
+                    experimentalFileTransferEnabled={experimentalFileTransferEnabled}
                 />
 
                 {/* Right Nav (Icon Bar) */}
@@ -575,6 +582,19 @@ function App() {
                     >
                         💬
                     </div>
+                    {experimentalFileTransferEnabled && (
+                        <div
+                            style={{
+                                ...styles.navIcon,
+                                backgroundColor: (isSidebarOpen && sidebarTab === 'files') ? '#333' : 'transparent',
+                                borderRight: (isSidebarOpen && sidebarTab === 'files') ? '2px solid #007acc' : '2px solid transparent'
+                            }}
+                            onClick={() => toggleSidebar('files')}
+                            title="文件"
+                        >
+                            📁
+                        </div>
+                    )}
                     {experimentalMonitoringEnabled && (
                         <div
                             style={{
@@ -611,6 +631,7 @@ function App() {
                 onToggleBroadcast={handleToggleBroadcast}
                 onCompletionDelayChange={setCompletionDelay}
                 onExperimentalMonitoringChange={setExperimentalMonitoringEnabled}
+                    onExperimentalFileTransferChange={setExperimentalFileTransferEnabled}
                 onTerminalConfigChange={setTerminalConfig}
                 onHighlightRulesChange={setHighlightRules}
             />

@@ -19,6 +19,18 @@ export function DeleteSavedSession(arg1:string):Promise<string>;
 
 export function DuplicateSession(arg1:string):Promise<main.ConnectResult>;
 
+export function FTCancel(arg1:string):Promise<string>;
+
+export function FTCheck(arg1:string):Promise<string>;
+
+export function FTDownload(arg1:string,arg2:string,arg3:string):Promise<string>;
+
+export function FTList(arg1:string,arg2:string):Promise<string>;
+
+export function FTStat(arg1:string,arg2:string):Promise<string>;
+
+export function FTUpload(arg1:string,arg2:string,arg3:string):Promise<string>;
+
 export function ForceQuit():Promise<void>;
 
 export function GenerateConclusionWithContext(arg1:string,arg2:string):Promise<string>;

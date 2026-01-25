@@ -22,6 +22,7 @@ interface AppConfig {
     };
     experimental?: {
         monitoring?: boolean;
+        file_transfer?: boolean;
     };
     terminal?: TerminalConfig;
     highlight_rules?: HighlightRule[];
@@ -36,11 +37,12 @@ interface SettingsModalProps {
     onToggleBroadcast?: (enabled: boolean) => void;
     onCompletionDelayChange?: (delay: number) => void;
     onExperimentalMonitoringChange?: (enabled: boolean) => void;
+    onExperimentalFileTransferChange?: (enabled: boolean) => void;
     onTerminalConfigChange?: (cfg: TerminalConfig) => void;
     onHighlightRulesChange?: (rules: HighlightRule[]) => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadcastMode, onToggleBroadcast, onCompletionDelayChange, onExperimentalMonitoringChange, onTerminalConfigChange, onHighlightRulesChange }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadcastMode, onToggleBroadcast, onCompletionDelayChange, onExperimentalMonitoringChange, onExperimentalFileTransferChange, onTerminalConfigChange, onHighlightRulesChange }) => {
     const [config, setConfig] = useState<AppConfig | null>(null);
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
@@ -114,6 +116,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                 }
                 if (onExperimentalMonitoringChange) {
                     onExperimentalMonitoringChange(!!config.experimental?.monitoring);
+                }
+                if (onExperimentalFileTransferChange) {
+                    onExperimentalFileTransferChange(!!config.experimental?.file_transfer);
                 }
                 if (onTerminalConfigChange && config.terminal) {
                     onTerminalConfigChange(config.terminal);
@@ -483,6 +488,33 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                                 </div>
                                 <div style={{ color: '#888', fontSize: '0.8rem', marginTop: '4px' }}>
                                     默认关闭。开启后会在右侧导航栏显示“监控”入口，用于收集少量用户反馈后迭代。
+                                </div>
+                            </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>实验功能：文件传输（SFTP/SCP）</label>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <label style={styles.switch}>
+                                        <input
+                                            type="checkbox"
+                                            checked={!!config.experimental?.file_transfer}
+                                            onChange={(e) => {
+                                                setConfig({
+                                                    ...config,
+                                                    experimental: {
+                                                        ...(config.experimental || {}),
+                                                        file_transfer: e.target.checked
+                                                    }
+                                                });
+                                            }}
+                                        />
+                                        <span style={styles.slider}></span>
+                                    </label>
+                                    <span style={{ color: '#ccc', fontSize: '0.9rem' }}>
+                                        {config.experimental?.file_transfer ? '已开启 (将显示文件入口)' : '已关闭'}
+                                    </span>
+                                </div>
+                                <div style={{ color: '#888', fontSize: '0.8rem', marginTop: '4px' }}>
+                                    默认关闭。开启后会在右侧导航栏显示“文件”入口，用于收集少量用户反馈后迭代。
                                 </div>
                             </div>
                             <div style={styles.formGroup}>

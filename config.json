@@ -14,7 +14,8 @@
   "completion_delay": 1500,
   "command_query_shortcut": "Ctrl+K",
   "experimental": {
-    "monitoring": false
+    "monitoring": false,
+    "file_transfer": true
   },
   "terminal": {
     "scrollback": 5000,

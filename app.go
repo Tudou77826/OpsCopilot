@@ -9,6 +9,7 @@ import (
 	"opscopilot/pkg/ai"
 	"opscopilot/pkg/completion"
 	"opscopilot/pkg/config"
+	"opscopilot/pkg/filetransfer"
 	"opscopilot/pkg/javamonitor"
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/llm"
@@ -19,8 +20,11 @@ import (
 	"opscopilot/pkg/sshclient"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/crypto/ssh"
 )
@@ -37,6 +41,8 @@ type App struct {
 	completionService *completion.Service
 	activeConfigs     map[string]ConnectConfig
 	isForceQuitting   bool // Flag to skip confirmation on force quit
+	ftMu              sync.Mutex
+	ftCancels         map[string]context.CancelFunc
 }
 
 // NewApp creates a new App application struct
@@ -90,6 +96,7 @@ func NewApp() *App {
 		completionService: completionService,
 		activeConfigs:     make(map[string]ConnectConfig),
 		isForceQuitting:   false,
+		ftCancels:         make(map[string]context.CancelFunc),
 	}
 }
 
@@ -620,6 +627,279 @@ func (a *App) ImportConfigFromDirectory(dirPath string) string {
 	a.aiService.UpdateProviders(fastProvider, complexProvider)
 
 	return a.configMgr.LastImportMessage()
+}
+
+type ftResponse struct {
+	OK      bool                         `json:"ok"`
+	Message string                       `json:"message,omitempty"`
+	Error   *filetransfer.TransferError  `json:"error,omitempty"`
+	TaskID  string                       `json:"taskId,omitempty"`
+	Entries []filetransfer.Entry         `json:"entries,omitempty"`
+	Entry   *filetransfer.Entry          `json:"entry,omitempty"`
+	Result  *filetransfer.TransferResult `json:"result,omitempty"`
+}
+
+func (a *App) getPreferredTransferSSHClient(sessionID string) (*ssh.Client, func(), string, error) {
+	sess, ok := a.sessionMgr.Get(sessionID)
+	if !ok || sess.Client == nil || sess.Client.SSHClient() == nil {
+		return nil, nil, "", &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotFound, Message: "会话不存在"}
+	}
+
+	base := sess.Client.SSHClient()
+	baseClose := func() {}
+	identity := "login"
+
+	cfg, ok := a.activeConfigs[sessionID]
+	if !ok {
+		return base, baseClose, identity, nil
+	}
+
+	if cfg.RootPassword == "" {
+		return base, baseClose, identity, nil
+	}
+	if strings.EqualFold(cfg.User, "root") {
+		return base, baseClose, "root", nil
+	}
+
+	rootCfg := &sshclient.ConnectConfig{
+		Host:     cfg.Host,
+		Port:     cfg.Port,
+		User:     "root",
+		Password: cfg.RootPassword,
+	}
+	if cfg.Bastion != nil {
+		rootCfg.Bastion = &sshclient.ConnectConfig{
+			Host:     cfg.Bastion.Host,
+			Port:     cfg.Bastion.Port,
+			User:     cfg.Bastion.User,
+			Password: cfg.Bastion.Password,
+		}
+	}
+
+	rootClient, err := sshclient.NewClient(rootCfg)
+	if err != nil || rootClient == nil || rootClient.SSHClient() == nil {
+		return base, baseClose, identity, nil
+	}
+	return rootClient.SSHClient(), func() { _ = rootClient.Close() }, "root", nil
+}
+
+func (a *App) FTList(sessionID, remotePath string) string {
+	c, closeFn, _, err := a.getPreferredTransferSSHClient(sessionID)
+	if err != nil {
+		return mustJSON(ftResponse{OK: false, Error: toTransferErr(err)})
+	}
+	defer closeFn()
+
+	tr := filetransfer.NewSFTPTransport(c)
+	entries, err := tr.List(context.Background(), remotePath)
+	if err != nil {
+		te := toTransferErr(err)
+		return mustJSON(ftResponse{OK: false, Error: te})
+	}
+	return mustJSON(ftResponse{OK: true, Entries: entries})
+}
+
+func (a *App) FTStat(sessionID, remotePath string) string {
+	c, closeFn, _, err := a.getPreferredTransferSSHClient(sessionID)
+	if err != nil {
+		return mustJSON(ftResponse{OK: false, Error: toTransferErr(err)})
+	}
+	defer closeFn()
+
+	tr := filetransfer.NewSFTPTransport(c)
+	entry, err := tr.Stat(context.Background(), remotePath)
+	if err != nil {
+		te := toTransferErr(err)
+		return mustJSON(ftResponse{OK: false, Error: te})
+	}
+	return mustJSON(ftResponse{OK: true, Entry: &entry})
+}
+
+func (a *App) FTUpload(sessionID, localPath, remotePath string) string {
+	return a.startFileTransferTask(sessionID, "upload", localPath, remotePath)
+}
+
+func (a *App) FTDownload(sessionID, remotePath, localPath string) string {
+	return a.startFileTransferTask(sessionID, "download", localPath, remotePath)
+}
+
+func (a *App) FTCancel(taskID string) string {
+	a.ftMu.Lock()
+	cancel, ok := a.ftCancels[taskID]
+	a.ftMu.Unlock()
+	if !ok {
+		return mustJSON(ftResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotFound, Message: "任务不存在"}})
+	}
+	cancel()
+	return mustJSON(ftResponse{OK: true, Message: "已取消"})
+}
+
+func (a *App) FTCheck(sessionID string) string {
+	c, closeFn, identity, err := a.getPreferredTransferSSHClient(sessionID)
+	if err != nil {
+		return mustJSON(ftResponse{OK: false, Error: toTransferErr(err)})
+	}
+	defer closeFn()
+
+	sftpTr := filetransfer.NewSFTPTransport(c)
+	_, _, sftpErr := sftpTr.Check(context.Background())
+	if sftpErr == nil {
+		if identity == "root" {
+			return mustJSON(ftResponse{OK: true, Message: "sftp(root)"})
+		}
+		return mustJSON(ftResponse{OK: true, Message: "sftp(login)"})
+	}
+
+	te := toTransferErr(sftpErr)
+	if te != nil && te.Code == filetransfer.ErrorCodeSFTPNotSupported {
+		scpTr := filetransfer.NewSCPTransport(c)
+		ok, _, err := scpTr.Check(context.Background())
+		if err != nil {
+			return mustJSON(ftResponse{OK: false, Error: toTransferErr(err)})
+		}
+		if ok {
+			if identity == "root" {
+				return mustJSON(ftResponse{OK: true, Message: "scp(root)"})
+			}
+			return mustJSON(ftResponse{OK: true, Message: "scp(login)"})
+		}
+		return mustJSON(ftResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeSFTPNotSupported, Message: "对端未开启 SFTP，且未安装 scp"}})
+	}
+	return mustJSON(ftResponse{OK: false, Error: te})
+}
+
+func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string) string {
+	_, _, _, err := a.getPreferredTransferSSHClient(sessionID)
+	if err != nil {
+		return mustJSON(ftResponse{OK: false, Error: toTransferErr(err)})
+	}
+
+	taskID := uuid.New().String()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	a.ftMu.Lock()
+	a.ftCancels[taskID] = cancel
+	a.ftMu.Unlock()
+
+	go func() {
+		defer func() {
+			a.ftMu.Lock()
+			delete(a.ftCancels, taskID)
+			a.ftMu.Unlock()
+		}()
+
+		c, closeFn, identity, err := a.getPreferredTransferSSHClient(sessionID)
+		if err != nil {
+			if a.ctx != nil {
+				te := toTransferErr(err)
+				runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
+					"taskId":    taskID,
+					"sessionId": sessionID,
+					"ok":        false,
+					"code":      te.Code,
+					"message":   te.Message,
+				})
+			}
+			return
+		}
+		defer closeFn()
+
+		sftpTr := filetransfer.NewSFTPTransport(c)
+		progressFn := func(p filetransfer.Progress) {
+			if a.ctx == nil {
+				return
+			}
+			runtime.EventsEmit(a.ctx, "file-transfer-progress", map[string]any{
+				"taskId":     taskID,
+				"sessionId":  sessionID,
+				"bytesDone":  p.BytesDone,
+				"bytesTotal": p.BytesTotal,
+				"speedBps":   p.SpeedBps,
+			})
+		}
+
+		var (
+			res   filetransfer.TransferResult
+			opErr error
+		)
+		if op == "upload" {
+			res, opErr = sftpTr.Upload(ctx, localPath, remotePath, progressFn)
+		} else {
+			res, opErr = sftpTr.Download(ctx, remotePath, localPath, progressFn)
+		}
+
+		usedTransport := "sftp"
+		if identity == "root" {
+			usedTransport = "sftp(root)"
+		} else {
+			usedTransport = "sftp(login)"
+		}
+
+		if opErr != nil {
+			if te, ok := opErr.(*filetransfer.TransferError); ok && te.Code == filetransfer.ErrorCodeSFTPNotSupported {
+				scpTr := filetransfer.NewSCPTransport(c)
+				ok, _, checkErr := scpTr.Check(ctx)
+				if checkErr == nil && ok {
+					if op == "upload" {
+						res, opErr = scpTr.Upload(ctx, localPath, remotePath, progressFn)
+					} else {
+						res, opErr = scpTr.Download(ctx, remotePath, localPath, progressFn)
+					}
+					if identity == "root" {
+						usedTransport = "scp(root)"
+					} else {
+						usedTransport = "scp(login)"
+					}
+				} else if checkErr == nil && !ok {
+					opErr = &filetransfer.TransferError{Code: filetransfer.ErrorCodeSFTPNotSupported, Message: "对端未开启 SFTP，且未安装 scp"}
+				} else if checkErr != nil {
+					opErr = checkErr
+				}
+			}
+		}
+
+		if a.ctx == nil {
+			return
+		}
+		if opErr != nil {
+			te := toTransferErr(opErr)
+			runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
+				"taskId":    taskID,
+				"sessionId": sessionID,
+				"ok":        false,
+				"code":      te.Code,
+				"message":   te.Message,
+			})
+			return
+		}
+		runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
+			"taskId":    taskID,
+			"sessionId": sessionID,
+			"ok":        true,
+			"bytes":     res.Bytes,
+			"message":   "完成 (" + usedTransport + ")",
+		})
+	}()
+
+	return mustJSON(ftResponse{OK: true, TaskID: taskID})
+}
+
+func mustJSON(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return `{"ok":false,"error":{"code":"UNKNOWN","message":"marshal failed"}}`
+	}
+	return string(b)
+}
+
+func toTransferErr(err error) *filetransfer.TransferError {
+	if err == nil {
+		return nil
+	}
+	if te, ok := err.(*filetransfer.TransferError); ok {
+		return te
+	}
+	return &filetransfer.TransferError{Code: filetransfer.ErrorCodeUnknown, Message: err.Error()}
 }
 
 func (a *App) GetHighlightRules() []config.HighlightRule {

@@ -26,6 +26,10 @@ type Client struct {
 	client *ssh.Client
 }
 
+func (c *Client) SSHClient() *ssh.Client {
+	return c.client
+}
+
 func NewClient(config *ConnectConfig) (*Client, error) {
 	// 递归建立 Bastion 连接
 	var bastionClient *Client // Change type to *Client to use dialViaNetcat
