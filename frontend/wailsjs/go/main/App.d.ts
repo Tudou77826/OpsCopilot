@@ -27,6 +27,16 @@ export function FTDownload(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function FTList(arg1:string,arg2:string):Promise<string>;
 
+export function FTRemoteMkdir(arg1:string,arg2:string):Promise<string>;
+
+export function FTRemoteReadFile(arg1:string,arg2:string,arg3:number):Promise<string>;
+
+export function FTRemoteRemove(arg1:string,arg2:string):Promise<string>;
+
+export function FTRemoteRename(arg1:string,arg2:string,arg3:string):Promise<string>;
+
+export function FTRemoteWriteFile(arg1:string,arg2:string,arg3:string):Promise<string>;
+
 export function FTStat(arg1:string,arg2:string):Promise<string>;
 
 export function FTUpload(arg1:string,arg2:string,arg3:string):Promise<string>;
@@ -60,6 +70,16 @@ export function ImportConfigFromDirectory(arg1:string):Promise<string>;
 export function ListJavaProcesses(arg1:string):Promise<string>;
 
 export function LoadQuickCommands():Promise<Array<config.QuickCommand>>;
+
+export function LocalList(arg1:string):Promise<string>;
+
+export function LocalMkdir(arg1:string):Promise<string>;
+
+export function LocalRemove(arg1:string):Promise<string>;
+
+export function LocalRename(arg1:string,arg2:string):Promise<string>;
+
+export function LocalStat(arg1:string):Promise<string>;
 
 export function ParseIntent(arg1:string):Promise<Array<main.ConnectConfig>>;
 

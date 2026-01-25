@@ -7,6 +7,7 @@ import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal'
 import Sidebar from './components/Sidebar/Sidebar';
 import SettingsModal from './components/SettingsModal/SettingsModal';
 import ConfirmCloseModal from './components/ConfirmCloseModal/ConfirmCloseModal';
+import FileTransferWindow from './components/FileTransferWindow/FileTransferWindow';
 import CommandQueryOverlay, { CommandQueryResult } from './components/CommandQueryOverlay/CommandQueryOverlay';
 import { ConnectionConfig } from './types';
 import { HighlightRule, TerminalConfig } from './components/Terminal/highlightTypes';
@@ -21,7 +22,7 @@ function App() {
     const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [sidebarTab, setSidebarTab] = useState<'sessions' | 'troubleshoot' | 'chat' | 'monitoring' | 'files'>('sessions');
+    const [sidebarTab, setSidebarTab] = useState<'sessions' | 'troubleshoot' | 'chat' | 'monitoring'>('sessions');
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
     const [layoutMode, setLayoutMode] = useState<'tab' | 'grid'>('tab');
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
@@ -32,6 +33,7 @@ function App() {
     const [completionDelay, setCompletionDelay] = useState(150);
     const [experimentalMonitoringEnabled, setExperimentalMonitoringEnabled] = useState(false);
     const [experimentalFileTransferEnabled, setExperimentalFileTransferEnabled] = useState(false);
+    const [isFileTransferOpen, setIsFileTransferOpen] = useState(false);
     const [terminalConfig, setTerminalConfig] = useState<TerminalConfig>({ scrollback: 5000, search_enabled: true, highlight_enabled: true });
     const [highlightRules, setHighlightRules] = useState<HighlightRule[]>([]);
     const [isCommandQueryOpen, setIsCommandQueryOpen] = useState(false);
@@ -118,10 +120,13 @@ function App() {
         if (!experimentalMonitoringEnabled && sidebarTab === 'monitoring') {
             setSidebarTab('sessions');
         }
-        if (!experimentalFileTransferEnabled && sidebarTab === 'files') {
-            setSidebarTab('sessions');
+    }, [experimentalMonitoringEnabled, sidebarTab]);
+
+    useEffect(() => {
+        if (!experimentalFileTransferEnabled && isFileTransferOpen) {
+            setIsFileTransferOpen(false);
         }
-    }, [experimentalMonitoringEnabled, experimentalFileTransferEnabled, sidebarTab]);
+    }, [experimentalFileTransferEnabled, isFileTransferOpen]);
 
     useEffect(() => {
         const isEditableTarget = (target: EventTarget | null) => {
@@ -447,9 +452,8 @@ function App() {
         }, 350); // Wait for transition (300ms)
     }, [isQuickCommandDrawerOpen]);
 
-    const toggleSidebar = (tab: 'sessions' | 'troubleshoot' | 'chat' | 'monitoring' | 'files') => {
+    const toggleSidebar = (tab: 'sessions' | 'troubleshoot' | 'chat' | 'monitoring') => {
         if (tab === 'monitoring' && !experimentalMonitoringEnabled) return;
-        if (tab === 'files' && !experimentalFileTransferEnabled) return;
         if (isSidebarOpen && sidebarTab === tab) {
             // If clicking the active tab, close it
             setIsSidebarOpen(false);
@@ -544,7 +548,6 @@ function App() {
                     activeTerminalId={activeTerminalId}
                     terminals={terminals}
                     experimentalMonitoringEnabled={experimentalMonitoringEnabled}
-                    experimentalFileTransferEnabled={experimentalFileTransferEnabled}
                 />
 
                 {/* Right Nav (Icon Bar) */}
@@ -582,19 +585,6 @@ function App() {
                     >
                         💬
                     </div>
-                    {experimentalFileTransferEnabled && (
-                        <div
-                            style={{
-                                ...styles.navIcon,
-                                backgroundColor: (isSidebarOpen && sidebarTab === 'files') ? '#333' : 'transparent',
-                                borderRight: (isSidebarOpen && sidebarTab === 'files') ? '2px solid #007acc' : '2px solid transparent'
-                            }}
-                            onClick={() => toggleSidebar('files')}
-                            title="文件"
-                        >
-                            📁
-                        </div>
-                    )}
                     {experimentalMonitoringEnabled && (
                         <div
                             style={{
@@ -631,9 +621,17 @@ function App() {
                 onToggleBroadcast={handleToggleBroadcast}
                 onCompletionDelayChange={setCompletionDelay}
                 onExperimentalMonitoringChange={setExperimentalMonitoringEnabled}
-                    onExperimentalFileTransferChange={setExperimentalFileTransferEnabled}
+                onExperimentalFileTransferChange={setExperimentalFileTransferEnabled}
+                onOpenFileTransfer={() => setIsFileTransferOpen(true)}
                 onTerminalConfigChange={setTerminalConfig}
                 onHighlightRulesChange={setHighlightRules}
+            />
+
+            <FileTransferWindow
+                isOpen={isFileTransferOpen}
+                onClose={() => setIsFileTransferOpen(false)}
+                activeTerminalId={activeTerminalId}
+                terminals={terminals}
             />
 
             <ConfirmCloseModal

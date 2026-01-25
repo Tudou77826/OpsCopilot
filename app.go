@@ -639,6 +639,202 @@ type ftResponse struct {
 	Result  *filetransfer.TransferResult `json:"result,omitempty"`
 }
 
+type localFSResponse struct {
+	OK      bool                        `json:"ok"`
+	Message string                      `json:"message,omitempty"`
+	Error   *filetransfer.TransferError `json:"error,omitempty"`
+	Entries []filetransfer.Entry        `json:"entries,omitempty"`
+	Entry   *filetransfer.Entry         `json:"entry,omitempty"`
+}
+
+type remoteFSResponse struct {
+	OK      bool                        `json:"ok"`
+	Message string                      `json:"message,omitempty"`
+	Error   *filetransfer.TransferError `json:"error,omitempty"`
+	Content string                      `json:"content,omitempty"`
+}
+
+func (a *App) LocalList(localPath string) string {
+	p := strings.TrimSpace(localPath)
+	if p == "" || p == "." {
+		if home, err := os.UserHomeDir(); err == nil && home != "" {
+			p = home
+		} else if wd, err := os.Getwd(); err == nil && wd != "" {
+			p = wd
+		} else {
+			p = "."
+		}
+	}
+	p = filepath.Clean(p)
+
+	entries, err := os.ReadDir(p)
+	if err != nil {
+		return mustJSON(localFSResponse{OK: false, Error: toTransferErr(err)})
+	}
+
+	out := make([]filetransfer.Entry, 0, len(entries))
+	for _, de := range entries {
+		fi, err := de.Info()
+		if err != nil {
+			continue
+		}
+		out = append(out, filetransfer.Entry{
+			Path:    filepath.Join(p, de.Name()),
+			Name:    de.Name(),
+			IsDir:   de.IsDir(),
+			Size:    fi.Size(),
+			Mode:    uint32(fi.Mode()),
+			ModTime: fi.ModTime(),
+		})
+	}
+	return mustJSON(localFSResponse{OK: true, Entries: out})
+}
+
+func (a *App) LocalStat(localPath string) string {
+	p := filepath.Clean(strings.TrimSpace(localPath))
+	if p == "" {
+		return mustJSON(localFSResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotFound, Message: "路径为空"}})
+	}
+	fi, err := os.Stat(p)
+	if err != nil {
+		return mustJSON(localFSResponse{OK: false, Error: toTransferErr(err)})
+	}
+	e := filetransfer.Entry{
+		Path:    p,
+		Name:    filepath.Base(p),
+		IsDir:   fi.IsDir(),
+		Size:    fi.Size(),
+		Mode:    uint32(fi.Mode()),
+		ModTime: fi.ModTime(),
+	}
+	return mustJSON(localFSResponse{OK: true, Entry: &e})
+}
+
+func (a *App) LocalMkdir(localPath string) string {
+	p := filepath.Clean(strings.TrimSpace(localPath))
+	if p == "" {
+		return mustJSON(localFSResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotFound, Message: "路径为空"}})
+	}
+	if err := os.MkdirAll(p, 0755); err != nil {
+		return mustJSON(localFSResponse{OK: false, Error: toTransferErr(err)})
+	}
+	return mustJSON(localFSResponse{OK: true})
+}
+
+func (a *App) LocalRemove(localPath string) string {
+	p := filepath.Clean(strings.TrimSpace(localPath))
+	if p == "" {
+		return mustJSON(localFSResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotFound, Message: "路径为空"}})
+	}
+	if err := os.RemoveAll(p); err != nil {
+		return mustJSON(localFSResponse{OK: false, Error: toTransferErr(err)})
+	}
+	return mustJSON(localFSResponse{OK: true})
+}
+
+func (a *App) LocalRename(oldPath, newPath string) string {
+	oldP := filepath.Clean(strings.TrimSpace(oldPath))
+	newP := filepath.Clean(strings.TrimSpace(newPath))
+	if oldP == "" || newP == "" {
+		return mustJSON(localFSResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotFound, Message: "路径为空"}})
+	}
+	if err := os.Rename(oldP, newP); err != nil {
+		return mustJSON(localFSResponse{OK: false, Error: toTransferErr(err)})
+	}
+	return mustJSON(localFSResponse{OK: true})
+}
+
+func (a *App) FTRemoteMkdir(sessionID, remotePath string) string {
+	c, closeFn, _, err := a.getPreferredTransferSSHClient(sessionID)
+	if err != nil {
+		return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(err)})
+	}
+	defer closeFn()
+
+	if strings.HasPrefix(a.getTransferMode(sessionID), "scp") {
+		return mustJSON(remoteFSResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotSupported, Message: "SCP 模式不支持远端目录操作"}})
+	}
+
+	tr := filetransfer.NewSFTPTransport(c)
+	if err := tr.Mkdir(context.Background(), remotePath); err != nil {
+		return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(err)})
+	}
+	return mustJSON(remoteFSResponse{OK: true})
+}
+
+func (a *App) FTRemoteRename(sessionID, oldPath, newPath string) string {
+	c, closeFn, _, err := a.getPreferredTransferSSHClient(sessionID)
+	if err != nil {
+		return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(err)})
+	}
+	defer closeFn()
+
+	if strings.HasPrefix(a.getTransferMode(sessionID), "scp") {
+		return mustJSON(remoteFSResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotSupported, Message: "SCP 模式不支持远端重命名"}})
+	}
+
+	tr := filetransfer.NewSFTPTransport(c)
+	if err := tr.Rename(context.Background(), oldPath, newPath); err != nil {
+		return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(err)})
+	}
+	return mustJSON(remoteFSResponse{OK: true})
+}
+
+func (a *App) FTRemoteRemove(sessionID, remotePath string) string {
+	c, closeFn, _, err := a.getPreferredTransferSSHClient(sessionID)
+	if err != nil {
+		return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(err)})
+	}
+	defer closeFn()
+
+	if strings.HasPrefix(a.getTransferMode(sessionID), "scp") {
+		return mustJSON(remoteFSResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotSupported, Message: "SCP 模式不支持远端删除"}})
+	}
+
+	tr := filetransfer.NewSFTPTransport(c)
+	if err := tr.Remove(context.Background(), remotePath, true); err != nil {
+		return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(err)})
+	}
+	return mustJSON(remoteFSResponse{OK: true})
+}
+
+func (a *App) FTRemoteReadFile(sessionID, remotePath string, maxBytes int64) string {
+	c, closeFn, _, err := a.getPreferredTransferSSHClient(sessionID)
+	if err != nil {
+		return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(err)})
+	}
+	defer closeFn()
+
+	if strings.HasPrefix(a.getTransferMode(sessionID), "scp") {
+		return mustJSON(remoteFSResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotSupported, Message: "SCP 模式不支持远端文件直读"}})
+	}
+
+	tr := filetransfer.NewSFTPTransport(c)
+	b, err := tr.ReadFile(context.Background(), remotePath, maxBytes)
+	if err != nil {
+		return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(err)})
+	}
+	return mustJSON(remoteFSResponse{OK: true, Content: string(b)})
+}
+
+func (a *App) FTRemoteWriteFile(sessionID, remotePath string, content string) string {
+	c, closeFn, _, err := a.getPreferredTransferSSHClient(sessionID)
+	if err != nil {
+		return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(err)})
+	}
+	defer closeFn()
+
+	if strings.HasPrefix(a.getTransferMode(sessionID), "scp") {
+		return mustJSON(remoteFSResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotSupported, Message: "SCP 模式不支持远端文件直写"}})
+	}
+
+	tr := filetransfer.NewSFTPTransport(c)
+	if err := tr.WriteFile(context.Background(), remotePath, []byte(content)); err != nil {
+		return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(err)})
+	}
+	return mustJSON(remoteFSResponse{OK: true})
+}
+
 func (a *App) getPreferredTransferSSHClient(sessionID string) (*ssh.Client, func(), string, error) {
 	sess, ok := a.sessionMgr.Get(sessionID)
 	if !ok || sess.Client == nil || sess.Client.SSHClient() == nil {
@@ -681,6 +877,29 @@ func (a *App) getPreferredTransferSSHClient(sessionID string) (*ssh.Client, func
 		return base, baseClose, identity, nil
 	}
 	return rootClient.SSHClient(), func() { _ = rootClient.Close() }, "root", nil
+}
+
+func (a *App) getTransferMode(sessionID string) string {
+	c, closeFn, _, err := a.getPreferredTransferSSHClient(sessionID)
+	if err != nil {
+		return ""
+	}
+	defer closeFn()
+
+	sftpTr := filetransfer.NewSFTPTransport(c)
+	_, _, sftpErr := sftpTr.Check(context.Background())
+	if sftpErr == nil {
+		return "sftp"
+	}
+	te := toTransferErr(sftpErr)
+	if te != nil && te.Code == filetransfer.ErrorCodeSFTPNotSupported {
+		scpTr := filetransfer.NewSCPTransport(c)
+		ok, _, err := scpTr.Check(context.Background())
+		if err == nil && ok {
+			return "scp"
+		}
+	}
+	return ""
 }
 
 func (a *App) FTList(sessionID, remotePath string) string {

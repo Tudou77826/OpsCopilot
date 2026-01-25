@@ -46,6 +46,26 @@ export function FTList(arg1, arg2) {
   return window['go']['main']['App']['FTList'](arg1, arg2);
 }
 
+export function FTRemoteMkdir(arg1, arg2) {
+  return window['go']['main']['App']['FTRemoteMkdir'](arg1, arg2);
+}
+
+export function FTRemoteReadFile(arg1, arg2, arg3) {
+  return window['go']['main']['App']['FTRemoteReadFile'](arg1, arg2, arg3);
+}
+
+export function FTRemoteRemove(arg1, arg2) {
+  return window['go']['main']['App']['FTRemoteRemove'](arg1, arg2);
+}
+
+export function FTRemoteRename(arg1, arg2, arg3) {
+  return window['go']['main']['App']['FTRemoteRename'](arg1, arg2, arg3);
+}
+
+export function FTRemoteWriteFile(arg1, arg2, arg3) {
+  return window['go']['main']['App']['FTRemoteWriteFile'](arg1, arg2, arg3);
+}
+
 export function FTStat(arg1, arg2) {
   return window['go']['main']['App']['FTStat'](arg1, arg2);
 }
@@ -112,6 +132,26 @@ export function ListJavaProcesses(arg1) {
 
 export function LoadQuickCommands() {
   return window['go']['main']['App']['LoadQuickCommands']();
+}
+
+export function LocalList(arg1) {
+  return window['go']['main']['App']['LocalList'](arg1);
+}
+
+export function LocalMkdir(arg1) {
+  return window['go']['main']['App']['LocalMkdir'](arg1);
+}
+
+export function LocalRemove(arg1) {
+  return window['go']['main']['App']['LocalRemove'](arg1);
+}
+
+export function LocalRename(arg1, arg2) {
+  return window['go']['main']['App']['LocalRename'](arg1, arg2);
+}
+
+export function LocalStat(arg1) {
+  return window['go']['main']['App']['LocalStat'](arg1);
 }
 
 export function ParseIntent(arg1) {

@@ -38,11 +38,12 @@ interface SettingsModalProps {
     onCompletionDelayChange?: (delay: number) => void;
     onExperimentalMonitoringChange?: (enabled: boolean) => void;
     onExperimentalFileTransferChange?: (enabled: boolean) => void;
+    onOpenFileTransfer?: () => void;
     onTerminalConfigChange?: (cfg: TerminalConfig) => void;
     onHighlightRulesChange?: (rules: HighlightRule[]) => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadcastMode, onToggleBroadcast, onCompletionDelayChange, onExperimentalMonitoringChange, onExperimentalFileTransferChange, onTerminalConfigChange, onHighlightRulesChange }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadcastMode, onToggleBroadcast, onCompletionDelayChange, onExperimentalMonitoringChange, onExperimentalFileTransferChange, onOpenFileTransfer, onTerminalConfigChange, onHighlightRulesChange }) => {
     const [config, setConfig] = useState<AppConfig | null>(null);
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
@@ -510,11 +511,23 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                                         <span style={styles.slider}></span>
                                     </label>
                                     <span style={{ color: '#ccc', fontSize: '0.9rem' }}>
-                                        {config.experimental?.file_transfer ? '已开启 (将显示文件入口)' : '已关闭'}
+                                        {config.experimental?.file_transfer ? '已开启 (可打开文件传输窗口)' : '已关闭'}
                                     </span>
+                                    <button
+                                        onClick={() => {
+                                            if (!config.experimental?.file_transfer) return;
+                                            if (onOpenFileTransfer) onOpenFileTransfer();
+                                            onClose();
+                                        }}
+                                        style={{ ...styles.saveBtn, padding: '6px 10px', height: '32px' }}
+                                        type="button"
+                                        disabled={!config.experimental?.file_transfer}
+                                    >
+                                        打开文件传输窗口
+                                    </button>
                                 </div>
                                 <div style={{ color: '#888', fontSize: '0.8rem', marginTop: '4px' }}>
-                                    默认关闭。开启后会在右侧导航栏显示“文件”入口，用于收集少量用户反馈后迭代。
+                                    默认关闭。开启后可从此处打开文件传输窗口，用于收集少量用户反馈后迭代。
                                 </div>
                             </div>
                             <div style={styles.formGroup}>

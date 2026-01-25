@@ -3,7 +3,6 @@ import SessionManager from './SessionManager';
 import TroubleshootingPanel from './TroubleshootingPanel';
 import AIChatPanel from './AIChatPanel';
 import MonitoringPanel from './MonitoringPanel';
-import FilesPanel from './FilesPanel';
 import { ConnectionConfig } from '../../types';
 
 interface TerminalSessionLite {
@@ -13,7 +12,7 @@ interface TerminalSessionLite {
 
 interface SidebarProps {
     isOpen: boolean;
-    activeTab: 'sessions' | 'troubleshoot' | 'chat' | 'monitoring' | 'files';
+    activeTab: 'sessions' | 'troubleshoot' | 'chat' | 'monitoring';
     onToggle: () => void;
     onStart?: () => void;
     onStop?: () => void;
@@ -21,10 +20,9 @@ interface SidebarProps {
     activeTerminalId: string | null;
     terminals: TerminalSessionLite[];
     experimentalMonitoringEnabled: boolean;
-    experimentalFileTransferEnabled?: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart, onStop, onConnect, activeTerminalId, terminals, experimentalMonitoringEnabled, experimentalFileTransferEnabled }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart, onStop, onConnect, activeTerminalId, terminals, experimentalMonitoringEnabled }) => {
     const [width, setWidth] = useState(350);
 
     const startResizing = (mouseDownEvent: React.MouseEvent) => {
@@ -55,7 +53,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart,
             case 'troubleshoot': return '定位助手';
             case 'chat': return 'AI 问答';
             case 'monitoring': return '监控';
-            case 'files': return '文件';
             default: return '侧边栏';
         }
     };
@@ -119,16 +116,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart,
                         <div style={{ display: activeTab === 'monitoring' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }} className="hide-scrollbar">
                             {experimentalMonitoringEnabled ? (
                                 <MonitoringPanel activeTerminalId={activeTerminalId} terminals={terminals} />
-                            ) : (
-                                <div style={{ padding: '12px', color: '#aaa' }}>
-                                    该功能为实验功能，默认关闭。请在“设置 → 应用选项”中开启后使用。
-                                </div>
-                            )}
-                        </div>
-
-                        <div style={{ display: activeTab === 'files' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
-                            {experimentalFileTransferEnabled ? (
-                                <FilesPanel activeTerminalId={activeTerminalId} terminals={terminals} />
                             ) : (
                                 <div style={{ padding: '12px', color: '#aaa' }}>
                                     该功能为实验功能，默认关闭。请在“设置 → 应用选项”中开启后使用。

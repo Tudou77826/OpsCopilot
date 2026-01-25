@@ -7,6 +7,7 @@ type ErrorCode string
 const (
 	ErrorCodeUnknown          ErrorCode = "UNKNOWN"
 	ErrorCodeSFTPNotSupported ErrorCode = "SFTP_NOT_SUPPORTED"
+	ErrorCodeNotSupported     ErrorCode = "NOT_SUPPORTED"
 	ErrorCodePermissionDenied ErrorCode = "PERMISSION_DENIED"
 	ErrorCodeNotFound         ErrorCode = "NOT_FOUND"
 	ErrorCodeAuthFailed       ErrorCode = "AUTH_FAILED"

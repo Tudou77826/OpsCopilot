@@ -3,6 +3,7 @@ package filetransfer
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,46 @@ import (
 
 type SFTPTransport struct {
 	client *ssh.Client
+}
+
+func removeRemoteRecursive(ctx context.Context, c *sftp.Client, p string) error {
+	select {
+	case <-ctx.Done():
+		return &TransferError{Code: ErrorCodeUnknown, Message: "传输已取消"}
+	default:
+	}
+
+	fi, err := c.Stat(p)
+	if err != nil {
+		return toTransferError(err)
+	}
+	if !fi.IsDir() {
+		if err := c.Remove(p); err != nil {
+			return toTransferError(err)
+		}
+		return nil
+	}
+
+	entries, err := c.ReadDir(p)
+	if err != nil {
+		return toTransferError(err)
+	}
+	for _, e := range entries {
+		child := joinRemote(p, e.Name())
+		if e.IsDir() {
+			if err := removeRemoteRecursive(ctx, c, child); err != nil {
+				return err
+			}
+		} else {
+			if err := c.Remove(child); err != nil {
+				return toTransferError(err)
+			}
+		}
+	}
+	if err := c.RemoveDirectory(p); err != nil {
+		return toTransferError(err)
+	}
+	return nil
 }
 
 func NewSFTPTransport(client *ssh.Client) *SFTPTransport {
@@ -148,6 +189,110 @@ func (t *SFTPTransport) Download(ctx context.Context, remotePath, localPath stri
 		return TransferResult{}, err
 	}
 	return TransferResult{Bytes: n}, nil
+}
+
+func (t *SFTPTransport) Mkdir(ctx context.Context, remotePath string) error {
+	c, err := t.newClient()
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+
+	p := normalizeRemotePath(remotePath)
+	if err := c.MkdirAll(p); err != nil {
+		return toTransferError(err)
+	}
+	return nil
+}
+
+func (t *SFTPTransport) Rename(ctx context.Context, oldPath, newPath string) error {
+	c, err := t.newClient()
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+
+	oldP := normalizeRemotePath(oldPath)
+	newP := normalizeRemotePath(newPath)
+	if err := c.Rename(oldP, newP); err != nil {
+		return toTransferError(err)
+	}
+	return nil
+}
+
+func (t *SFTPTransport) Remove(ctx context.Context, remotePath string, recursive bool) error {
+	c, err := t.newClient()
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+
+	p := normalizeRemotePath(remotePath)
+	if !recursive {
+		fi, err := c.Stat(p)
+		if err != nil {
+			return toTransferError(err)
+		}
+		if fi.IsDir() {
+			if err := c.RemoveDirectory(p); err != nil {
+				return toTransferError(err)
+			}
+			return nil
+		}
+		if err := c.Remove(p); err != nil {
+			return toTransferError(err)
+		}
+		return nil
+	}
+
+	return removeRemoteRecursive(ctx, c, p)
+}
+
+func (t *SFTPTransport) ReadFile(ctx context.Context, remotePath string, maxBytes int64) ([]byte, error) {
+	c, err := t.newClient()
+	if err != nil {
+		return nil, err
+	}
+	defer c.Close()
+
+	p := normalizeRemotePath(remotePath)
+	f, err := c.Open(p)
+	if err != nil {
+		return nil, toTransferError(err)
+	}
+	defer f.Close()
+
+	if maxBytes <= 0 {
+		maxBytes = 256 * 1024
+	}
+	b, err := io.ReadAll(io.LimitReader(f, maxBytes+1))
+	if err != nil {
+		return nil, toTransferError(err)
+	}
+	if int64(len(b)) > maxBytes {
+		return nil, &TransferError{Code: ErrorCodeNotSupported, Message: "文件过大，暂不支持直接编辑"}
+	}
+	return b, nil
+}
+
+func (t *SFTPTransport) WriteFile(ctx context.Context, remotePath string, content []byte) error {
+	c, err := t.newClient()
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+
+	p := normalizeRemotePath(remotePath)
+	f, err := c.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
+	if err != nil {
+		return toTransferError(err)
+	}
+	defer f.Close()
+
+	if _, err := f.Write(content); err != nil {
+		return toTransferError(err)
+	}
+	return nil
 }
 
 func (t *SFTPTransport) newClient() (*sftp.Client, error) {
