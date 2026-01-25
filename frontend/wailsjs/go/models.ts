@@ -78,7 +78,6 @@ export namespace config {
 	}
 	export class ExperimentalConfig {
 	    monitoring: boolean;
-	    file_transfer: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ExperimentalConfig(source);
@@ -87,7 +86,6 @@ export namespace config {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.monitoring = source["monitoring"];
-	        this.file_transfer = source["file_transfer"];
 	    }
 	}
 	export class QuickCommand {

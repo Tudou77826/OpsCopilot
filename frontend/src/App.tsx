@@ -32,7 +32,6 @@ function App() {
     const [confirmCloseMessage, setConfirmCloseMessage] = useState("");
     const [completionDelay, setCompletionDelay] = useState(150);
     const [experimentalMonitoringEnabled, setExperimentalMonitoringEnabled] = useState(false);
-    const [experimentalFileTransferEnabled, setExperimentalFileTransferEnabled] = useState(false);
     const [isFileTransferOpen, setIsFileTransferOpen] = useState(false);
     const [terminalConfig, setTerminalConfig] = useState<TerminalConfig>({ scrollback: 5000, search_enabled: true, highlight_enabled: true });
     const [highlightRules, setHighlightRules] = useState<HighlightRule[]>([]);
@@ -101,7 +100,6 @@ function App() {
                         setCompletionDelay(cfg.completion_delay);
                     }
                     setExperimentalMonitoringEnabled(!!(cfg && cfg.experimental && cfg.experimental.monitoring));
-                    setExperimentalFileTransferEnabled(!!(cfg && cfg.experimental && cfg.experimental.file_transfer));
                     if (cfg && cfg.terminal) {
                         setTerminalConfig(cfg.terminal);
                     }
@@ -122,11 +120,6 @@ function App() {
         }
     }, [experimentalMonitoringEnabled, sidebarTab]);
 
-    useEffect(() => {
-        if (!experimentalFileTransferEnabled && isFileTransferOpen) {
-            setIsFileTransferOpen(false);
-        }
-    }, [experimentalFileTransferEnabled, isFileTransferOpen]);
 
     useEffect(() => {
         const isEditableTarget = (target: EventTarget | null) => {
@@ -621,7 +614,6 @@ function App() {
                 onToggleBroadcast={handleToggleBroadcast}
                 onCompletionDelayChange={setCompletionDelay}
                 onExperimentalMonitoringChange={setExperimentalMonitoringEnabled}
-                onExperimentalFileTransferChange={setExperimentalFileTransferEnabled}
                 onOpenFileTransfer={() => setIsFileTransferOpen(true)}
                 onTerminalConfigChange={setTerminalConfig}
                 onHighlightRulesChange={setHighlightRules}

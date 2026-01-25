@@ -6,16 +6,15 @@
     "ComplexModel": "glm46"
   },
   "log": {
-    "dir": "D:\\dev\\log"
+    "dir": "D:\\dev\\workspace-go\\OpsCopilot\\logs"
   },
   "docs": {
     "dir": ""
   },
-  "completion_delay": 1500,
+  "completion_delay": 150,
   "command_query_shortcut": "Ctrl+K",
   "experimental": {
-    "monitoring": false,
-    "file_transfer": true
+    "monitoring": false
   },
   "terminal": {
     "scrollback": 5000,

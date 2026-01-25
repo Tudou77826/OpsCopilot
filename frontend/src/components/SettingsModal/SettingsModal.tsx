@@ -22,7 +22,6 @@ interface AppConfig {
     };
     experimental?: {
         monitoring?: boolean;
-        file_transfer?: boolean;
     };
     terminal?: TerminalConfig;
     highlight_rules?: HighlightRule[];
@@ -37,13 +36,12 @@ interface SettingsModalProps {
     onToggleBroadcast?: (enabled: boolean) => void;
     onCompletionDelayChange?: (delay: number) => void;
     onExperimentalMonitoringChange?: (enabled: boolean) => void;
-    onExperimentalFileTransferChange?: (enabled: boolean) => void;
     onOpenFileTransfer?: () => void;
     onTerminalConfigChange?: (cfg: TerminalConfig) => void;
     onHighlightRulesChange?: (rules: HighlightRule[]) => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadcastMode, onToggleBroadcast, onCompletionDelayChange, onExperimentalMonitoringChange, onExperimentalFileTransferChange, onOpenFileTransfer, onTerminalConfigChange, onHighlightRulesChange }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadcastMode, onToggleBroadcast, onCompletionDelayChange, onExperimentalMonitoringChange, onOpenFileTransfer, onTerminalConfigChange, onHighlightRulesChange }) => {
     const [config, setConfig] = useState<AppConfig | null>(null);
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
@@ -117,9 +115,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                 }
                 if (onExperimentalMonitoringChange) {
                     onExperimentalMonitoringChange(!!config.experimental?.monitoring);
-                }
-                if (onExperimentalFileTransferChange) {
-                    onExperimentalFileTransferChange(!!config.experimental?.file_transfer);
                 }
                 if (onTerminalConfigChange && config.terminal) {
                     onTerminalConfigChange(config.terminal);
@@ -492,42 +487,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                                 </div>
                             </div>
                             <div style={styles.formGroup}>
-                                <label style={styles.label}>实验功能：文件传输（SFTP/SCP）</label>
+                                <label style={styles.label}>文件传输</label>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <label style={styles.switch}>
-                                        <input
-                                            type="checkbox"
-                                            checked={!!config.experimental?.file_transfer}
-                                            onChange={(e) => {
-                                                setConfig({
-                                                    ...config,
-                                                    experimental: {
-                                                        ...(config.experimental || {}),
-                                                        file_transfer: e.target.checked
-                                                    }
-                                                });
-                                            }}
-                                        />
-                                        <span style={styles.slider}></span>
-                                    </label>
-                                    <span style={{ color: '#ccc', fontSize: '0.9rem' }}>
-                                        {config.experimental?.file_transfer ? '已开启 (可打开文件传输窗口)' : '已关闭'}
-                                    </span>
                                     <button
                                         onClick={() => {
-                                            if (!config.experimental?.file_transfer) return;
                                             if (onOpenFileTransfer) onOpenFileTransfer();
                                             onClose();
                                         }}
                                         style={{ ...styles.saveBtn, padding: '6px 10px', height: '32px' }}
                                         type="button"
-                                        disabled={!config.experimental?.file_transfer}
                                     >
                                         打开文件传输窗口
                                     </button>
-                                </div>
-                                <div style={{ color: '#888', fontSize: '0.8rem', marginTop: '4px' }}>
-                                    默认关闭。开启后可从此处打开文件传输窗口，用于收集少量用户反馈后迭代。
+                                    <span style={{ color: '#888', fontSize: '0.85rem' }}>
+                                        打开后可在终端旁边并行使用
+                                    </span>
                                 </div>
                             </div>
                             <div style={styles.formGroup}>
