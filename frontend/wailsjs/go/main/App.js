@@ -78,6 +78,10 @@ export function HasActiveWork() {
   return window['go']['main']['App']['HasActiveWork']();
 }
 
+export function ImportConfigFromDirectory(arg1) {
+  return window['go']['main']['App']['ImportConfigFromDirectory'](arg1);
+}
+
 export function ListJavaProcesses(arg1) {
   return window['go']['main']['App']['ListJavaProcesses'](arg1);
 }

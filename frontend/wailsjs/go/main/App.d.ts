@@ -43,6 +43,8 @@ export function GetSettings():Promise<config.AppConfig>;
 
 export function HasActiveWork():Promise<Record<string, any>>;
 
+export function ImportConfigFromDirectory(arg1:string):Promise<string>;
+
 export function ListJavaProcesses(arg1:string):Promise<string>;
 
 export function LoadQuickCommands():Promise<Array<config.QuickCommand>>;

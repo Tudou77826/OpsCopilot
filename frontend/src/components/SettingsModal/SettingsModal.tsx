@@ -46,11 +46,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
     const [msg, setMsg] = useState('');
     const [activeTab, setActiveTab] = useState<'llm' | 'prompts' | 'system' | 'app' | 'keys'>('llm');
     const [rulesModalOpen, setRulesModalOpen] = useState(false);
+    const [importDir, setImportDir] = useState('');
+    const [importLoading, setImportLoading] = useState(false);
+    const [importMsg, setImportMsg] = useState('');
 
     useEffect(() => {
         if (isOpen) {
             loadSettings();
             setMsg('');
+            setImportDir('');
+            setImportMsg('');
         }
     }, [isOpen]);
 
@@ -159,6 +164,28 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                 [key]: value
             }
         });
+    };
+
+    const handleImportConfig = async () => {
+        const dir = (importDir || '').trim();
+        if (!dir) {
+            setImportMsg('请输入旧版本目录路径');
+            return;
+        }
+        setImportLoading(true);
+        setImportMsg('正在导入配置...');
+        try {
+            // @ts-ignore
+            const result = await window.go.main.App.ImportConfigFromDirectory(dir);
+            setImportMsg(result || '导入完成');
+            if (typeof result === 'string' && (result.includes('已成功导入') || result.includes('配置导入成功'))) {
+                await loadSettings();
+            }
+        } catch (e: any) {
+            setImportMsg('导入失败: ' + e.toString());
+        } finally {
+            setImportLoading(false);
+        }
     };
 
     if (!isOpen || !config) return null;
@@ -343,6 +370,34 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
 
                     {activeTab === 'app' && (
                         <div style={styles.formSection}>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>导入旧版本配置</label>
+                                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' as const }}>
+                                    <input
+                                        style={{ ...styles.input, flex: 1, minWidth: '320px' }}
+                                        value={importDir}
+                                        onChange={(e) => setImportDir(e.target.value)}
+                                        placeholder="例如：C:\\Users\\xxx\\OldOpsCopilot"
+                                    />
+                                    <button
+                                        onClick={handleImportConfig}
+                                        style={{ ...styles.saveBtn, padding: '8px 12px', height: '36px' }}
+                                        disabled={importLoading}
+                                        type="button"
+                                    >
+                                        {importLoading ? '正在导入...' : '开始导入'}
+                                    </button>
+                                </div>
+                                {importMsg ? (
+                                    <div style={{ color: '#888', fontSize: '0.85rem' }}>
+                                        {importMsg}
+                                    </div>
+                                ) : (
+                                    <div style={{ color: '#888', fontSize: '0.85rem' }}>
+                                        支持导入 config.json / prompts.json / quick_commands.json / highlight_rules.json；导入前会自动备份当前配置到 .bak 文件。
+                                    </div>
+                                )}
+                            </div>
                             <div style={styles.formGroup}>
                                 <label style={styles.label}>命令补全延迟时间 (毫秒)</label>
                                 <input

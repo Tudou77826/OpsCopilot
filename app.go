@@ -593,6 +593,35 @@ func (a *App) SaveSettings(cfg config.AppConfig) string {
 	return ""
 }
 
+func (a *App) ImportConfigFromDirectory(dirPath string) string {
+	if err := a.configMgr.ImportFromDirectory(dirPath); err != nil {
+		msg := a.configMgr.LastImportMessage()
+		if msg != "" {
+			return msg
+		}
+		return fmt.Sprintf("导入失败: %v", err)
+	}
+
+	cfg := *a.configMgr.Config
+	llmConfig := cfg.LLM
+	fastModel := llmConfig.FastModel
+	if fastModel == "" {
+		fastModel = llmConfig.Model
+	}
+	if fastModel == "" {
+		fastModel = "deepseek-chat"
+	}
+	complexModel := llmConfig.ComplexModel
+	if complexModel == "" {
+		complexModel = "glm46"
+	}
+	fastProvider := llm.NewOpenAIProvider(llmConfig.APIKey, llmConfig.BaseURL, fastModel)
+	complexProvider := llm.NewOpenAIProvider(llmConfig.APIKey, llmConfig.BaseURL, complexModel)
+	a.aiService.UpdateProviders(fastProvider, complexProvider)
+
+	return a.configMgr.LastImportMessage()
+}
+
 func (a *App) GetHighlightRules() []config.HighlightRule {
 	return a.configMgr.Config.HighlightRules
 }

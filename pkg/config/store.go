@@ -2,8 +2,11 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 )
 
 type AppConfig struct {
@@ -66,6 +69,8 @@ type Manager struct {
 	quickCommandsPath  string
 	highlightRulesPath string
 	Config             *AppConfig
+	lastImportMessage  string
+	importing          atomic.Bool
 }
 
 func NewManager() *Manager {
@@ -319,6 +324,194 @@ func (m *Manager) Save() error {
 	}
 
 	return nil
+}
+
+func (m *Manager) LastImportMessage() string {
+	return m.lastImportMessage
+}
+
+func (m *Manager) ImportFromDirectory(dirPath string) error {
+	if !m.importing.CompareAndSwap(false, true) {
+		m.lastImportMessage = "正在导入配置..."
+		return fmt.Errorf("import in progress")
+	}
+	defer m.importing.Store(false)
+
+	cleaned := filepath.Clean(strings.TrimSpace(dirPath))
+	if cleaned == "" {
+		m.lastImportMessage = "目录不存在"
+		return fmt.Errorf("empty directory path")
+	}
+
+	st, err := os.Stat(cleaned)
+	if err != nil {
+		if os.IsNotExist(err) {
+			m.lastImportMessage = "目录不存在"
+		} else {
+			m.lastImportMessage = fmt.Sprintf("读取目录失败: %v", err)
+		}
+		return err
+	}
+	if !st.IsDir() {
+		m.lastImportMessage = "目录不存在"
+		return fmt.Errorf("not a directory: %s", cleaned)
+	}
+
+	original, err := cloneAppConfig(m.Config)
+	if err != nil {
+		return err
+	}
+	updated, err := cloneAppConfig(m.Config)
+	if err != nil {
+		return err
+	}
+
+	var imported []string
+	var warnings []string
+	usedDefaults := false
+
+	if data, err := os.ReadFile(filepath.Join(cleaned, "config.json")); err == nil {
+		type oldConfig struct {
+			LLM LLMConfig `json:"llm"`
+		}
+		var old oldConfig
+		if err := json.Unmarshal(data, &old); err != nil {
+			warnings = append(warnings, "config.json 格式错误，已跳过")
+		} else {
+			oldLLM := old.LLM
+			if oldLLM.APIKey != "" {
+				updated.LLM.APIKey = oldLLM.APIKey
+			}
+			if oldLLM.BaseURL != "" {
+				updated.LLM.BaseURL = oldLLM.BaseURL
+			}
+			fastModel := oldLLM.FastModel
+			if fastModel == "" && oldLLM.Model != "" {
+				fastModel = oldLLM.Model
+			}
+			if fastModel != "" {
+				updated.LLM.FastModel = fastModel
+			}
+			if oldLLM.ComplexModel != "" {
+				updated.LLM.ComplexModel = oldLLM.ComplexModel
+			} else {
+				usedDefaults = true
+			}
+			updated.LLM.Model = ""
+			imported = append(imported, "config.json")
+		}
+	} else if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	if data, err := os.ReadFile(filepath.Join(cleaned, "prompts.json")); err == nil {
+		var old map[string]string
+		if err := json.Unmarshal(data, &old); err != nil {
+			warnings = append(warnings, "prompts.json 格式错误，已跳过")
+		} else {
+			if updated.Prompts == nil {
+				updated.Prompts = map[string]string{}
+			}
+			for k, v := range old {
+				updated.Prompts[k] = v
+			}
+			imported = append(imported, "prompts.json")
+		}
+	} else if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	if data, err := os.ReadFile(filepath.Join(cleaned, "quick_commands.json")); err == nil {
+		var old []QuickCommand
+		if err := json.Unmarshal(data, &old); err != nil {
+			warnings = append(warnings, "quick_commands.json 格式错误，已跳过")
+		} else {
+			if old == nil {
+				old = []QuickCommand{}
+			}
+			updated.QuickCommands = old
+			imported = append(imported, "quick_commands.json")
+		}
+	} else if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	if data, err := os.ReadFile(filepath.Join(cleaned, "highlight_rules.json")); err == nil {
+		var old []HighlightRule
+		if err := json.Unmarshal(data, &old); err != nil {
+			warnings = append(warnings, "highlight_rules.json 格式错误，已跳过")
+		} else {
+			if old == nil {
+				old = []HighlightRule{}
+			}
+			updated.HighlightRules = old
+			imported = append(imported, "highlight_rules.json")
+		}
+	} else if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	if len(imported) == 0 {
+		if len(warnings) > 0 {
+			m.lastImportMessage = "未找到任何可用的配置文件，配置保持不变"
+		} else {
+			m.lastImportMessage = "未找到任何配置文件，配置保持不变"
+		}
+		return nil
+	}
+
+	if err := backupFileIfExists(m.configPath, m.configPath+".bak"); err != nil {
+		return err
+	}
+	if err := backupFileIfExists(m.promptsPath, m.promptsPath+".bak"); err != nil {
+		return err
+	}
+	if err := backupFileIfExists(m.quickCommandsPath, m.quickCommandsPath+".bak"); err != nil {
+		return err
+	}
+	if err := backupFileIfExists(m.highlightRulesPath, m.highlightRulesPath+".bak"); err != nil {
+		return err
+	}
+
+	*m.Config = *updated
+
+	if err := m.Save(); err != nil {
+		*m.Config = *original
+		return err
+	}
+
+	msg := fmt.Sprintf("已成功导入 %d 个配置文件", len(imported))
+	if len(warnings) > 0 {
+		msg = msg + "。" + strings.Join(warnings, "；")
+	}
+	if usedDefaults {
+		msg += "。部分字段已使用新版本默认值"
+	}
+	m.lastImportMessage = msg
+	return nil
+}
+
+func cloneAppConfig(cfg *AppConfig) (*AppConfig, error) {
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		return nil, err
+	}
+	var out AppConfig
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func backupFileIfExists(srcPath, dstPath string) error {
+	data, err := os.ReadFile(srcPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	return os.WriteFile(dstPath, data, 0644)
 }
 
 // savePrompts 保存提示词配置到独立文件
