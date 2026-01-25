@@ -344,8 +344,9 @@ const styles: Record<string, React.CSSProperties> = {
     modal: {
         width: '900px',
         maxWidth: '95vw',
-        height: '740px',
-        maxHeight: '95vh',
+        height: '80vh',
+        maxHeight: '800px',
+        minHeight: '600px',
         backgroundColor: '#252526',
         border: '1px solid #1f1f1f',
         borderRadius: '12px',
@@ -360,7 +361,8 @@ const styles: Record<string, React.CSSProperties> = {
         justifyContent: 'space-between',
         padding: '16px 20px',
         borderBottom: '1px solid #1f1f1f',
-        backgroundColor: '#1e1e1e'
+        backgroundColor: '#1e1e1e',
+        flexShrink: 0
     },
     title: {
         color: '#fff',
@@ -387,7 +389,8 @@ const styles: Record<string, React.CSSProperties> = {
         flex: 1,
         minHeight: 0,
         display: 'flex',
-        flexDirection: 'column'
+        flexDirection: 'column',
+        overflow: 'hidden'
     },
     toolbar: {
         display: 'flex',
@@ -395,7 +398,8 @@ const styles: Record<string, React.CSSProperties> = {
         justifyContent: 'space-between',
         padding: '16px 20px',
         borderBottom: '1px solid #1f1f1f',
-        backgroundColor: '#1a1a1a'
+        backgroundColor: '#1a1a1a',
+        flexShrink: 0
     },
     hint: {
         color: '#8a8a8a',
@@ -404,7 +408,8 @@ const styles: Record<string, React.CSSProperties> = {
     list: {
         flex: 1,
         minHeight: 0,
-        overflow: 'auto',
+        overflowY: 'auto',
+        overflowX: 'hidden',
         padding: '16px 20px',
         display: 'flex',
         flexDirection: 'column',
@@ -420,7 +425,7 @@ const styles: Record<string, React.CSSProperties> = {
         border: '1px solid #2a2a2a',
         borderRadius: '8px',
         backgroundColor: '#1a1a1a',
-        overflow: 'hidden',
+        overflow: 'visible',
         transition: 'all 0.2s'
     },
     itemHeader: {
@@ -509,8 +514,7 @@ const styles: Record<string, React.CSSProperties> = {
         flexDirection: 'column',
         gap: '12px',
         backgroundColor: '#151515',
-        maxHeight: '400px',
-        overflowY: 'auto'
+        overflow: 'visible'
     },
     row: {
         display: 'flex',
@@ -598,7 +602,8 @@ const styles: Record<string, React.CSSProperties> = {
         alignItems: 'center',
         padding: '16px 20px',
         borderTop: '1px solid #1f1f1f',
-        backgroundColor: '#1e1e1e'
+        backgroundColor: '#1e1e1e',
+        flexShrink: 0
     },
     summary: {
         color: '#8a8a8a',
