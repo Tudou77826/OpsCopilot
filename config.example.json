@@ -1,12 +1,12 @@
 {
   "llm": {
-    "APIKey": "sk-BW5vqaJWdVTWabwQK9ORXekDA2a7RdC8bFULbTN2XS6KRQDC",
-    "BaseURL": "https://huazi.de5.net/v1",
+    "APIKey": "your-api-key-here",
+    "BaseURL": "https://api.example.com/v1",
     "FastModel": "gemini-2.5-flash",
     "ComplexModel": "glm46"
   },
   "log": {
-    "dir": "D:\\dev\\workspace-go\\OpsCopilot\\logs"
+    "dir": "logs"
   },
   "docs": {
     "dir": ""
