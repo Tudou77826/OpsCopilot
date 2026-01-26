@@ -45,3 +45,10 @@ $RECYCLE.BIN/
 *.msm
 *.msp
 sessions/
+
+# Logs
+logs/
+*.log
+
+# Media
+promo-video/video.mp4
