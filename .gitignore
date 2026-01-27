@@ -57,3 +57,4 @@ promo-video/video.mp4
 config.json
 sessions.json
 .env.local
+logs/opscopilot.log

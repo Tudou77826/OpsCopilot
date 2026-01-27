@@ -9,6 +9,7 @@ import SettingsModal from './components/SettingsModal/SettingsModal';
 import ConfirmCloseModal from './components/ConfirmCloseModal/ConfirmCloseModal';
 import FileTransferWindow from './components/FileTransferWindow/FileTransferWindow';
 import CommandQueryOverlay, { CommandQueryResult } from './components/CommandQueryOverlay/CommandQueryOverlay';
+import ConnectErrorModal from './components/ConnectErrorModal/ConnectErrorModal';
 import { ConnectionConfig } from './types';
 import { HighlightRule, TerminalConfig } from './components/Terminal/highlightTypes';
 
@@ -42,6 +43,7 @@ function App() {
     const [commandQueryResult, setCommandQueryResult] = useState<CommandQueryResult | null>(null);
     const [commandQueryError, setCommandQueryError] = useState('');
     const commandQueryShortcut = 'Ctrl+K';
+    const [connectErrors, setConnectErrors] = useState<{ title: string; message: string }[]>([]);
 
     // Refs to hold latest state for callbacks
     const isBroadcastModeRef = useRef(isBroadcastMode);
@@ -58,6 +60,15 @@ function App() {
     const terminalRefs = useRef(new Map<string, TerminalRef>());
     // Store unlisten functions for events
     const unlisteners = useRef(new Map<string, () => void>());
+    const activeConnectError = connectErrors.length > 0 ? connectErrors[0] : null;
+
+    const enqueueConnectError = (title: string, message: string) => {
+        setConnectErrors(prev => [...prev, { title, message }]);
+    };
+
+    const dismissConnectError = () => {
+        setConnectErrors(prev => prev.slice(1));
+    };
 
     useEffect(() => {
         // Listen for session closed events from backend
@@ -258,13 +269,19 @@ function App() {
                     unlisteners.current.set(newSessionId, cancel);
 
                 } else {
-                    setStatus("错误: " + result.message);
+                    setStatus("就绪");
+                    const connectLabel = config?.name || (config?.user && config?.host ? `${config.user}@${config.host}` : (config?.host || '未知目标'));
+                    enqueueConnectError(`连接失败：${connectLabel}`, result.message || '未知错误');
                 }
             } else {
-                setStatus("Wails 运行时未就绪");
+                setStatus("就绪");
+                enqueueConnectError("连接失败：运行时未就绪", "Wails 运行时未就绪");
             }
         } catch (e) {
-            setStatus("错误: " + e);
+            const errMsg = (e as any)?.message ? String((e as any).message) : String(e);
+            setStatus("就绪");
+            const connectLabel = config?.name || (config?.user && config?.host ? `${config.user}@${config.host}` : (config?.host || '未知目标'));
+            enqueueConnectError(`连接失败：${connectLabel}`, errMsg || '未知错误');
         }
     };
 
@@ -631,6 +648,13 @@ function App() {
                 message={confirmCloseMessage}
                 onConfirm={handleConfirmClose}
                 onCancel={handleCancelClose}
+            />
+
+            <ConnectErrorModal
+                isOpen={!!activeConnectError}
+                title={activeConnectError?.title || ''}
+                message={activeConnectError?.message || ''}
+                onClose={dismissConnectError}
             />
 
             <CommandQueryOverlay
