@@ -3,3 +3,6 @@
 2026/01/26 00:52:44 app.go:184: [beforeClose] Active work detected: terminals=1, troubleshooting=false
 2026/01/26 00:52:46 app.go:214: [ForceQuit] Setting force quit flag and calling runtime.Quit()
 2026/01/26 00:52:46 app.go:171: [beforeClose] Force quitting, allowing close
+[Startup] Log initialized at D:\dev\workspace-go\OpsCopilot\logs
+2026/01/27 22:08:15 app.go:163: App started
+2026/01/27 22:11:14 app.go:207: [beforeClose] No active work, allowing close

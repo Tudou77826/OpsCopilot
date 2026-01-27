@@ -56,3 +56,4 @@ promo-video/video.mp4
 # Local Config
 config.json
 sessions.json
+.env.local

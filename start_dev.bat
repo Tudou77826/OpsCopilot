@@ -1,21 +1,25 @@
 @echo off
-setlocal
+setlocal EnableExtensions
 
 :: ==============================
 :: OpsCopilot 启动脚本
 :: ==============================
 
-:: 设置 LLM API Key (请在此处填入您的 Key)
-set "LLM_API_KEY=sk-BW5vqaJWdVTWabwQK9ORXekDA2a7RdC8bFULbTN2XS6KRQDC"
+if not defined LLM_BASE_URL set "LLM_BASE_URL=https://huazi.de5.net/v1"
+if not defined LLM_MODEL set "LLM_MODEL=gemini-2.5-flash"
+if not defined OPSCOPILOT_DEV_MODE set "OPSCOPILOT_DEV_MODE=true"
 
-:: 设置 LLM Base URL (默认为 DeepSeek，可按需修改)
-set "LLM_BASE_URL=https://huazi.de5.net/v1"
+if exist ".env.local" (
+    for /f "usebackq tokens=1,* delims==" %%A in (".env.local") do (
+        if /I "%%A"=="LLM_API_KEY" set "LLM_API_KEY=%%B"
+        if /I "%%A"=="LLM_BASE_URL" set "LLM_BASE_URL=%%B"
+        if /I "%%A"=="LLM_MODEL" set "LLM_MODEL=%%B"
+    )
+)
 
-:: 设置 LLM 模型 (可选，默认 deepseek-chat)
-set "LLM_MODEL=gemini-2.5-flash"
-
-:: 开启开发模式日志 (同时输出到控制台和文件)
-set "OPSCOPILOT_DEV_MODE=true"
+if not defined LLM_API_KEY (
+    echo [WARN] LLM_API_KEY not set. Set it in environment or .env.local.
+)
 
 echo [INFO] Environment variables set.
 echo [INFO] Starting OpsCopilot (Dev Mode)...
