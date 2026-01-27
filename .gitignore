@@ -1,58 +1,68 @@
-# Binaries
-build/bin
-*.exe
-*.dll
-*.so
-*.dylib
-
-# Wails
-build/windows/installer/project.nsi
-build/windows/installer/wails_tools.nsh
-wails.json.old
-
-# Go
-# go.sum # Keep go.sum
-go.work
-go.work.sum
-vendor/
-.DS_Store
-
-# Frontend
-frontend/node_modules
-frontend/dist
-frontend/.env.local
-frontend/.env.development.local
-frontend/.env.test.local
-frontend/.env.production.local
-frontend/npm-debug.log*
-frontend/yarn-debug.log*
-frontend/yarn-error.log*
+```
+# Dependencies
 node_modules/
 
+# Build outputs
+dist/
+build/
+target/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.ENV
+.python-version
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.local
+*.env.*
+
 # IDE
-.idea/
 .vscode/
+.idea/
 *.swp
 *.swo
 
 # OS
+.DS_Store
 Thumbs.db
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
 *.cab
-*.msi
-*.msm
-*.msp
-sessions/
-
-# Logs
-logs/
-*.log
-
-# Media
-promo-video/video.mp4
-
-# Local Config
-config.json
-sessions.json
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
+```

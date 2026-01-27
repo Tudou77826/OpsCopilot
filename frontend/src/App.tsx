@@ -7,6 +7,7 @@ import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal'
 import Sidebar from './components/Sidebar/Sidebar';
 import SettingsModal from './components/SettingsModal/SettingsModal';
 import ConfirmCloseModal from './components/ConfirmCloseModal/ConfirmCloseModal';
+import ErrorModal from './components/ErrorModal/ErrorModal';
 import FileTransferWindow from './components/FileTransferWindow/FileTransferWindow';
 import CommandQueryOverlay, { CommandQueryResult } from './components/CommandQueryOverlay/CommandQueryOverlay';
 import { ConnectionConfig } from './types';
@@ -41,6 +42,10 @@ function App() {
     const [commandQueryLoading, setCommandQueryLoading] = useState(false);
     const [commandQueryResult, setCommandQueryResult] = useState<CommandQueryResult | null>(null);
     const [commandQueryError, setCommandQueryError] = useState('');
+    const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
+    const [errorModalTitle, setErrorModalTitle] = useState('');
+    const [errorModalMessage, setErrorModalMessage] = useState('');
+    const [errorModalDetails, setErrorModalDetails] = useState('');
     const commandQueryShortcut = 'Ctrl+K';
 
     // Refs to hold latest state for callbacks
@@ -232,6 +237,13 @@ function App() {
         terminalRefs.current.delete(id);
     };
 
+    const showErrorModal = (title: string, message: string, details?: string) => {
+        setErrorModalTitle(title);
+        setErrorModalMessage(message);
+        setErrorModalDetails(details || '');
+        setIsErrorModalOpen(true);
+    };
+
     const handleConnect = async (config: any) => {
         setStatus("正在连接...");
         try {
@@ -258,13 +270,17 @@ function App() {
                     unlisteners.current.set(newSessionId, cancel);
 
                 } else {
-                    setStatus("错误: " + result.message);
+                    // Show connection error in modal instead of status bar
+                    showErrorModal("连接失败", result.message || "未知错误", result.message);
                 }
             } else {
-                setStatus("Wails 运行时未就绪");
+                // Show runtime error in modal instead of status bar
+                showErrorModal("运行时错误", "Wails 运行时未就绪", "无法访问 Wails 后端服务");
             }
         } catch (e) {
-            setStatus("错误: " + e);
+            // Show connection error in modal instead of status bar
+            const errorMessage = e instanceof Error ? e.message : String(e);
+            showErrorModal("连接异常", errorMessage, errorMessage);
         }
     };
 
@@ -631,6 +647,15 @@ function App() {
                 message={confirmCloseMessage}
                 onConfirm={handleConfirmClose}
                 onCancel={handleCancelClose}
+            />
+
+            <ErrorModal
+                isOpen={isErrorModalOpen}
+                title={errorModalTitle}
+                message={errorModalMessage}
+                showDetails={!!errorModalDetails}
+                details={errorModalDetails}
+                onConfirm={() => setIsErrorModalOpen(false)}
             />
 
             <CommandQueryOverlay
