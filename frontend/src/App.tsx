@@ -261,6 +261,7 @@ function App() {
                     };
 
                     setTerminals(prev => [...prev, newTerminal]);
+                    setActiveTerminalId(newSessionId); // Set the new terminal as active
 
                     // Listen for data for this specific session
                     // @ts-ignore
