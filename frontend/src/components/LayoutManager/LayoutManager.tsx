@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import TerminalComponent, { TerminalRef } from '../Terminal/Terminal';
 import { HighlightRule, TerminalConfig } from '../Terminal/highlightTypes';
 
@@ -31,6 +31,8 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
     const [editingTab, setEditingTab] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, id: string } | null>(null);
+    const didMountRef = useRef(false);
+    const prevTerminalIdsRef = useRef<string[]>([]);
 
     // Ensure active tab is valid
     React.useEffect(() => {
@@ -42,6 +44,23 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
         }
     }, [terminals, activeTab]);
 
+    React.useEffect(() => {
+        if (!didMountRef.current) {
+            didMountRef.current = true;
+            prevTerminalIdsRef.current = terminals.map(t => t.id);
+            return;
+        }
+
+        const prevIds = prevTerminalIdsRef.current;
+        const nextIds = terminals.map(t => t.id);
+        prevTerminalIdsRef.current = nextIds;
+
+        if (nextIds.length <= prevIds.length) return;
+        const added = nextIds.filter(id => !prevIds.includes(id));
+        const targetId = added[added.length - 1] || terminals[terminals.length - 1]?.id;
+        if (targetId) setActiveTab(targetId);
+    }, [terminals]);
+
     // Notify active terminal change
     React.useEffect(() => {
         if (onActiveTerminalChange) {
@@ -49,12 +68,35 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
         }
     }, [activeTab, onActiveTerminalChange]);
 
+    React.useEffect(() => {
+        if (!activeTab) return;
+        if (editingTab) return;
+
+        let cancelled = false;
+        let attempts = 0;
+
+        const tryFocus = () => {
+            if (cancelled) return;
+            const inst = terminalRefs.current.get(activeTab);
+            if (inst) {
+                inst.fit();
+                inst.focus();
+                return;
+            }
+            attempts += 1;
+            if (attempts >= 10) return;
+            setTimeout(tryFocus, 50);
+        };
+
+        setTimeout(tryFocus, 0);
+
+        return () => {
+            cancelled = true;
+        };
+    }, [activeTab, editingTab, mode, terminalRefs]);
+
     const handleTabClick = (id: string) => {
         setActiveTab(id);
-        // Focus the terminal when tab is clicked
-        setTimeout(() => {
-            terminalRefs.current.get(id)?.fit();
-        }, 50);
     };
 
     // Trigger fit on layout change
