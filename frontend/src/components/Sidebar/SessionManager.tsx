@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ConnectionConfig } from '../../types';
+import EditSavedSessionModal from './EditSavedSessionModal';
 
 // Wails bindings
 declare global {
@@ -10,6 +11,7 @@ declare global {
                     GetSavedSessions: () => Promise<SessionNode[]>;
                     DeleteSavedSession: (id: string) => Promise<string>;
                     RenameSavedSession: (id: string, newName: string) => Promise<string>;
+                    UpdateSavedSession: (id: string, config: ConnectionConfig) => Promise<string>;
                 }
             }
         }
@@ -37,6 +39,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
     const [editName, setEditName] = useState('');
     const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
     const [hoveredMenuItem, setHoveredMenuItem] = useState<string | null>(null);
+    const [editingSession, setEditingSession] = useState<{ id: string; config: ConnectionConfig } | null>(null);
 
     useEffect(() => {
         loadSessions();
@@ -125,6 +128,14 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
             await window.go.main.App.DeleteSavedSession(id);
             loadSessions();
         }
+    };
+
+    const handleUnGroup = async (node: SessionNode) => {
+        if (!node.config) return;
+        const next: ConnectionConfig = { ...node.config };
+        delete (next as any).group;
+        await window.go.main.App.UpdateSavedSession(node.id, next);
+        loadSessions();
     };
 
     // Recursive render
@@ -257,6 +268,38 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                             }}
                         >打开连接</div>
                     )}
+                    {contextMenu.node.type === 'session' && (
+                        <div
+                            style={{
+                                ...styles.menuItem,
+                                backgroundColor: hoveredMenuItem === 'edit' ? '#094771' : 'transparent',
+                                color: hoveredMenuItem === 'edit' ? '#fff' : '#ccc'
+                            }}
+                            onMouseEnter={() => setHoveredMenuItem('edit')}
+                            onMouseLeave={() => setHoveredMenuItem(null)}
+                            onClick={() => {
+                                if (contextMenu.node.config) {
+                                    setEditingSession({ id: contextMenu.node.id, config: contextMenu.node.config });
+                                }
+                                setContextMenu(null);
+                            }}
+                        >编辑连接</div>
+                    )}
+                    {contextMenu.node.type === 'session' && !!contextMenu.node.config?.group && (
+                        <div
+                            style={{
+                                ...styles.menuItem,
+                                backgroundColor: hoveredMenuItem === 'ungroup' ? '#094771' : 'transparent',
+                                color: hoveredMenuItem === 'ungroup' ? '#fff' : '#ccc'
+                            }}
+                            onMouseEnter={() => setHoveredMenuItem('ungroup')}
+                            onMouseLeave={() => setHoveredMenuItem(null)}
+                            onClick={() => {
+                                handleUnGroup(contextMenu.node);
+                                setContextMenu(null);
+                            }}
+                        >移出分组</div>
+                    )}
                     <div 
                         style={{
                             ...styles.menuItem,
@@ -285,6 +328,16 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                         }}
                     >删除</div>
                 </div>
+            )}
+
+            {editingSession && (
+                <EditSavedSessionModal
+                    isOpen={true}
+                    sessionId={editingSession.id}
+                    initialConfig={editingSession.config}
+                    onClose={() => setEditingSession(null)}
+                    onSaved={loadSessions}
+                />
             )}
         </div>
     );

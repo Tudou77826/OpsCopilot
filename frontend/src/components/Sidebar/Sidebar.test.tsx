@@ -14,6 +14,7 @@ describe('Sidebar Component', () => {
                     GetSavedSessions: async () => [],
                     DeleteSavedSession: async () => '',
                     RenameSavedSession: async () => '',
+                    UpdateSavedSession: async () => '',
                 }
             }
         };

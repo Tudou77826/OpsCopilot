@@ -18,10 +18,10 @@ const (
 )
 
 type Session struct {
-	ID       string                  `json:"id"`
-	Name     string                  `json:"name"` // Display name (IP)
-	Type     SessionType             `json:"type"`
-	Children []*Session              `json:"children,omitempty"` // For folders
+	ID       string                   `json:"id"`
+	Name     string                   `json:"name"` // Display name (IP)
+	Type     SessionType              `json:"type"`
+	Children []*Session               `json:"children,omitempty"` // For folders
 	Config   *sshclient.ConnectConfig `json:"config,omitempty"`   // For sessions
 }
 
@@ -103,9 +103,9 @@ func (m *Manager) RenameSession(id, newName string) error {
 			if node.ID == id {
 				node.Name = newName
 				if node.Config != nil {
-					// We only change the display name of the node, 
+					// We only change the display name of the node,
 					// but maybe we should also sync it to config?
-					// The Requirement says "Name uses IP". 
+					// The Requirement says "Name uses IP".
 					// If user renames, they might want a custom alias.
 					// So we allow renaming the Node.Name.
 				}
@@ -147,7 +147,7 @@ func (m *Manager) Upsert(config sshclient.ConnectConfig, groupName string) error
 		for _, node := range nodes {
 			if node.Type == TypeSession && node.Config != nil && node.Config.Host == config.Host {
 				removedID = node.ID // Reuse ID
-				continue // Remove
+				continue            // Remove
 			}
 			if node.Type == TypeFolder {
 				node.Children = removeByHost(node.Children)
@@ -160,7 +160,7 @@ func (m *Manager) Upsert(config sshclient.ConnectConfig, groupName string) error
 
 	// Step 2: Create new node
 	newNode := &Session{
-		ID:     removedID, 
+		ID:     removedID,
 		Name:   targetName,
 		Type:   TypeSession,
 		Config: &config,
@@ -192,6 +192,98 @@ func (m *Manager) Upsert(config sshclient.ConnectConfig, groupName string) error
 		}
 	} else {
 		// Add to root
+		m.Sessions = append(m.Sessions, newNode)
+	}
+
+	return m.Save()
+}
+
+func (m *Manager) UpdateSession(id string, config sshclient.ConnectConfig, groupName string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var removed *Session
+	var removeByID func(nodes []*Session) []*Session
+	removeByID = func(nodes []*Session) []*Session {
+		var result []*Session
+		for _, node := range nodes {
+			if node.ID == id {
+				removed = node
+				continue
+			}
+			if node.Type == TypeFolder {
+				node.Children = removeByID(node.Children)
+			}
+			result = append(result, node)
+		}
+		return result
+	}
+	m.Sessions = removeByID(m.Sessions)
+	if removed == nil {
+		return fmt.Errorf("session not found")
+	}
+
+	config.Group = groupName
+
+	var hasDuplicateHost func(nodes []*Session) bool
+	hasDuplicateHost = func(nodes []*Session) bool {
+		for _, node := range nodes {
+			if node.Type == TypeSession && node.Config != nil && node.Config.Host == config.Host && node.ID != id {
+				return true
+			}
+			if node.Type == TypeFolder && hasDuplicateHost(node.Children) {
+				return true
+			}
+		}
+		return false
+	}
+	if hasDuplicateHost(m.Sessions) {
+		return fmt.Errorf("a session with the same host already exists")
+	}
+
+	oldDisplayName := removed.Name
+	oldHost := ""
+	if removed.Config != nil {
+		oldHost = removed.Config.Host
+	}
+
+	displayName := config.Name
+	if displayName == "" {
+		displayName = config.Host
+	}
+	if oldDisplayName != "" && oldHost != "" && oldDisplayName != oldHost {
+		if config.Name == "" || config.Name == oldHost || config.Name == oldDisplayName {
+			displayName = oldDisplayName
+		}
+	}
+	config.Name = displayName
+
+	newNode := &Session{
+		ID:     id,
+		Name:   displayName,
+		Type:   TypeSession,
+		Config: &config,
+	}
+
+	if groupName != "" {
+		found := false
+		for _, node := range m.Sessions {
+			if node.Type == TypeFolder && node.Name == groupName {
+				node.Children = append(node.Children, newNode)
+				found = true
+				break
+			}
+		}
+		if !found {
+			newFolder := &Session{
+				ID:       uuid.New().String(),
+				Name:     groupName,
+				Type:     TypeFolder,
+				Children: []*Session{newNode},
+			}
+			m.Sessions = append(m.Sessions, newFolder)
+		}
+	} else {
 		m.Sessions = append(m.Sessions, newNode)
 	}
 

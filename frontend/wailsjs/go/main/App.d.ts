@@ -4,6 +4,7 @@ import {main} from '../models';
 import {config} from '../models';
 import {sessionmanager} from '../models';
 import {session_recorder} from '../models';
+import {sshclient} from '../models';
 
 export function AskAI(arg1:string):Promise<string>;
 
@@ -98,6 +99,8 @@ export function SaveSettings(arg1:config.AppConfig):Promise<string>;
 export function StartSession(arg1:string):Promise<string>;
 
 export function StopSession(arg1:string,arg2:string):Promise<string>;
+
+export function UpdateSavedSession(arg1:string,arg2:sshclient.ConnectConfig):Promise<string>;
 
 export function UpdateSessionTimeline(arg1:Array<session_recorder.TimelineEvent>):Promise<string>;
 

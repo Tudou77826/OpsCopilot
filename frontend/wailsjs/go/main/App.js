@@ -190,6 +190,10 @@ export function StopSession(arg1, arg2) {
   return window['go']['main']['App']['StopSession'](arg1, arg2);
 }
 
+export function UpdateSavedSession(arg1, arg2) {
+  return window['go']['main']['App']['UpdateSavedSession'](arg1, arg2);
+}
+
 export function UpdateSessionTimeline(arg1) {
   return window['go']['main']['App']['UpdateSessionTimeline'](arg1);
 }

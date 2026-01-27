@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ConnectionConfig } from '../../types';
+import ConnectionConfigForm from '../ConnectionConfigForm/ConnectionConfigForm';
 
 interface SmartConnectModalProps {
     isOpen: boolean;
@@ -182,19 +183,11 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
         setParsedConfigs(newConfigs);
     };
 
-    const renderField = (label: string, value: string | number, onChange: (val: string) => void, type: string = "text", placeholder: string = "", id?: string) => (
-        <div style={styles.fieldGroup}>
-            <label style={styles.fieldLabel} htmlFor={id}>{label}</label>
-            <input
-                id={id}
-                type={type}
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                style={styles.input}
-                placeholder={placeholder}
-            />
-        </div>
-    );
+    const updateConfigObject = (index: number, next: ConnectionConfig) => {
+        const newConfigs = [...parsedConfigs];
+        newConfigs[index] = next;
+        setParsedConfigs(newConfigs);
+    };
 
     return (
         <div style={styles.overlay}>
@@ -290,50 +283,13 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
                                     {/* Expanded Form */}
                                     {isExpanded && (
                                         <div style={styles.cardBody}>
-                                            <div style={styles.row}>
-                                                <div style={{flex: 2}}>{renderField("主机地址", config.host, (v) => updateConfig(i, 'host', v), "text", "", `host-${i}`)}</div>
-                                                <div style={{flex: 1}}>{renderField("端口", config.port, (v) => updateConfig(i, 'port', parseInt(v) || 22), "number", "", `port-${i}`)}</div>
-                                            </div>
-                                            <div style={styles.row}>
-                                                <div style={{flex: 1}}>{renderField("用户名", config.user, (v) => updateConfig(i, 'user', v), "text", "", `user-${i}`)}</div>
-                                                <div style={{flex: 1}}>{renderField("密码", config.password || '', (v) => updateConfig(i, 'password', v), "password", "", `password-${i}`)}</div>
-                                            </div>
-                                            <div style={styles.row}>
-                                                <div style={{flex: 1}}>{renderField("Root 密码", config.rootPassword || '', (v) => updateConfig(i, 'rootPassword', v), "password", "可选 (用于 sudo)", `root-password-${i}`)}</div>
-                                            </div>
-
-                                            {/* Bastion Config */}
-                                            <div style={styles.bastionSection}>
-                                                <label style={styles.bastionHeader}>
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={!!config.bastion}
-                                                        onChange={(e) => {
-                                                            if (e.target.checked) {
-                                                                updateConfig(i, 'bastion.host', ''); // Initialize bastion
-                                                            } else {
-                                                                const newConfigs = [...parsedConfigs];
-                                                                delete newConfigs[i].bastion;
-                                                                setParsedConfigs(newConfigs);
-                                                            }
-                                                        }}
-                                                        style={{marginRight: '8px'}}
-                                                    />
-                                                    <span>使用跳板机 (Bastion)</span>
-                                                </label>
-                                                {config.bastion && (
-                                                    <div style={styles.bastionBody}>
-                                                        <div style={styles.row}>
-                                                            <div style={{flex: 2}}>{renderField("跳板机主机", config.bastion.host, (v) => updateConfig(i, 'bastion.host', v), "text", "", `bastion-host-${i}`)}</div>
-                                                            <div style={{flex: 1}}>{renderField("跳板机端口", config.bastion.port, (v) => updateConfig(i, 'bastion.port', parseInt(v) || 22), "number", "", `bastion-port-${i}`)}</div>
-                                                        </div>
-                                                        <div style={styles.row}>
-                                                            <div style={{flex: 1}}>{renderField("跳板机用户", config.bastion.user, (v) => updateConfig(i, 'bastion.user', v), "text", "", `bastion-user-${i}`)}</div>
-                                                            <div style={{flex: 1}}>{renderField("跳板机密码", config.bastion.password || '', (v) => updateConfig(i, 'bastion.password', v), "password", "", `bastion-password-${i}`)}</div>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
+                                            <ConnectionConfigForm
+                                                config={config}
+                                                onChange={(next) => updateConfigObject(i, next)}
+                                                idPrefix={`smart-${i}`}
+                                                showName={false}
+                                                showGroup={false}
+                                            />
                                         </div>
                                     )}
                                 </div>
