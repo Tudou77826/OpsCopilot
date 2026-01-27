@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ConnectionConfig } from '../../types';
+import SmartConnectModal from '../SmartConnectModal/SmartConnectModal';
 
 // Wails bindings
 declare global {
@@ -10,6 +11,7 @@ declare global {
                     GetSavedSessions: () => Promise<SessionNode[]>;
                     DeleteSavedSession: (id: string) => Promise<string>;
                     RenameSavedSession: (id: string, newName: string) => Promise<string>;
+                    UpdateSavedSession: (id: string, config: ConnectionConfig) => Promise<string>;
                 }
             }
         }
@@ -37,6 +39,9 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
     const [editName, setEditName] = useState('');
     const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
     const [hoveredMenuItem, setHoveredMenuItem] = useState<string | null>(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editingConfig, setEditingConfig] = useState<ConnectionConfig | null>(null);
+    const [editingNodeIdForEdit, setEditingNodeIdForEdit] = useState<string | null>(null);
 
     useEffect(() => {
         loadSessions();
@@ -125,6 +130,24 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
             await window.go.main.App.DeleteSavedSession(id);
             loadSessions();
         }
+    };
+
+    const handleEdit = (node: SessionNode) => {
+        if (node.config) {
+            setEditingConfig(node.config);
+            setEditingNodeIdForEdit(node.id);
+            setIsEditModalOpen(true);
+            setContextMenu(null);
+        }
+    };
+
+    const handleSaveEditedConfig = async (configs: ConnectionConfig[]) => {
+        if (configs.length > 0 && editingNodeIdForEdit) {
+            const updatedConfig = configs[0];
+            await window.go.main.App.UpdateSavedSession(editingNodeIdForEdit, updatedConfig);
+            loadSessions(); // Reload sessions to reflect the changes
+        }
+        setIsEditModalOpen(false);
     };
 
     // Recursive render
@@ -257,6 +280,18 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                             }}
                         >打开连接</div>
                     )}
+                    {contextMenu.node.type === 'session' && (
+                        <div 
+                            style={{
+                                ...styles.menuItem,
+                                backgroundColor: hoveredMenuItem === 'edit' ? '#094771' : 'transparent',
+                                color: hoveredMenuItem === 'edit' ? '#fff' : '#ccc'
+                            }}
+                            onMouseEnter={() => setHoveredMenuItem('edit')}
+                            onMouseLeave={() => setHoveredMenuItem(null)}
+                            onClick={() => handleEdit(contextMenu.node)}
+                        >编辑</div>
+                    )}
                     <div 
                         style={{
                             ...styles.menuItem,
@@ -286,6 +321,104 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                     >删除</div>
                 </div>
             )}
+        </div>
+    );
+
+    // SmartConnectModal for editing sessions
+    const handleParse = async (input: string) => {
+        // This is a mock implementation since we're editing existing configs
+        // In edit mode, we just return the initial config
+        if (editingConfig) {
+            return [editingConfig];
+        }
+        return [];
+    };
+
+    return (
+        <div style={styles.container} onClick={() => setContextMenu(null)}>
+            <div style={styles.searchBar}>
+                <input 
+                    style={styles.searchInput}
+                    placeholder="搜索会话 (IP/名称)..."
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                />
+            </div>
+            
+            <div style={styles.treeContainer}>
+                {renderTree(displayedSessions)}
+                {displayedSessions.length === 0 && (
+                    <div style={styles.empty}>无会话</div>
+                )}
+            </div>
+
+            {/* Context Menu */}
+            {contextMenu && (
+                <div style={{...styles.contextMenu, top: contextMenu.y, left: contextMenu.x}}>
+                    {contextMenu.node.type === 'session' && (
+                        <div 
+                            style={{
+                                ...styles.menuItem,
+                                backgroundColor: hoveredMenuItem === 'connect' ? '#094771' : 'transparent',
+                                color: hoveredMenuItem === 'connect' ? '#fff' : '#ccc'
+                            }} 
+                            onMouseEnter={() => setHoveredMenuItem('connect')}
+                            onMouseLeave={() => setHoveredMenuItem(null)}
+                            onClick={() => {
+                                if (contextMenu.node.config) onConnect(contextMenu.node.config);
+                                setContextMenu(null);
+                            }}
+                        >打开连接</div>
+                    )}
+                    {contextMenu.node.type === 'session' && (
+                        <div 
+                            style={{
+                                ...styles.menuItem,
+                                backgroundColor: hoveredMenuItem === 'edit' ? '#094771' : 'transparent',
+                                color: hoveredMenuItem === 'edit' ? '#fff' : '#ccc'
+                            }}
+                            onMouseEnter={() => setHoveredMenuItem('edit')}
+                            onMouseLeave={() => setHoveredMenuItem(null)}
+                            onClick={() => handleEdit(contextMenu.node)}
+                        >编辑</div>
+                    )}
+                    <div 
+                        style={{
+                            ...styles.menuItem,
+                            backgroundColor: hoveredMenuItem === 'rename' ? '#094771' : 'transparent',
+                            color: hoveredMenuItem === 'rename' ? '#fff' : '#ccc'
+                        }}
+                        onMouseEnter={() => setHoveredMenuItem('rename')}
+                        onMouseLeave={() => setHoveredMenuItem(null)}
+                        onClick={() => {
+                            setEditingNodeId(contextMenu.node.id);
+                            setEditName(contextMenu.node.name);
+                            setContextMenu(null);
+                        }}
+                    >重命名</div>
+                    <div 
+                        style={{
+                            ...styles.menuItem,
+                            backgroundColor: hoveredMenuItem === 'delete' ? '#094771' : 'transparent',
+                            color: hoveredMenuItem === 'delete' ? '#fff' : '#ccc'
+                        }}
+                        onMouseEnter={() => setHoveredMenuItem('delete')}
+                        onMouseLeave={() => setHoveredMenuItem(null)}
+                        onClick={() => {
+                            handleDelete(contextMenu.node.id);
+                            setContextMenu(null);
+                        }}
+                    >删除</div>
+                </div>
+            )}
+
+            {/* SmartConnectModal for editing */}
+            <SmartConnectModal 
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                onConnect={handleSaveEditedConfig}
+                onParse={handleParse}
+            />
         </div>
     );
 };

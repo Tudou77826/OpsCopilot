@@ -126,6 +126,38 @@ func (m *Manager) RenameSession(id, newName string) error {
 	return fmt.Errorf("session not found")
 }
 
+// UpdateSession updates an existing session's configuration
+func (m *Manager) UpdateSession(id string, config sshclient.ConnectConfig) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var updateNode func(nodes []*Session) bool
+	updateNode = func(nodes []*Session) bool {
+		for _, node := range nodes {
+			if node.ID == id && node.Type == TypeSession {
+				// Update the node's config
+				node.Config = &config
+				// Optionally update the name to match the host if it was using the host as the name previously
+				if node.Name == node.Config.Host {
+					node.Name = config.Host
+				}
+				return true
+			}
+			if node.Type == TypeFolder {
+				if updateNode(node.Children) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
+	if updateNode(m.Sessions) {
+		return m.Save()
+	}
+	return fmt.Errorf("session not found")
+}
+
 // Upsert adds or updates a session.
 // If groupName is provided, it puts it in that folder.
 // Naming rule: Use IP (Host) as Name.
@@ -197,3 +229,4 @@ func (m *Manager) Upsert(config sshclient.ConnectConfig, groupName string) error
 
 	return m.Save()
 }
+

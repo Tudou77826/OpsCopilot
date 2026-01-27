@@ -1239,6 +1239,13 @@ func (a *App) RenameSavedSession(id, newName string) string {
 	return ""
 }
 
+func (a *App) UpdateSavedSession(id string, config sshclient.ConnectConfig) string {
+	if err := a.savedSessionMgr.UpdateSession(id, config); err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	return ""
+}
+
 // HasActiveWork checks if there are active terminal sessions or ongoing troubleshooting session
 func (a *App) HasActiveWork() map[string]interface{} {
 	hasTerminals := len(a.sessionMgr.List()) > 0
