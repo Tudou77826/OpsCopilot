@@ -13,6 +13,7 @@ import (
 const (
 	ToolListFiles = "list_knowledge_files"
 	ToolReadFile  = "read_knowledge_file"
+	ToolSearch    = "search_knowledge"
 )
 
 func GetToolDefinitions() map[string]json.RawMessage {
@@ -31,6 +32,23 @@ func GetToolDefinitions() map[string]json.RawMessage {
 				}
 			},
 			"required": ["path"],
+			"additionalProperties": false
+		}`),
+		ToolSearch: json.RawMessage(`{
+			"type": "object",
+			"properties": {
+				"query": {
+					"type": "string",
+					"description": "Search query. Prefer short phrases or keywords."
+				},
+				"top_k": {
+					"type": "integer",
+					"description": "Number of results to return (1-20).",
+					"minimum": 1,
+					"maximum": 20
+				}
+			},
+			"required": ["query"],
 			"additionalProperties": false
 		}`),
 	}

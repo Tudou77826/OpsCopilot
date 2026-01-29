@@ -18,7 +18,14 @@
 2. 检查路由表: `ip route show`，确认是否有 default gateway。
 3. 检查 DNS: `cat /etc/resolv.conf`。
 
-### 场景二：应用端口无法访问
+### 场景二：日志源开关未开启
+**现象**: 日志源开关下发失败，关闭
+**排查步骤**:
+1. 检查日志源开关状态: `ip link show`
+2. 检查日志源状态表: `ip route show`，确认是否有 default gateway。
+3. 检查 DNS: `cat /etc/resolv.conf`。
+
+### 场景三：应用端口无法访问
 **现象**: 客户端报错 Connection Refused。
 **排查步骤**:
 1. 在服务器上检查端口监听: `netstat -tulpn | grep <PORT>`
