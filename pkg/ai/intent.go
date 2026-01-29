@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"opscopilot/pkg/config"
+	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/llm"
 	"opscopilot/pkg/sshclient"
 	"regexp"
@@ -52,7 +53,7 @@ func (s *AIService) GenerateLinuxCommand(request string) (*CommandQueryResult, e
 		return nil, fmt.Errorf("AI provider error: %w", err)
 	}
 
-	cleaned := cleanJSONResponse(resp)
+	cleaned := CleanJSONResponse(resp)
 	var result CommandQueryResult
 	if err := json.Unmarshal([]byte(cleaned), &result); err != nil {
 		return nil, fmt.Errorf("failed to parse AI response as JSON: %v. Raw: %s", err, resp)
@@ -92,7 +93,7 @@ func (s *AIService) ParseConnectIntent(input string) ([]sshclient.ConnectConfig,
 	var configs []sshclient.ConnectConfig
 
 	// 清理 Markdown 代码块标记
-	cleanedResp := cleanJSONResponse(resp)
+	cleanedResp := CleanJSONResponse(resp)
 
 	if err := json.Unmarshal([]byte(cleanedResp), &configs); err != nil {
 		log.Printf("[AIService] JSON parse error: %v. Cleaned response: %s", err, cleanedResp)
@@ -112,8 +113,8 @@ func (s *AIService) ParseConnectIntent(input string) ([]sshclient.ConnectConfig,
 	return configs, nil
 }
 
-// cleanJSONResponse 移除可能存在的 Markdown 代码块标记
-func cleanJSONResponse(resp string) string {
+// CleanJSONResponse 移除可能存在的 Markdown 代码块标记
+func CleanJSONResponse(resp string) string {
 	// 1. 移除 Markdown 代码块标记 ```json 或 ```
 	// (?s) 开启 dot-matches-newline 模式，确保能匹配多行
 	re := regexp.MustCompile("(?s)```(?:json)?(.*?)```")
@@ -128,54 +129,56 @@ func cleanJSONResponse(resp string) string {
 	return strings.TrimSpace(resp)
 }
 
-func (s *AIService) AskWithContext(question string, contextContent string) (string, error) {
+func (s *AIService) AskWithContext(ctx context.Context, question string, knowledgeDir string) (string, error) {
 	prompt := s.cfgMgr.Config.Prompts["qa_prompt"]
 	if prompt == "" {
 		prompt = config.DefaultQAPrompt
 	}
 
-	fullContent := fmt.Sprintf("Context:\n%s\n\nQuestion: %s", contextContent, question)
-
-	messages := []llm.ChatMessage{
-		{Role: "system", Content: prompt},
-		{Role: "user", Content: fullContent},
-	}
-
-	log.Printf("[AIService] Sending QA request to LLM")
-
-	resp, err := s.complexProvider.ChatCompletion(context.Background(), messages)
+	resp, err := s.RunAgent(ctx, AgentRunOptions{
+		Question:     question,
+		KnowledgeDir: knowledgeDir,
+		SystemPrompt: prompt,
+	})
 	if err != nil {
-		log.Printf("[AIService] QA Provider error: %v", err)
-		return "", fmt.Errorf("AI provider error: %w", err)
+		log.Printf("[AIService] Agent mode failed: %v. Falling back to legacy RAG.", err)
+
+		// Fallback: Load all knowledge and ask directly
+		contextContent, loadErr := knowledge.LoadAll(knowledgeDir)
+		if loadErr != nil {
+			log.Printf("[AIService] Fallback load failed: %v", loadErr)
+			contextContent = "" // Continue with empty context
+		}
+
+		fullContent := fmt.Sprintf("Context:\n%s\n\nQuestion: %s", contextContent, question)
+		messages := []llm.ChatMessage{
+			{Role: "system", Content: prompt},
+			{Role: "user", Content: fullContent},
+		}
+
+		return s.complexProvider.ChatCompletion(ctx, messages)
 	}
 
-	// Don't clean the response, we want Markdown now
 	return resp, nil
 }
 
-func (s *AIService) AskTroubleshoot(problem string, contextContent string) (string, error) {
+func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowledgeDir string) (string, error) {
 	prompt := s.cfgMgr.Config.Prompts["troubleshoot_prompt"]
 	if prompt == "" {
 		prompt = config.DefaultTroubleshootPrompt
 	}
 
-	fullContent := fmt.Sprintf("Context:\n%s\n\nProblem: %s", contextContent, problem)
-
-	messages := []llm.ChatMessage{
-		{Role: "system", Content: prompt},
-		{Role: "user", Content: fullContent},
-	}
-
-	log.Printf("[AIService] Sending Troubleshoot request to LLM")
-
-	resp, err := s.complexProvider.ChatCompletion(context.Background(), messages)
+	resp, err := s.RunAgent(ctx, AgentRunOptions{
+		Question:     problem,
+		KnowledgeDir: knowledgeDir,
+		SystemPrompt: prompt,
+	})
 	if err != nil {
-		log.Printf("[AIService] Troubleshoot Provider error: %v", err)
-		return "", fmt.Errorf("AI provider error: %w", err)
+		return "", err
 	}
 
 	// Clean JSON response (remove markdown code blocks)
-	return cleanJSONResponse(resp), nil
+	return CleanJSONResponse(resp), nil
 }
 
 func (s *AIService) GenerateConclusion(timeline string, rootCause string) (string, error) {

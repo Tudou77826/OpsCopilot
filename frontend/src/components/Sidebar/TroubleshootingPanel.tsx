@@ -2,11 +2,20 @@ import React, { useState, useEffect, useRef } from 'react';
 import TroubleshootingStep from './TroubleshootingStep';
 import CommandCard from './CommandCard';
 import SessionReviewModal from './SessionReviewModal';
+// @ts-ignore
+import { EventsOn } from '../../../wailsjs/runtime/runtime';
 
 interface Message {
     role: 'user' | 'ai';
     content: string;
     timestamp: number;
+}
+
+interface AgentStatusEvent {
+    runId?: string;
+    stage: string;
+    message: string;
+    ts: number;
 }
 
 interface TroubleshootingPanelProps {
@@ -18,11 +27,22 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
     const [isInvestigating, setIsInvestigating] = useState(false);
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
+    const [agentStatus, setAgentStatus] = useState<{ stage: string; message: string } | null>(null);
+    const [agentStatusHistory, setAgentStatusHistory] = useState<AgentStatusEvent[]>([]);
+    const [lastUsedDocs, setLastUsedDocs] = useState<string[]>([]);
+    const usedDocsRef = useRef<Set<string>>(new Set());
     const [isStopping, setIsStopping] = useState(false);
     const [rootCause, setRootCause] = useState('');
     const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
     const [isPolishing, setIsPolishing] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    const extractDocFromReadingMessage = (message: string): string | null => {
+        const idx = message.indexOf('正在阅读文档:');
+        if (idx === -1) return null;
+        const after = message.slice(idx + '正在阅读文档:'.length).trim();
+        return after.replace(/\.\.\.$/, '').trim() || null;
+    };
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -30,7 +50,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
 
     useEffect(() => {
         scrollToBottom();
-    }, [messages]);
+    }, [messages, agentStatus]);
 
     const handleStart = async () => {
         if (!input.trim()) {
@@ -66,6 +86,38 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         }
 
         try {
+            setAgentStatus({ stage: 'thinking', message: '正在分析问题...' });
+            setAgentStatusHistory([]);
+            setLastUsedDocs([]);
+            usedDocsRef.current = new Set();
+            let cancelStatus: (() => void) | undefined;
+            try {
+                if (EventsOn) {
+                    cancelStatus = EventsOn("agent:status", (...args: any[]) => {
+                        const data = args?.[0] ?? {};
+                        const stage = String(data?.stage ?? '');
+                        const message = String(data?.message ?? '');
+                        const runId = data?.runId ? String(data.runId) : undefined;
+                        if (!stage || !message) return;
+
+                        setAgentStatus({ stage, message });
+                        setAgentStatusHistory(prev => {
+                            const last = prev[prev.length - 1];
+                            if (last && last.stage === stage && last.message === message) return prev;
+                            const next = [...prev, { runId, stage, message, ts: Date.now() }];
+                            return next.slice(-8);
+                        });
+
+                        if (stage === 'reading') {
+                            const doc = extractDocFromReadingMessage(message);
+                            if (doc) usedDocsRef.current.add(doc);
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to register event listener:", err);
+            }
+
             // @ts-ignore
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskTroubleshoot) {
                 // @ts-ignore
@@ -88,8 +140,13 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                     }]);
                 }
             }
+            if (cancelStatus) cancelStatus();
         } catch (e: any) {
             console.error("Initial AI analysis failed", e);
+        } finally {
+            setAgentStatus(null);
+            setAgentStatusHistory([]);
+            setLastUsedDocs(Array.from(usedDocsRef.current));
         }
         
         setInput('');
@@ -161,6 +218,38 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         setMessages(prev => [...prev, userMsg]);
         setInput('');
 
+        setAgentStatus({ stage: 'thinking', message: '正在分析...' });
+        setAgentStatusHistory([]);
+        setLastUsedDocs([]);
+        usedDocsRef.current = new Set();
+        let cancelStatus: (() => void) | undefined;
+        try {
+            if (EventsOn) {
+                cancelStatus = EventsOn("agent:status", (...args: any[]) => {
+                    const data = args?.[0] ?? {};
+                    const stage = String(data?.stage ?? '');
+                    const message = String(data?.message ?? '');
+                    const runId = data?.runId ? String(data.runId) : undefined;
+                    if (!stage || !message) return;
+
+                    setAgentStatus({ stage, message });
+                    setAgentStatusHistory(prev => {
+                        const last = prev[prev.length - 1];
+                        if (last && last.stage === stage && last.message === message) return prev;
+                        const next = [...prev, { runId, stage, message, ts: Date.now() }];
+                        return next.slice(-8);
+                    });
+
+                    if (stage === 'reading') {
+                        const doc = extractDocFromReadingMessage(message);
+                        if (doc) usedDocsRef.current.add(doc);
+                    }
+                });
+            }
+        } catch (err) {
+            console.error("Failed to register event listener:", err);
+        }
+
         try {
             // @ts-ignore
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskTroubleshoot) {
@@ -198,6 +287,11 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                 content: "Error: " + e.toString(),
                 timestamp: Date.now()
             }]);
+        } finally {
+            if (cancelStatus) cancelStatus();
+            setAgentStatus(null);
+            setAgentStatusHistory([]);
+            setLastUsedDocs(Array.from(usedDocsRef.current));
         }
     };
 
@@ -289,6 +383,30 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                             </div>
                         ))}
                         <div ref={messagesEndRef} />
+                        {agentStatus && (
+                            <div style={styles.statusIndicator}>
+                                <span style={styles.spinner}>⚙️</span> {agentStatus.message}
+                            </div>
+                        )}
+                        {agentStatus && agentStatusHistory.length > 0 && (
+                            <div style={styles.statusHistory}>
+                                {agentStatusHistory.slice(-5).map((s, idx) => (
+                                    <div key={idx} style={styles.statusHistoryLine}>
+                                        {s.stage}: {s.message}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        {!agentStatus && lastUsedDocs.length > 0 && (
+                            <div style={styles.usedDocsBox}>
+                                <div style={styles.usedDocsTitle}>本次参考文档</div>
+                                <div style={styles.usedDocsList}>
+                                    {lastUsedDocs.map((d) => (
+                                        <span key={d} style={styles.usedDocChip}>{d}</span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -447,6 +565,60 @@ const styles = {
         borderRadius: '4px',
         cursor: 'pointer',
     },
+    statusIndicator: {
+        padding: '8px 12px',
+        color: '#888',
+        fontSize: '12px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        fontStyle: 'italic',
+        animation: 'fadeIn 0.3s ease',
+    },
+    spinner: {
+        display: 'inline-block',
+        animation: 'spin 2s linear infinite',
+    },
+    statusHistory: {
+        padding: '6px 12px 10px 12px',
+        borderLeft: '2px solid #333',
+        marginLeft: '8px',
+        color: '#777',
+        fontSize: '12px',
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '4px',
+    },
+    statusHistoryLine: {
+        whiteSpace: 'pre-wrap' as const,
+        wordBreak: 'break-word' as const,
+    },
+    usedDocsBox: {
+        padding: '10px 12px',
+        backgroundColor: '#1f1f1f',
+        border: '1px solid #333',
+        borderRadius: '8px',
+        color: '#aaa',
+        maxWidth: '95%',
+    },
+    usedDocsTitle: {
+        fontSize: '12px',
+        color: '#888',
+        marginBottom: '8px',
+    },
+    usedDocsList: {
+        display: 'flex',
+        flexWrap: 'wrap' as const,
+        gap: '6px',
+    },
+    usedDocChip: {
+        padding: '2px 8px',
+        borderRadius: '999px',
+        backgroundColor: '#2a2a2a',
+        border: '1px solid #3a3a3a',
+        color: '#bbb',
+        fontSize: '12px',
+    },
     structuredResponse: {
         display: 'flex',
         flexDirection: 'column' as const,
@@ -502,5 +674,15 @@ const styles = {
         gap: '8px',
     }
 };
+
+const existing = document.getElementById('opscopilot-animations');
+if (!existing) {
+    const styleSheet = document.createElement("style");
+    styleSheet.id = 'opscopilot-animations';
+    styleSheet.textContent = `
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+    `;
+    document.head.appendChild(styleSheet);
+}
 
 export default TroubleshootingPanel;

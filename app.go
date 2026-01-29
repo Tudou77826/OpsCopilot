@@ -11,7 +11,6 @@ import (
 	"opscopilot/pkg/config"
 	"opscopilot/pkg/filetransfer"
 	"opscopilot/pkg/javamonitor"
-	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/llm"
 	"opscopilot/pkg/secretstore"
 	"opscopilot/pkg/session"
@@ -528,19 +527,11 @@ func (a *App) resolveKnowledgeBase() string {
 
 // AskAI handles the Q&A request from frontend
 func (a *App) AskAI(question string) string {
-	// 1. Load knowledge
+	// 1. Resolve knowledge directory
 	knowledgeDir := a.resolveKnowledgeBase()
 
-	// We attempt to load knowledge. If it fails or dir doesn't exist, we pass empty context.
-	// The prompt handles "answer based on general knowledge" if context is missing.
-	contextContent, err := knowledge.LoadAll(knowledgeDir)
-	if err != nil {
-		log.Printf("[App] Warning: Failed to load knowledge from %s: %v", knowledgeDir, err)
-		contextContent = ""
-	}
-
-	// 2. Call AIService
-	answer, err := a.aiService.AskWithContext(question, contextContent)
+	// 2. Call AIService with Agent mode
+	answer, err := a.aiService.AskWithContext(a.ctx, question, knowledgeDir)
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
 	}
@@ -550,16 +541,11 @@ func (a *App) AskAI(question string) string {
 
 // AskTroubleshoot handles the troubleshooting request from frontend and returns structured JSON
 func (a *App) AskTroubleshoot(problem string) string {
-	// 1. Load knowledge
+	// 1. Resolve knowledge directory
 	knowledgeDir := a.resolveKnowledgeBase()
-	contextContent, err := knowledge.LoadAll(knowledgeDir)
-	if err != nil {
-		log.Printf("[App] Warning: Failed to load knowledge from %s: %v", knowledgeDir, err)
-		contextContent = ""
-	}
 
-	// 2. Call AIService
-	answer, err := a.aiService.AskTroubleshoot(problem, contextContent)
+	// 2. Call AIService with Agent mode
+	answer, err := a.aiService.AskTroubleshoot(a.ctx, problem, knowledgeDir)
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
 	}

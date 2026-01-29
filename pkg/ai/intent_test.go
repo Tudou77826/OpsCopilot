@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"context"
 	"opscopilot/pkg/config"
 	"opscopilot/pkg/llm"
 	"testing"
@@ -94,10 +95,24 @@ echo 42`
 	cfgMgr := config.NewManager()
 	service := NewAIService(mockProvider, mockProvider, cfgMgr)
 
-	contextContent := "The answer to everything is 42."
+	// Since AskWithContext now expects a directory path for Agent mode,
+	// and we are using MockProvider which doesn't actually read files but returns static response,
+	// we can pass a dummy directory.
+	// However, if Agent mode is triggered, it will try to call ListFiles tool.
+	// Our MockProvider (from llm package) doesn't implement ChatWithTools logic (it just returns Content).
+	// So AskWithContext will receive the static content immediately as "Answer".
+	
+	// Wait, AskWithContext now calls RunAgent. RunAgent calls ChatWithTools.
+	// llm.MockProvider implementation of ChatWithTools returns Content + ToolCalls.
+	// If ToolCalls is empty, Agent loop finishes and returns Content.
+	// So if we set Response in MockProvider, it will return that content and 0 ToolCalls.
+	// This simulates a scenario where Agent decides to answer directly without looking at files.
+	
+	dummyDir := "/tmp/knowledge"
 	question := "What is the answer?"
 
-	resp, err := service.AskWithContext(question, contextContent)
+	// We need to pass context.Background() as first arg
+	resp, err := service.AskWithContext(context.Background(), question, dummyDir)
 	if err != nil {
 		t.Fatalf("AskWithContext failed: %v", err)
 	}
