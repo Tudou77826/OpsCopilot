@@ -3,14 +3,17 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/llm"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	openai "github.com/sashabaranov/go-openai"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -19,6 +22,7 @@ type AgentRunOptions struct {
 	Question     string
 	KnowledgeDir string
 	SystemPrompt string
+	RetryMax     int
 }
 
 const agentToolPrompt = "You are OpsCopilot running in Agent mode. You have access to a local knowledge base and the following tools:\n" +
@@ -78,7 +82,9 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 	for i := 0; i < maxSteps; i++ {
 		emitStatus(ctx, runID, "thinking", "正在思考下一步...")
 		stepAt := time.Now()
-		resp, err := provider.ChatWithTools(ctx, messages, tools)
+		resp, err := retryChatWithTools(ctx, runID, opts.RetryMax, func() (*llm.ChatResponse, error) {
+			return provider.ChatWithTools(ctx, messages, tools)
+		})
 		llmCost := time.Since(stepAt)
 		if err != nil {
 			log.Printf("[Agent][%s] Step=%d LLMError cost=%s err=%v", runID, i+1, llmCost, err)
@@ -198,4 +204,94 @@ func emitStatus(ctx context.Context, runID string, stage string, message string)
 	}
 	log.Printf("[Agent][%s] Status stage=%s message=%s", runID, stage, message)
 	safeEmit(ctx, "agent:status", payload)
+}
+
+func retryChatWithTools(ctx context.Context, runID string, maxAttempts int, fn func() (*llm.ChatResponse, error)) (*llm.ChatResponse, error) {
+	if maxAttempts <= 0 {
+		maxAttempts = 1
+	}
+
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		resp, err := fn()
+		if err == nil {
+			return resp, nil
+		}
+		lastErr = err
+
+		if !isRetriableLLMError(err) || attempt == maxAttempts {
+			emitStatus(ctx, runID, "error", fmt.Sprintf("请求失败：%s", shortErr(err)))
+			return nil, err
+		}
+
+		wait := retryBackoff(attempt)
+		emitStatus(ctx, runID, "retrying", fmt.Sprintf("请求失败，正在重试（%d/%d），等待 %s... %s", attempt+1, maxAttempts, wait, shortErr(err)))
+
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+
+	return nil, lastErr
+}
+
+func retryBackoff(attempt int) time.Duration {
+	base := 300 * time.Millisecond
+	max := 4 * time.Second
+	wait := base * time.Duration(1<<(attempt-1))
+	if wait > max {
+		wait = max
+	}
+	jitter := time.Duration(time.Now().UnixNano()%250) * time.Millisecond
+	return wait + jitter
+}
+
+func isRetriableLLMError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+
+	var apiErr *openai.APIError
+	if errors.As(err, &apiErr) {
+		if apiErr.HTTPStatusCode == 429 {
+			return true
+		}
+		if apiErr.HTTPStatusCode >= 500 && apiErr.HTTPStatusCode <= 599 {
+			return true
+		}
+		if apiErr.HTTPStatusCode == 408 {
+			return true
+		}
+		return false
+	}
+
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "rate") && strings.Contains(msg, "limit") {
+		return true
+	}
+	if strings.Contains(msg, "timeout") || strings.Contains(msg, "temporarily") {
+		return true
+	}
+
+	return true
+}
+
+func shortErr(err error) string {
+	if err == nil {
+		return ""
+	}
+	s := strings.TrimSpace(err.Error())
+	s = strings.ReplaceAll(s, "\r", " ")
+	s = strings.ReplaceAll(s, "\n", " ")
+	if len(s) > 200 {
+		return s[:200] + "..."
+	}
+	return s
 }

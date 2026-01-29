@@ -11,6 +11,9 @@ import (
 	"opscopilot/pkg/sshclient"
 	"regexp"
 	"strings"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 type AIService struct {
@@ -139,6 +142,7 @@ func (s *AIService) AskWithContext(ctx context.Context, question string, knowled
 		Question:     question,
 		KnowledgeDir: knowledgeDir,
 		SystemPrompt: prompt,
+		RetryMax:     5,
 	})
 	if err != nil {
 		log.Printf("[AIService] Agent mode failed: %v. Falling back to legacy RAG.", err)
@@ -156,7 +160,28 @@ func (s *AIService) AskWithContext(ctx context.Context, question string, knowled
 			{Role: "user", Content: fullContent},
 		}
 
-		return s.complexProvider.ChatCompletion(ctx, messages)
+		runID := uuid.NewString()
+		maxAttempts := 5
+		for attempt := 1; attempt <= maxAttempts; attempt++ {
+			resp, err := s.complexProvider.ChatCompletion(ctx, messages)
+			if err == nil {
+				return resp, nil
+			}
+			if !isRetriableLLMError(err) || attempt == maxAttempts {
+				emitStatus(ctx, runID, "error", fmt.Sprintf("请求失败：%s", shortErr(err)))
+				return "", err
+			}
+			wait := retryBackoff(attempt)
+			emitStatus(ctx, runID, "retrying", fmt.Sprintf("请求失败，正在重试（%d/%d），等待 %s... %s", attempt+1, maxAttempts, wait, shortErr(err)))
+			timer := time.NewTimer(wait)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return "", ctx.Err()
+			case <-timer.C:
+			}
+		}
+		return "", err
 	}
 
 	return resp, nil
@@ -172,6 +197,7 @@ func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowled
 		Question:     problem,
 		KnowledgeDir: knowledgeDir,
 		SystemPrompt: prompt,
+		RetryMax:     5,
 	})
 	if err != nil {
 		return "", err
