@@ -68,6 +68,7 @@ type Manager struct {
 	promptsPath        string
 	quickCommandsPath  string
 	highlightRulesPath string
+	sessionsPath       string
 	Config             *AppConfig
 	lastImportMessage  string
 	importing          atomic.Bool
@@ -115,6 +116,7 @@ func NewManager() *Manager {
 		promptsPath:        "prompts.json",        // prompts 配置文件
 		quickCommandsPath:  "quick_commands.json", // quick_commands 配置文件
 		highlightRulesPath: "highlight_rules.json",
+		sessionsPath:       "sessions.json",
 		Config:             cfg,
 	}
 }
@@ -372,7 +374,9 @@ func (m *Manager) ImportFromDirectory(dirPath string) error {
 
 	if data, err := os.ReadFile(filepath.Join(cleaned, "config.json")); err == nil {
 		type oldConfig struct {
-			LLM LLMConfig `json:"llm"`
+			LLM  LLMConfig  `json:"llm"`
+			Log  LogConfig  `json:"log"`
+			Docs DocsConfig `json:"docs"`
 		}
 		var old oldConfig
 		if err := json.Unmarshal(data, &old); err != nil {
@@ -398,6 +402,14 @@ func (m *Manager) ImportFromDirectory(dirPath string) error {
 				usedDefaults = true
 			}
 			updated.LLM.Model = ""
+
+			if old.Log.Dir != "" {
+				updated.Log.Dir = old.Log.Dir
+			}
+			if old.Docs.Dir != "" {
+				updated.Docs.Dir = old.Docs.Dir
+			}
+
 			imported = append(imported, "config.json")
 		}
 	} else if err != nil && !os.IsNotExist(err) {
@@ -451,6 +463,19 @@ func (m *Manager) ImportFromDirectory(dirPath string) error {
 		return err
 	}
 
+	if data, err := os.ReadFile(filepath.Join(cleaned, "sessions.json")); err == nil {
+		if err := backupFileIfExists(m.sessionsPath, m.sessionsPath+".bak"); err != nil {
+			warnings = append(warnings, "备份 sessions.json 失败: "+err.Error())
+		}
+		if err := os.WriteFile(m.sessionsPath, data, 0644); err != nil {
+			warnings = append(warnings, "写入 sessions.json 失败: "+err.Error())
+		} else {
+			imported = append(imported, "sessions.json")
+		}
+	} else if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
 	if len(imported) == 0 {
 		if len(warnings) > 0 {
 			m.lastImportMessage = "未找到任何可用的配置文件，配置保持不变"
@@ -486,6 +511,12 @@ func (m *Manager) ImportFromDirectory(dirPath string) error {
 	}
 	if usedDefaults {
 		msg += "。部分字段已使用新版本默认值"
+	}
+	if updated.Log.Dir != "" && original.Log.Dir != updated.Log.Dir {
+		msg += `。请前往"系统设置-系统选项"确认日志目录配置`
+	}
+	if updated.Docs.Dir != "" && original.Docs.Dir != updated.Docs.Dir {
+		msg += `。请前往"系统设置-系统选项"确认文档目录配置`
 	}
 	m.lastImportMessage = msg
 	return nil

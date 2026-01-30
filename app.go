@@ -612,6 +612,10 @@ func (a *App) ImportConfigFromDirectory(dirPath string) string {
 	complexProvider := llm.NewOpenAIProvider(llmConfig.APIKey, llmConfig.BaseURL, complexModel)
 	a.aiService.UpdateProviders(fastProvider, complexProvider)
 
+	if err := a.savedSessionMgr.Load(); err != nil {
+		log.Printf("Failed to reload sessions after import: %v", err)
+	}
+
 	return a.configMgr.LastImportMessage()
 }
 

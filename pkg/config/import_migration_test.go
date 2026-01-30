@@ -18,6 +18,7 @@ func newTestManager(t *testing.T) (*Manager, string) {
 	mgr.promptsPath = filepath.Join(dir, "prompts.json")
 	mgr.quickCommandsPath = filepath.Join(dir, "quick_commands.json")
 	mgr.highlightRulesPath = filepath.Join(dir, "highlight_rules.json")
+	mgr.sessionsPath = filepath.Join(dir, "sessions.json")
 
 	mgr.Config.LLM = LLMConfig{
 		APIKey:       "sk-new",
@@ -234,5 +235,127 @@ func TestImportFromDirectory_PartialFiles_ImportsLLMAndPromptsOnly(t *testing.T)
 	}
 	if len(mgr.Config.HighlightRules) != 0 {
 		t.Fatalf("HighlightRules should remain default")
+	}
+}
+
+func TestImportFromDirectory_ImportsSessionsJson(t *testing.T) {
+	mgr, baseDir := newTestManager(t)
+
+	oldSessions := `[]`
+	if err := os.WriteFile(filepath.Join(baseDir, "sessions.json"), []byte(oldSessions), 0644); err != nil {
+		t.Fatalf("write initial sessions.json: %v", err)
+	}
+
+	oldDir := t.TempDir()
+
+	oldSessions = `[{"id":"s1","name":"192.168.1.1","type":"session","config":{"host":"192.168.1.1","port":22,"user":"root"}}]`
+	if err := os.WriteFile(filepath.Join(oldDir, "sessions.json"), []byte(oldSessions), 0644); err != nil {
+		t.Fatalf("write old sessions.json: %v", err)
+	}
+
+	if err := mgr.ImportFromDirectory(oldDir); err != nil {
+		t.Fatalf("ImportFromDirectory error: %v", err)
+	}
+
+	if msg := mgr.LastImportMessage(); msg == "" || !strings.Contains(msg, "已成功导入") {
+		t.Fatalf("LastImportMessage = %q, want it to indicate success", msg)
+	}
+
+	sessionsData, err := os.ReadFile(filepath.Join(baseDir, "sessions.json"))
+	if err != nil {
+		t.Fatalf("read sessions.json after import: %v", err)
+	}
+
+	if string(sessionsData) != oldSessions {
+		t.Fatalf("sessions.json content mismatch after import")
+	}
+
+	if _, err := os.Stat(filepath.Join(baseDir, "sessions.json.bak")); err != nil {
+		t.Fatalf("expected backup file sessions.json.bak: %v", err)
+	}
+}
+
+func TestImportFromDirectory_ImportsLogAndDocsDirs(t *testing.T) {
+	mgr, _ := newTestManager(t)
+
+	oldDir := t.TempDir()
+
+	oldCfg := map[string]any{
+		"llm": map[string]any{
+			"APIKey":  "sk-old",
+			"BaseURL": "https://old.example/v1",
+			"Model":   "old-model",
+		},
+		"log": map[string]any{
+			"dir": "/custom/logs",
+		},
+		"docs": map[string]any{
+			"dir": "/custom/docs",
+		},
+	}
+	b, err := json.MarshalIndent(oldCfg, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal old config: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(oldDir, "config.json"), b, 0644); err != nil {
+		t.Fatalf("write old config.json: %v", err)
+	}
+
+	if err := mgr.ImportFromDirectory(oldDir); err != nil {
+		t.Fatalf("ImportFromDirectory error: %v", err)
+	}
+
+	if mgr.Config.Log.Dir != "/custom/logs" {
+		t.Fatalf("Log.Dir = %q, want %q", mgr.Config.Log.Dir, "/custom/logs")
+	}
+	if mgr.Config.Docs.Dir != "/custom/docs" {
+		t.Fatalf("Docs.Dir = %q, want %q", mgr.Config.Docs.Dir, "/custom/docs")
+	}
+	if mgr.Config.LLM.FastModel != "old-model" {
+		t.Fatalf("FastModel should be imported")
+	}
+}
+
+func TestImportFromDirectory_LogAndDocsDirsShowsReminder(t *testing.T) {
+	mgr, _ := newTestManager(t)
+
+	mgr.Config.Log.Dir = "/old/logs"
+	mgr.Config.Docs.Dir = "/old/docs"
+
+	oldDir := t.TempDir()
+
+	oldCfg := map[string]any{
+		"llm": map[string]any{
+			"APIKey":  "sk-old",
+			"BaseURL": "https://old.example/v1",
+		},
+		"log": map[string]any{
+			"dir": "/new/logs",
+		},
+		"docs": map[string]any{
+			"dir": "/new/docs",
+		},
+	}
+	b, err := json.MarshalIndent(oldCfg, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal old config: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(oldDir, "config.json"), b, 0644); err != nil {
+		t.Fatalf("write old config.json: %v", err)
+	}
+
+	if err := mgr.ImportFromDirectory(oldDir); err != nil {
+		t.Fatalf("ImportFromDirectory error: %v", err)
+	}
+
+	msg := mgr.LastImportMessage()
+	if !strings.Contains(msg, "系统设置-系统选项") {
+		t.Fatalf("LastImportMessage = %q, want it to contain reminder about system settings", msg)
+	}
+	if !strings.Contains(msg, "确认日志目录配置") {
+		t.Fatalf("LastImportMessage = %q, want it to mention log dir confirmation", msg)
+	}
+	if !strings.Contains(msg, "确认文档目录配置") {
+		t.Fatalf("LastImportMessage = %q, want it to mention docs dir confirmation", msg)
 	}
 }
