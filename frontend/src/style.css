@@ -4,7 +4,7 @@ body {
   background-color: #1e1e1e;
   color: #fff;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-  overflow: hidden; /* Prevent body scroll */
+  overflow: hidden;
   height: 100vh;
   width: 100vw;
 }
@@ -13,4 +13,9 @@ body {
   height: 100%;
   width: 100%;
   overflow: hidden;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }

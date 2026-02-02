@@ -187,12 +187,33 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         setInput('');
     };
 
+    const handleCancelClick = () => {
+        if (confirm('确定要取消定位吗？这将清空当前的所有记录。')) {
+            handleReset();
+        }
+    };
+
     const handleStopClick = () => {
         setIsStopping(true);
     };
 
     const handleConfirmStop = async () => {
         setIsReviewModalOpen(true);
+    };
+
+    const handleReset = () => {
+        setIsInvestigating(false);
+        setInput('');
+        setMessages([]);
+        setAgentStatus(null);
+        setAgentStatusHistory([]);
+        setLastUsedDocs([]);
+        usedDocsRef.current = new Set();
+        setViewMode('opscopilot');
+        setTroubleshootResult(null);
+        setIsStopping(false);
+        setRootCause('');
+        if (onStart) onStart();
     };
 
     const handleArchive = async (conclusion: string) => {
@@ -499,37 +520,68 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                         {troubleshootResult && (
                             <div style={styles.viewSwitcher}>
                                 <button
+                                    role="tab"
+                                    aria-selected={viewMode === 'opscopilot'}
                                     onClick={() => setViewMode('opscopilot')}
                                     disabled={!troubleshootResult.opsCopilotReady}
                                     style={{
                                         ...(viewMode === 'opscopilot' ? styles.activeViewBtn : styles.viewBtn),
-                                        opacity: troubleshootResult.opsCopilotReady ? 1 : 0.4,
-                                        backgroundColor: viewMode === 'opscopilot' ? '#007acc' : (troubleshootResult.opsCopilotReady ? '#4CAF50' : '#666')
+                                        opacity: troubleshootResult.opsCopilotReady ? 1 : 0.6,
+                                        cursor: troubleshootResult.opsCopilotReady ? 'pointer' : 'default'
                                     }}
                                 >
-                                    OpsCopilot {troubleshootResult.opsCopilotReady ? '✓' : troubleshootResult.opsCopilotReady === false ? '✗' : '⏳'}
+                                    <span style={styles.tabIcon}>
+                                        {troubleshootResult.opsCopilotReady === true ? (
+                                            <span style={styles.statusIcon} aria-label="完成">✓</span>
+                                        ) : troubleshootResult.opsCopilotReady === false ? (
+                                            <span style={styles.statusIconError} aria-label="失败">✗</span>
+                                        ) : (
+                                            <span style={styles.loadingSpinner} aria-label="加载中">⏳</span>
+                                        )}
+                                    </span>
+                                    <span style={styles.tabLabel}>OpsCopilot</span>
                                 </button>
                                 <button
+                                    role="tab"
+                                    aria-selected={viewMode === 'external'}
                                     onClick={() => setViewMode('external')}
                                     disabled={!troubleshootResult.externalReady}
                                     style={{
                                         ...(viewMode === 'external' ? styles.activeViewBtn : styles.viewBtn),
-                                        opacity: troubleshootResult.externalReady ? 1 : 0.4,
-                                        backgroundColor: viewMode === 'external' ? '#007acc' : (troubleshootResult.externalReady ? '#4CAF50' : '#666')
+                                        opacity: troubleshootResult.externalReady ? 1 : 0.6,
+                                        cursor: troubleshootResult.externalReady ? 'pointer' : 'default'
                                     }}
                                 >
-                                    外部定位 {troubleshootResult.externalReady ? '✓' : troubleshootResult.externalReady === false ? '✗' : '⏳'}
+                                    <span style={styles.tabIcon}>
+                                        {troubleshootResult.externalReady === true ? (
+                                            <span style={styles.statusIcon} aria-label="完成">✓</span>
+                                        ) : troubleshootResult.externalReady === false ? (
+                                            <span style={styles.statusIconError} aria-label="失败">✗</span>
+                                        ) : (
+                                            <span style={styles.loadingSpinner} aria-label="加载中">⏳</span>
+                                        )}
+                                    </span>
+                                    <span style={styles.tabLabel}>外部定位</span>
                                 </button>
                                 <button
+                                    role="tab"
+                                    aria-selected={viewMode === 'integrated'}
                                     onClick={() => setViewMode('integrated')}
                                     disabled={!troubleshootResult.integratedReady}
                                     style={{
                                         ...(viewMode === 'integrated' ? styles.activeViewBtn : styles.viewBtn),
-                                        opacity: troubleshootResult.integratedReady ? 1 : 0.4,
-                                        backgroundColor: viewMode === 'integrated' ? '#007acc' : (troubleshootResult.integratedReady ? '#4CAF50' : '#666')
+                                        opacity: troubleshootResult.integratedReady ? 1 : 0.6,
+                                        cursor: troubleshootResult.integratedReady ? 'pointer' : 'default'
                                     }}
                                 >
-                                    综合答复 {troubleshootResult.integratedReady ? '✓' : '⏳'}
+                                    <span style={styles.tabIcon}>
+                                        {troubleshootResult.integratedReady === true ? (
+                                            <span style={styles.statusIcon} aria-label="完成">✓</span>
+                                        ) : (
+                                            <span style={styles.loadingSpinner} aria-label="加载中">⏳</span>
+                                        )}
+                                    </span>
+                                    <span style={styles.tabLabel}>综合答复</span>
                                 </button>
                             </div>
                         )}
@@ -616,7 +668,14 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                     ) : (
                         <>
                             <div style={styles.toolbar}>
-                                <button onClick={handleStopClick} style={styles.secondaryButton}>结束排查</button>
+                                <button onClick={handleCancelClick} style={styles.cancelButton}>
+                                    <span style={styles.cancelButtonIcon}>✕</span>
+                                    <span style={styles.cancelButtonText}>取消定位</span>
+                                </button>
+                                <button onClick={handleStopClick} style={styles.stopButton}>
+                                    <span style={styles.stopButtonIcon}>⏹</span>
+                                    <span style={styles.stopButtonText}>结束排查</span>
+                                </button>
                             </div>
                             <div style={styles.inputBox}>
                                 <textarea
@@ -685,6 +744,54 @@ const styles = {
         cursor: 'pointer',
         fontSize: '12px',
     },
+    stopButton: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '8px 14px',
+        backgroundColor: '#007acc',
+        color: '#fff',
+        border: 'none',
+        borderRadius: '6px',
+        cursor: 'pointer',
+        fontSize: '13px',
+        fontWeight: '500',
+        transition: 'all 0.2s ease',
+        boxShadow: '0 2px 8px rgba(0, 122, 204, 0.3)',
+    },
+    stopButtonIcon: {
+        fontSize: '16px',
+        display: 'inline-flex',
+        alignItems: 'center',
+    },
+    stopButtonText: {
+        fontSize: '13px',
+        fontWeight: '500',
+    },
+    cancelButton: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '8px 14px',
+        backgroundColor: '#f44336',
+        color: '#fff',
+        border: 'none',
+        borderRadius: '6px',
+        cursor: 'pointer',
+        fontSize: '13px',
+        fontWeight: '500',
+        transition: 'all 0.2s ease',
+        boxShadow: '0 2px 8px rgba(244, 67, 54, 0.3)',
+    },
+    cancelButtonIcon: {
+        fontSize: '16px',
+        display: 'inline-flex',
+        alignItems: 'center',
+    },
+    cancelButtonText: {
+        fontSize: '13px',
+        fontWeight: '500',
+    },
     chatContainer: {
         flex: 1,
         overflowY: 'auto' as const,
@@ -715,6 +822,7 @@ const styles = {
     toolbar: {
         display: 'flex',
         justifyContent: 'flex-end',
+        gap: '8px',
         marginBottom: '8px',
     },
     inputBox: {
@@ -850,42 +958,69 @@ const styles = {
     },
     viewSwitcher: {
         display: 'flex',
-        gap: '8px',
-        marginBottom: '10px',
-        padding: '8px',
-        backgroundColor: '#2a2a2a',
-        borderRadius: '8px',
-        border: '1px solid #3a3a3a',
+        gap: '4px',
+        marginBottom: '12px',
+        padding: '4px',
+        backgroundColor: '#1e1e1e',
+        borderRadius: '6px',
+        border: '1px solid #333',
+    },
+    tabIcon: {
+        fontSize: '14px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: '20px',
+    },
+    tabLabel: {
+        fontSize: '13px',
+        fontWeight: '400',
+    },
+    statusIcon: {
+        color: '#4CAF50',
+        fontSize: '14px',
+        fontWeight: '500',
+    },
+    statusIconError: {
+        color: '#f44336',
+        fontSize: '14px',
+        fontWeight: '500',
+    },
+    loadingSpinner: {
+        color: '#666',
+        fontSize: '14px',
+        animation: 'spin 1s linear infinite',
     },
     viewBtn: {
         flex: 1,
-        padding: '6px 12px',
-        backgroundColor: '#3c3c3c',
-        color: '#ccc',
-        border: '1px solid #555',
+        padding: '8px 12px',
+        backgroundColor: 'transparent',
+        color: '#999',
+        border: '1px solid transparent',
         borderRadius: '4px',
         cursor: 'pointer',
-        fontSize: '12px',
+        fontSize: '13px',
         transition: 'all 0.2s ease',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: '4px',
+        gap: '6px',
     },
     activeViewBtn: {
         flex: 1,
-        padding: '6px 12px',
+        padding: '8px 12px',
         backgroundColor: '#007acc',
-        color: 'white',
-        border: '1px solid #007acc',
+        color: '#fff',
+        border: '1px solid transparent',
         borderRadius: '4px',
         cursor: 'pointer',
-        fontSize: '12px',
+        fontSize: '13px',
+        fontWeight: '500',
         transition: 'all 0.2s ease',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: '4px',
+        gap: '6px',
     }
 };
 
