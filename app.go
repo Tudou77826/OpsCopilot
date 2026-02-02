@@ -6,6 +6,17 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"golang.org/x/crypto/ssh"
+
 	"opscopilot/pkg/ai"
 	"opscopilot/pkg/completion"
 	"opscopilot/pkg/config"
@@ -17,15 +28,6 @@ import (
 	"opscopilot/pkg/session_recorder"
 	"opscopilot/pkg/sessionmanager"
 	"opscopilot/pkg/sshclient"
-	"os"
-	"path/filepath"
-	"strings"
-	"sync"
-	"time"
-
-	"github.com/google/uuid"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
-	"golang.org/x/crypto/ssh"
 )
 
 // App struct
@@ -228,6 +230,16 @@ type ConnectConfig struct {
 	RootPassword string         `json:"rootPassword"`
 	Bastion      *ConnectConfig `json:"bastion"`
 	Group        string         `json:"group"`
+}
+
+type TroubleshootResult struct {
+	OpsCopilotAnswer string `json:"opsCopilotAnswer"`
+	ExternalAnswer   string `json:"externalAnswer"`
+	IntegratedAnswer string `json:"integratedAnswer"`
+	OpsCopilotReady  bool   `json:"opsCopilotReady"`
+	ExternalReady    bool   `json:"externalReady"`
+	IntegratedReady  bool   `json:"integratedReady"`
+	ExternalError    string `json:"externalError,omitempty"`
 }
 
 type ConnectResult struct {
@@ -541,16 +553,138 @@ func (a *App) AskAI(question string) string {
 
 // AskTroubleshoot handles the troubleshooting request from frontend and returns structured JSON
 func (a *App) AskTroubleshoot(problem string) string {
-	// 1. Resolve knowledge directory
-	knowledgeDir := a.resolveKnowledgeBase()
+	scriptPath := ""
+	if a.configMgr.Config.Experimental.ExternalTroubleshootScriptPath != "" {
+		scriptPath = a.configMgr.Config.Experimental.ExternalTroubleshootScriptPath
+	}
+	return a.runTroubleshootWithExternal(problem, scriptPath)
+}
 
-	// 2. Call AIService with Agent mode
-	answer, err := a.aiService.AskTroubleshoot(a.ctx, problem, knowledgeDir)
-	if err != nil {
-		return fmt.Sprintf("Error: %v", err)
+func (a *App) runTroubleshootWithExternal(problem, scriptPath string) string {
+	knowledgeDir := a.resolveKnowledgeBase()
+	result := &TroubleshootResult{
+		OpsCopilotAnswer: "",
+		ExternalAnswer:   "",
+		IntegratedAnswer: "",
+		OpsCopilotReady:  false,
+		ExternalReady:    false,
+		IntegratedReady:  false,
 	}
 
-	return answer
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	opsCopilotDone := make(chan struct{})
+	integratedDone := make(chan struct{})
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		answer, err := a.aiService.AskTroubleshoot(a.ctx, problem, knowledgeDir)
+		mu.Lock()
+		defer mu.Unlock()
+		if err != nil {
+			result.OpsCopilotAnswer = fmt.Sprintf("Error: %v", err)
+		} else {
+			result.OpsCopilotAnswer = answer
+		}
+		result.OpsCopilotReady = true
+		close(opsCopilotDone)
+	}()
+
+	if scriptPath != "" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// 使用 -Command 配合 Get-Content 来正确处理 UTF-8 编码的脚本文件
+			cmd := exec.Command("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+				"-Command", fmt.Sprintf("[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-Content -Raw -Encoding UTF8 '%s' | Invoke-Expression", scriptPath))
+			output, err := cmd.CombinedOutput()
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				result.ExternalError = fmt.Sprintf("外部脚本执行失败: %v\n脚本路径: %s", err, scriptPath)
+			} else {
+				result.ExternalAnswer = string(output)
+			}
+			result.ExternalReady = true
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		mu.Lock()
+		if result.OpsCopilotReady && result.ExternalReady && result.ExternalError == "" {
+			// 发送状态事件：开始综合分析
+			runID := uuid.NewString()
+			runtime.EventsEmit(a.ctx, "agent:status", map[string]string{
+				"runId":   runID,
+				"stage":   "integrating",
+				"message": "正在综合分析多个定位结果...",
+			})
+
+			integratedPrompt := fmt.Sprintf(`You are a smart OpsCopilot assistant. Your task is to synthesize findings from multiple troubleshooting tools and provide a unified, structured troubleshooting plan.
+
+Response Format:
+1. Return ONLY a valid JSON object.
+2. DO NOT wrap the JSON in markdown code blocks (no ` + "```json" + `).
+3. The JSON must have this structure:
+{
+  "summary": "Comprehensive analysis summarizing the root cause hypothesis, key findings from logs/code review, and overall assessment. Use markdown formatting for readability.",
+  "steps": [
+    {
+      "title": "Step title",
+      "description": "Detailed explanation of what to check and why",
+      "expected_outcome": "What we expect to find"
+    }
+  ],
+  "commands": [
+    {
+      "command": "command to run",
+      "description": "what this command does and why"
+    }
+  ]
+}
+
+Instructions:
+- The "summary" field should contain the synthesized analysis including:
+  * Root cause hypothesis from external script (code review findings)
+  * Key log patterns and anomalies detected
+  * Assessment of uncertainty and confidence level
+  * Important context that doesn't fit into steps/commands
+- Use markdown formatting in summary (headers, bullet points, code blocks for logs, etc.)
+- The "steps" field contains actionable investigation steps
+- The "commands" field contains ready-to-run diagnostic commands
+- Remove duplicates and resolve conflicts between the two sources
+- Preserve important insights even if uncertain
+
+Findings to synthesize:
+
+=== OpsCopilot Conclusion ===
+%s
+
+=== External Tool Conclusion ===
+%s`, result.OpsCopilotAnswer, result.ExternalAnswer)
+
+			integrated, err := a.aiService.AskWithContext(a.ctx, integratedPrompt, knowledgeDir)
+			if err != nil {
+				result.IntegratedAnswer = fmt.Sprintf("综合失败: %v", err)
+			} else {
+				result.IntegratedAnswer = integrated
+			}
+		}
+		result.IntegratedReady = true
+		mu.Unlock()
+		close(integratedDone)
+	}()
+
+	// 等待综合分析完成后再返回
+	<-integratedDone
+	jsonBytes, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Sprintf(`{"error": "Failed to marshal result: %v"}`, err)
+	}
+
+	return string(jsonBytes)
 }
 
 func (a *App) GetSettings() config.AppConfig {

@@ -23,7 +23,8 @@ type AppConfig struct {
 }
 
 type ExperimentalConfig struct {
-	Monitoring bool `json:"monitoring"`
+	Monitoring                     bool   `json:"monitoring"`
+	ExternalTroubleshootScriptPath string `json:"external_troubleshoot_script_path"`
 }
 
 type TerminalConfig struct {
@@ -101,7 +102,8 @@ func NewManager() *Manager {
 		CompletionDelay:      150, // Default 150ms
 		CommandQueryShortcut: "Ctrl+K",
 		Experimental: ExperimentalConfig{
-			Monitoring: false,
+			Monitoring:                     false,
+			ExternalTroubleshootScriptPath: "",
 		},
 		Terminal: TerminalConfig{
 			Scrollback:       5000,
@@ -374,9 +376,10 @@ func (m *Manager) ImportFromDirectory(dirPath string) error {
 
 	if data, err := os.ReadFile(filepath.Join(cleaned, "config.json")); err == nil {
 		type oldConfig struct {
-			LLM  LLMConfig  `json:"llm"`
-			Log  LogConfig  `json:"log"`
-			Docs DocsConfig `json:"docs"`
+			LLM          LLMConfig          `json:"llm"`
+			Log          LogConfig          `json:"log"`
+			Docs         DocsConfig         `json:"docs"`
+			Experimental ExperimentalConfig `json:"experimental"`
 		}
 		var old oldConfig
 		if err := json.Unmarshal(data, &old); err != nil {
@@ -408,6 +411,9 @@ func (m *Manager) ImportFromDirectory(dirPath string) error {
 			}
 			if old.Docs.Dir != "" {
 				updated.Docs.Dir = old.Docs.Dir
+			}
+			if old.Experimental.ExternalTroubleshootScriptPath != "" {
+				updated.Experimental.ExternalTroubleshootScriptPath = old.Experimental.ExternalTroubleshootScriptPath
 			}
 
 			imported = append(imported, "config.json")

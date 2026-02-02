@@ -22,6 +22,7 @@ interface AppConfig {
     };
     experimental?: {
         monitoring?: boolean;
+        external_troubleshoot_script_path?: string;
     };
     terminal?: TerminalConfig;
     highlight_rules?: HighlightRule[];
@@ -81,6 +82,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                     },
                     experimental: {
                         monitoring: !!(cfg.experimental && cfg.experimental.monitoring),
+                        external_troubleshoot_script_path: cfg.experimental?.external_troubleshoot_script_path || '',
                     },
                     terminal,
                     highlight_rules,
@@ -398,6 +400,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                                         支持导入 config.json / prompts.json / quick_commands.json / highlight_rules.json；导入前会自动备份当前配置到 .bak 文件。
                                     </div>
                                 )}
+                            </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>外部定位脚本路径</label>
+                                <input
+                                    style={styles.input}
+                                    value={config.experimental?.external_troubleshoot_script_path || ''}
+                                    onChange={(e) => handleChange('experimental', 'external_troubleshoot_script_path', e.target.value)}
+                                    placeholder="例如：C:\\scripts\\troubleshoot.bat"
+                                />
+                                <div style={{ color: '#888', fontSize: '0.8rem', marginTop: '4px' }}>
+                                    外部定位脚本（.bat/.ps1）会在问题排查时并行执行，提供另一种定位思路
+                                </div>
                             </div>
                             <div style={styles.formGroup}>
                                 <label style={styles.label}>命令补全延迟时间 (毫秒)</label>

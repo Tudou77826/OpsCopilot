@@ -2,6 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import TroubleshootingStep from './TroubleshootingStep';
 import CommandCard from './CommandCard';
 import SessionReviewModal from './SessionReviewModal';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
+import 'highlight.js/styles/github-dark.css';
 // @ts-ignore
 import { EventsOn } from '../../../wailsjs/runtime/runtime';
 
@@ -16,6 +20,16 @@ interface AgentStatusEvent {
     stage: string;
     message: string;
     ts: number;
+}
+
+interface TroubleshootResult {
+    opsCopilotAnswer: string;
+    externalAnswer: string;
+    integratedAnswer: string;
+    opsCopilotReady: boolean;
+    externalReady: boolean;
+    integratedReady: boolean;
+    externalError?: string;
 }
 
 interface TroubleshootingPanelProps {
@@ -36,6 +50,8 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
     const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
     const [isPolishing, setIsPolishing] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [viewMode, setViewMode] = useState<'opscopilot' | 'external' | 'integrated'>('opscopilot');
+    const [troubleshootResult, setTroubleshootResult] = useState<TroubleshootResult | null>(null);
 
     const extractDocFromReadingMessage = (message: string): string | null => {
         const idx = message.indexOf('正在阅读文档:');
@@ -122,11 +138,30 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskTroubleshoot) {
                 // @ts-ignore
                 const response = await window.go.main.App.AskTroubleshoot(problem);
-                setMessages(prev => [...prev, {
-                    role: 'ai',
-                    content: response,
-                    timestamp: Date.now()
-                }]);
+                let parsedResponse = response;
+                let result: TroubleshootResult | null = null;
+
+                try {
+                    const jsonMatch = response.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        result = JSON.parse(jsonMatch[0]);
+                        if (result && result.opsCopilotReady) {
+                            parsedResponse = result.opsCopilotAnswer;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to parse troubleshoot result:', e);
+                }
+
+                if (result) {
+                    setTroubleshootResult(result);
+                } else {
+                    setMessages(prev => [...prev, {
+                        role: 'ai',
+                        content: parsedResponse,
+                        timestamp: Date.now()
+                    }]);
+                }
             } else {
                  // Fallback to AskAI if AskTroubleshoot is not available (e.g. bindings not updated yet)
                  // @ts-ignore
@@ -255,12 +290,30 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskTroubleshoot) {
                 // @ts-ignore
                 const response = await window.go.main.App.AskTroubleshoot(userMsg.content);
+                let parsedResponse = response;
+                let result: TroubleshootResult | null = null;
                 
-                setMessages(prev => [...prev, {
-                    role: 'ai',
-                    content: response,
-                    timestamp: Date.now()
-                }]);
+                try {
+                    const jsonMatch = response.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        result = JSON.parse(jsonMatch[0]);
+                        if (result && result.opsCopilotReady) {
+                            parsedResponse = result.opsCopilotAnswer;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to parse troubleshoot result:', e);
+                }
+
+                if (result) {
+                    setTroubleshootResult(result);
+                } else {
+                    setMessages(prev => [...prev, {
+                        role: 'ai',
+                        content: parsedResponse,
+                        timestamp: Date.now()
+                    }]);
+                }
             } else {
                  // Fallback to AskAI if AskTroubleshoot is not available (e.g. bindings not updated yet)
                  // @ts-ignore
@@ -306,7 +359,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         try {
             // Check if content looks like JSON before parsing
             let jsonContent = content.trim();
-            
+
             // Try to strip Markdown code blocks if present (frontend fallback)
             const markdownMatch = jsonContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
             if (markdownMatch) {
@@ -315,9 +368,39 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
 
             if (jsonContent.startsWith('{')) {
                 const data = JSON.parse(jsonContent);
-                if (data && (Array.isArray(data.steps) || Array.isArray(data.commands))) {
+                if (data && (Array.isArray(data.steps) || Array.isArray(data.commands) || data.summary)) {
                     return (
                         <div style={styles.structuredResponse}>
+                            {/* Summary section - shows comprehensive analysis */}
+                            {data.summary && (
+                                <div style={styles.section}>
+                                    <h4 style={styles.sectionTitle}>综合分析</h4>
+                                    <div style={{...styles.messageContent, paddingBottom: '12px'}}>
+                                        <ReactMarkdown
+                                            remarkPlugins={[remarkGfm]}
+                                            rehypePlugins={[rehypeHighlight]}
+                                            components={{
+                                                h1: ({node, ...props}) => <h1 style={{...props.style, fontSize: '1.3em', fontWeight: 'bold', marginBottom: '0.5em', marginTop: '0.8em'}} {...props} />,
+                                                h2: ({node, ...props}) => <h2 style={{...props.style, fontSize: '1.15em', fontWeight: 'bold', marginBottom: '0.5em', marginTop: '0.6em'}} {...props} />,
+                                                h3: ({node, ...props}) => <h3 style={{...props.style, fontSize: '1.05em', fontWeight: 'bold', marginBottom: '0.5em', marginTop: '0.5em'}} {...props} />,
+                                                p: ({node, ...props}) => <p style={{...props.style, marginBottom: '0.6em', lineHeight: '1.5'}} {...props} />,
+                                                ul: ({node, ...props}) => <ul style={{...props.style, paddingLeft: '1.5em', marginBottom: '0.6em'}} {...props} />,
+                                                ol: ({node, ...props}) => <ol style={{...props.style, paddingLeft: '1.5em', marginBottom: '0.6em'}} {...props} />,
+                                                li: ({node, ...props}) => <li style={{...props.style, marginBottom: '0.25em'}} {...props} />,
+                                                code: ({node, inline, ...props}: any) => inline
+                                                    ? <code style={{backgroundColor: '#2a2a2a', padding: '2px 6px', borderRadius: '3px', fontSize: '0.9em'}} {...props} />
+                                                    : <code style={{display: 'block', backgroundColor: '#1a1a1a', padding: '10px', borderRadius: '4px', overflowX: 'auto', marginBottom: '0.6em', fontSize: '0.85em'}} {...props} />,
+                                                strong: ({node, ...props}) => <strong style={{fontWeight: 'bold'}} {...props} />,
+                                                blockquote: ({node, ...props}) => <blockquote style={{borderLeft: '3px solid #555', paddingLeft: '0.8em', fontStyle: 'italic', color: '#999', marginBottom: '0.6em'}} {...props} />,
+                                            }}
+                                        >
+                                            {data.summary}
+                                        </ReactMarkdown>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Steps section */}
                             {Array.isArray(data.steps) && data.steps.length > 0 && (
                                 <div style={styles.section}>
                                     <h4 style={styles.sectionTitle}>排查思路</h4>
@@ -326,15 +409,16 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                                     ))}
                                 </div>
                             )}
-                            
+
+                            {/* Commands section */}
                             {Array.isArray(data.commands) && data.commands.length > 0 && (
                                 <div style={styles.section}>
                                     <h4 style={styles.sectionTitle}>建议命令</h4>
                                     {data.commands.map((cmd: any, idx: number) => (
-                                        <CommandCard 
-                                            key={idx} 
-                                            command={cmd.command} 
-                                            description={cmd.description} 
+                                        <CommandCard
+                                            key={idx}
+                                            command={cmd.command}
+                                            description={cmd.description}
                                         />
                                     ))}
                                 </div>
@@ -346,7 +430,49 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         } catch (e) {
             console.error("Failed to parse structured response:", e);
         }
-        return <div style={styles.messageContent}>{content}</div>;
+        // Render as Markdown if not structured JSON
+        return (
+            <div style={styles.messageContent}>
+                <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeHighlight]}
+                    components={{
+                        h1: ({node, ...props}) => <h1 style={{...props.style, fontSize: '1.5em', fontWeight: 'bold', marginBottom: '0.5em', marginTop: '1em'}} {...props} />,
+                        h2: ({node, ...props}) => <h2 style={{...props.style, fontSize: '1.3em', fontWeight: 'bold', marginBottom: '0.5em', marginTop: '0.8em'}} {...props} />,
+                        h3: ({node, ...props}) => <h3 style={{...props.style, fontSize: '1.1em', fontWeight: 'bold', marginBottom: '0.5em', marginTop: '0.6em'}} {...props} />,
+                        p: ({node, ...props}) => <p style={{...props.style, marginBottom: '0.8em', lineHeight: '1.5'}} {...props} />,
+                        ul: ({node, ...props}) => <ul style={{...props.style, paddingLeft: '1.5em', marginBottom: '0.8em'}} {...props} />,
+                        ol: ({node, ...props}) => <ol style={{...props.style, paddingLeft: '1.5em', marginBottom: '0.8em'}} {...props} />,
+                        li: ({node, ...props}) => <li style={{...props.style, marginBottom: '0.3em'}} {...props} />,
+                        code: ({node, inline, ...props}: any) => inline
+                            ? <code style={{backgroundColor: '#2a2a2a', padding: '2px 6px', borderRadius: '3px', fontSize: '0.9em'}} {...props} />
+                            : <code style={{display: 'block', backgroundColor: '#1a1a1a', padding: '12px', borderRadius: '6px', overflowX: 'auto', marginBottom: '1em'}} {...props} />,
+                        strong: ({node, ...props}) => <strong style={{fontWeight: 'bold'}} {...props} />,
+                        blockquote: ({node, ...props}) => <blockquote style={{borderLeft: '3px solid #555', paddingLeft: '1em', fontStyle: 'italic', color: '#999', marginBottom: '0.8em'}} {...props} />,
+                    }}
+                >
+                    {content}
+                </ReactMarkdown>
+            </div>
+        );
+    };
+
+    const renderViewContent = () => {
+        if (!troubleshootResult) return null;
+
+        switch (viewMode) {
+            case 'opscopilot':
+                return renderMessageContent(troubleshootResult.opsCopilotAnswer);
+            case 'external':
+                if (troubleshootResult.externalError) {
+                    return <div style={{...styles.messageContent, color: '#ff6b6b'}}>{troubleshootResult.externalError}</div>;
+                }
+                return renderMessageContent(troubleshootResult.externalAnswer || '外部定位结果加载中...');
+            case 'integrated':
+                return renderMessageContent(troubleshootResult.integratedAnswer || '综合答复生成中...');
+            default:
+                return null;
+        }
     };
 
     return (
@@ -370,18 +496,67 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
             ) : (
                 <div style={styles.chatContainer}>
                     <div style={styles.messageList}>
-                        {messages.map((msg, idx) => (
-                            <div key={idx} style={{
-                                ...styles.messageItem,
-                                alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                                backgroundColor: msg.role === 'user' ? '#007acc' : '#333',
-                                maxWidth: msg.role === 'user' ? '85%' : '95%'
-                            }}>
-                                {msg.role === 'ai' ? renderMessageContent(msg.content) : (
-                                    <div style={styles.messageContent}>{msg.content}</div>
-                                )}
+                        {troubleshootResult && (
+                            <div style={styles.viewSwitcher}>
+                                <button
+                                    onClick={() => setViewMode('opscopilot')}
+                                    disabled={!troubleshootResult.opsCopilotReady}
+                                    style={{
+                                        ...(viewMode === 'opscopilot' ? styles.activeViewBtn : styles.viewBtn),
+                                        opacity: troubleshootResult.opsCopilotReady ? 1 : 0.4,
+                                        backgroundColor: viewMode === 'opscopilot' ? '#007acc' : (troubleshootResult.opsCopilotReady ? '#4CAF50' : '#666')
+                                    }}
+                                >
+                                    OpsCopilot {troubleshootResult.opsCopilotReady ? '✓' : troubleshootResult.opsCopilotReady === false ? '✗' : '⏳'}
+                                </button>
+                                <button
+                                    onClick={() => setViewMode('external')}
+                                    disabled={!troubleshootResult.externalReady}
+                                    style={{
+                                        ...(viewMode === 'external' ? styles.activeViewBtn : styles.viewBtn),
+                                        opacity: troubleshootResult.externalReady ? 1 : 0.4,
+                                        backgroundColor: viewMode === 'external' ? '#007acc' : (troubleshootResult.externalReady ? '#4CAF50' : '#666')
+                                    }}
+                                >
+                                    外部定位 {troubleshootResult.externalReady ? '✓' : troubleshootResult.externalReady === false ? '✗' : '⏳'}
+                                </button>
+                                <button
+                                    onClick={() => setViewMode('integrated')}
+                                    disabled={!troubleshootResult.integratedReady}
+                                    style={{
+                                        ...(viewMode === 'integrated' ? styles.activeViewBtn : styles.viewBtn),
+                                        opacity: troubleshootResult.integratedReady ? 1 : 0.4,
+                                        backgroundColor: viewMode === 'integrated' ? '#007acc' : (troubleshootResult.integratedReady ? '#4CAF50' : '#666')
+                                    }}
+                                >
+                                    综合答复 {troubleshootResult.integratedReady ? '✓' : '⏳'}
+                                </button>
                             </div>
-                        ))}
+                        )}
+                        {troubleshootResult ? (
+                            <div style={{
+                                ...styles.messageItem,
+                                alignSelf: 'flex-start',
+                                backgroundColor: '#333',
+                                maxWidth: '95%',
+                                width: '95%'
+                            }}>
+                                {renderViewContent()}
+                            </div>
+                        ) : (
+                            messages.map((msg, idx) => (
+                                <div key={idx} style={{
+                                    ...styles.messageItem,
+                                    alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                                    backgroundColor: msg.role === 'user' ? '#007acc' : '#333',
+                                    maxWidth: msg.role === 'user' ? '85%' : '95%'
+                                }}>
+                                    {msg.role === 'ai' ? renderMessageContent(msg.content) : (
+                                        <div style={styles.messageContent}>{msg.content}</div>
+                                    )}
+                                </div>
+                            ))
+                        )}
                         <div ref={messagesEndRef} />
                         {agentStatus && (
                             <div style={styles.statusIndicator}>
@@ -397,7 +572,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                                 ))}
                             </div>
                         )}
-                        {!agentStatus && lastUsedDocs.length > 0 && (
+                        {!troubleshootResult && !agentStatus && lastUsedDocs.length > 0 && (
                             <div style={styles.usedDocsBox}>
                                 <div style={styles.usedDocsTitle}>本次参考文档</div>
                                 <div style={styles.usedDocsList}>
@@ -672,6 +847,45 @@ const styles = {
         display: 'flex',
         justifyContent: 'flex-end',
         gap: '8px',
+    },
+    viewSwitcher: {
+        display: 'flex',
+        gap: '8px',
+        marginBottom: '10px',
+        padding: '8px',
+        backgroundColor: '#2a2a2a',
+        borderRadius: '8px',
+        border: '1px solid #3a3a3a',
+    },
+    viewBtn: {
+        flex: 1,
+        padding: '6px 12px',
+        backgroundColor: '#3c3c3c',
+        color: '#ccc',
+        border: '1px solid #555',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        fontSize: '12px',
+        transition: 'all 0.2s ease',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '4px',
+    },
+    activeViewBtn: {
+        flex: 1,
+        padding: '6px 12px',
+        backgroundColor: '#007acc',
+        color: 'white',
+        border: '1px solid #007acc',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        fontSize: '12px',
+        transition: 'all 0.2s ease',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '4px',
     }
 };
 
