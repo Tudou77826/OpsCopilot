@@ -98,10 +98,13 @@ npm run build  # Production build
 6. On close, backend emits `session-closed` event
 
 **AI Troubleshooting:**
-1. Frontend calls `AskTroubleshoot(problem, repoPath, customVars)`
-2. Backend runs parallel queries: OpsCopilot AI + optional external script
-3. Results integrated via AI synthesis
-4. Returns structured JSON with ready-to-use steps and commands
+1. Frontend calls `AskTroubleshoot(problem)` - simplified to single parameter
+2. Backend runs parallel queries:
+   - OpsCopilot AI analyzes problem using knowledge base
+   - External script (if configured) receives `-Problem` and `-OutputDir` parameters
+3. Backend reads `conclusion.md` from external script output directory
+4. Results integrated via AI synthesis
+5. Returns structured JSON with three sections: `opsCopilotAnswer`, `externalAnswer`, `integratedAnswer`
 
 **File Transfer:**
 1. Frontend calls `FTUpload` or `FTDownload`
@@ -153,12 +156,175 @@ Configuration files (in executable directory or working directory):
 - Force quit flag skips confirmation
 - Active sessions include both terminals and troubleshooting recordings
 
+## Development and Testing Workflow
+
+### Development Mode
+
+**Start Development Server:**
+```bash
+# Using the convenience script (recommended)
+start_dev.bat
+
+# Or manually:
+set OPSCOPILOT_DEV_MODE=true
+wails dev
+```
+
+The development server:
+- Runs on `http://localhost:34115`
+- Enables hot reload for both Go and TypeScript/React
+- Outputs logs to console and `logs/opscopilot.log`
+- Automatically regenerates Wails bindings on code changes
+
+### End-to-End Testing with Chrome DevTools MCP
+
+**For comprehensive UI testing, use Chrome DevTools MCP:**
+
+1. **Start the application in background:**
+   ```bash
+   cd "D:/dev/workspace-go/OpsCopilot"
+   set OPSCOPILOT_DEV_MODE=true
+   wails dev  # Run in background
+   ```
+
+2. **Navigate to the application:**
+   ```javascript
+   mcp__chrome-devtools__navigate_page({
+     url: "http://localhost:34115",
+     type: "url"
+   })
+   ```
+
+3. **Take snapshots to inspect UI:**
+   ```javascript
+   mcp__chrome-devtools__take_snapshot()
+   ```
+
+4. **Interact with elements:**
+   ```javascript
+   // Click an element by uid
+   mcp__chrome-devtools__click({ uid: "1_8" })
+
+   // Fill input fields
+   mcp__chrome-devtools__fill({ uid: "2_4", value: "test input" })
+   ```
+
+5. **Capture screenshots for documentation:**
+   ```javascript
+   mcp__chrome-devtools__take_screenshot()
+   ```
+
+**Example Workflow - Testing Troubleshooting Feature:**
+```javascript
+// 1. Navigate to app
+navigate_page({ url: "http://localhost:34115" })
+
+// 2. Click troubleshooting panel
+click({ uid: "1_8" })
+
+// 3. Input problem
+fill({ uid: "2_4", value: "服务器CPU占用过高" })
+
+// 4. Start troubleshooting
+click({ uid: "2_5" })
+
+// 5. Wait for completion
+sleep(20000)
+
+// 6. Check results
+take_snapshot()
+
+// 7. Switch to external results tab
+click({ uid: "8_1" })
+
+// 8. Take screenshot
+take_screenshot()
+```
+
+### Testing External Script Integration
+
+**1. Prepare Test Script:**
+- Use `scripts/test_troubleshoot.bat` as a template
+- Ensure it accepts `-Problem` and `-OutputDir` parameters
+- Script must create `%OutputDir%\conclusion.md`
+
+**2. Configure External Script:**
+- Open Settings → Application Options
+- Set "External Troubleshoot Script Path" to your test script
+- Example: `D:\dev\workspace-go\OpsCopilot\scripts\test_troubleshoot.bat`
+
+**3. Verify Script Execution:**
+```batch
+# Manual test
+scripts\test_troubleshoot.bat -Problem "测试问题" -OutputDir "C:\temp\test"
+
+# Check output
+type C:\temp\test\conclusion.md
+```
+
+**4. Test in Application:**
+- Start troubleshooting via UI
+- Verify three tabs appear: OpsCopilot, External, Integrated
+- Check external script results are displayed correctly
+
+**5. Debug Failed Scripts:**
+- Check `logs/opscopilot.log` for execution errors
+- Verify temporary directory creation in `%TEMP%\OpsCopilot\troubleshoot`
+- Manually test script with same parameters used by backend
+
+### Unit Testing
+
+**Run all tests:**
+```bash
+go test ./pkg/...
+```
+
+**Run specific package:**
+```bash
+go test ./pkg/app -v
+```
+
+**Run with coverage:**
+```bash
+go test -cover ./pkg/...
+```
+
+**Integration tests** (`pkg/app/integration_test.go`):
+- TestBackendScriptCall - Verifies script execution with temp files
+- TestParameterParsing - Validates different parameter types
+- TestScriptExistence - Checks required template files
+- TestDocumentationExists - Validates documentation completeness
+
+### Troubleshooting Development Issues
+
+**Hot reload not working:**
+- Check file watcher is running: Look for `[Rebuild triggered]` in console
+- Ensure file is in watched directory (project root)
+- Restart `wails dev` if needed
+
+**Wails bindings outdated:**
+- Delete `frontend/wailsjs/` directory
+- Run `wails dev` to regenerate
+- Verify `App.d.ts` has correct method signatures
+
+**External script fails silently:**
+- Enable `OPSCOPILOT_DEV_MODE=true` to see console logs
+- Check backend error handling in `app.go:runTroubleshootWithExternal`
+- Verify script has correct exit code: `exit /b 0` (batch) or `exit 0` (PowerShell)
+- Ensure `conclusion.md` is created in the output directory
+
+**Frontend can't call backend methods:**
+- Check method is exported (capitalized) in Go
+- Run `wails dev` to regenerate bindings
+- Verify import path: `import { method } from 'wailsjs/go/main/App'`
+
 ## Testing Notes
 
 - SSH tests use `github.com/golang/crypto/ssh/test` server
 - File transfer tests mock SSH with test server
 - Java monitoring tests use sample jstack output
 - Frontend tests use vitest + jsdom
+- Integration tests verify external script execution with real file I/O
 
 ## Common Patterns
 
