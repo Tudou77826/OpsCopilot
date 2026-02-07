@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 export interface QuickCommand {
     id: string;
     name: string;
     content: string;
+    group?: string; // 所属分组
 }
 
 interface QuickCommandDrawerProps {
@@ -13,11 +14,31 @@ interface QuickCommandDrawerProps {
 }
 
 const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute, isOpen, onToggle }) => {
-    // const [isOpen, setIsOpen] = useState(false); // Removed local state
     const [commands, setCommands] = useState<QuickCommand[]>([]);
+    const [selectedGroup, setSelectedGroup] = useState<string>('default');
+    const [availableGroups, setAvailableGroups] = useState<string[]>(['default']);
+    const [showGroupList, setShowGroupList] = useState(false);
+    const groupListRef = useRef<HTMLDivElement>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, cmdId: string } | null>(null);
     const [editingCmd, setEditingCmd] = useState<QuickCommand | null>(null);
     const [loaded, setLoaded] = useState(false);
+
+    // Close group list when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (groupListRef.current && !groupListRef.current.contains(event.target as Node)) {
+                setShowGroupList(false);
+            }
+        };
+
+        if (showGroupList) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showGroupList]);
 
     // Load from backend on mount
     useEffect(() => {
@@ -40,6 +61,25 @@ const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute, isOp
         }
     }, []);
 
+    // Load groups when commands change
+    useEffect(() => {
+        // @ts-ignore
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetQuickCommandGroups) {
+            // @ts-ignore
+            window.go.main.App.GetQuickCommandGroups().then((groups: string[]) => {
+                if (groups && groups.length > 0) {
+                    setAvailableGroups(groups);
+                    // If current selected group doesn't exist, select the first available group
+                    if (!groups.includes(selectedGroup)) {
+                        setSelectedGroup(groups[0]);
+                    }
+                }
+            }).catch((err: any) => {
+                console.error("Failed to load groups", err);
+            });
+        }
+    }, [commands]);
+
     // Save to backend on change
     useEffect(() => {
         if (!loaded) return;
@@ -55,7 +95,8 @@ const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute, isOp
         const newCmd: QuickCommand = {
             id: Date.now().toString(),
             name: 'New Command',
-            content: 'echo "Hello"'
+            content: 'echo "Hello"',
+            group: selectedGroup // New command belongs to current group
         };
         setCommands(prev => [...prev, newCmd]);
         setEditingCmd(newCmd); // Immediately edit
@@ -72,6 +113,12 @@ const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute, isOp
         setEditingCmd(null);
     };
 
+    // Filter commands by selected group
+    const filteredCommands = commands.filter(cmd => {
+        const group = cmd.group || 'default';
+        return group === selectedGroup;
+    });
+
     return (
         <>
             <div
@@ -80,19 +127,71 @@ const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute, isOp
                     maxHeight: isOpen ? '300px' : '24px',
                 }}
             >
-                {/* Handle */}
+                {/* Handle with Group Selector */}
                 <div
                     style={styles.handle}
-                    onClick={onToggle}
-                    title="展开/收起"
                 >
-                    {isOpen ? '▼ 快捷命令' : '▲ 快捷命令'}
+                    {/* Group Selector on the left */}
+                    <div style={styles.groupSelectorContainer} ref={groupListRef}>
+                        <div
+                            style={styles.groupTrigger}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setShowGroupList(!showGroupList);
+                            }}
+                        >
+                            <span style={styles.groupTriggerText}>{selectedGroup}</span>
+                            <span style={styles.groupTriggerArrow}>{showGroupList ? '▲' : '▼'}</span>
+                        </div>
+
+                        {showGroupList && (
+                            <div
+                                style={{
+                                    ...styles.groupListPopup,
+                                    left: groupListRef.current ? groupListRef.current.getBoundingClientRect().left : 0,
+                                    bottom: groupListRef.current ? window.innerHeight - groupListRef.current.getBoundingClientRect().top + 4 : 0,
+                                } as any}
+                            >
+                                {availableGroups.map(group => (
+                                    <div
+                                        key={group}
+                                        style={{
+                                            ...styles.groupListItem,
+                                            ...(selectedGroup === group ? styles.groupListItemActive : {})
+                                        }}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedGroup(group);
+                                            setShowGroupList(false);
+                                        }}
+                                    >
+                                        {group}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Spacer */}
+                    <div style={{ flex: 1 }} />
+
+                    {/* Toggle button centered */}
+                    <div
+                        style={styles.toggleButton}
+                        onClick={onToggle}
+                    >
+                        {isOpen ? '▼ 快捷命令' : '▲ 快捷命令'}
+                    </div>
+
+                    {/* Spacer */}
+                    <div style={{ flex: 1 }} />
                 </div>
 
                 {/* Content */}
                 <div style={styles.content}>
+                    {/* Commands Grid */}
                     <div style={styles.grid}>
-                        {commands.map(cmd => (
+                        {filteredCommands.map(cmd => (
                             <div
                                 key={cmd.id}
                                 style={styles.card}
@@ -140,6 +239,19 @@ const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute, isOp
                             />
                         </div>
                         <div style={styles.formGroup}>
+                            <label style={styles.label}>分组</label>
+                            <input
+                                style={styles.input}
+                                value={editingCmd.group || 'default'}
+                                onChange={e => setEditingCmd({ ...editingCmd, group: e.target.value })}
+                                placeholder="default"
+                                list="availableGroups"
+                            />
+                            <datalist id="availableGroups">
+                                {availableGroups.map(g => <option key={g} value={g} />)}
+                            </datalist>
+                        </div>
+                        <div style={styles.formGroup}>
                             <label style={styles.label}>命令内容</label>
                             <textarea
                                 style={styles.textarea}
@@ -177,14 +289,79 @@ const styles = {
         justifyContent: 'center',
         backgroundColor: '#2e2e2e',
         color: '#ccc',
-        cursor: 'pointer',
         fontSize: '12px',
         userSelect: 'none' as const,
         borderBottom: '1px solid #333',
+        padding: '0 6px',
+    },
+    centerControls: {
+        display: 'flex' as const,
+        alignItems: 'center' as const,
+        gap: '8px',
+    },
+    groupSelectorContainer: {
+        position: 'relative' as const,
+    },
+    groupTrigger: {
+        display: 'flex' as const,
+        alignItems: 'center' as const,
+        gap: '6px',
+        padding: '2px 8px',
+        backgroundColor: '#3c3c3c',
+        border: '1px solid #555',
+        borderRadius: '3px',
+        cursor: 'pointer',
+        fontSize: '12px',
+        color: '#ccc',
+        userSelect: 'none' as const,
+        ':hover': {
+            backgroundColor: '#444',
+            borderColor: '#007acc',
+        }
+    },
+    groupTriggerText: {
+        fontWeight: 500,
+    },
+    groupTriggerArrow: {
+        fontSize: '10px',
+    },
+    groupListPopup: {
+        position: 'fixed' as const,
+        backgroundColor: '#252526',
+        border: '1px solid #454545',
+        borderRadius: '4px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+        minWidth: '100px',
+        maxHeight: '200px',
+        overflowY: 'auto' as const,
+        zIndex: 9999,
+    },
+    groupListItem: {
+        padding: '6px 12px',
+        fontSize: '12px',
+        color: '#ccc',
+        cursor: 'pointer',
+        whiteSpace: 'nowrap' as const,
+        ':hover': {
+            backgroundColor: '#094771',
+            color: '#fff',
+        }
+    },
+    groupListItemActive: {
+        backgroundColor: '#007acc',
+        color: '#fff',
+    },
+    toggleButton: {
+        cursor: 'pointer',
+        fontSize: '10px',
+        padding: '2px 8px',
+        ':hover': {
+            color: '#fff',
+        }
     },
     content: {
         flex: 1,
-        padding: '10px',
+        padding: '8px 10px',
         overflowY: 'auto' as const,
     },
     grid: {

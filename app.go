@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -1314,6 +1315,28 @@ func (a *App) SaveQuickCommands(commands []config.QuickCommand) string {
 		return fmt.Sprintf("Error saving config: %v", err)
 	}
 	return ""
+}
+
+// GetQuickCommandGroups returns a list of all unique groups from quick commands
+func (a *App) GetQuickCommandGroups() []string {
+	commands := a.configMgr.Config.QuickCommands
+	groupMap := make(map[string]bool)
+
+	for _, cmd := range commands {
+		if cmd.Group == "" {
+			groupMap["default"] = true
+		} else {
+			groupMap[cmd.Group] = true
+		}
+	}
+
+	groups := make([]string, 0, len(groupMap))
+	for group := range groupMap {
+		groups = append(groups, group)
+	}
+
+	sort.Strings(groups)
+	return groups
 }
 
 // PolishRootCause polishes the root cause description

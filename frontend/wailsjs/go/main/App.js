@@ -106,6 +106,10 @@ export function GetJavaTopCPUThreads(arg1, arg2) {
   return window['go']['main']['App']['GetJavaTopCPUThreads'](arg1, arg2);
 }
 
+export function GetQuickCommandGroups() {
+  return window['go']['main']['App']['GetQuickCommandGroups']();
+}
+
 export function GetSavedSessions() {
   return window['go']['main']['App']['GetSavedSessions']();
 }

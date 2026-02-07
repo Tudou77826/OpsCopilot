@@ -94,6 +94,7 @@ export namespace config {
 	    id: string;
 	    name: string;
 	    content: string;
+	    group?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new QuickCommand(source);
@@ -104,6 +105,7 @@ export namespace config {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.content = source["content"];
+	        this.group = source["group"];
 	    }
 	}
 	export class DocsConfig {

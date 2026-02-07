@@ -54,6 +54,7 @@ type QuickCommand struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
 	Content string `json:"content"`
+	Group   string `json:"group,omitempty"` // 所属分组，默认为 "default"
 }
 
 type LogConfig struct {
@@ -279,7 +280,37 @@ func (m *Manager) loadQuickCommands() error {
 		m.Config.QuickCommands = []QuickCommand{}
 	}
 
+	// 迁移旧格式命令（没有 Group 字段的命令归入 "default" 组）
+	if err := m.migrateQuickCommands(); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// migrateQuickCommands 迁移旧格式的快捷命令
+func (m *Manager) migrateQuickCommands() error {
+	needsMigration := false
+	for _, cmd := range m.Config.QuickCommands {
+		if cmd.Group == "" {
+			needsMigration = true
+			break
+		}
+	}
+
+	if !needsMigration {
+		return nil
+	}
+
+	// 为没有分组的命令设置默认分组
+	for i := range m.Config.QuickCommands {
+		if m.Config.QuickCommands[i].Group == "" {
+			m.Config.QuickCommands[i].Group = "default"
+		}
+	}
+
+	// 保存迁移后的数据
+	return m.saveQuickCommands()
 }
 
 func (m *Manager) Save() error {
