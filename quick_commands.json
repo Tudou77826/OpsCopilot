@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "id": "1",
+    "name": "List Files",
+    "content": "ls -la",
+    "group": "default"
+  },
+  {
+    "id": "2",
+    "name": "Check MySQL",
+    "content": "systemctl status mysql",
+    "group": "database"
+  },
+  {
+    "id": "3",
+    "name": "Test Network",
+    "content": "ping -c 4 google.com",
+    "group": "network"
+  }
+]

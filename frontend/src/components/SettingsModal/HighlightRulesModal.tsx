@@ -31,6 +31,7 @@ function isHighRiskPattern(pattern: string): boolean {
 export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }: HighlightRulesModalProps) {
     const [draft, setDraft] = useState<HighlightRule[]>(rules);
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [hoveredBgOption, setHoveredBgOption] = useState<string | null>(null);
 
     React.useEffect(() => {
         if (isOpen) {
@@ -90,7 +91,31 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
     };
 
     const patchStyle = (id: string, partial: Partial<HighlightRule['style']>) => {
-        update(sorted.map(r => (r.id === id ? { ...r, style: { ...(r.style || {}), ...partial } } : r)));
+        update(sorted.map(r => {
+            if (r.id !== id) return r;
+            const current = { ...(r.style || {}) };
+            if ('background_color' in partial) {
+                const v = partial.background_color;
+                if (!v) {
+                    delete (current as any).background_color;
+                } else {
+                    (current as any).background_color = v;
+                }
+            }
+            if ('color' in partial && partial.color !== undefined) {
+                (current as any).color = partial.color;
+            }
+            if ('font_weight' in partial && partial.font_weight !== undefined) {
+                (current as any).font_weight = partial.font_weight;
+            }
+            if ('text_decoration' in partial && partial.text_decoration !== undefined) {
+                (current as any).text_decoration = partial.text_decoration;
+            }
+            if ('opacity' in partial && partial.opacity !== undefined) {
+                (current as any).opacity = partial.opacity;
+            }
+            return { ...r, style: current };
+        }));
     };
 
     const isEditing = (id: string) => editingId === id;
@@ -246,20 +271,46 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
                                             <div style={styles.row}>
                                                 <div style={styles.col}>
                                                     <label style={styles.fieldLabel}>背景色</label>
-                                                    <div style={styles.colorInput}>
+                                                    <label
+                                                        style={{
+                                                            ...styles.bgOption,
+                                                            color: hoveredBgOption === r.id ? '#fff' : '#ccc'
+                                                        }}
+                                                        onMouseEnter={() => setHoveredBgOption(r.id)}
+                                                        onMouseLeave={() => setHoveredBgOption(null)}
+                                                    >
                                                         <input
-                                                            type="color"
-                                                            value={r.style?.background_color || '#1d3a5a'}
-                                                            onChange={(e) => patchStyle(r.id, { background_color: e.target.value })}
-                                                            style={styles.colorPicker}
+                                                            type="checkbox"
+                                                            checked={!r.style?.background_color}
+                                                            onChange={(e) => patchStyle(r.id, { background_color: e.target.checked ? '' : '#1d3a5a' })}
+                                                            style={{...styles.checkbox, position: 'absolute', opacity: 0, pointerEvents: 'none'}}
                                                         />
-                                                        <input
-                                                            value={r.style?.background_color || ''}
-                                                            onChange={(e) => patchStyle(r.id, { background_color: e.target.value })}
-                                                            style={styles.input}
-                                                            placeholder="#RRGGBB"
-                                                        />
-                                                    </div>
+                                                        <span style={{
+                                                            ...styles.customCheckbox,
+                                                            borderColor: !r.style?.background_color ? '#5a8a6a' : (hoveredBgOption === r.id ? '#666' : '#555'),
+                                                            backgroundColor: !r.style?.background_color ? '#1a2a24' : (hoveredBgOption === r.id ? '#2a2a2a' : '#1e1e1e'),
+                                                            transform: hoveredBgOption === r.id ? 'scale(1.05)' : 'scale(1)'
+                                                        }}>
+                                                            {!r.style?.background_color && <span style={styles.checkmark}>✓</span>}
+                                                        </span>
+                                                        <span style={styles.bgOptionText}>使用终端背景色</span>
+                                                    </label>
+                                                    {r.style?.background_color && (
+                                                        <div style={styles.colorInput}>
+                                                            <input
+                                                                type="color"
+                                                                value={r.style?.background_color || '#1d3a5a'}
+                                                                onChange={(e) => patchStyle(r.id, { background_color: e.target.value })}
+                                                                style={styles.colorPicker}
+                                                            />
+                                                            <input
+                                                                value={r.style?.background_color || ''}
+                                                                onChange={(e) => patchStyle(r.id, { background_color: e.target.value })}
+                                                                style={styles.input}
+                                                                placeholder="#RRGGBB"
+                                                            />
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div style={styles.col}>
                                                     <label style={styles.fieldLabel}>文字颜色</label>
@@ -297,12 +348,14 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
                                                     <label style={styles.fieldLabel}>效果预览</label>
                                                     <div style={styles.previewBg}>
                                                         <span style={{
-                                                            backgroundColor: r.style?.background_color || '#1d3a5a',
+                                                            backgroundColor: r.style?.background_color ? r.style.background_color : 'unset',
                                                             color: r.style?.color || '#ffffff',
                                                             fontWeight: r.style?.font_weight as any || 'normal',
                                                             padding: '2px 6px',
                                                             borderRadius: '3px',
-                                                            whiteSpace: 'nowrap'
+                                                            whiteSpace: 'nowrap',
+                                                            textDecoration: r.style?.text_decoration || 'none',
+                                                            opacity: r.style?.opacity !== undefined ? r.style.opacity : 1
                                                         }}>
                                                             {r.name || '未命名'} 示例文本
                                                         </span>
@@ -455,7 +508,10 @@ const styles: Record<string, React.CSSProperties> = {
         width: '16px',
         height: '16px',
         cursor: 'pointer',
-        flexShrink: 0
+        flexShrink: 0,
+        border: '1px solid #555',
+        borderRadius: '3px',
+        backgroundColor: '#1e1e1e'
     },
     statusDot: {
         width: '12px',
@@ -560,6 +616,41 @@ const styles: Record<string, React.CSSProperties> = {
         display: 'flex',
         gap: '8px',
         alignItems: 'center'
+    },
+    bgOption: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        cursor: 'pointer',
+        fontSize: '13px',
+        color: '#ccc',
+        marginBottom: '8px',
+        userSelect: 'none',
+        position: 'relative',
+        transition: 'opacity 0.2s'
+    },
+    customCheckbox: {
+        width: '18px',
+        height: '18px',
+        border: '2px solid #555',
+        borderRadius: '4px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        transition: 'all 0.2s',
+        backgroundColor: '#1e1e1e'
+    },
+    checkmark: {
+        color: '#7aaa88',
+        fontSize: '12px',
+        fontWeight: 'bold',
+        lineHeight: 1
+    },
+    bgOptionText: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        transition: 'color 0.2s'
     },
     colorPicker: {
         width: '40px',
