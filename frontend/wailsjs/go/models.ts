@@ -77,7 +77,6 @@ export namespace config {
 	    }
 	}
 	export class ExperimentalConfig {
-	    monitoring: boolean;
 	    external_troubleshoot_script_path: string;
 	
 	    static createFrom(source: any = {}) {
@@ -86,7 +85,6 @@ export namespace config {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.monitoring = source["monitoring"];
 	        this.external_troubleshoot_script_path = source["external_troubleshoot_script_path"];
 	    }
 	}

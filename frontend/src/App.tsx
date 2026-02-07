@@ -23,7 +23,7 @@ function App() {
     const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [sidebarTab, setSidebarTab] = useState<'sessions' | 'troubleshoot' | 'chat' | 'monitoring'>('sessions');
+    const [sidebarTab, setSidebarTab] = useState<'sessions' | 'troubleshoot' | 'chat'>('sessions');
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
     const [layoutMode, setLayoutMode] = useState<'tab' | 'grid'>('tab');
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
@@ -32,7 +32,6 @@ function App() {
     const [isConfirmCloseOpen, setIsConfirmCloseOpen] = useState(false);
     const [confirmCloseMessage, setConfirmCloseMessage] = useState("");
     const [completionDelay, setCompletionDelay] = useState(150);
-    const [experimentalMonitoringEnabled, setExperimentalMonitoringEnabled] = useState(false);
     const [isFileTransferOpen, setIsFileTransferOpen] = useState(false);
     const [terminalConfig, setTerminalConfig] = useState<TerminalConfig>({ scrollback: 5000, search_enabled: true, highlight_enabled: true });
     const [highlightRules, setHighlightRules] = useState<HighlightRule[]>([]);
@@ -110,7 +109,6 @@ function App() {
                     if (cfg && cfg.completion_delay !== undefined) {
                         setCompletionDelay(cfg.completion_delay);
                     }
-                    setExperimentalMonitoringEnabled(!!(cfg && cfg.experimental && cfg.experimental.monitoring));
                     if (cfg && cfg.terminal) {
                         setTerminalConfig(cfg.terminal);
                     }
@@ -124,13 +122,6 @@ function App() {
         };
         loadSettings();
     }, []);
-
-    useEffect(() => {
-        if (!experimentalMonitoringEnabled && sidebarTab === 'monitoring') {
-            setSidebarTab('sessions');
-        }
-    }, [experimentalMonitoringEnabled, sidebarTab]);
-
 
     useEffect(() => {
         const isEditableTarget = (target: EventTarget | null) => {
@@ -462,8 +453,7 @@ function App() {
         }, 350); // Wait for transition (300ms)
     }, [isQuickCommandDrawerOpen]);
 
-    const toggleSidebar = (tab: 'sessions' | 'troubleshoot' | 'chat' | 'monitoring') => {
-        if (tab === 'monitoring' && !experimentalMonitoringEnabled) return;
+    const toggleSidebar = (tab: 'sessions' | 'troubleshoot' | 'chat') => {
         if (isSidebarOpen && sidebarTab === tab) {
             // If clicking the active tab, close it
             setIsSidebarOpen(false);
@@ -557,7 +547,6 @@ function App() {
                     onConnect={(config) => handleBatchConnect([config])}
                     activeTerminalId={activeTerminalId}
                     terminals={terminals}
-                    experimentalMonitoringEnabled={experimentalMonitoringEnabled}
                 />
 
                 {/* Right Nav (Icon Bar) */}
@@ -595,19 +584,6 @@ function App() {
                     >
                         💬
                     </div>
-                    {experimentalMonitoringEnabled && (
-                        <div
-                            style={{
-                                ...styles.navIcon,
-                                backgroundColor: (isSidebarOpen && sidebarTab === 'monitoring') ? '#333' : 'transparent',
-                                borderRight: (isSidebarOpen && sidebarTab === 'monitoring') ? '2px solid #007acc' : '2px solid transparent'
-                            }}
-                            onClick={() => toggleSidebar('monitoring')}
-                            title="监控"
-                        >
-                            📈
-                        </div>
-                    )}
                 </div>
             </div>
 
@@ -630,7 +606,6 @@ function App() {
                 isBroadcastMode={isBroadcastMode}
                 onToggleBroadcast={handleToggleBroadcast}
                 onCompletionDelayChange={setCompletionDelay}
-                onExperimentalMonitoringChange={setExperimentalMonitoringEnabled}
                 onOpenFileTransfer={() => setIsFileTransferOpen(true)}
                 onTerminalConfigChange={setTerminalConfig}
                 onHighlightRulesChange={setHighlightRules}

@@ -52,12 +52,6 @@ export function GetCompletions(arg1:string,arg2:number):Promise<string>;
 
 export function GetHighlightRules():Promise<Array<config.HighlightRule>>;
 
-export function GetJavaMonitorSnapshot(arg1:string,arg2:number):Promise<string>;
-
-export function GetJavaThreadStateCounts(arg1:string,arg2:number):Promise<string>;
-
-export function GetJavaTopCPUThreads(arg1:string,arg2:number):Promise<string>;
-
 export function GetQuickCommandGroups():Promise<Array<string>>;
 
 export function GetSavedSessions():Promise<Array<sessionmanager.Session>>;
@@ -69,8 +63,6 @@ export function GetSettings():Promise<config.AppConfig>;
 export function HasActiveWork():Promise<Record<string, any>>;
 
 export function ImportConfigFromDirectory(arg1:string):Promise<string>;
-
-export function ListJavaProcesses(arg1:string):Promise<string>;
 
 export function LoadQuickCommands():Promise<Array<config.QuickCommand>>;
 

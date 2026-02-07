@@ -94,18 +94,6 @@ export function GetHighlightRules() {
   return window['go']['main']['App']['GetHighlightRules']();
 }
 
-export function GetJavaMonitorSnapshot(arg1, arg2) {
-  return window['go']['main']['App']['GetJavaMonitorSnapshot'](arg1, arg2);
-}
-
-export function GetJavaThreadStateCounts(arg1, arg2) {
-  return window['go']['main']['App']['GetJavaThreadStateCounts'](arg1, arg2);
-}
-
-export function GetJavaTopCPUThreads(arg1, arg2) {
-  return window['go']['main']['App']['GetJavaTopCPUThreads'](arg1, arg2);
-}
-
 export function GetQuickCommandGroups() {
   return window['go']['main']['App']['GetQuickCommandGroups']();
 }
@@ -128,10 +116,6 @@ export function HasActiveWork() {
 
 export function ImportConfigFromDirectory(arg1) {
   return window['go']['main']['App']['ImportConfigFromDirectory'](arg1);
-}
-
-export function ListJavaProcesses(arg1) {
-  return window['go']['main']['App']['ListJavaProcesses'](arg1);
 }
 
 export function LoadQuickCommands() {

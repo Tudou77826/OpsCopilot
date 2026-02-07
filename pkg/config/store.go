@@ -23,7 +23,6 @@ type AppConfig struct {
 }
 
 type ExperimentalConfig struct {
-	Monitoring                     bool   `json:"monitoring"`
 	ExternalTroubleshootScriptPath string `json:"external_troubleshoot_script_path"`
 }
 
@@ -103,7 +102,6 @@ func NewManager() *Manager {
 		CompletionDelay:      150, // Default 150ms
 		CommandQueryShortcut: "Ctrl+K",
 		Experimental: ExperimentalConfig{
-			Monitoring:                     false,
 			ExternalTroubleshootScriptPath: "",
 		},
 		Terminal: TerminalConfig{

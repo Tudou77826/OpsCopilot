@@ -29,7 +29,6 @@ describe('Sidebar Component', () => {
                 onConnect={() => { }}
                 activeTerminalId={null}
                 terminals={[]}
-                experimentalMonitoringEnabled={false}
             />
         );
         // When closed, it should return a hidden div, not null
@@ -46,7 +45,6 @@ describe('Sidebar Component', () => {
                 onConnect={() => { }}
                 activeTerminalId={null}
                 terminals={[]}
-                experimentalMonitoringEnabled={false}
             />
         );
         // Assuming TroubleshootingPanel renders specific text
@@ -62,7 +60,6 @@ describe('Sidebar Component', () => {
                 onConnect={() => { }}
                 activeTerminalId={null}
                 terminals={[]}
-                experimentalMonitoringEnabled={false}
             />
         );
         expect(screen.getByText('AI 问答')).toBeInTheDocument();
