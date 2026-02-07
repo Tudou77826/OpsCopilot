@@ -21,6 +21,7 @@ const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute, isOp
     const groupListRef = useRef<HTMLDivElement>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, cmdId: string } | null>(null);
     const [editingCmd, setEditingCmd] = useState<QuickCommand | null>(null);
+    const [isNewCommand, setIsNewCommand] = useState(false);
     const [loaded, setLoaded] = useState(false);
 
     // Close group list when clicking outside
@@ -98,8 +99,8 @@ const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute, isOp
             content: 'echo "Hello"',
             group: selectedGroup // New command belongs to current group
         };
-        setCommands(prev => [...prev, newCmd]);
-        setEditingCmd(newCmd); // Immediately edit
+        setEditingCmd(newCmd);
+        setIsNewCommand(true); // Mark as new command
     };
 
     const handleDelete = (id: string) => {
@@ -109,8 +110,16 @@ const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute, isOp
 
     const handleSaveEdit = () => {
         if (!editingCmd) return;
-        setCommands(prev => prev.map(c => c.id === editingCmd.id ? editingCmd : c));
+
+        if (isNewCommand) {
+            // Add new command to list
+            setCommands(prev => [...prev, editingCmd]);
+        } else {
+            // Update existing command
+            setCommands(prev => prev.map(c => c.id === editingCmd.id ? editingCmd : c));
+        }
         setEditingCmd(null);
+        setIsNewCommand(false);
     };
 
     // Filter commands by selected group
@@ -217,7 +226,10 @@ const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute, isOp
                     <div style={{ ...styles.menu, top: contextMenu.y - 80, left: contextMenu.x }}>
                         <div style={styles.menuItem} onClick={() => {
                             const cmd = commands.find(c => c.id === contextMenu.cmdId);
-                            if (cmd) setEditingCmd(cmd);
+                            if (cmd) {
+                                setEditingCmd(cmd);
+                                setIsNewCommand(false); // Mark as existing command
+                            }
                             setContextMenu(null);
                         }}>编辑</div>
                         <div style={styles.menuItem} onClick={() => handleDelete(contextMenu.cmdId)}>删除</div>
@@ -260,7 +272,10 @@ const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute, isOp
                             />
                         </div>
                         <div style={styles.modalActions}>
-                            <button onClick={() => setEditingCmd(null)} style={styles.secondaryBtn}>取消</button>
+                            <button onClick={() => {
+                                setEditingCmd(null);
+                                setIsNewCommand(false);
+                            }} style={styles.secondaryBtn}>取消</button>
                             <button onClick={handleSaveEdit} style={styles.primaryBtn}>保存</button>
                         </div>
                     </div>
