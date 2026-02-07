@@ -1,49 +1,25 @@
+param([string]$Problem, [string]$OutputDir)
+
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-Write-Output "# External Code Review Analysis"
-Write-Output ""
-Write-Output "## Root Cause Hypothesis"
-Write-Output ""
-Write-Output "Based on static code analysis, the issue appears to be related to:"
-Write-Output "- Possible null pointer dereference in request handler"
-Write-Output "- Missing error handling in database connection pool"
-Write-Output "- Race condition in concurrent request processing"
-Write-Output ""
-Write-Output "## Log Analysis"
-Write-Output ""
-Write-Output "### Critical Patterns Found"
-Write-Output ""
-Write-Output "ERROR: Connection timeout after 30s"
-Write-Output "WARN: Database pool exhausted"
-Write-Output "ERROR: Panic: runtime error: invalid memory address"
-Write-Output ""
-Write-Output "### Timing Analysis"
-Write-Output "- Request latency spikes occur every 5 minutes"
-Write-Output "- Correlates with backup job execution window"
-Write-Output "- Memory usage shows gradual leak pattern"
-Write-Output ""
-Write-Output "## Confidence Assessment"
-Write-Output ""
-Write-Output "High Confidence (80%): Database pool exhaustion is the primary trigger"
-Write-Output ""
-Write-Output "Medium Confidence (60%): Race condition in concurrent request handling"
-Write-Output ""
-Write-Output "Low Confidence (40%): Memory leak may be contributing factor"
-Write-Output ""
-Write-Output "## Recommended Investigation Steps"
-Write-Output ""
-Write-Output "1. Check database connection pool settings"
-Write-Output "2. Review concurrent request limits"
-Write-Output "3. Analyze memory profile during peak load"
-Write-Output ""
-Write-Output "## Suggested Diagnostic Commands"
-Write-Output ""
-Write-Output "- Check database connections: SHOW PROCESSLIST"
-Write-Output "- Monitor goroutines: curl http://localhost:6060/debug/pprof/goroutine?debug=1"
-Write-Output "- Review heap profile: go tool pprof heap.profile"
-Write-Output ""
-Write-Output "---"
-Write-Output ""
-Write-Output "Note: This analysis is based on code review without runtime context. Verify findings with actual system monitoring."
-Write-Output ""
-exit 0
+if ([string]::IsNullOrWhiteSpace($Problem)) {
+    Write-Host "ERROR: Missing -Problem parameter" -ForegroundColor Red
+    exit 1
+}
+
+if ([string]::IsNullOrWhiteSpace($OutputDir)) {
+    Write-Host "ERROR: Missing -OutputDir parameter" -ForegroundColor Red
+    exit 1
+}
+
+if (!(Test-Path $OutputDir)) {
+    New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
+}
+
+$ConclusionFile = Join-Path $OutputDir "conclusion.md"
+
+$Content = "# External Tool Conclusion`n`n## Problem`n`n$Problem`n`n## Received Parameters`n`n- Problem: $Problem`n- OutputDir: $OutputDir`n`n## Test Results`n`nThis is a test output from the external script.`n`n### Detected Issues`n`n- Test issue 1`n- Test issue 2`n`n## Suggested Commands`n`n```bash`ncommand1`ncommand2`n```"
+
+[System.IO.File]::WriteAllText($ConclusionFile, $Content, [System.Text.Encoding]::UTF8)
+
+Write-Host "Test complete" -ForegroundColor Green

@@ -595,16 +595,58 @@ func (a *App) runTroubleshootWithExternal(problem, scriptPath string) string {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			// 使用 -Command 配合 Get-Content 来正确处理 UTF-8 编码的脚本文件
-			cmd := exec.Command("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
-				"-Command", fmt.Sprintf("[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Get-Content -Raw -Encoding UTF8 '%s' | Invoke-Expression", scriptPath))
+
+			// 创建临时输出目录
+			tempDir := filepath.Join(os.TempDir(), "OpsCopilot", "troubleshoot")
+			if err := os.MkdirAll(tempDir, 0755); err != nil {
+				mu.Lock()
+				result.ExternalError = fmt.Sprintf("创建临时目录失败: %v", err)
+				result.ExternalReady = true
+				mu.Unlock()
+				return
+			}
+
+			// 构建参数字符串 - 只传递固定参数
+			var args []string
+			args = append(args, "-Problem", problem)
+			args = append(args, "-OutputDir", tempDir)
+
+			var cmd *exec.Cmd
+			ext := strings.ToLower(filepath.Ext(scriptPath))
+
+			// 根据文件扩展名选择执行方式
+			if ext == ".ps1" {
+				// PowerShell 脚本
+				psArgs := []string{"-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath}
+				psArgs = append(psArgs, args...)
+				cmd = exec.Command("powershell", psArgs...)
+			} else if ext == ".bat" || ext == ".cmd" {
+				// 批处理文件 - 使用 cmd.exe
+				cmdArgs := []string{"/C", scriptPath}
+				cmdArgs = append(cmdArgs, args...)
+				cmd = exec.Command("cmd", cmdArgs...)
+			} else {
+				// 默认使用 cmd.exe
+				cmdArgs := []string{"/C", scriptPath}
+				cmdArgs = append(cmdArgs, args...)
+				cmd = exec.Command("cmd", cmdArgs...)
+			}
+
 			output, err := cmd.CombinedOutput()
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
 				result.ExternalError = fmt.Sprintf("外部脚本执行失败: %v\n脚本路径: %s", err, scriptPath)
 			} else {
-				result.ExternalAnswer = string(output)
+				// 尝试读取脚本生成的结论文件
+				conclusionFile := filepath.Join(tempDir, "conclusion.md")
+				if content, err := os.ReadFile(conclusionFile); err == nil {
+					// 如果结论文件存在，读取文件内容
+					result.ExternalAnswer = string(content)
+				} else {
+					// 如果结论文件不存在，使用脚本输出
+					result.ExternalAnswer = string(output)
+				}
 			}
 			result.ExternalReady = true
 		}()

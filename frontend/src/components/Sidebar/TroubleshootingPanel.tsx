@@ -52,6 +52,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [viewMode, setViewMode] = useState<'opscopilot' | 'external' | 'integrated'>('opscopilot');
     const [troubleshootResult, setTroubleshootResult] = useState<TroubleshootResult | null>(null);
+    const [externalScriptEnhanced, setExternalScriptEnhanced] = useState(false);
 
     const extractDocFromReadingMessage = (message: string): string | null => {
         const idx = message.indexOf('正在阅读文档:');
@@ -501,8 +502,10 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
             {!isInvestigating ? (
                 <div style={styles.emptyState}>
                     <div style={styles.icon}>🩺</div>
-                    <p style={styles.emptyText}>请输入您遇到的问题，并点击“开始排查”</p>
+                    <p style={styles.emptyText}>请输入您遇到的问题，并点击"开始排查"</p>
                     <div style={{width: '100%', padding: '0 20px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: '10px'}}>
+
+                        {/* 问题输入区域 */}
                         <textarea
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
@@ -677,6 +680,16 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                                     <span style={styles.stopButtonText}>结束排查</span>
                                 </button>
                             </div>
+
+                            {/* 增强模式状态显示（只读） */}
+                            {externalScriptEnhanced && (
+                                <div style={styles.enhancedModeStatus}>
+                                    <div style={styles.statusItem}>
+                                        <span style={styles.statusLabel}>🔧 增强模式已启用</span>
+                                    </div>
+                                </div>
+                            )}
+
                             <div style={styles.inputBox}>
                                 <textarea
                                     value={input}
@@ -1021,6 +1034,132 @@ const styles = {
         alignItems: 'center',
         justifyContent: 'center',
         gap: '6px',
+    },
+    enhancedModeSection: {
+        padding: '8px 12px',
+        borderBottom: '1px solid #3a3a3a',
+    },
+    checkboxLabel: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        cursor: 'pointer',
+    },
+    checkbox: {
+        width: '16px',
+        height: '16px',
+        cursor: 'pointer',
+    },
+    checkboxText: {
+        color: '#ccc',
+        fontSize: '13px',
+    },
+    enhancedConfig: {
+        marginTop: '10px',
+        padding: '12px',
+        backgroundColor: '#1a1a1a',
+        borderRadius: '6px',
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '8px',
+    },
+    configRow: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+    },
+    configLabel: {
+        color: '#999',
+        fontSize: '12px',
+        minWidth: '100px',
+    },
+    configInput: {
+        flex: 1,
+        backgroundColor: '#252526',
+        color: '#ddd',
+        border: '1px solid #3a3a3a',
+        borderRadius: '4px',
+        padding: '6px 10px',
+        fontSize: '13px',
+        outline: 'none',
+    },
+    editButton: {
+        backgroundColor: '#3a3a3a',
+        color: '#ccc',
+        border: '1px solid #4a4a4a',
+        borderRadius: '4px',
+        padding: '4px 12px',
+        fontSize: '12px',
+        cursor: 'pointer',
+    },
+    customVarEditor: {
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '6px',
+        paddingLeft: '108px',
+    },
+    varRow: {
+        display: 'flex',
+        gap: '6px',
+        alignItems: 'center',
+    },
+    varInput: {
+        backgroundColor: '#252526',
+        color: '#ddd',
+        border: '1px solid #3a3a3a',
+        borderRadius: '4px',
+        padding: '6px 10px',
+        fontSize: '13px',
+        outline: 'none',
+    },
+    deleteButton: {
+        backgroundColor: '#5c3a3a',
+        color: '#ff8080',
+        border: '1px solid #6c4a4a',
+        borderRadius: '4px',
+        padding: '4px 8px',
+        fontSize: '11px',
+        cursor: 'pointer',
+    },
+    addButton: {
+        backgroundColor: '#3a5a3a',
+        color: '#80cc80',
+        border: '1px solid #4a6a4a',
+        borderRadius: '4px',
+        padding: '4px 12px',
+        fontSize: '12px',
+        cursor: 'pointer',
+    },
+    enhancedModeConfig: {
+        width: '100%',
+        padding: '12px',
+        backgroundColor: '#1a1a1a',
+        borderRadius: '8px',
+        border: '1px solid #3a3a3a',
+    },
+    enhancedModeHeader: {
+        marginBottom: '10px',
+    },
+    enhancedModeStatus: {
+        padding: '8px 12px',
+        backgroundColor: '#1a2a1a',
+        borderRadius: '6px',
+        border: '1px solid #3a4a3a',
+    },
+    statusItem: {
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '4px',
+    },
+    statusLabel: {
+        color: '#7aaa88',
+        fontSize: '12px',
+        fontWeight: '500',
+    },
+    statusDetail: {
+        color: '#888',
+        fontSize: '11px',
+        paddingLeft: '16px',
     }
 };
 

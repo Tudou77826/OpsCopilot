@@ -44,6 +44,13 @@ if exist "highlight_rules.json" (
     echo [INFO]   - highlight_rules.json
 )
 
+:: 复制桥接脚本模板到输出目录
+echo [INFO] Copying bridge script template to build/bin/...
+if exist "scripts\troubleshoot_bridge_template.bat" (
+    copy /Y "scripts\troubleshoot_bridge_template.bat" "build\bin\" >nul
+    echo [INFO]   - troubleshoot_bridge_template.bat
+)
+
 echo [SUCCESS] Build complete. Executable is in build/bin/
-echo [INFO] Configuration files have been copied to build/bin/
+echo [INFO] Configuration files and bridge script template have been copied to build/bin/
 endlocal
