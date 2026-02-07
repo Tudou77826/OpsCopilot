@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { HighlightRule } from '../Terminal/highlightTypes';
 
 interface HighlightRulesModalProps {
@@ -6,6 +6,15 @@ interface HighlightRulesModalProps {
     rules: HighlightRule[];
     onChange: (rules: HighlightRule[]) => void;
     onClose: () => void;
+}
+
+// 风险等级类型
+type RiskLevel = 'safe' | 'moderate' | 'high' | 'severe';
+
+interface PatternRisk {
+    level: RiskLevel;
+    issues: string[];
+    canEnable: boolean;
 }
 
 function newId() {
@@ -17,28 +26,167 @@ function newId() {
     return `r_${Math.random().toString(16).slice(2)}_${Date.now()}`;
 }
 
-function isHighRiskPattern(pattern: string): boolean {
+// 评估正则表达式的风险等级
+function assessPatternRisk(pattern: string): PatternRisk {
     const p = pattern.trim();
-    if (!p) return false;
-    if (p.length > 200) return true;
-    if (/\(\.\*\)\+/.test(p) || /\(\.\+\)\+/.test(p)) return true;
-    if (/\(\.\*\)\*/.test(p) && /\+/.test(p)) return true;
-    if (/\)\+/.test(p) && /(\+|\*)\)/.test(p)) return true;
-    if (/\(\?:?[^)]*[+*][^)]*\)[+*]/.test(p)) return true;
-    return false;
+    if (!p) return { level: 'safe', issues: [], canEnable: true };
+
+    const issues: string[] = [];
+    let level: RiskLevel = 'safe';
+
+    // 长度检查
+    if (p.length > 500) {
+        issues.push(`正则非常长 (${p.length}字符)`);
+        level = 'high';
+    } else if (p.length > 200) {
+        issues.push(`正则较长 (${p.length}字符)`);
+        level = 'moderate';
+    }
+
+    // 嵌套量词检查
+    if (/\(\.\*\)\+/.test(p) || /\(\.\+\)\+/.test(p)) {
+        issues.push('包含嵌套量词，可能导致指数级匹配');
+        if (level === 'safe') {
+            level = 'high';
+        } else if (level === 'moderate') {
+            level = 'severe';
+        }
+    }
+
+    // 灾难性模式检查
+    if (/^(\.\*|\.\+)[+*]/.test(p)) {
+        issues.push('灾难性回溯模式');
+        level = 'severe';
+    }
+
+    // 其他复杂嵌套
+    if (/\(\?:?[^)]*[+*][^)]*\)[+*]/.test(p)) {
+        issues.push('复杂的嵌套量词组合');
+        if (level === 'safe') {
+            level = 'moderate';
+        }
+    }
+
+    return {
+        level,
+        issues,
+        canEnable: level !== 'severe'
+    };
+}
+
+// 深度比较两个规则数组是否相同
+function areRulesEqual(a: HighlightRule[], b: HighlightRule[]): boolean {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+        if (a[i].id !== b[i].id) return false;
+        if (a[i].name !== b[i].name) return false;
+        if (a[i].pattern !== b[i].pattern) return false;
+        if (a[i].is_enabled !== b[i].is_enabled) return false;
+        if (a[i].priority !== b[i].priority) return false;
+        if (JSON.stringify(a[i].style) !== JSON.stringify(b[i].style)) return false;
+    }
+    return true;
+}
+
+// Toggle Switch 子组件
+interface ToggleSwitchProps {
+    enabled: boolean;
+    disabled: boolean;
+    locked: boolean;
+    onToggle: () => void;
+    reason?: string;
+}
+
+function ToggleSwitch({ enabled, disabled, locked, onToggle, reason }: ToggleSwitchProps) {
+    const getTrackColor = () => {
+        if (locked) return '#ff9800';
+        if (enabled) return '#4caf50';
+        return '#555';
+    };
+
+    const getThumbPosition = () => {
+        return enabled ? 'calc(100% - 18px)' : '2px';
+    };
+
+    return (
+        <div
+            style={{
+                ...styles.toggleSwitch,
+                backgroundColor: getTrackColor(),
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                opacity: disabled ? 0.5 : 1
+            }}
+            onClick={disabled ? undefined : onToggle}
+            title={reason}
+        >
+            <div
+                style={{
+                    ...styles.toggleThumb,
+                    left: getThumbPosition()
+                }}
+            >
+                {locked && <span style={styles.lockIcon}>🔒</span>}
+            </div>
+        </div>
+    );
+}
+
+// 未保存更改确认弹窗
+interface UnsavedChangesModalProps {
+    isOpen: boolean;
+    changedCount: number;
+    onSave: () => void;
+    onDiscard: () => void;
+    onCancel: () => void;
+}
+
+function UnsavedChangesModal({ isOpen, changedCount, onSave, onDiscard, onCancel }: UnsavedChangesModalProps) {
+    if (!isOpen) return null;
+
+    return (
+        <div style={styles.confirmBackdrop}>
+            <div style={styles.confirmModal}>
+                <h3 style={styles.confirmTitle}>⚠️ 确认关闭？</h3>
+                <p style={styles.confirmMessage}>
+                    您有 {changedCount} 条规则的更改尚未保存。
+                </p>
+                <div style={styles.confirmActions}>
+                    <button style={styles.confirmCancelBtn} onClick={onCancel}>
+                        继续编辑
+                    </button>
+                    <button style={styles.confirmDiscardBtn} onClick={onDiscard}>
+                        放弃更改
+                    </button>
+                    <button style={styles.confirmSaveBtn} onClick={onSave}>
+                        保存并关闭
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
 }
 
 export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }: HighlightRulesModalProps) {
     const [draft, setDraft] = useState<HighlightRule[]>(rules);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [hoveredBgOption, setHoveredBgOption] = useState<string | null>(null);
+    const [isDirty, setIsDirty] = useState(false);
+    const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
+    const [riskAcknowledged, setRiskAcknowledged] = useState<Record<string, boolean>>({});
 
-    React.useEffect(() => {
+    useEffect(() => {
         if (isOpen) {
             setDraft(rules);
             setEditingId(null);
+            setRiskAcknowledged({});
         }
     }, [isOpen, rules]);
+
+    // 检测是否有未保存的更改
+    useEffect(() => {
+        const hasChanges = !areRulesEqual(draft, rules);
+        setIsDirty(hasChanges);
+    }, [draft, rules]);
 
     const sorted = useMemo(() => {
         return [...draft].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
@@ -50,9 +198,23 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
         setDraft(next);
     };
 
+    const applyChanges = () => {
+        onChange(sorted);
+        // Reset the dirty state after saving
+        setIsDirty(false);
+    };
+
     const applyAndClose = () => {
         onChange(sorted);
         onClose();
+    };
+
+    const handleXClick = () => {
+        if (isDirty) {
+            setShowUnsavedWarning(true);
+        } else {
+            onClose();
+        }
     };
 
     const addRule = () => {
@@ -120,267 +282,374 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
 
     const isEditing = (id: string) => editingId === id;
 
-    return (
-        <div style={styles.backdrop} onClick={onClose}>
-            <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-                <div style={styles.header}>
-                    <div style={styles.title}>突出显示集</div>
-                    <button style={styles.x} onClick={onClose}>×</button>
-                </div>
+    // 计算未保存的更改数量
+    const getChangedCount = () => {
+        let count = 0;
+        for (const d of draft) {
+            const original = rules.find(r => r.id === d.id);
+            if (!original) {
+                count++;
+            } else {
+                if (d.name !== original.name || d.pattern !== original.pattern ||
+                    d.is_enabled !== original.is_enabled ||
+                    JSON.stringify(d.style) !== JSON.stringify(original.style)) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    };
 
-                <div style={styles.body}>
-                    <div style={styles.toolbar}>
-                        <button style={styles.primary} onClick={addRule}>+ 新建规则</button>
-                        <div style={styles.hint}>优先级越小越先匹配；高风险正则自动禁用</div>
+    return (
+        <>
+            <div style={styles.backdrop} onClick={onClose}>
+                <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+                    <div style={styles.header}>
+                        <div style={styles.titleContainer}>
+                            <div style={styles.title}>突出显示集</div>
+                            {isDirty && <div style={styles.unsavedIndicator}>● 未保存</div>}
+                        </div>
+                        <button style={styles.x} onClick={handleXClick}>×</button>
                     </div>
 
-                    <div style={styles.list} className="hide-scrollbar">
-                        {sorted.length === 0 && <div style={styles.empty}>暂无规则，点击上方按钮添加</div>}
-                        {sorted.map((r, i) => {
-                            const risky = isHighRiskPattern(r.pattern);
-                            const editing = isEditing(r.id);
+                    <div style={styles.body}>
+                        <div style={styles.toolbar}>
+                            <button style={styles.primary} onClick={addRule}>+ 新建规则</button>
+                            <div style={styles.hint}>
+                                {isDirty ? `提示: 有 ${getChangedCount()} 条未保存更改` : '优先级越小越先匹配'}
+                            </div>
+                        </div>
 
-                            return (
-                                <div key={r.id} style={styles.item}>
-                                    {/* 顶部栏：启用开关 + 操作按钮 */}
-                                    <div style={styles.itemHeader}>
-                                        <div style={styles.itemLeft}>
-                                            <label style={styles.switchLabel}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={!!r.is_enabled}
-                                                    onChange={(e) => patch(r.id, { is_enabled: e.target.checked && !risky })}
-                                                    style={styles.checkbox}
-                                                />
-                                                <span style={{
-                                                    ...styles.statusDot,
-                                                    backgroundColor: r.is_enabled ? '#4caf50' : '#555',
-                                                    boxShadow: r.is_enabled ? '0 0 0 3px rgba(76, 175, 80, 0.2)' : 'none'
-                                                }} />
-                                                <span style={styles.nameText}>{r.name || '未命名'}</span>
-                                                {risky && <span style={styles.riskBadge}>高风险</span>}
-                                            </label>
-                                        </div>
-                                        <div style={styles.actions}>
-                                            <button
-                                                style={styles.iconBtn}
-                                                onClick={() => setEditingId(editing ? null : r.id)}
-                                                title={editing ? '收起' : '编辑'}
-                                            >
-                                                {editing ? '✕' : '✎'}
-                                            </button>
-                                            <button
-                                                style={styles.iconBtn}
-                                                onClick={() => move(r.id, -1)}
-                                                disabled={i === 0}
-                                                title="上移"
-                                            >
-                                                ↑
-                                            </button>
-                                            <button
-                                                style={styles.iconBtn}
-                                                onClick={() => move(r.id, 1)}
-                                                disabled={i === sorted.length - 1}
-                                                title="下移"
-                                            >
-                                                ↓
-                                            </button>
-                                            <button
-                                                style={styles.iconBtn}
-                                                onClick={() => {
-                                                    const idx = sorted.findIndex(x => x.id === r.id);
-                                                    if (idx <= 0) return;
-                                                    const target = sorted[0];
-                                                    const current = sorted[idx];
-                                                    const next = [...sorted];
-                                                    next[0] = { ...current, priority: target.priority };
-                                                    next[idx] = { ...target, priority: current.priority };
-                                                    for (let j = 1; j < idx; j++) {
-                                                        next[j].priority = next[j-1].priority + 1;
-                                                    }
-                                                    update(next);
-                                                }}
-                                                disabled={i === 0}
-                                                title="置顶"
-                                            >
-                                                ⇱
-                                            </button>
-                                            <button
-                                                style={styles.iconBtn}
-                                                onClick={() => {
-                                                    const idx = sorted.findIndex(x => x.id === r.id);
-                                                    if (idx < 0 || idx >= sorted.length - 1) return;
-                                                    const target = sorted[sorted.length - 1];
-                                                    const current = sorted[idx];
-                                                    const next = [...sorted];
-                                                    next[sorted.length - 1] = { ...current, priority: target.priority };
-                                                    next[idx] = { ...target, priority: current.priority };
-                                                    for (let j = idx + 1; j < sorted.length - 1; j++) {
-                                                        next[j].priority = next[j-1].priority + 1;
-                                                    }
-                                                    update(next);
-                                                }}
-                                                disabled={i === sorted.length - 1}
-                                                title="置底"
-                                            >
-                                                ⇲
-                                            </button>
-                                            <button
-                                                style={{ ...styles.iconBtn, ...styles.deleteBtn }}
-                                                onClick={() => removeRule(r.id)}
-                                                title="删除"
-                                            >
-                                                ×
-                                            </button>
-                                        </div>
-                                    </div>
+                        <div style={styles.list} className="hide-scrollbar">
+                            {sorted.length === 0 && <div style={styles.empty}>暂无规则，点击上方按钮添加</div>}
+                            {sorted.map((r, i) => {
+                                const risk = assessPatternRisk(r.pattern);
+                                const canEnable = risk.canEnable && (risk.level === 'safe' || riskAcknowledged[r.id]);
+                                const editing = isEditing(r.id);
 
-                                    {/* 展开的编辑区域 */}
-                                    {editing && (
-                                        <div style={styles.expanded}>
-                                            <div style={styles.field}>
-                                                <label style={styles.fieldLabel}>规则名称</label>
-                                                <input
-                                                    value={r.name}
-                                                    onChange={(e) => patch(r.id, { name: e.target.value })}
-                                                    style={styles.input}
-                                                    placeholder="例如：错误信息"
-                                                />
-                                            </div>
-
-                                            <div style={styles.field}>
-                                                <label style={styles.fieldLabel}>匹配模式（正则表达式）</label>
-                                                <input
-                                                    value={r.pattern}
-                                                    onChange={(e) => {
-                                                        const v = e.target.value;
-                                                        const riskyNow = isHighRiskPattern(v);
-                                                        patch(r.id, { pattern: v, is_enabled: riskyNow ? false : r.is_enabled });
-                                                    }}
-                                                    style={styles.input}
-                                                    placeholder="例如：(?i)\\b(error|fail)\\b"
-                                                />
-                                                {risky && <div style={styles.warnText}>该正则可能有性能风险，已自动禁用</div>}
-                                                {r.pattern && !risky && (
-                                                    <div style={styles.previewText}>
-                                                        预览：匹配 <code style={styles.code}>{r.pattern}</code>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            <div style={styles.row}>
-                                                <div style={styles.col}>
-                                                    <label style={styles.fieldLabel}>背景色</label>
-                                                    <label
-                                                        style={{
-                                                            ...styles.bgOption,
-                                                            color: hoveredBgOption === r.id ? '#fff' : '#ccc'
-                                                        }}
-                                                        onMouseEnter={() => setHoveredBgOption(r.id)}
-                                                        onMouseLeave={() => setHoveredBgOption(null)}
-                                                    >
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={!r.style?.background_color}
-                                                            onChange={(e) => patchStyle(r.id, { background_color: e.target.checked ? '' : '#1d3a5a' })}
-                                                            style={{...styles.checkbox, position: 'absolute', opacity: 0, pointerEvents: 'none'}}
-                                                        />
+                                return (
+                                    <div key={r.id} style={styles.item}>
+                                        {/* 顶部栏：启用开关 + 操作按钮 */}
+                                        <div style={styles.itemHeader}>
+                                            <div style={styles.itemLeft}>
+                                                <div style={styles.ruleInfo}>
+                                                    <ToggleSwitch
+                                                        enabled={!!r.is_enabled}
+                                                        disabled={!canEnable}
+                                                        locked={risk.level === 'severe' || (risk.level === 'high' && !riskAcknowledged[r.id])}
+                                                        onToggle={() => patch(r.id, { is_enabled: !r.is_enabled && canEnable })}
+                                                        reason={risk.level !== 'safe' ? `风险等级: ${risk.level}` : undefined}
+                                                    />
+                                                    <span style={styles.nameText}>{r.name || '未命名'}</span>
+                                                    {risk.level !== 'safe' && (
                                                         <span style={{
-                                                            ...styles.customCheckbox,
-                                                            borderColor: !r.style?.background_color ? '#5a8a6a' : (hoveredBgOption === r.id ? '#666' : '#555'),
-                                                            backgroundColor: !r.style?.background_color ? '#1a2a24' : (hoveredBgOption === r.id ? '#2a2a2a' : '#1e1e1e'),
-                                                            transform: hoveredBgOption === r.id ? 'scale(1.05)' : 'scale(1)'
+                                                            ...styles.riskBadge,
+                                                            backgroundColor: risk.level === 'moderate' ? '#7a5c2e' :
+                                                                           risk.level === 'high' ? '#5c2e2e' :
+                                                                           '#4a1a1a',
+                                                            color: risk.level === 'moderate' ? '#ffcc80' :
+                                                                   risk.level === 'high' ? '#ff9980' :
+                                                                   '#ff8080'
                                                         }}>
-                                                            {!r.style?.background_color && <span style={styles.checkmark}>✓</span>}
+                                                            {risk.level === 'moderate' ? '中等风险' :
+                                                             risk.level === 'high' ? '高风险' :
+                                                             '严重风险'}
                                                         </span>
-                                                        <span style={styles.bgOptionText}>使用终端背景色</span>
-                                                    </label>
-                                                    {r.style?.background_color && (
+                                                    )}
+                                                </div>
+                                                <div style={styles.statusText}>
+                                                    {r.is_enabled ? '已启用' : '已禁用'}
+                                                    {risk.level !== 'safe' && r.is_enabled && ' (风险已确认)'}
+                                                </div>
+                                            </div>
+                                            <div style={styles.actions}>
+                                                <button
+                                                    style={styles.editBtn}
+                                                    onClick={() => setEditingId(editing ? null : r.id)}
+                                                    title={editing ? '收起编辑' : '展开编辑'}
+                                                >
+                                                    <span>{editing ? '▾' : '▸'}</span>
+                                                    <span>{editing ? '收起' : '编辑'}</span>
+                                                </button>
+                                                <button
+                                                    style={styles.iconBtn}
+                                                    onClick={() => move(r.id, -1)}
+                                                    disabled={i === 0}
+                                                    title="上移"
+                                                >
+                                                    ↑
+                                                </button>
+                                                <button
+                                                    style={styles.iconBtn}
+                                                    onClick={() => move(r.id, 1)}
+                                                    disabled={i === sorted.length - 1}
+                                                    title="下移"
+                                                >
+                                                    ↓
+                                                </button>
+                                                <button
+                                                    style={styles.iconBtn}
+                                                    onClick={() => {
+                                                        const idx = sorted.findIndex(x => x.id === r.id);
+                                                        if (idx <= 0) return;
+                                                        const target = sorted[0];
+                                                        const current = sorted[idx];
+                                                        const next = [...sorted];
+                                                        next[0] = { ...current, priority: target.priority };
+                                                        next[idx] = { ...target, priority: current.priority };
+                                                        for (let j = 1; j < idx; j++) {
+                                                            next[j].priority = next[j-1].priority + 1;
+                                                        }
+                                                        update(next);
+                                                    }}
+                                                    disabled={i === 0}
+                                                    title="置顶"
+                                                >
+                                                    ⇱
+                                                </button>
+                                                <button
+                                                    style={styles.iconBtn}
+                                                    onClick={() => {
+                                                        const idx = sorted.findIndex(x => x.id === r.id);
+                                                        if (idx < 0 || idx >= sorted.length - 1) return;
+                                                        const target = sorted[sorted.length - 1];
+                                                        const current = sorted[idx];
+                                                        const next = [...sorted];
+                                                        next[sorted.length - 1] = { ...current, priority: target.priority };
+                                                        next[idx] = { ...target, priority: current.priority };
+                                                        for (let j = idx + 1; j < sorted.length - 1; j++) {
+                                                            next[j].priority = next[j-1].priority + 1;
+                                                        }
+                                                        update(next);
+                                                    }}
+                                                    disabled={i === sorted.length - 1}
+                                                    title="置底"
+                                                >
+                                                    ⇲
+                                                </button>
+                                                <button
+                                                    style={{ ...styles.iconBtn, ...styles.deleteBtn }}
+                                                    onClick={() => removeRule(r.id)}
+                                                    title="删除"
+                                                >
+                                                    ×
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* 展开的编辑区域 */}
+                                        {editing && (
+                                            <div style={styles.expanded}>
+                                                <div style={styles.field}>
+                                                    <label style={styles.fieldLabel}>规则名称</label>
+                                                    <input
+                                                        value={r.name}
+                                                        onChange={(e) => patch(r.id, { name: e.target.value })}
+                                                        style={styles.input}
+                                                        placeholder="例如：错误信息"
+                                                    />
+                                                </div>
+
+                                                <div style={styles.field}>
+                                                    <label style={styles.fieldLabel}>匹配模式（正则表达式）</label>
+                                                    <input
+                                                        value={r.pattern}
+                                                        onChange={(e) => {
+                                                            const v = e.target.value;
+                                                            patch(r.id, { pattern: v });
+                                                        }}
+                                                        style={styles.input}
+                                                        placeholder="例如：(?i)\\b(error|fail)\\b"
+                                                    />
+                                                    {risk.level !== 'safe' && (
+                                                        <div style={{
+                                                            ...styles.warningBox,
+                                                            backgroundColor: risk.level === 'moderate' ? 'rgba(255, 152, 0, 0.1)' :
+                                                                             risk.level === 'high' ? 'rgba(255, 87, 34, 0.1)' :
+                                                                             'rgba(211, 47, 47, 0.1)',
+                                                            borderColor: risk.level === 'moderate' ? '#ff9800' :
+                                                                          risk.level === 'high' ? '#ff5722' :
+                                                                          '#d32f2f'
+                                                        }}>
+                                                            <div style={styles.warningHeader}>
+                                                                <span style={styles.warningIcon}>
+                                                                    {risk.level === 'moderate' ? '⚠️' :
+                                                                     risk.level === 'high' ? '⚠️' :
+                                                                     '🚫'}
+                                                                </span>
+                                                                <span style={{
+                                                                    ...styles.warningTitle,
+                                                                    color: risk.level === 'moderate' ? '#ff9800' :
+                                                                           risk.level === 'high' ? '#ff5722' :
+                                                                           '#d32f2f'
+                                                                }}>
+                                                                    {risk.level === 'moderate' ? '中等风险' :
+                                                                     risk.level === 'high' ? '高风险' :
+                                                                     '严重风险'}
+                                                                </span>
+                                                            </div>
+                                                            <ul style={styles.warningList}>
+                                                                {risk.issues.map((issue, idx) => (
+                                                                    <li key={idx} style={styles.warningItem}>{issue}</li>
+                                                                ))}
+                                                            </ul>
+                                                            {risk.level === 'high' && (
+                                                                <label style={styles.ackLabel}>
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={riskAcknowledged[r.id] || false}
+                                                                        onChange={(e) => setRiskAcknowledged({
+                                                                            ...riskAcknowledged,
+                                                                            [r.id]: e.target.checked
+                                                                        })}
+                                                                        style={styles.ackCheckbox}
+                                                                    />
+                                                                    我了解风险，仍要启用此规则
+                                                                </label>
+                                                            )}
+                                                            {risk.level === 'severe' && (
+                                                                <div style={styles.severeMessage}>
+                                                                    此模式过于危险，必须修复后才能启用
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    {r.pattern && risk.level === 'safe' && (
+                                                        <div style={styles.previewText}>
+                                                            ✅ 预览：匹配 <code style={styles.code}>{r.pattern}</code>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <div style={styles.row}>
+                                                    <div style={styles.col}>
+                                                        <label style={styles.fieldLabel}>背景色</label>
+                                                        <label
+                                                            style={{
+                                                                ...styles.bgOption,
+                                                                color: hoveredBgOption === r.id ? '#fff' : '#ccc'
+                                                            }}
+                                                            onMouseEnter={() => setHoveredBgOption(r.id)}
+                                                            onMouseLeave={() => setHoveredBgOption(null)}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!r.style?.background_color}
+                                                                onChange={(e) => patchStyle(r.id, { background_color: e.target.checked ? '' : '#1d3a5a' })}
+                                                                style={{...styles.checkbox, position: 'absolute', opacity: 0, pointerEvents: 'none'}}
+                                                            />
+                                                            <span style={{
+                                                                ...styles.customCheckbox,
+                                                                borderColor: !r.style?.background_color ? '#5a8a6a' : (hoveredBgOption === r.id ? '#666' : '#555'),
+                                                                backgroundColor: !r.style?.background_color ? '#1a2a24' : (hoveredBgOption === r.id ? '#2a2a2a' : '#1e1e1e'),
+                                                                transform: hoveredBgOption === r.id ? 'scale(1.05)' : 'scale(1)'
+                                                            }}>
+                                                                {!r.style?.background_color && <span style={styles.checkmark}>✓</span>}
+                                                            </span>
+                                                            <span style={styles.bgOptionText}>使用终端背景色</span>
+                                                        </label>
+                                                        {r.style?.background_color && (
+                                                            <div style={styles.colorInput}>
+                                                                <input
+                                                                    type="color"
+                                                                    value={r.style?.background_color || '#1d3a5a'}
+                                                                    onChange={(e) => patchStyle(r.id, { background_color: e.target.value })}
+                                                                    style={styles.colorPicker}
+                                                                />
+                                                                <input
+                                                                    value={r.style?.background_color || ''}
+                                                                    onChange={(e) => patchStyle(r.id, { background_color: e.target.value })}
+                                                                    style={styles.input}
+                                                                    placeholder="#RRGGBB"
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div style={styles.col}>
+                                                        <label style={styles.fieldLabel}>文字颜色</label>
                                                         <div style={styles.colorInput}>
                                                             <input
                                                                 type="color"
-                                                                value={r.style?.background_color || '#1d3a5a'}
-                                                                onChange={(e) => patchStyle(r.id, { background_color: e.target.value })}
+                                                                value={r.style?.color || '#ffffff'}
+                                                                onChange={(e) => patchStyle(r.id, { color: e.target.value })}
                                                                 style={styles.colorPicker}
                                                             />
                                                             <input
-                                                                value={r.style?.background_color || ''}
-                                                                onChange={(e) => patchStyle(r.id, { background_color: e.target.value })}
+                                                                value={r.style?.color || ''}
+                                                                onChange={(e) => patchStyle(r.id, { color: e.target.value })}
                                                                 style={styles.input}
                                                                 placeholder="#RRGGBB"
                                                             />
                                                         </div>
-                                                    )}
-                                                </div>
-                                                <div style={styles.col}>
-                                                    <label style={styles.fieldLabel}>文字颜色</label>
-                                                    <div style={styles.colorInput}>
-                                                        <input
-                                                            type="color"
-                                                            value={r.style?.color || '#ffffff'}
-                                                            onChange={(e) => patchStyle(r.id, { color: e.target.value })}
-                                                            style={styles.colorPicker}
-                                                        />
-                                                        <input
-                                                            value={r.style?.color || ''}
-                                                            onChange={(e) => patchStyle(r.id, { color: e.target.value })}
-                                                            style={styles.input}
-                                                            placeholder="#RRGGBB"
-                                                        />
                                                     </div>
                                                 </div>
-                                            </div>
-                                            <div style={styles.field}>
-                                                <label style={styles.fieldLabel}>字重</label>
-                                                <select
-                                                    value={r.style?.font_weight || 'normal'}
-                                                    onChange={(e) => patchStyle(r.id, { font_weight: e.target.value })}
-                                                    style={styles.select}
-                                                >
-                                                    <option value="normal">常规</option>
-                                                    <option value="bold">粗体</option>
-                                                </select>
-                                            </div>
-
-                                            {/* 效果预览 */}
-                                            {r.pattern && (
-                                                <div style={styles.previewBox}>
-                                                    <label style={styles.fieldLabel}>效果预览</label>
-                                                    <div style={styles.previewBg}>
-                                                        <span style={{
-                                                            backgroundColor: r.style?.background_color ? r.style.background_color : 'unset',
-                                                            color: r.style?.color || '#ffffff',
-                                                            fontWeight: r.style?.font_weight as any || 'normal',
-                                                            padding: '2px 6px',
-                                                            borderRadius: '3px',
-                                                            whiteSpace: 'nowrap',
-                                                            textDecoration: r.style?.text_decoration || 'none',
-                                                            opacity: r.style?.opacity !== undefined ? r.style.opacity : 1
-                                                        }}>
-                                                            {r.name || '未命名'} 示例文本
-                                                        </span>
-                                                    </div>
+                                                <div style={styles.field}>
+                                                    <label style={styles.fieldLabel}>字重</label>
+                                                    <select
+                                                        value={r.style?.font_weight || 'normal'}
+                                                        onChange={(e) => patchStyle(r.id, { font_weight: e.target.value })}
+                                                        style={styles.select}
+                                                    >
+                                                        <option value="normal">常规</option>
+                                                        <option value="bold">粗体</option>
+                                                    </select>
                                                 </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
 
-                <div style={styles.footer}>
-                    <div style={styles.summary}>
-                        共 {sorted.length} 条规则，{sorted.filter(r => r.is_enabled).length} 条已启用
+                                                {/* 效果预览 */}
+                                                {r.pattern && (
+                                                    <div style={styles.previewBox}>
+                                                        <label style={styles.fieldLabel}>效果预览</label>
+                                                        <div style={styles.previewBg}>
+                                                            <span style={{
+                                                                backgroundColor: r.style?.background_color ? r.style.background_color : 'unset',
+                                                                color: r.style?.color || '#ffffff',
+                                                                fontWeight: r.style?.font_weight as any || 'normal',
+                                                                padding: '2px 6px',
+                                                                borderRadius: '3px',
+                                                                whiteSpace: 'nowrap',
+                                                                textDecoration: r.style?.text_decoration || 'none',
+                                                                opacity: r.style?.opacity !== undefined ? r.style.opacity : 1
+                                                            }}>
+                                                                {r.name || '未命名'} 示例文本
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
-                    <div style={styles.footerBtns}>
-                        <button style={styles.cancelBtn} onClick={onClose}>取消</button>
-                        <button style={styles.primary} onClick={applyAndClose}>保存更改</button>
+
+                    <div style={styles.footer}>
+                        <div style={styles.summary}>
+                            共 {sorted.length} 条规则，{sorted.filter(r => r.is_enabled).length} 条已启用
+                        </div>
+                        <div style={styles.footerBtns}>
+                            <button style={styles.cancelBtn} onClick={handleXClick}>取消</button>
+                            <button style={styles.primary} onClick={applyChanges}>保存更改</button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+
+            {/* 未保存更改确认弹窗 */}
+            <UnsavedChangesModal
+                isOpen={showUnsavedWarning}
+                changedCount={getChangedCount()}
+                onSave={() => {
+                    applyAndClose();
+                    setShowUnsavedWarning(false);
+                }}
+                onDiscard={() => {
+                    onClose();
+                    setShowUnsavedWarning(false);
+                }}
+                onCancel={() => setShowUnsavedWarning(false)}
+            />
+        </>
     );
 }
 
@@ -417,11 +686,21 @@ const styles: Record<string, React.CSSProperties> = {
         backgroundColor: '#1e1e1e',
         flexShrink: 0
     },
+    titleContainer: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px'
+    },
     title: {
         color: '#fff',
         fontWeight: 600,
         fontSize: '16px',
         letterSpacing: '0.3px'
+    },
+    unsavedIndicator: {
+        color: '#ff9800',
+        fontSize: '12px',
+        fontWeight: 500
     },
     x: {
         background: 'transparent',
@@ -491,18 +770,47 @@ const styles: Record<string, React.CSSProperties> = {
     },
     itemLeft: {
         display: 'flex',
+        flexDirection: 'column',
+        gap: '4px',
+        flex: 1,
+        minWidth: 0
+    },
+    ruleInfo: {
+        display: 'flex',
         alignItems: 'center',
         gap: '10px',
         flex: 1,
         minWidth: 0
     },
-    switchLabel: {
+    statusText: {
+        fontSize: '11px',
+        color: '#888',
+        marginLeft: '50px'
+    },
+    // Toggle Switch 样式
+    toggleSwitch: {
+        position: 'relative' as const,
+        width: '44px',
+        height: '22px',
+        borderRadius: '11px',
+        flexShrink: 0,
+        transition: 'all 0.2s'
+    },
+    toggleThumb: {
+        position: 'absolute' as const,
+        top: '2px',
+        width: '18px',
+        height: '18px',
+        borderRadius: '50%',
+        backgroundColor: '#fff',
+        transition: 'left 0.2s',
         display: 'flex',
         alignItems: 'center',
-        gap: '10px',
-        cursor: 'pointer',
-        flex: 1,
-        minWidth: 0
+        justifyContent: 'center',
+        fontSize: '10px'
+    },
+    lockIcon: {
+        fontSize: '10px'
     },
     checkbox: {
         width: '16px',
@@ -512,14 +820,6 @@ const styles: Record<string, React.CSSProperties> = {
         border: '1px solid #555',
         borderRadius: '3px',
         backgroundColor: '#1e1e1e'
-    },
-    statusDot: {
-        width: '12px',
-        height: '12px',
-        borderRadius: '50%',
-        flexShrink: 0,
-        transition: 'all 0.2s',
-        boxShadow: '0 0 0 2px transparent'
     },
     nameText: {
         color: '#ddd',
@@ -531,8 +831,6 @@ const styles: Record<string, React.CSSProperties> = {
         flex: 1
     },
     riskBadge: {
-        backgroundColor: '#5c2e2e',
-        color: '#ff9980',
         fontSize: '11px',
         padding: '2px 6px',
         borderRadius: '4px',
@@ -543,6 +841,20 @@ const styles: Record<string, React.CSSProperties> = {
         display: 'flex',
         gap: '4px',
         flexShrink: 0
+    },
+    editBtn: {
+        backgroundColor: '#333',
+        color: '#bbb',
+        border: '1px solid #444',
+        borderRadius: '4px',
+        padding: '0 8px',
+        height: '26px',
+        cursor: 'pointer',
+        fontSize: '12px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
+        transition: 'all 0.2s'
     },
     iconBtn: {
         backgroundColor: '#333',
@@ -661,9 +973,51 @@ const styles: Record<string, React.CSSProperties> = {
         padding: '2px',
         backgroundColor: '#1e1e1e'
     },
-    warnText: {
-        color: '#ff9980',
-        fontSize: '12px'
+    warningBox: {
+        padding: '12px',
+        borderRadius: '6px',
+        border: '1px solid',
+        marginTop: '8px'
+    },
+    warningHeader: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        marginBottom: '8px'
+    },
+    warningIcon: {
+        fontSize: '16px'
+    },
+    warningTitle: {
+        fontWeight: 600,
+        fontSize: '13px'
+    },
+    warningList: {
+        margin: '0 0 12px 0',
+        paddingLeft: '24px'
+    },
+    warningItem: {
+        fontSize: '12px',
+        color: '#ccc',
+        marginBottom: '4px'
+    },
+    ackLabel: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        fontSize: '12px',
+        color: '#ccc',
+        cursor: 'pointer'
+    },
+    ackCheckbox: {
+        width: '14px',
+        height: '14px',
+        cursor: 'pointer'
+    },
+    severeMessage: {
+        fontSize: '12px',
+        color: '#ff8080',
+        marginTop: '8px'
     },
     previewText: {
         color: '#8a8a8a',
@@ -724,5 +1078,67 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: '13px',
         fontWeight: 600,
         transition: 'all 0.2s'
+    },
+    // 未保存确认弹窗样式
+    confirmBackdrop: {
+        position: 'fixed',
+        inset: 0,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 3000
+    },
+    confirmModal: {
+        backgroundColor: '#252526',
+        border: '1px solid #1f1f1f',
+        borderRadius: '12px',
+        padding: '24px',
+        width: '400px',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+    },
+    confirmTitle: {
+        color: '#fff',
+        fontSize: '18px',
+        fontWeight: 600,
+        margin: '0 0 12px 0'
+    },
+    confirmMessage: {
+        color: '#ccc',
+        fontSize: '14px',
+        margin: '0 0 20px 0'
+    },
+    confirmActions: {
+        display: 'flex',
+        gap: '10px',
+        justifyContent: 'flex-end'
+    },
+    confirmCancelBtn: {
+        backgroundColor: '#3a3a3a',
+        color: '#ddd',
+        border: '1px solid #4a4a4a',
+        borderRadius: '6px',
+        padding: '8px 16px',
+        cursor: 'pointer',
+        fontSize: '13px'
+    },
+    confirmDiscardBtn: {
+        backgroundColor: '#5c3a3a',
+        color: '#ff8080',
+        border: '1px solid #6c4a4a',
+        borderRadius: '6px',
+        padding: '8px 16px',
+        cursor: 'pointer',
+        fontSize: '13px'
+    },
+    confirmSaveBtn: {
+        backgroundColor: '#007acc',
+        color: '#fff',
+        border: 'none',
+        borderRadius: '6px',
+        padding: '8px 16px',
+        cursor: 'pointer',
+        fontSize: '13px',
+        fontWeight: 600
     }
 };
