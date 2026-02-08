@@ -8,7 +8,6 @@ interface HighlightRulesModalProps {
     onClose: () => void;
 }
 
-// 风险等级类型
 type RiskLevel = 'safe' | 'moderate' | 'high' | 'severe';
 
 interface PatternRisk {
@@ -26,7 +25,6 @@ function newId() {
     return `r_${Math.random().toString(16).slice(2)}_${Date.now()}`;
 }
 
-// 评估正则表达式的风险等级
 function assessPatternRisk(pattern: string): PatternRisk {
     const p = pattern.trim();
     if (!p) return { level: 'safe', issues: [], canEnable: true };
@@ -34,7 +32,6 @@ function assessPatternRisk(pattern: string): PatternRisk {
     const issues: string[] = [];
     let level: RiskLevel = 'safe';
 
-    // 长度检查
     if (p.length > 500) {
         issues.push(`正则非常长 (${p.length}字符)`);
         level = 'high';
@@ -43,7 +40,6 @@ function assessPatternRisk(pattern: string): PatternRisk {
         level = 'moderate';
     }
 
-    // 嵌套量词检查
     if (/\(\.\*\)\+/.test(p) || /\(\.\+\)\+/.test(p)) {
         issues.push('包含嵌套量词，可能导致指数级匹配');
         if (level === 'safe') {
@@ -53,13 +49,11 @@ function assessPatternRisk(pattern: string): PatternRisk {
         }
     }
 
-    // 灾难性模式检查
     if (/^(\.\*|\.\+)[+*]/.test(p)) {
         issues.push('灾难性回溯模式');
         level = 'severe';
     }
 
-    // 其他复杂嵌套
     if (/\(\?:?[^)]*[+*][^)]*\)[+*]/.test(p)) {
         issues.push('复杂的嵌套量词组合');
         if (level === 'safe') {
@@ -74,7 +68,6 @@ function assessPatternRisk(pattern: string): PatternRisk {
     };
 }
 
-// 深度比较两个规则数组是否相同
 function areRulesEqual(a: HighlightRule[], b: HighlightRule[]): boolean {
     if (a.length !== b.length) return false;
     for (let i = 0; i < a.length; i++) {
@@ -88,50 +81,6 @@ function areRulesEqual(a: HighlightRule[], b: HighlightRule[]): boolean {
     return true;
 }
 
-// Toggle Switch 子组件
-interface ToggleSwitchProps {
-    enabled: boolean;
-    disabled: boolean;
-    locked: boolean;
-    onToggle: () => void;
-    reason?: string;
-}
-
-function ToggleSwitch({ enabled, disabled, locked, onToggle, reason }: ToggleSwitchProps) {
-    const getTrackColor = () => {
-        if (locked) return '#ff9800';
-        if (enabled) return '#4caf50';
-        return '#555';
-    };
-
-    const getThumbPosition = () => {
-        return enabled ? 'calc(100% - 18px)' : '2px';
-    };
-
-    return (
-        <div
-            style={{
-                ...styles.toggleSwitch,
-                backgroundColor: getTrackColor(),
-                cursor: disabled ? 'not-allowed' : 'pointer',
-                opacity: disabled ? 0.5 : 1
-            }}
-            onClick={disabled ? undefined : onToggle}
-            title={reason}
-        >
-            <div
-                style={{
-                    ...styles.toggleThumb,
-                    left: getThumbPosition()
-                }}
-            >
-                {locked && <span style={styles.lockIcon}>🔒</span>}
-            </div>
-        </div>
-    );
-}
-
-// 未保存更改确认弹窗
 interface UnsavedChangesModalProps {
     isOpen: boolean;
     changedCount: number;
@@ -144,20 +93,20 @@ function UnsavedChangesModal({ isOpen, changedCount, onSave, onDiscard, onCancel
     if (!isOpen) return null;
 
     return (
-        <div style={styles.confirmBackdrop}>
-            <div style={styles.confirmModal}>
-                <h3 style={styles.confirmTitle}>⚠️ 确认关闭？</h3>
-                <p style={styles.confirmMessage}>
+        <div style={unsavedStyles.overlay}>
+            <div style={unsavedStyles.modal}>
+                <h3 style={unsavedStyles.title}>确认关闭？</h3>
+                <p style={unsavedStyles.message}>
                     您有 {changedCount} 条规则的更改尚未保存。
                 </p>
-                <div style={styles.confirmActions}>
-                    <button style={styles.confirmCancelBtn} onClick={onCancel}>
+                <div style={unsavedStyles.actions}>
+                    <button style={unsavedStyles.cancelBtn} onClick={onCancel}>
                         继续编辑
                     </button>
-                    <button style={styles.confirmDiscardBtn} onClick={onDiscard}>
+                    <button style={unsavedStyles.discardBtn} onClick={onDiscard}>
                         放弃更改
                     </button>
-                    <button style={styles.confirmSaveBtn} onClick={onSave}>
+                    <button style={unsavedStyles.saveBtn} onClick={onSave}>
                         保存并关闭
                     </button>
                 </div>
@@ -182,7 +131,6 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
         }
     }, [isOpen, rules]);
 
-    // 检测是否有未保存的更改
     useEffect(() => {
         const hasChanges = !areRulesEqual(draft, rules);
         setIsDirty(hasChanges);
@@ -200,7 +148,6 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
 
     const applyChanges = () => {
         onChange(sorted);
-        // Reset the dirty state after saving
         setIsDirty(false);
     };
 
@@ -282,7 +229,6 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
 
     const isEditing = (id: string) => editingId === id;
 
-    // 计算未保存的更改数量
     const getChangedCount = () => {
         let count = 0;
         for (const d of draft) {
@@ -302,25 +248,29 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
 
     return (
         <>
-            <div style={styles.backdrop} onClick={onClose}>
+            <div style={styles.overlay}>
                 <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+                    {/* Header */}
                     <div style={styles.header}>
                         <div style={styles.titleContainer}>
-                            <div style={styles.title}>突出显示集</div>
-                            {isDirty && <div style={styles.unsavedIndicator}>● 未保存</div>}
+                            <h2 style={styles.title}>突出显示集</h2>
+                            {isDirty && <span style={styles.unsavedIndicator}>● 未保存</span>}
                         </div>
-                        <button style={styles.x} onClick={handleXClick}>×</button>
+                        <button onClick={handleXClick} style={styles.closeBtn}>×</button>
                     </div>
 
+                    {/* Body */}
                     <div style={styles.body}>
+                        {/* Toolbar */}
                         <div style={styles.toolbar}>
-                            <button style={styles.primary} onClick={addRule}>+ 新建规则</button>
+                            <button style={styles.primaryButton} onClick={addRule}>+ 新建规则</button>
                             <div style={styles.hint}>
                                 {isDirty ? `提示: 有 ${getChangedCount()} 条未保存更改` : '优先级越小越先匹配'}
                             </div>
                         </div>
 
-                        <div style={styles.list} className="hide-scrollbar">
+                        {/* Rules List */}
+                        <div style={styles.list}>
                             {sorted.length === 0 && <div style={styles.empty}>暂无规则，点击上方按钮添加</div>}
                             {sorted.map((r, i) => {
                                 const risk = assessPatternRisk(r.pattern);
@@ -329,17 +279,23 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
 
                                 return (
                                     <div key={r.id} style={styles.item}>
-                                        {/* 顶部栏：启用开关 + 操作按钮 */}
+                                        {/* Item Header */}
                                         <div style={styles.itemHeader}>
                                             <div style={styles.itemLeft}>
                                                 <div style={styles.ruleInfo}>
-                                                    <ToggleSwitch
-                                                        enabled={!!r.is_enabled}
-                                                        disabled={!canEnable}
-                                                        locked={risk.level === 'severe' || (risk.level === 'high' && !riskAcknowledged[r.id])}
-                                                        onToggle={() => patch(r.id, { is_enabled: !r.is_enabled && canEnable })}
-                                                        reason={risk.level !== 'safe' ? `风险等级: ${risk.level}` : undefined}
-                                                    />
+                                                    {/* Enable Switch */}
+                                                    <label style={styles.switch}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!r.is_enabled}
+                                                            onChange={() => patch(r.id, { is_enabled: !r.is_enabled && canEnable })}
+                                                            disabled={!canEnable}
+                                                        />
+                                                        <span style={{
+                                                            ...styles.slider,
+                                                            ...(risk.level !== 'safe' ? { backgroundColor: '#ff9800' } : {})
+                                                        }}></span>
+                                                    </label>
                                                     <span style={styles.nameText}>{r.name || '未命名'}</span>
                                                     {risk.level !== 'safe' && (
                                                         <span style={{
@@ -359,7 +315,6 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
                                                 </div>
                                                 <div style={styles.statusText}>
                                                     {r.is_enabled ? '已启用' : '已禁用'}
-                                                    {risk.level !== 'safe' && r.is_enabled && ' (风险已确认)'}
                                                 </div>
                                             </div>
                                             <div style={styles.actions}>
@@ -389,46 +344,6 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
                                                 </button>
                                                 <button
                                                     style={styles.iconBtn}
-                                                    onClick={() => {
-                                                        const idx = sorted.findIndex(x => x.id === r.id);
-                                                        if (idx <= 0) return;
-                                                        const target = sorted[0];
-                                                        const current = sorted[idx];
-                                                        const next = [...sorted];
-                                                        next[0] = { ...current, priority: target.priority };
-                                                        next[idx] = { ...target, priority: current.priority };
-                                                        for (let j = 1; j < idx; j++) {
-                                                            next[j].priority = next[j-1].priority + 1;
-                                                        }
-                                                        update(next);
-                                                    }}
-                                                    disabled={i === 0}
-                                                    title="置顶"
-                                                >
-                                                    ⇱
-                                                </button>
-                                                <button
-                                                    style={styles.iconBtn}
-                                                    onClick={() => {
-                                                        const idx = sorted.findIndex(x => x.id === r.id);
-                                                        if (idx < 0 || idx >= sorted.length - 1) return;
-                                                        const target = sorted[sorted.length - 1];
-                                                        const current = sorted[idx];
-                                                        const next = [...sorted];
-                                                        next[sorted.length - 1] = { ...current, priority: target.priority };
-                                                        next[idx] = { ...target, priority: current.priority };
-                                                        for (let j = idx + 1; j < sorted.length - 1; j++) {
-                                                            next[j].priority = next[j-1].priority + 1;
-                                                        }
-                                                        update(next);
-                                                    }}
-                                                    disabled={i === sorted.length - 1}
-                                                    title="置底"
-                                                >
-                                                    ⇲
-                                                </button>
-                                                <button
-                                                    style={{ ...styles.iconBtn, ...styles.deleteBtn }}
                                                     onClick={() => removeRule(r.id)}
                                                     title="删除"
                                                 >
@@ -437,7 +352,7 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
                                             </div>
                                         </div>
 
-                                        {/* 展开的编辑区域 */}
+                                        {/* Expanded Edit Area */}
                                         {editing && (
                                             <div style={styles.expanded}>
                                                 <div style={styles.field}>
@@ -455,8 +370,7 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
                                                     <input
                                                         value={r.pattern}
                                                         onChange={(e) => {
-                                                            const v = e.target.value;
-                                                            patch(r.id, { pattern: v });
+                                                            patch(r.id, { pattern: e.target.value });
                                                         }}
                                                         style={styles.input}
                                                         placeholder="例如：(?i)\\b(error|fail)\\b"
@@ -514,11 +428,6 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
                                                             )}
                                                         </div>
                                                     )}
-                                                    {r.pattern && risk.level === 'safe' && (
-                                                        <div style={styles.previewText}>
-                                                            ✅ 预览：匹配 <code style={styles.code}>{r.pattern}</code>
-                                                        </div>
-                                                    )}
                                                 </div>
 
                                                 <div style={styles.row}>
@@ -542,7 +451,6 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
                                                                 ...styles.customCheckbox,
                                                                 borderColor: !r.style?.background_color ? '#5a8a6a' : (hoveredBgOption === r.id ? '#666' : '#555'),
                                                                 backgroundColor: !r.style?.background_color ? '#1a2a24' : (hoveredBgOption === r.id ? '#2a2a2a' : '#1e1e1e'),
-                                                                transform: hoveredBgOption === r.id ? 'scale(1.05)' : 'scale(1)'
                                                             }}>
                                                                 {!r.style?.background_color && <span style={styles.checkmark}>✓</span>}
                                                             </span>
@@ -595,9 +503,9 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
                                                     </select>
                                                 </div>
 
-                                                {/* 效果预览 */}
+                                                {/* Preview */}
                                                 {r.pattern && (
-                                                    <div style={styles.previewBox}>
+                                                    <div style={styles.field}>
                                                         <label style={styles.fieldLabel}>效果预览</label>
                                                         <div style={styles.previewBg}>
                                                             <span style={{
@@ -623,19 +531,20 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
                         </div>
                     </div>
 
+                    {/* Footer */}
                     <div style={styles.footer}>
                         <div style={styles.summary}>
                             共 {sorted.length} 条规则，{sorted.filter(r => r.is_enabled).length} 条已启用
                         </div>
-                        <div style={styles.footerBtns}>
+                        <div style={styles.footerActions}>
                             <button style={styles.cancelBtn} onClick={handleXClick}>取消</button>
-                            <button style={styles.primary} onClick={applyChanges}>保存更改</button>
+                            <button style={styles.saveBtn} onClick={applyChanges}>保存更改</button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* 未保存更改确认弹窗 */}
+            {/* Unsaved Confirmation */}
             <UnsavedChangesModal
                 isOpen={showUnsavedWarning}
                 changedCount={getChangedCount()}
@@ -653,353 +562,350 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
     );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-    backdrop: {
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(0,0,0,0.6)',
+const styles = {
+    overlay: {
+        position: 'fixed' as const,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 2000
+        zIndex: 2100,
+        padding: '20px',
     },
     modal: {
-        width: '900px',
-        maxWidth: '95vw',
-        height: '80vh',
-        maxHeight: '800px',
-        minHeight: '600px',
         backgroundColor: '#252526',
-        border: '1px solid #1f1f1f',
-        borderRadius: '12px',
+        borderRadius: '8px',
+        width: '900px',
+        maxHeight: '650px',
+        height: '650px',
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'column' as const,
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
         overflow: 'hidden',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+        alignSelf: 'center' as const,
     },
     header: {
+        padding: '16px 24px',
+        borderBottom: '1px solid #3c3c3c',
         display: 'flex',
-        alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '16px 20px',
-        borderBottom: '1px solid #1f1f1f',
+        alignItems: 'center',
         backgroundColor: '#1e1e1e',
-        flexShrink: 0
     },
     titleContainer: {
         display: 'flex',
         alignItems: 'center',
-        gap: '12px'
+        gap: '12px',
     },
     title: {
+        margin: 0,
+        fontSize: '1.1rem',
         color: '#fff',
         fontWeight: 600,
-        fontSize: '16px',
-        letterSpacing: '0.3px'
     },
     unsavedIndicator: {
         color: '#ff9800',
-        fontSize: '12px',
-        fontWeight: 500
+        fontSize: '13px',
+        fontWeight: 500,
     },
-    x: {
-        background: 'transparent',
-        color: '#999',
+    closeBtn: {
+        background: 'none',
         border: 'none',
-        borderRadius: '6px',
-        width: '36px',
-        height: '32px',
+        color: '#ccc',
+        fontSize: '1.5rem',
         cursor: 'pointer',
-        fontSize: '24px',
-        lineHeight: '24px',
+        padding: '0',
+        width: '32px',
+        height: '32px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        transition: 'all 0.2s'
+        borderRadius: '4px',
+        ':hover': {
+            backgroundColor: '#3c3c3c',
+        }
     },
     body: {
         flex: 1,
-        minHeight: 0,
         display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden'
+        flexDirection: 'column' as const,
+        overflow: 'hidden',
+        minHeight: 0,
     },
     toolbar: {
         display: 'flex',
-        alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '16px 20px',
-        borderBottom: '1px solid #1f1f1f',
-        backgroundColor: '#1a1a1a',
-        flexShrink: 0
+        alignItems: 'center',
+        padding: '16px 24px',
+        borderBottom: '1px solid #3c3c3c',
+        backgroundColor: '#2D2D2D',
     },
     hint: {
-        color: '#8a8a8a',
-        fontSize: '12px'
+        color: '#888',
+        fontSize: '12px',
     },
     list: {
         flex: 1,
-        minHeight: 0,
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        padding: '16px 20px',
+        overflowY: 'auto' as const,
+        overflowX: 'hidden' as const,
+        padding: '16px 24px',
+        backgroundColor: '#2D2D2D',
         display: 'flex',
-        flexDirection: 'column',
-        gap: '8px'
+        flexDirection: 'column' as const,
+        gap: '12px',
+        minHeight: 0,
     },
     empty: {
         color: '#666',
         fontSize: '13px',
-        textAlign: 'center',
-        padding: '40px 0'
+        textAlign: 'center' as const,
+        padding: '40px 0',
     },
     item: {
-        border: '1px solid #2a2a2a',
-        borderRadius: '8px',
-        backgroundColor: '#1a1a1a',
-        overflow: 'visible',
-        transition: 'all 0.2s'
+        border: '1px solid #3c3c3c',
+        borderRadius: '6px',
+        backgroundColor: '#1e1e1e',
+        overflow: 'hidden',
+        flexShrink: 0,
     },
     itemHeader: {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: '10px 12px',
+        padding: '12px',
         gap: '12px',
-        backgroundColor: '#222'
     },
     itemLeft: {
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'column' as const,
         gap: '4px',
         flex: 1,
-        minWidth: 0
+        minWidth: 0,
     },
     ruleInfo: {
         display: 'flex',
         alignItems: 'center',
         gap: '10px',
-        flex: 1,
-        minWidth: 0
-    },
-    statusText: {
-        fontSize: '11px',
-        color: '#888',
-        marginLeft: '50px'
-    },
-    // Toggle Switch 样式
-    toggleSwitch: {
-        position: 'relative' as const,
-        width: '44px',
-        height: '22px',
-        borderRadius: '11px',
-        flexShrink: 0,
-        transition: 'all 0.2s'
-    },
-    toggleThumb: {
-        position: 'absolute' as const,
-        top: '2px',
-        width: '18px',
-        height: '18px',
-        borderRadius: '50%',
-        backgroundColor: '#fff',
-        transition: 'left 0.2s',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: '10px'
-    },
-    lockIcon: {
-        fontSize: '10px'
-    },
-    checkbox: {
-        width: '16px',
-        height: '16px',
-        cursor: 'pointer',
-        flexShrink: 0,
-        border: '1px solid #555',
-        borderRadius: '3px',
-        backgroundColor: '#1e1e1e'
     },
     nameText: {
-        color: '#ddd',
+        color: '#ccc',
         fontSize: '13px',
         fontWeight: 500,
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap',
-        flex: 1
+        flex: 1,
     },
     riskBadge: {
         fontSize: '11px',
         padding: '2px 6px',
         borderRadius: '4px',
         fontWeight: 600,
-        flexShrink: 0
+        flexShrink: 0,
+    },
+    statusText: {
+        fontSize: '11px',
+        color: '#888',
+        marginLeft: '50px',
+    },
+    switch: {
+        position: 'relative' as const,
+        display: 'inline-block',
+        width: '40px',
+        height: '20px',
+        flexShrink: 0,
+    },
+    slider: {
+        position: 'absolute' as const,
+        cursor: 'pointer',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: '#ccc',
+        transition: '.4s',
+        borderRadius: '20px',
+        ':before': {
+            position: 'absolute' as const,
+            content: '""',
+            height: '16px',
+            width: '16px',
+            left: '2px',
+            bottom: '2px',
+            backgroundColor: 'white',
+            transition: '.4s',
+            borderRadius: '50%',
+        }
     },
     actions: {
         display: 'flex',
-        gap: '4px',
-        flexShrink: 0
+        gap: '6px',
+        flexShrink: 0,
     },
     editBtn: {
-        backgroundColor: '#333',
-        color: '#bbb',
-        border: '1px solid #444',
+        padding: '6px 12px',
         borderRadius: '4px',
-        padding: '0 8px',
-        height: '26px',
+        border: '1px solid #5A5A5A',
+        backgroundColor: '#3C3C3C',
+        color: '#fff',
         cursor: 'pointer',
         fontSize: '12px',
         display: 'flex',
         alignItems: 'center',
         gap: '4px',
-        transition: 'all 0.2s'
+        ':hover': {
+            backgroundColor: '#4C4C4C',
+        }
     },
     iconBtn: {
-        backgroundColor: '#333',
-        color: '#bbb',
-        border: '1px solid #444',
-        borderRadius: '4px',
+        padding: '0',
         width: '28px',
-        height: '26px',
+        height: '28px',
+        borderRadius: '4px',
+        border: '1px solid #5A5A5A',
+        backgroundColor: '#3C3C3C',
+        color: '#bbb',
         cursor: 'pointer',
         fontSize: '14px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        transition: 'all 0.2s',
-        padding: 0
-    },
-    deleteBtn: {
-        color: '#ff8080',
-        borderColor: '#5c3a3a'
+        ':hover': {
+            backgroundColor: '#4C4C4C',
+        }
     },
     expanded: {
         padding: '16px',
-        borderTop: '1px solid #2a2a2a',
+        borderTop: '1px solid #3c3c3c',
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'column' as const,
         gap: '12px',
-        backgroundColor: '#151515',
-        overflow: 'visible'
+        backgroundColor: '#252526',
     },
     row: {
         display: 'flex',
-        gap: '12px'
+        gap: '12px',
     },
     col: {
         flex: 1,
         display: 'flex',
-        flexDirection: 'column',
-        gap: '6px'
+        flexDirection: 'column' as const,
+        gap: '6px',
     },
     field: {
         display: 'flex',
-        flexDirection: 'column',
-        gap: '6px'
+        flexDirection: 'column' as const,
+        gap: '6px',
     },
     fieldLabel: {
-        color: '#999',
-        fontSize: '12px',
-        fontWeight: 500
+        fontSize: '13px',
+        color: '#CCCCCC',
+        fontWeight: 500,
     },
     input: {
+        padding: '8px 12px',
+        borderRadius: '4px',
+        border: '1px solid #3c3c3c',
         backgroundColor: '#1e1e1e',
-        color: '#ddd',
-        border: '1px solid #3a3a3a',
-        borderRadius: '6px',
-        padding: '8px 10px',
+        color: '#fff',
         outline: 'none',
         fontSize: '13px',
-        transition: 'border-color 0.2s'
+        ':focus': {
+            borderColor: '#007ACC',
+        }
     },
     select: {
+        padding: '8px 12px',
+        borderRadius: '4px',
+        border: '1px solid #3c3c3c',
         backgroundColor: '#1e1e1e',
-        color: '#ddd',
-        border: '1px solid #3a3a3a',
-        borderRadius: '6px',
-        padding: '8px 10px',
+        color: '#fff',
         outline: 'none',
         fontSize: '13px',
-        cursor: 'pointer'
+        cursor: 'pointer',
     },
     colorInput: {
         display: 'flex',
         gap: '8px',
-        alignItems: 'center'
+        alignItems: 'center',
+    },
+    colorPicker: {
+        width: '40px',
+        height: '34px',
+        border: '1px solid #3c3c3c',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        padding: '2px',
+        backgroundColor: '#1e1e1e',
     },
     bgOption: {
         display: 'flex',
         alignItems: 'center',
-        gap: '10px',
+        gap: '8px',
         cursor: 'pointer',
         fontSize: '13px',
         color: '#ccc',
-        marginBottom: '8px',
-        userSelect: 'none',
-        position: 'relative',
-        transition: 'opacity 0.2s'
+        userSelect: 'none' as const,
+        position: 'relative' as const,
     },
     customCheckbox: {
-        width: '18px',
-        height: '18px',
+        width: '16px',
+        height: '16px',
         border: '2px solid #555',
-        borderRadius: '4px',
+        borderRadius: '3px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         flexShrink: 0,
-        transition: 'all 0.2s',
-        backgroundColor: '#1e1e1e'
+        backgroundColor: '#1e1e1e',
     },
     checkmark: {
         color: '#7aaa88',
         fontSize: '12px',
         fontWeight: 'bold',
-        lineHeight: 1
+        lineHeight: 1,
     },
     bgOptionText: {
         display: 'inline-flex',
         alignItems: 'center',
-        transition: 'color 0.2s'
     },
-    colorPicker: {
-        width: '40px',
-        height: '34px',
-        border: '1px solid #3a3a3a',
-        borderRadius: '6px',
+    checkbox: {
+        width: '16px',
+        height: '16px',
         cursor: 'pointer',
-        padding: '2px',
-        backgroundColor: '#1e1e1e'
+        flexShrink: 0,
     },
     warningBox: {
         padding: '12px',
-        borderRadius: '6px',
+        borderRadius: '4px',
         border: '1px solid',
-        marginTop: '8px'
+        marginTop: '8px',
     },
     warningHeader: {
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
-        marginBottom: '8px'
+        marginBottom: '8px',
     },
     warningIcon: {
-        fontSize: '16px'
+        fontSize: '14px',
     },
     warningTitle: {
         fontWeight: 600,
-        fontSize: '13px'
+        fontSize: '13px',
     },
     warningList: {
         margin: '0 0 12px 0',
-        paddingLeft: '24px'
+        paddingLeft: '24px',
     },
     warningItem: {
         fontSize: '12px',
         color: '#ccc',
-        marginBottom: '4px'
+        marginBottom: '4px',
     },
     ackLabel: {
         display: 'flex',
@@ -1007,138 +913,144 @@ const styles: Record<string, React.CSSProperties> = {
         gap: '8px',
         fontSize: '12px',
         color: '#ccc',
-        cursor: 'pointer'
+        cursor: 'pointer',
     },
     ackCheckbox: {
         width: '14px',
         height: '14px',
-        cursor: 'pointer'
+        cursor: 'pointer',
     },
     severeMessage: {
         fontSize: '12px',
         color: '#ff8080',
-        marginTop: '8px'
-    },
-    previewText: {
-        color: '#8a8a8a',
-        fontSize: '12px'
-    },
-    code: {
-        backgroundColor: '#2a2a2a',
-        padding: '2px 6px',
-        borderRadius: '3px',
-        fontFamily: 'monospace',
-        fontSize: '11px'
-    },
-    previewBox: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '6px'
+        marginTop: '8px',
     },
     previewBg: {
         backgroundColor: '#0d0d0d',
         padding: '12px',
-        borderRadius: '6px',
-        border: '1px solid #2a2a2a'
+        borderRadius: '4px',
+        border: '1px solid #3c3c3c',
     },
     footer: {
+        padding: '16px 24px',
+        borderTop: '1px solid #3c3c3c',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: '16px 20px',
-        borderTop: '1px solid #1f1f1f',
         backgroundColor: '#1e1e1e',
-        flexShrink: 0
     },
     summary: {
-        color: '#8a8a8a',
-        fontSize: '13px'
-    },
-    footerBtns: {
-        display: 'flex',
-        gap: '10px'
-    },
-    cancelBtn: {
-        backgroundColor: '#3a3a3a',
-        color: '#ddd',
-        border: '1px solid #4a4a4a',
-        borderRadius: '6px',
-        padding: '8px 20px',
-        cursor: 'pointer',
+        color: '#888',
         fontSize: '13px',
-        transition: 'all 0.2s'
     },
-    primary: {
+    footerActions: {
+        display: 'flex',
+        gap: '12px',
+    },
+    saveBtn: {
+        padding: '8px 20px',
+        borderRadius: '4px',
+        border: 'none',
         backgroundColor: '#007acc',
         color: '#fff',
-        border: 'none',
-        borderRadius: '6px',
-        padding: '8px 20px',
         cursor: 'pointer',
+        fontWeight: 500,
         fontSize: '13px',
-        fontWeight: 600,
-        transition: 'all 0.2s'
+        ':hover': {
+            backgroundColor: '#005a9e',
+        }
     },
-    // 未保存确认弹窗样式
-    confirmBackdrop: {
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(0,0,0,0.7)',
+    cancelBtn: {
+        padding: '8px 20px',
+        borderRadius: '4px',
+        border: '1px solid #5A5A5A',
+        backgroundColor: 'transparent',
+        color: '#ccc',
+        cursor: 'pointer',
+        fontWeight: 500,
+        fontSize: '13px',
+        ':hover': {
+            backgroundColor: '#3C3C3C',
+        }
+    },
+    primaryButton: {
+        padding: '8px 16px',
+        borderRadius: '4px',
+        border: 'none',
+        backgroundColor: '#007acc',
+        color: '#fff',
+        cursor: 'pointer',
+        fontWeight: 500,
+        fontSize: '13px',
+        ':hover': {
+            backgroundColor: '#005a9e',
+        }
+    },
+};
+
+const unsavedStyles = {
+    overlay: {
+        position: 'fixed' as const,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 3000
+        zIndex: 2200,
     },
-    confirmModal: {
+    modal: {
         backgroundColor: '#252526',
-        border: '1px solid #1f1f1f',
-        borderRadius: '12px',
+        borderRadius: '8px',
         padding: '24px',
         width: '400px',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
     },
-    confirmTitle: {
+    title: {
         color: '#fff',
-        fontSize: '18px',
+        fontSize: '16px',
         fontWeight: 600,
-        margin: '0 0 12px 0'
+        margin: '0 0 12px 0',
     },
-    confirmMessage: {
+    message: {
         color: '#ccc',
-        fontSize: '14px',
-        margin: '0 0 20px 0'
+        fontSize: '13px',
+        margin: '0 0 20px 0',
     },
-    confirmActions: {
+    actions: {
         display: 'flex',
         gap: '10px',
-        justifyContent: 'flex-end'
+        justifyContent: 'flex-end',
     },
-    confirmCancelBtn: {
-        backgroundColor: '#3a3a3a',
-        color: '#ddd',
-        border: '1px solid #4a4a4a',
-        borderRadius: '6px',
+    cancelBtn: {
         padding: '8px 16px',
+        borderRadius: '4px',
+        border: '1px solid #5A5A5A',
+        backgroundColor: 'transparent',
+        color: '#ccc',
         cursor: 'pointer',
-        fontSize: '13px'
+        fontWeight: 500,
+        fontSize: '13px',
     },
-    confirmDiscardBtn: {
+    discardBtn: {
+        padding: '8px 16px',
+        borderRadius: '4px',
+        border: '1px solid #6c4a4a',
         backgroundColor: '#5c3a3a',
         color: '#ff8080',
-        border: '1px solid #6c4a4a',
-        borderRadius: '6px',
-        padding: '8px 16px',
-        cursor: 'pointer',
-        fontSize: '13px'
-    },
-    confirmSaveBtn: {
-        backgroundColor: '#007acc',
-        color: '#fff',
-        border: 'none',
-        borderRadius: '6px',
-        padding: '8px 16px',
         cursor: 'pointer',
         fontSize: '13px',
-        fontWeight: 600
+    },
+    saveBtn: {
+        padding: '8px 16px',
+        borderRadius: '4px',
+        border: 'none',
+        backgroundColor: '#007acc',
+        color: '#fff',
+        cursor: 'pointer',
+        fontWeight: 500,
+        fontSize: '13px',
     }
 };
