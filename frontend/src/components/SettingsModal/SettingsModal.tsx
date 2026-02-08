@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import KeysMap from './KeysMap';
 import HighlightRulesModal from './HighlightRulesModal';
 import { HighlightRule, TerminalConfig } from '../Terminal/highlightTypes';
@@ -41,15 +41,47 @@ interface SettingsModalProps {
     onHighlightRulesChange?: (rules: HighlightRule[]) => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadcastMode, onToggleBroadcast, onCompletionDelayChange, onOpenFileTransfer, onTerminalConfigChange, onHighlightRulesChange }) => {
+type TabId = 'llm' | 'prompts' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'filetransfer' | 'experimental';
+
+interface NavItem {
+    id: TabId;
+    label: string;
+    icon: string;
+    category: string;
+}
+
+const SettingsModal: React.FC<SettingsModalProps> = ({
+    isOpen,
+    onClose,
+    isBroadcastMode,
+    onToggleBroadcast,
+    onCompletionDelayChange,
+    onOpenFileTransfer,
+    onTerminalConfigChange,
+    onHighlightRulesChange
+}) => {
     const [config, setConfig] = useState<AppConfig | null>(null);
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
-    const [activeTab, setActiveTab] = useState<'llm' | 'prompts' | 'system' | 'app' | 'keys'>('llm');
+    const [activeTab, setActiveTab] = useState<TabId>('llm');
     const [rulesModalOpen, setRulesModalOpen] = useState(false);
     const [importDir, setImportDir] = useState('');
     const [importLoading, setImportLoading] = useState(false);
     const [importMsg, setImportMsg] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const searchInputRef = useRef<HTMLInputElement>(null);
+
+    // Navigation items structure
+    const navItems: NavItem[] = [
+        { id: 'llm', label: '模型服务', icon: '🤖', category: 'AI' },
+        { id: 'prompts', label: 'AI提示词', icon: '💬', category: 'AI' },
+        { id: 'terminal', label: '终端设置', icon: '🖥️', category: '终端' },
+        { id: 'highlight', label: '突出显示', icon: '🎨', category: '终端' },
+        { id: 'shortcuts', label: '快捷键', icon: '⌨️', category: '交互' },
+        { id: 'broadcast', label: '多窗口', icon: '🪟', category: '交互' },
+        { id: 'filetransfer', label: '文件传输', icon: '📁', category: '工具' },
+        { id: 'experimental', label: '高级选项', icon: '🔧', category: '系统' },
+    ];
 
     useEffect(() => {
         if (isOpen) {
@@ -57,8 +89,44 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
             setMsg('');
             setImportDir('');
             setImportMsg('');
+            setSearchQuery('');
+            setActiveTab('llm');
         }
     }, [isOpen]);
+
+    // Focus search box when tab changes
+    useEffect(() => {
+        if (isOpen && searchInputRef.current) {
+            searchInputRef.current.focus();
+        }
+    }, [activeTab, isOpen]);
+
+    // Keyboard shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (!isOpen) return;
+
+            // Ctrl/Cmd + S: Save
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                handleSave();
+            }
+
+            // Escape: Close
+            if (e.key === 'Escape') {
+                handleClose();
+            }
+
+            // Ctrl/Cmd + F: Focus search
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                e.preventDefault();
+                searchInputRef.current?.focus();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, config]);
 
     const loadSettings = async () => {
         setLoading(true);
@@ -131,6 +199,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
         }
     };
 
+    const handleClose = () => {
+        onClose();
+    };
+
     const handleChange = (section: keyof AppConfig, key: string, value: string) => {
         if (!config) return;
         const sectionValue = config[section];
@@ -188,9 +260,267 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
 
     if (!isOpen || !config) return null;
 
+    // Render tab content
+    const renderTabContent = () => {
+        switch (activeTab) {
+            case 'llm':
+                return (
+                    <div style={styles.settingsGroup}>
+                        <div style={styles.groupTitle}>基础配置</div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>API 地址 (Base URL)</label>
+                            <input
+                                style={styles.input}
+                                value={config.llm.BaseURL}
+                                onChange={(e) => handleChange('llm', 'BaseURL', e.target.value)}
+                                placeholder="https://api.openai.com/v1"
+                            />
+                        </div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>API 密钥 (API Key)</label>
+                            <input
+                                style={styles.input}
+                                type="password"
+                                value={config.llm.APIKey}
+                                onChange={(e) => handleChange('llm', 'APIKey', e.target.value)}
+                            />
+                        </div>
+                        <div style={styles.groupTitle}>模型选择</div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>快速模型（简单任务）</label>
+                            <input
+                                style={styles.input}
+                                value={config.llm.FastModel}
+                                onChange={(e) => handleChange('llm', 'FastModel', e.target.value)}
+                                placeholder="deepseek-chat"
+                            />
+                        </div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>复杂模型（长上下文任务）</label>
+                            <input
+                                style={styles.input}
+                                value={config.llm.ComplexModel}
+                                onChange={(e) => handleChange('llm', 'ComplexModel', e.target.value)}
+                                placeholder="glm46"
+                            />
+                        </div>
+                    </div>
+                );
+
+            case 'prompts':
+                return (
+                    <div style={styles.settingsGroup}>
+                        <div style={styles.groupTitle}>系统提示词</div>
+                        {[
+                            { key: 'smart_connect', label: '智能连接系统提示词 (Smart Connect)' },
+                            { key: 'qa_prompt', label: 'AI 问答提示词 (AI Chat Agent)' },
+                            { key: 'troubleshoot_prompt', label: '问题排查提示词 (Troubleshooting Agent)' },
+                            { key: 'conclusion_prompt', label: '故障总结提示词 (Conclusion Agent)' },
+                            { key: 'polish_prompt', label: '内容润色提示词 (Polishing Agent)' },
+                        ].map(({ key, label }) => (
+                            <div key={key} style={styles.settingItem}>
+                                <label style={styles.settingLabel}>{label}</label>
+                                <textarea
+                                    style={styles.textarea}
+                                    value={config.prompts[key] || ''}
+                                    onChange={(e) => handlePromptChange(key, e.target.value)}
+                                    rows={8}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                );
+
+            case 'terminal':
+                return (
+                    <div style={styles.settingsGroup}>
+                        <div style={styles.groupTitle}>显示设置</div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>Scrollback 历史行数</label>
+                            <input
+                                style={styles.input}
+                                type="number"
+                                min="500"
+                                max="20000"
+                                step="500"
+                                value={config.terminal?.scrollback ?? 5000}
+                                onChange={(e) => {
+                                    const v = Math.max(500, Math.min(20000, parseInt(e.target.value) || 5000));
+                                    setConfig({
+                                        ...config,
+                                        terminal: {
+                                            ...(config.terminal || { scrollback: 5000, search_enabled: true, highlight_enabled: true }),
+                                            scrollback: v
+                                        }
+                                    });
+                                }}
+                            />
+                            <div style={styles.settingDescription}>
+                                影响可搜索与可高亮的历史行数；调整后建议重启应用使其完全生效
+                            </div>
+                        </div>
+                    </div>
+                );
+
+            case 'highlight':
+                return (
+                    <div style={styles.settingsGroup}>
+                        <div style={styles.groupTitle}>突出显示规则</div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>管理突出显示集</label>
+                            <button
+                                onClick={() => setRulesModalOpen(true)}
+                                style={styles.secondaryButton}
+                            >
+                                打开突出显示设置
+                            </button>
+                            <div style={styles.settingDescription}>
+                                当前已启用 {config.highlight_rules?.filter(r => r.is_enabled).length || 0} 条规则
+                            </div>
+                        </div>
+                    </div>
+                );
+
+            case 'shortcuts':
+                return (
+                    <div style={styles.settingsGroup}>
+                        <div style={styles.groupTitle}>键盘快捷键</div>
+                        <KeysMap commandQueryShortcut={formatShortcutLabel(config.command_query_shortcut)} />
+                    </div>
+                );
+
+            case 'broadcast':
+                return (
+                    <div style={styles.settingsGroup}>
+                        <div style={styles.groupTitle}>多窗口广播模式</div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>启用广播模式</label>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <label style={styles.switch}>
+                                    <input
+                                        type="checkbox"
+                                        checked={!!isBroadcastMode}
+                                        onChange={(e) => {
+                                            if (onToggleBroadcast) {
+                                                onToggleBroadcast(e.target.checked);
+                                            }
+                                        }}
+                                    />
+                                    <span style={styles.slider}></span>
+                                </label>
+                                <span style={{ color: '#ccc', fontSize: '0.9rem' }}>
+                                    {isBroadcastMode ? '已开启' : '已关闭'}
+                                </span>
+                            </div>
+                            <div style={styles.settingDescription}>
+                                开启后，默认将当前所有打开的终端加入广播组。您可以在标签页上单独切换每个终端的广播状态。
+                            </div>
+                        </div>
+                    </div>
+                );
+
+            case 'filetransfer':
+                return (
+                    <div style={styles.settingsGroup}>
+                        <div style={styles.groupTitle}>文件传输</div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>打开文件传输窗口</label>
+                            <button
+                                onClick={() => {
+                                    if (onOpenFileTransfer) onOpenFileTransfer();
+                                    onClose();
+                                }}
+                                style={styles.secondaryButton}
+                            >
+                                打开文件传输
+                            </button>
+                            <div style={styles.settingDescription}>
+                                打开后可在终端旁边并行使用文件传输功能
+                            </div>
+                        </div>
+                    </div>
+                );
+
+            case 'experimental':
+                return (
+                    <div style={styles.settingsGroup}>
+                        <div style={styles.groupTitle}>配置管理</div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>导入旧版本配置</label>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' as const }}>
+                                <input
+                                    style={{ ...styles.input, flex: 1, minWidth: '320px' }}
+                                    value={importDir}
+                                    onChange={(e) => setImportDir(e.target.value)}
+                                    placeholder="例如：C:\\Users\\xxx\\OldOpsCopilot"
+                                />
+                                <button
+                                    onClick={handleImportConfig}
+                                    style={styles.secondaryButton}
+                                    disabled={importLoading}
+                                >
+                                    {importLoading ? '正在导入...' : '开始导入'}
+                                </button>
+                            </div>
+                            {importMsg ? (
+                                <div style={styles.settingDescription}>{importMsg}</div>
+                            ) : (
+                                <div style={styles.settingDescription}>
+                                    支持导入 config.json / prompts.json / quick_commands.json / highlight_rules.json；导入前会自动备份当前配置到 .bak 文件
+                                </div>
+                            )}
+                        </div>
+                        <div style={styles.groupTitle}>高级功能</div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>外部定位脚本路径</label>
+                            <input
+                                style={styles.input}
+                                value={config.experimental?.external_troubleshoot_script_path || ''}
+                                onChange={(e) => handleChange('experimental', 'external_troubleshoot_script_path', e.target.value)}
+                                placeholder="例如：C:\\scripts\\troubleshoot.bat"
+                            />
+                            <div style={styles.settingDescription}>
+                                外部定位脚本（.bat/.ps1）会在问题排查时并行执行，提供另一种定位思路
+                            </div>
+                        </div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>命令补全延迟时间 (毫秒)</label>
+                            <input
+                                style={styles.input}
+                                type="number"
+                                min="0"
+                                max="2000"
+                                step="50"
+                                value={config.completion_delay || 150}
+                                onChange={(e) => {
+                                    const value = parseInt(e.target.value) || 150;
+                                    setConfig({
+                                        ...config,
+                                        completion_delay: Math.max(0, Math.min(2000, value))
+                                    });
+                                }}
+                            />
+                            <div style={styles.settingDescription}>
+                                设置命令自动补全的触发延迟时间（毫秒）。设置为 0 表示立即触发，设置为 2000 表示延迟 2 秒触发
+                            </div>
+                        </div>
+                    </div>
+                );
+
+            default:
+                return null;
+        }
+    };
+
+    // Get current breadcrumb path
+    const getBreadcrumb = () => {
+        const currentItem = navItems.find(item => item.id === activeTab);
+        return `系统设置 > ${currentItem?.label}`;
+    };
+
     return (
         <div style={styles.overlay}>
-             <style>{`
+            <style>{`
                 input:checked + span {
                     background-color: #2196F3 !important;
                 }
@@ -200,7 +530,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                 input:checked + span:before {
                     transform: translateX(20px);
                 }
-                /* Hide default checkbox */
                 label input {
                     opacity: 0;
                     width: 0;
@@ -208,310 +537,57 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                 }
             `}</style>
             <div style={styles.modal}>
+                {/* Header */}
                 <div style={styles.header}>
                     <h2 style={styles.title}>系统设置</h2>
-                    <button onClick={onClose} style={styles.closeBtn}>×</button>
+                    <button onClick={handleClose} style={styles.closeBtn}>×</button>
                 </div>
 
-                <div style={styles.tabs}>
-                    <button 
-                        style={activeTab === 'llm' ? styles.activeTab : styles.tab}
-                        onClick={() => setActiveTab('llm')}
-                    >
-                        模型服务
-                    </button>
-                    <button 
-                        style={activeTab === 'prompts' ? styles.activeTab : styles.tab}
-                        onClick={() => setActiveTab('prompts')}
-                    >
-                        AI 提示词
-                    </button>
-                    <button 
-                        style={activeTab === 'keys' ? styles.activeTab : styles.tab}
-                        onClick={() => setActiveTab('keys')}
-                    >
-                        快捷键
-                    </button>
-                    <button 
-                        style={activeTab === 'system' ? styles.activeTab : styles.tab}
-                        onClick={() => setActiveTab('system')}
-                    >
-                        系统选项
-                    </button>
-                    <button 
-                        style={activeTab === 'app' ? styles.activeTab : styles.tab}
-                        onClick={() => setActiveTab('app')}
-                    >
-                        应用选项
-                    </button>
-                </div>
-
-                <div style={styles.content}>
-                    {activeTab === 'llm' && (
-                        <div style={styles.formSection}>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>API 地址 (Base URL)</label>
-                                <input 
-                                    style={styles.input}
-                                    value={config.llm.BaseURL}
-                                    onChange={(e) => handleChange('llm', 'BaseURL', e.target.value)}
-                                    placeholder="https://api.openai.com/v1"
-                                />
-                            </div>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>API 密钥 (API Key)</label>
-                                <input 
-                                    style={styles.input}
-                                    type="password"
-                                    value={config.llm.APIKey}
-                                    onChange={(e) => handleChange('llm', 'APIKey', e.target.value)}
-                                />
-                            </div>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>快速模型（简单任务）</label>
-                                <input 
-                                    style={styles.input}
-                                    value={config.llm.FastModel}
-                                    onChange={(e) => handleChange('llm', 'FastModel', e.target.value)}
-                                    placeholder="deepseek-chat"
-                                />
-                            </div>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>复杂模型（长上下文任务）</label>
-                                <input 
-                                    style={styles.input}
-                                    value={config.llm.ComplexModel}
-                                    onChange={(e) => handleChange('llm', 'ComplexModel', e.target.value)}
-                                    placeholder="glm46"
-                                />
-                            </div>
+                {/* Main Content Area */}
+                <div style={styles.mainContent}>
+                    {/* Left Sidebar */}
+                    <div style={styles.sidebar}>
+                        <div style={styles.searchBox}>
+                            <input
+                                ref={searchInputRef}
+                                style={styles.searchInput}
+                                placeholder="🔍 搜索设置..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
                         </div>
-                    )}
-
-                    {activeTab === 'prompts' && (
-                        <div style={styles.formSection}>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>智能连接系统提示词 (Smart Connect)</label>
-                                <textarea 
-                                    style={styles.textarea}
-                                    value={config.prompts['smart_connect'] || ''}
-                                    onChange={(e) => handlePromptChange('smart_connect', e.target.value)}
-                                    rows={10}
-                                />
-                            </div>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>AI 问答提示词 (AI Chat Agent)</label>
-                                <textarea 
-                                    style={styles.textarea}
-                                    value={config.prompts['qa_prompt'] || ''}
-                                    onChange={(e) => handlePromptChange('qa_prompt', e.target.value)}
-                                    rows={10}
-                                />
-                            </div>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>问题排查提示词 (Troubleshooting Agent)</label>
-                                <textarea 
-                                    style={styles.textarea}
-                                    value={config.prompts['troubleshoot_prompt'] || ''}
-                                    onChange={(e) => handlePromptChange('troubleshoot_prompt', e.target.value)}
-                                    rows={10}
-                                />
-                            </div>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>故障总结提示词 (Conclusion Agent)</label>
-                                <textarea 
-                                    style={styles.textarea}
-                                    value={config.prompts['conclusion_prompt'] || ''}
-                                    onChange={(e) => handlePromptChange('conclusion_prompt', e.target.value)}
-                                    rows={10}
-                                />
-                            </div>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>内容润色提示词 (Polishing Agent)</label>
-                                <textarea 
-                                    style={styles.textarea}
-                                    value={config.prompts['polish_prompt'] || ''}
-                                    onChange={(e) => handlePromptChange('polish_prompt', e.target.value)}
-                                    rows={10}
-                                />
-                            </div>
-                        </div>
-                    )}
-
-                    {activeTab === 'system' && (
-                        <div style={styles.formSection}>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>日志存储目录</label>
-                                <input 
-                                    style={styles.input}
-                                    value={config.log.dir}
-                                    onChange={(e) => handleChange('log', 'dir', e.target.value)}
-                                />
-                            </div>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>业务文档&定位手册目录 (Docs Dir)</label>
-                                <input 
-                                    style={styles.input}
-                                    value={config.docs?.dir || ''}
-                                    onChange={(e) => handleChange('docs', 'dir', e.target.value)}
-                                    placeholder="默认使用程序同级目录下的 docs"
-                                />
-                            </div>
-                        </div>
-                    )}
-
-                    {activeTab === 'keys' && (
-                        <div style={styles.formSection}>
-                            <KeysMap commandQueryShortcut={formatShortcutLabel(config.command_query_shortcut)} />
-                        </div>
-                    )}
-
-                    {activeTab === 'app' && (
-                        <div style={styles.formSection}>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>导入旧版本配置</label>
-                                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' as const }}>
-                                    <input
-                                        style={{ ...styles.input, flex: 1, minWidth: '320px' }}
-                                        value={importDir}
-                                        onChange={(e) => setImportDir(e.target.value)}
-                                        placeholder="例如：C:\\Users\\xxx\\OldOpsCopilot"
-                                    />
-                                    <button
-                                        onClick={handleImportConfig}
-                                        style={{ ...styles.saveBtn, padding: '8px 12px', height: '36px' }}
-                                        disabled={importLoading}
-                                        type="button"
-                                    >
-                                        {importLoading ? '正在导入...' : '开始导入'}
-                                    </button>
-                                </div>
-                                {importMsg ? (
-                                    <div style={{ color: '#888', fontSize: '0.85rem' }}>
-                                        {importMsg}
-                                    </div>
-                                ) : (
-                                    <div style={{ color: '#888', fontSize: '0.85rem' }}>
-                                        支持导入 config.json / prompts.json / quick_commands.json / highlight_rules.json；导入前会自动备份当前配置到 .bak 文件。
-                                    </div>
-                                )}
-                            </div>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>外部定位脚本路径</label>
-                                <input
-                                    style={styles.input}
-                                    value={config.experimental?.external_troubleshoot_script_path || ''}
-                                    onChange={(e) => handleChange('experimental', 'external_troubleshoot_script_path', e.target.value)}
-                                    placeholder="例如：C:\\scripts\\troubleshoot.bat"
-                                />
-                                <div style={{ color: '#888', fontSize: '0.8rem', marginTop: '4px' }}>
-                                    外部定位脚本（.bat/.ps1）会在问题排查时并行执行，提供另一种定位思路
-                                </div>
-                            </div>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>命令补全延迟时间 (毫秒)</label>
-                                <input
-                                    style={styles.input}
-                                    type="number"
-                                    min="0"
-                                    max="2000"
-                                    step="50"
-                                    value={config.completion_delay || 150}
-                                    onChange={(e) => {
-                                        const value = parseInt(e.target.value) || 150;
-                                        setConfig({
-                                            ...config,
-                                            completion_delay: Math.max(0, Math.min(2000, value))
-                                        });
+                        <nav style={styles.nav}>
+                            {navItems.map((item) => (
+                                <div
+                                    key={item.id}
+                                    style={{
+                                        ...styles.navItem,
+                                        ...(activeTab === item.id ? styles.navItemActive : {})
                                     }}
-                                />
-                                <div style={{ color: '#888', fontSize: '0.8rem', marginTop: '4px' }}>
-                                    设置命令自动补全的触发延迟时间（毫秒）。设置为 0 表示立即触发，设置为 2000 表示延迟 2 秒触发。
+                                    onClick={() => setActiveTab(item.id)}
+                                >
+                                    <span style={styles.navIcon}>{item.icon}</span>
+                                    <span style={styles.navText}>{item.label}</span>
                                 </div>
-                            </div>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>终端搜索与高亮</label>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' as const }}>
-                                    <button
-                                        style={{ ...styles.saveBtn, padding: '8px 12px', height: '36px' }}
-                                        onClick={() => setRulesModalOpen(true)}
-                                        type="button"
-                                    >
-                                        设置突出显示集
-                                    </button>
-                                    <span style={{ color: '#888', fontSize: '0.85rem' }}>
-                                        {config.highlight_rules?.filter(r => r.is_enabled).length || 0} 条规则已启用
-                                    </span>
-                                </div>
-                                <div style={{ marginTop: '10px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' as const }}>
-                                    <div style={{ color: '#ccc', fontSize: '0.9rem' }}>Scrollback 行数</div>
-                                    <input
-                                        style={{ ...styles.input, width: '200px' }}
-                                        type="number"
-                                        min="500"
-                                        max="20000"
-                                        step="500"
-                                        value={config.terminal?.scrollback ?? 5000}
-                                        onChange={(e) => {
-                                            const v = Math.max(500, Math.min(20000, parseInt(e.target.value) || 5000));
-                                            setConfig({
-                                                ...config,
-                                                terminal: {
-                                                    ...(config.terminal || { scrollback: 5000, search_enabled: true, highlight_enabled: true }),
-                                                    scrollback: v
-                                                }
-                                            });
-                                        }}
-                                    />
-                                    <div style={{ color: '#888', fontSize: '0.8rem' }}>
-                                        影响可搜索与可高亮的历史行数；调整后建议重启应用使其完全生效。
-                                    </div>
-                                </div>
-                            </div>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>文件传输</label>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <button
-                                        onClick={() => {
-                                            if (onOpenFileTransfer) onOpenFileTransfer();
-                                            onClose();
-                                        }}
-                                        style={{ ...styles.saveBtn, padding: '6px 10px', height: '32px' }}
-                                        type="button"
-                                    >
-                                        打开文件传输窗口
-                                    </button>
-                                    <span style={{ color: '#888', fontSize: '0.85rem' }}>
-                                        打开后可在终端旁边并行使用
-                                    </span>
-                                </div>
-                            </div>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>多窗口广播模式</label>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <label style={styles.switch}>
-                                        <input 
-                                            type="checkbox" 
-                                            checked={!!isBroadcastMode}
-                                            onChange={(e) => {
-                                                if (onToggleBroadcast) {
-                                                    onToggleBroadcast(e.target.checked);
-                                                }
-                                            }}
-                                        />
-                                        <span style={styles.slider}></span>
-                                    </label>
-                                    <span style={{ color: '#ccc', fontSize: '0.9rem' }}>
-                                        {isBroadcastMode ? '已开启 (输入将同步到所有广播组终端)' : '已关闭'}
-                                    </span>
-                                </div>
-                                <div style={{ color: '#888', fontSize: '0.8rem', marginTop: '4px' }}>
-                                    开启后，默认将当前所有打开的终端加入广播组。您可以在标签页上单独切换每个终端的广播状态。
-                                </div>
-                            </div>
+                            ))}
+                        </nav>
+                    </div>
+
+                    {/* Right Content Area */}
+                    <div style={styles.contentArea}>
+                        {/* Breadcrumb */}
+                        <div style={styles.breadcrumb}>
+                            {getBreadcrumb()}
                         </div>
-                    )}
+
+                        {/* Settings Content */}
+                        <div style={styles.settingsContent}>
+                            {renderTabContent()}
+                        </div>
+                    </div>
                 </div>
+
+                {/* Highlight Rules Modal */}
                 <HighlightRulesModal
                     isOpen={rulesModalOpen}
                     rules={config.highlight_rules || []}
@@ -524,11 +600,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, isBroadc
                     onClose={() => setRulesModalOpen(false)}
                 />
 
+                {/* Footer */}
                 <div style={styles.footer}>
                     <div style={styles.statusMsg}>{msg}</div>
-                    <button onClick={handleSave} style={styles.saveBtn} disabled={loading}>
-                        {loading ? '正在保存...' : '保存设置'}
-                    </button>
+                    <div style={styles.footerActions}>
+                        <button onClick={handleClose} style={styles.cancelBtn}>取消</button>
+                        <button onClick={handleSave} style={styles.saveBtn} disabled={loading}>
+                            {loading ? '正在保存...' : '保存更改'}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -551,8 +631,8 @@ const styles = {
     modal: {
         backgroundColor: '#252526',
         borderRadius: '8px',
-        width: '700px',
-        height: '600px',
+        width: '900px',
+        height: '650px',
         display: 'flex',
         flexDirection: 'column' as const,
         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
@@ -569,8 +649,9 @@ const styles = {
     },
     title: {
         margin: 0,
-        fontSize: '1.2rem',
+        fontSize: '1.1rem',
         color: '#fff',
+        fontWeight: 600,
     },
     closeBtn: {
         background: 'none',
@@ -578,51 +659,125 @@ const styles = {
         color: '#ccc',
         fontSize: '1.5rem',
         cursor: 'pointer',
-    },
-    tabs: {
+        padding: '0',
+        width: '32px',
+        height: '32px',
         display: 'flex',
-        backgroundColor: '#1e1e1e',
-        padding: '0 24px',
-        borderBottom: '1px solid #3c3c3c',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: '4px',
+        ':hover': {
+            backgroundColor: '#3c3c3c',
+        }
     },
-    tab: {
-        padding: '12px 16px',
-        background: 'none',
-        border: 'none',
-        borderBottom: '2px solid transparent',
-        color: '#888',
-        cursor: 'pointer',
-        fontSize: '0.9rem',
-    },
-    activeTab: {
-        padding: '12px 16px',
-        background: 'none',
-        border: 'none',
-        borderBottom: '2px solid #007acc',
-        color: '#fff',
-        cursor: 'pointer',
-        fontSize: '0.9rem',
-        fontWeight: 'bold' as const,
-    },
-    content: {
+    mainContent: {
+        display: 'flex',
         flex: 1,
-        padding: '24px',
-        overflowY: 'auto' as const,
+        overflow: 'hidden',
     },
-    formSection: {
+    sidebar: {
+        width: '220px',
+        backgroundColor: '#252526',
+        borderRight: '1px solid #3E3E42',
         display: 'flex',
         flexDirection: 'column' as const,
-        gap: '16px',
+        padding: '12px 0',
     },
-    formGroup: {
+    searchBox: {
+        padding: '0 12px 12px',
+    },
+    searchInput: {
+        width: '100%',
+        padding: '8px 12px',
+        backgroundColor: '#3C3C3C',
+        border: '1px solid #5A5A5A',
+        borderRadius: '4px',
+        color: '#FFFFFF',
+        fontSize: '13px',
+        outline: 'none',
+        boxSizing: 'border-box' as 'border-box',
+        ':focus': {
+            borderColor: '#007ACC',
+        }
+    },
+    nav: {
+        flex: 1,
+        overflowY: 'auto' as const,
+    },
+    navItem: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        padding: '10px 12px',
+        cursor: 'pointer',
+        fontSize: '13px',
+        color: '#CCCCCC',
+        borderRadius: '4px',
+        margin: '0 8px',
+        ':hover': {
+            backgroundColor: '#37373D',
+        }
+    },
+    navItemActive: {
+        backgroundColor: '#37373D',
+        color: '#FFFFFF',
+        fontWeight: 500,
+    },
+    navIcon: {
+        fontSize: '16px',
+        width: '20px',
+        textAlign: 'center' as const,
+    },
+    navText: {
+        flex: 1,
+    },
+    contentArea: {
+        flex: 1,
+        padding: '20px 24px',
+        overflowY: 'auto' as const,
+        backgroundColor: '#2D2D2D',
+    },
+    breadcrumb: {
+        fontSize: '12px',
+        color: '#888',
+        marginBottom: '16px',
+        paddingBottom: '8px',
+        borderBottom: '1px solid #3E3E42',
+    },
+    settingsContent: {
         display: 'flex',
         flexDirection: 'column' as const,
         gap: '8px',
     },
-    label: {
-        fontSize: '0.9rem',
-        fontWeight: 'bold' as const,
-        color: '#ddd',
+    settingsGroup: {
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '20px',
+    },
+    groupTitle: {
+        fontSize: '13px',
+        fontWeight: 600,
+        color: '#E0E0E0',
+        marginTop: '8px',
+        marginBottom: '4px',
+        paddingBottom: '6px',
+        borderBottom: '1px solid #3E3E42',
+    },
+    settingItem: {
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '8px',
+    },
+    settingLabel: {
+        fontSize: '13px',
+        color: '#CCCCCC',
+        fontWeight: 500,
+    },
+    settingDescription: {
+        fontSize: '11px',
+        color: '#999999',
+        lineHeight: '1.4',
+        marginTop: '-4px',
     },
     input: {
         padding: '8px 12px',
@@ -631,6 +786,10 @@ const styles = {
         backgroundColor: '#1e1e1e',
         color: '#fff',
         outline: 'none',
+        fontSize: '13px',
+        ':focus': {
+            borderColor: '#007ACC',
+        }
     },
     textarea: {
         padding: '8px 12px',
@@ -640,30 +799,66 @@ const styles = {
         color: '#fff',
         outline: 'none',
         fontFamily: 'monospace',
-        fontSize: '0.85rem',
+        fontSize: '12px',
         resize: 'vertical' as const,
+        ':focus': {
+            borderColor: '#007ACC',
+        }
+    },
+    secondaryButton: {
+        padding: '8px 16px',
+        borderRadius: '4px',
+        border: '1px solid #5A5A5A',
+        backgroundColor: '#3C3C3C',
+        color: '#fff',
+        cursor: 'pointer',
+        fontSize: '13px',
+        ':hover': {
+            backgroundColor: '#4C4C4C',
+            borderColor: '#6A6A6A',
+        }
     },
     footer: {
         padding: '16px 24px',
         borderTop: '1px solid #3c3c3c',
         display: 'flex',
-        justifyContent: 'flex-end',
+        justifyContent: 'space-between',
         alignItems: 'center',
         backgroundColor: '#1e1e1e',
-        gap: '16px',
+    },
+    footerActions: {
+        display: 'flex',
+        gap: '12px',
     },
     statusMsg: {
         color: '#4caf50',
-        fontSize: '0.9rem',
+        fontSize: '13px',
     },
     saveBtn: {
-        padding: '8px 24px',
+        padding: '8px 20px',
         borderRadius: '4px',
         border: 'none',
         backgroundColor: '#007acc',
         color: '#fff',
         cursor: 'pointer',
-        fontWeight: 'bold' as const,
+        fontWeight: 500,
+        fontSize: '13px',
+        ':hover': {
+            backgroundColor: '#005a9e',
+        }
+    },
+    cancelBtn: {
+        padding: '8px 20px',
+        borderRadius: '4px',
+        border: '1px solid #5A5A5A',
+        backgroundColor: 'transparent',
+        color: '#ccc',
+        cursor: 'pointer',
+        fontWeight: 500,
+        fontSize: '13px',
+        ':hover': {
+            backgroundColor: '#3C3C3C',
+        }
     },
     switch: {
         position: 'relative' as const,
@@ -694,9 +889,5 @@ const styles = {
         }
     }
 };
-
-// Add style for checked state using a style tag in component since we can't use pseudo-classes easily in inline styles
-// Or we can use conditional styling in render.
-// Let's use a simple <style> tag in the component return.
 
 export default SettingsModal;
