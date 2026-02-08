@@ -15,7 +15,9 @@ interface FileTransferWindowProps {
 
 const FileTransferWindow: React.FC<FileTransferWindowProps> = ({ isOpen, onClose, activeTerminalId, terminals }) => {
     const [minimized, setMinimized] = useState(false);
+    const [maximized, setMaximized] = useState(false);
     const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+    const [beforeMaximizePos, setBeforeMaximizePos] = useState<{ x: number; y: number } | null>(null);
     const draggingRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
     const winRef = useRef<HTMLDivElement | null>(null);
 
@@ -31,9 +33,30 @@ const FileTransferWindow: React.FC<FileTransferWindowProps> = ({ isOpen, onClose
     useEffect(() => {
         if (isOpen) {
             setMinimized(false);
+            setMaximized(false);
             setPos({ x: initialPos.x, y: initialPos.y });
+            setBeforeMaximizePos(null);
         }
     }, [isOpen, initialPos.x, initialPos.y]);
+
+    // Handle maximize/restore
+    const handleToggleMaximize = () => {
+        if (maximized) {
+            // Restore to original position and size
+            if (beforeMaximizePos) {
+                setPos(beforeMaximizePos);
+            }
+            setMaximized(false);
+        } else {
+            // Save current position and maximize
+            if (pos) {
+                setBeforeMaximizePos(pos);
+            }
+            const pad = 0;
+            setPos({ x: pad, y: pad });
+            setMaximized(true);
+        }
+    };
 
     useEffect(() => {
         const onMove = (e: MouseEvent) => {
@@ -90,8 +113,10 @@ const FileTransferWindow: React.FC<FileTransferWindowProps> = ({ isOpen, onClose
                 ...styles.window,
                 left: pos ? pos.x : initialPos.x,
                 top: pos ? pos.y : initialPos.y,
-                width: initialPos.w,
-                height: initialPos.h
+                width: maximized ? '100vw' : initialPos.w,
+                height: maximized ? 'calc(100vh - 40px)' : initialPos.h,
+                borderRadius: maximized ? '0' : '10px',
+                borderWidth: maximized ? '0' : '1px'
             }}
         >
             <div
@@ -113,6 +138,9 @@ const FileTransferWindow: React.FC<FileTransferWindowProps> = ({ isOpen, onClose
                 <div style={{ flex: 1 }} />
                 <button style={styles.minBtn} onClick={() => setMinimized(true)} aria-label="最小化">
                     最小化
+                </button>
+                <button style={styles.maxBtn} onClick={handleToggleMaximize} aria-label={maximized ? "向下还原" : "最大化"}>
+                    {maximized ? '还原' : '最大化'}
                 </button>
                 <button style={styles.closeBtn} onClick={onClose} aria-label="关闭">
                     ×
@@ -184,6 +212,16 @@ const styles: Record<string, React.CSSProperties> = {
         lineHeight: '18px'
     },
     minBtn: {
+        height: '28px',
+        borderRadius: '6px',
+        border: '1px solid #3c3c3c',
+        backgroundColor: '#1e1e1e',
+        color: '#ddd',
+        cursor: 'pointer',
+        fontSize: '12px',
+        padding: '0 10px'
+    },
+    maxBtn: {
         height: '28px',
         borderRadius: '6px',
         border: '1px solid #3c3c3c',
