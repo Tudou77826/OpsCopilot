@@ -16,7 +16,9 @@ interface ScriptListPanelProps {
     onReplayScript: (scriptId: string) => void;
 }
 
-const ScriptListPanel = forwardRef<any, ScriptListPanelProps>(({
+const ScriptListPanel = forwardRef<{
+    loadScripts: () => void;
+}, ScriptListPanelProps>(({
     activeSessionId,
     onEditScript,
     onReplayScript
@@ -207,7 +209,9 @@ const ScriptListPanel = forwardRef<any, ScriptListPanelProps>(({
             )}
         </div>
     );
-};
+});
+
+ScriptListPanel.displayName = 'ScriptListPanel';
 
 const styles: Record<string, React.CSSProperties> = {
     container: {

@@ -4,6 +4,7 @@ import TroubleshootingPanel from './TroubleshootingPanel';
 import AIChatPanel from './AIChatPanel';
 import ScriptRecordingPanel from '../ScriptPanel/ScriptRecordingPanel';
 import ScriptListPanel from '../ScriptPanel/ScriptListPanel';
+import ScriptEditorModal from '../ScriptPanel/ScriptEditorModal';
 import { ConnectionConfig } from '../../types';
 
 interface TerminalSessionLite {
@@ -29,7 +30,17 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart,
 
     const handleEditScript = (scriptId: string) => {
         setEditingScriptId(scriptId);
-        // TODO: Open script editor modal
+    };
+
+    const handleCloseEditor = () => {
+        setEditingScriptId(null);
+    };
+
+    const handleSaveScript = () => {
+        // 刷新脚本列表
+        if (scriptListRef.current) {
+            scriptListRef.current.loadScripts();
+        }
     };
 
     const handleReplayScript = async (scriptId: string) => {
@@ -91,9 +102,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart,
     };
 
     return (
+        <>
         <div style={{
-            ...styles.container, 
-            width: isOpen ? width : 0, 
+            ...styles.container,
+            width: isOpen ? width : 0,
             position: 'relative',
             // When closed, hide border and content but keep mounted
             borderLeft: isOpen ? '1px solid #333' : 'none',
@@ -107,7 +119,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart,
                     scrollbar-width: none;
                 }
             `}</style>
-            
+
             {/* Only show resize handle when open */}
             {isOpen && (
                 <div
@@ -117,11 +129,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart,
             )}
 
             {/* Content Container - Hide when closed to avoid layout issues */}
-            <div style={{ 
-                display: isOpen ? 'flex' : 'none', 
-                flexDirection: 'column', 
+            <div style={{
+                display: isOpen ? 'flex' : 'none',
+                flexDirection: 'column',
                 height: '100%',
-                flex: 1 
+                flex: 1
             }}>
                 {/* Header */}
                 <div style={styles.header}>
@@ -163,6 +175,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart,
                 </div>
             </div>
         </div>
+
+        {/* Script Editor Modal */}
+        <ScriptEditorModal
+            isOpen={editingScriptId !== null}
+            scriptId={editingScriptId}
+            onClose={handleCloseEditor}
+            onSave={handleSaveScript}
+        />
+        </>
     );
 };
 

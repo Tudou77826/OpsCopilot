@@ -593,7 +593,7 @@ function App() {
                         onClick={() => toggleSidebar('script')}
                         title="脚本录制"
                     >
-                        📜
+                        🎬
                     </div>
                 </div>
             </div>
