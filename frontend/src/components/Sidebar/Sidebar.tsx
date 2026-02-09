@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import SessionManager from './SessionManager';
 import TroubleshootingPanel from './TroubleshootingPanel';
 import AIChatPanel from './AIChatPanel';
+import ScriptRecordingPanel from '../ScriptPanel/ScriptRecordingPanel';
+import ScriptListPanel from '../ScriptPanel/ScriptListPanel';
 import { ConnectionConfig } from '../../types';
 
 interface TerminalSessionLite {
@@ -11,7 +13,7 @@ interface TerminalSessionLite {
 
 interface SidebarProps {
     isOpen: boolean;
-    activeTab: 'sessions' | 'troubleshoot' | 'chat';
+    activeTab: 'sessions' | 'troubleshoot' | 'chat' | 'script';
     onToggle: () => void;
     onStart?: () => void;
     onStop?: () => void;
@@ -22,6 +24,39 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart, onStop, onConnect, activeTerminalId, terminals }) => {
     const [width, setWidth] = useState(350);
+    const [editingScriptId, setEditingScriptId] = useState<string | null>(null);
+    const scriptListRef = useRef<any>(null);
+
+    const handleEditScript = (scriptId: string) => {
+        setEditingScriptId(scriptId);
+        // TODO: Open script editor modal
+    };
+
+    const handleReplayScript = async (scriptId: string) => {
+        if (!activeTerminalId) {
+            alert('请先连接到SSH会话');
+            return;
+        }
+
+        if (!confirm(`确定要在当前会话中回放此脚本吗？`)) {
+            return;
+        }
+
+        try {
+            // @ts-ignore
+            await window.go.main.App.ReplayScript(scriptId, activeTerminalId);
+            alert('脚本回放完成');
+        } catch (err: any) {
+            alert('回放失败: ' + err.message);
+        }
+    };
+
+    const handleRecordingComplete = () => {
+        // 录制完成后刷新脚本列表
+        if (scriptListRef.current) {
+            scriptListRef.current.loadScripts();
+        }
+    };
 
     const startResizing = (mouseDownEvent: React.MouseEvent) => {
         mouseDownEvent.preventDefault();
@@ -50,6 +85,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart,
             case 'sessions': return '会话管理';
             case 'troubleshoot': return '定位助手';
             case 'chat': return 'AI 问答';
+            case 'script': return '脚本录制';
             default: return '侧边栏';
         }
     };
@@ -100,7 +136,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart,
                         <div style={{ display: activeTab === 'sessions' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
                              <SessionManager onConnect={onConnect} />
                         </div>
-                        
+
                         {/* Always mounted, toggled visibility */}
                         <div style={{ display: activeTab === 'troubleshoot' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
                             <TroubleshootingPanel onStart={onStart} onStop={onStop} />
@@ -108,6 +144,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart,
 
                         <div style={{ display: activeTab === 'chat' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
                             <AIChatPanel />
+                        </div>
+
+                        {/* Script Recording Panel */}
+                        <div style={{ display: activeTab === 'script' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+                            <ScriptRecordingPanel
+                                activeSessionId={activeTerminalId}
+                                onRecordingComplete={handleRecordingComplete}
+                            />
+                            <ScriptListPanel
+                                ref={scriptListRef}
+                                activeSessionId={activeTerminalId}
+                                onEditScript={handleEditScript}
+                                onReplayScript={handleReplayScript}
+                            />
                         </div>
                     </div>
                 </div>

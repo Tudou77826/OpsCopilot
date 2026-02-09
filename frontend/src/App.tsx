@@ -23,7 +23,7 @@ function App() {
     const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [sidebarTab, setSidebarTab] = useState<'sessions' | 'troubleshoot' | 'chat'>('sessions');
+    const [sidebarTab, setSidebarTab] = useState<'sessions' | 'troubleshoot' | 'chat' | 'script'>('sessions');
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
     const [layoutMode, setLayoutMode] = useState<'tab' | 'grid'>('tab');
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
@@ -453,7 +453,7 @@ function App() {
         }, 350); // Wait for transition (300ms)
     }, [isQuickCommandDrawerOpen]);
 
-    const toggleSidebar = (tab: 'sessions' | 'troubleshoot' | 'chat') => {
+    const toggleSidebar = (tab: 'sessions' | 'troubleshoot' | 'chat' | 'script') => {
         if (isSidebarOpen && sidebarTab === tab) {
             // If clicking the active tab, close it
             setIsSidebarOpen(false);
@@ -583,6 +583,17 @@ function App() {
                         title="AI 问答"
                     >
                         💬
+                    </div>
+                    <div
+                        style={{
+                            ...styles.navIcon,
+                            backgroundColor: (isSidebarOpen && sidebarTab === 'script') ? '#333' : 'transparent',
+                            borderRight: (isSidebarOpen && sidebarTab === 'script') ? '2px solid #007acc' : '2px solid transparent'
+                        }}
+                        onClick={() => toggleSidebar('script')}
+                        title="脚本录制"
+                    >
+                        📜
                     </div>
                 </div>
             </div>

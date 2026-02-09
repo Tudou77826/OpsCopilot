@@ -15,34 +15,18 @@ func NewLineBuffer() *LineBuffer {
 
 // Handle processes input string and returns (committed_line, true) if Enter is pressed
 func (lb *LineBuffer) Handle(input string) (string, bool) {
-	// Simple ANSI sequence parser for cursor movement
+	// Enhanced ANSI sequence parser
 	// We need to iterate runes to handle multibyte characters correctly
 	runes := []rune(input)
-	
+
 	i := 0
 	for i < len(runes) {
 		r := runes[i]
-		
-		// Handle Escape Sequences
+
+		// Skip all escape sequences completely (don't process them)
 		if r == '\x1b' {
-			// Check if it's a CSI sequence
-			if i+1 < len(runes) && runes[i+1] == '[' {
-				// Detect sequence end
-				j := i + 2
-				for j < len(runes) {
-					if runes[j] >= 0x40 && runes[j] <= 0x7E {
-						break
-					}
-					j++
-				}
-				
-				if j < len(runes) {
-					seq := string(runes[i : j+1])
-					lb.handleSequence(seq)
-					i = j + 1
-					continue
-				}
-			}
+			i = lb.skipEscapeSequence(runes, i)
+			continue
 		}
 
 		// Handle Control Characters
@@ -54,15 +38,68 @@ func (lb *LineBuffer) Handle(input string) (string, bool) {
 		case '\x7f', '\x08': // Backspace
 			lb.backspace()
 		default:
-			// Regular character
-			if r >= 32 { // Printable
+			// Only record printable characters
+			// ASCII printable: 32-126
+			// Multi-byte characters (like Chinese) are > 126
+			if r >= 32 && r <= 126 {
+				lb.insert(r)
+			} else if r > 126 {
+				// Multi-byte UTF-8 characters (Chinese, Japanese, etc.)
 				lb.insert(r)
 			}
+			// Ignore control characters (0-31, except \r, \n, \x7f, \x08)
 		}
 		i++
 	}
 
 	return "", false
+}
+
+// skipEscapeSequence skips a complete escape sequence and returns the next index
+func (lb *LineBuffer) skipEscapeSequence(runes []rune, start int) int {
+	if start >= len(runes) || runes[start] != '\x1b' {
+		return start + 1
+	}
+
+	// ESC + [ (CSI sequence - most common)
+	// Format: ESC [ <parameters> <intermediate> <final>
+	// Final character range: 0x40-0x7E
+	if start+1 < len(runes) && runes[start+1] == '[' {
+		end := start + 2
+		for end < len(runes) {
+			if runes[end] >= 0x40 && runes[end] <= 0x7E {
+				return end + 1
+			}
+			end++
+			// Prevent malicious data from causing infinite loops
+			if end-start > 20 {
+				break
+			}
+		}
+		return end
+	}
+
+	// ESC + O (PF1-PF4 function keys)
+	if start+1 < len(runes) && runes[start+1] == 'O' {
+		end := start + 2
+		if end < len(runes) {
+			return end + 1
+		}
+		return end
+	}
+
+	// Other escape sequences - skip up to 4 characters
+	end := start + 1
+	maxSkip := start + 5
+	for end < len(runes) && end < maxSkip {
+		if runes[end] >= 0x20 && runes[end] <= 0x7E {
+			end++
+		} else {
+			break
+		}
+	}
+
+	return end
 }
 
 func (lb *LineBuffer) Reset() {

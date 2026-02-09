@@ -26,8 +26,16 @@ export function DeleteSavedSession(arg1) {
   return window['go']['main']['App']['DeleteSavedSession'](arg1);
 }
 
+export function DeleteScript(arg1) {
+  return window['go']['main']['App']['DeleteScript'](arg1);
+}
+
 export function DuplicateSession(arg1) {
   return window['go']['main']['App']['DuplicateSession'](arg1);
+}
+
+export function ExportScript(arg1) {
+  return window['go']['main']['App']['ExportScript'](arg1);
 }
 
 export function FTCancel(arg1) {
@@ -102,6 +110,14 @@ export function GetSavedSessions() {
   return window['go']['main']['App']['GetSavedSessions']();
 }
 
+export function GetScriptList() {
+  return window['go']['main']['App']['GetScriptList']();
+}
+
+export function GetScriptRecordingStatus() {
+  return window['go']['main']['App']['GetScriptRecordingStatus']();
+}
+
 export function GetSessionTimeline() {
   return window['go']['main']['App']['GetSessionTimeline']();
 }
@@ -120,6 +136,10 @@ export function ImportConfigFromDirectory(arg1) {
 
 export function LoadQuickCommands() {
   return window['go']['main']['App']['LoadQuickCommands']();
+}
+
+export function LoadScript(arg1) {
+  return window['go']['main']['App']['LoadScript'](arg1);
 }
 
 export function LocalList(arg1) {
@@ -154,6 +174,10 @@ export function RenameSavedSession(arg1, arg2) {
   return window['go']['main']['App']['RenameSavedSession'](arg1, arg2);
 }
 
+export function ReplayScript(arg1, arg2) {
+  return window['go']['main']['App']['ReplayScript'](arg1, arg2);
+}
+
 export function ResizeTerminal(arg1, arg2, arg3) {
   return window['go']['main']['App']['ResizeTerminal'](arg1, arg2, arg3);
 }
@@ -170,8 +194,20 @@ export function SaveSettings(arg1) {
   return window['go']['main']['App']['SaveSettings'](arg1);
 }
 
+export function SendCommand(arg1, arg2) {
+  return window['go']['main']['App']['SendCommand'](arg1, arg2);
+}
+
+export function StartScriptRecording(arg1, arg2, arg3) {
+  return window['go']['main']['App']['StartScriptRecording'](arg1, arg2, arg3);
+}
+
 export function StartSession(arg1) {
   return window['go']['main']['App']['StartSession'](arg1);
+}
+
+export function StopScriptRecording() {
+  return window['go']['main']['App']['StopScriptRecording']();
 }
 
 export function StopSession(arg1, arg2) {
@@ -180,6 +216,10 @@ export function StopSession(arg1, arg2) {
 
 export function UpdateSavedSession(arg1, arg2) {
   return window['go']['main']['App']['UpdateSavedSession'](arg1, arg2);
+}
+
+export function UpdateScript(arg1) {
+  return window['go']['main']['App']['UpdateScript'](arg1);
 }
 
 export function UpdateSessionTimeline(arg1) {

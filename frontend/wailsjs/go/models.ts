@@ -273,6 +273,115 @@ export namespace main {
 
 }
 
+export namespace script {
+	
+	export class ScriptCommand {
+	    index: number;
+	    content: string;
+	    output?: string;
+	    timestamp: number;
+	    duration?: number;
+	    comment: string;
+	    delay: number;
+	    enabled: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ScriptCommand(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.index = source["index"];
+	        this.content = source["content"];
+	        this.output = source["output"];
+	        this.timestamp = source["timestamp"];
+	        this.duration = source["duration"];
+	        this.comment = source["comment"];
+	        this.delay = source["delay"];
+	        this.enabled = source["enabled"];
+	    }
+	}
+	export class Script {
+	    id: string;
+	    type: string;
+	    // Go type: time
+	    start_time: any;
+	    // Go type: time
+	    end_time?: any;
+	    // Go type: time
+	    updated_at?: any;
+	    session_id: string;
+	    host: string;
+	    user: string;
+	    commands: recorder.RecordedCommand[];
+	    metadata?: Record<string, any>;
+	    name: string;
+	    description: string;
+	    commands: ScriptCommand[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Script(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.type = source["type"];
+	        this.start_time = this.convertValues(source["start_time"], null);
+	        this.end_time = this.convertValues(source["end_time"], null);
+	        this.updated_at = this.convertValues(source["updated_at"], null);
+	        this.session_id = source["session_id"];
+	        this.host = source["host"];
+	        this.user = source["user"];
+	        this.commands = this.convertValues(source["commands"], recorder.RecordedCommand);
+	        this.metadata = source["metadata"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.commands = this.convertValues(source["commands"], ScriptCommand);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class ScriptStatus {
+	    is_recording: boolean;
+	    script_id?: string;
+	    name?: string;
+	    command_count: number;
+	    duration: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ScriptStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.is_recording = source["is_recording"];
+	        this.script_id = source["script_id"];
+	        this.name = source["name"];
+	        this.command_count = source["command_count"];
+	        this.duration = source["duration"];
+	    }
+	}
+
+}
+
 export namespace session_recorder {
 	
 	export class TimelineEvent {

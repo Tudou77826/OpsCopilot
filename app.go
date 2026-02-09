@@ -23,11 +23,15 @@ import (
 	"opscopilot/pkg/config"
 	"opscopilot/pkg/filetransfer"
 	"opscopilot/pkg/llm"
+	"opscopilot/pkg/recorder"
+	"opscopilot/pkg/script"
 	"opscopilot/pkg/secretstore"
 	"opscopilot/pkg/session"
 	"opscopilot/pkg/session_recorder"
 	"opscopilot/pkg/sessionmanager"
 	"opscopilot/pkg/sshclient"
+	"opscopilot/pkg/terminal"
+	"opscopilot/pkg/troubleshoot"
 )
 
 // App struct
@@ -38,12 +42,16 @@ type App struct {
 	secretStore       secretstore.SecretStore
 	aiService         *ai.AIService
 	configMgr         *config.Manager
-	recorder          *session_recorder.Recorder
+	recorder          *session_recorder.Recorder // 保留用于兼容
+	coreRecorder      *recorder.Recorder         // 核心录制引擎
+	troubleMgr        *troubleshoot.Manager      // 故障排查管理器
+	scriptMgr         *script.Manager             // 脚本管理器
 	completionService *completion.Service
 	activeConfigs     map[string]ConnectConfig
 	isForceQuitting   bool // Flag to skip confirmation on force quit
 	ftMu              sync.Mutex
 	ftCancels         map[string]context.CancelFunc
+	lineBuffers       map[string]*terminal.LineBuffer
 }
 
 // NewApp creates a new App application struct
@@ -72,7 +80,20 @@ func NewApp() *App {
 	aiService := ai.NewAIService(fastProvider, complexProvider, configMgr)
 
 	// Initialize Recorder
-	recorder := session_recorder.NewRecorder("sessions")
+	oldRecorder := session_recorder.NewRecorder("sessions")
+
+	// Initialize Core Recorder Engine
+	recordingsPath := filepath.Join(configMgr.Config.Log.Dir, "recordings")
+	coreRecorder := recorder.NewRecorder(recordingsPath)
+
+	// Initialize Session Manager (will be used in App)
+	sessionMgrInstance := session.NewManager()
+
+	// Initialize Troubleshoot Manager
+	troubleMgr := troubleshoot.NewManager(coreRecorder, recordingsPath)
+
+	// Initialize Script Manager (pass nil for now, will set in App)
+	scriptMgr := script.NewManager(coreRecorder, recordingsPath, nil)
 
 	// Initialize Saved Session Manager
 	savedMgr := sessionmanager.NewManager()
@@ -87,18 +108,27 @@ func NewApp() *App {
 	}
 	completionService := completion.NewService(completionDB)
 
-	return &App{
-		sessionMgr:        session.NewManager(),
+	app := &App{
+		sessionMgr:        sessionMgrInstance,
 		savedSessionMgr:   savedMgr,
 		secretStore:       secretstore.NewKeyringStore(),
 		aiService:         aiService,
 		configMgr:         configMgr,
-		recorder:          recorder,
+		recorder:          oldRecorder,
+		coreRecorder:      coreRecorder,
+		troubleMgr:        troubleMgr,
+		scriptMgr:         scriptMgr,
 		completionService: completionService,
 		activeConfigs:     make(map[string]ConnectConfig),
 		isForceQuitting:   false,
 		ftCancels:         make(map[string]context.CancelFunc),
+		lineBuffers:       make(map[string]*terminal.LineBuffer),
 	}
+
+	// Set the CommandSender to app itself
+	scriptMgr.SetCommandSender(app)
+
+	return app
 }
 
 // startup is called when the app starts. The context is saved
@@ -357,8 +387,11 @@ func (a *App) Write(sessionID string, data string) {
 			runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, fmt.Sprintf("\r\nWrite Error: %v\r\n", err))
 		}
 
-		// Record input
+		// Record input (使用旧的录制器，保持兼容)
 		a.recordInput(sessionID, data)
+
+		// 处理输入用于新的录制引擎
+		a.processTerminalInput(sessionID, []byte(data))
 	}
 }
 
@@ -1471,4 +1504,110 @@ func (a *App) GetCompletions(input string, cursor int) string {
 	}
 
 	return string(data)
+}
+
+// ========== Script Recording & Playback Methods ==========
+
+// SendCommand 实现 script.CommandSender 接口
+func (a *App) SendCommand(sessionID string, command string) error {
+	sess, ok := a.sessionMgr.Get(sessionID)
+	if !ok || sess.Stdin == nil {
+		return fmt.Errorf("session not found or not ready: %s", sessionID)
+	}
+
+	_, err := sess.Stdin.Write([]byte(command))
+	return err
+}
+
+// StartScriptRecording 开始脚本录制
+func (a *App) StartScriptRecording(name, description, sessionID string) (*script.Script, error) {
+	// 检查会话是否存在
+	_, ok := a.sessionMgr.Get(sessionID)
+	if !ok {
+		return nil, fmt.Errorf("session not found: %s", sessionID)
+	}
+
+	// 从配置中获取主机信息
+	config, ok := a.activeConfigs[sessionID]
+	if !ok {
+		return nil, fmt.Errorf("session config not found")
+	}
+
+	return a.scriptMgr.StartRecording(name, description, sessionID, config.Host, config.User)
+}
+
+// StopScriptRecording 停止脚本录制
+func (a *App) StopScriptRecording() (*script.Script, error) {
+	return a.scriptMgr.StopRecording()
+}
+
+// GetScriptList 获取脚本列表
+func (a *App) GetScriptList() ([]*script.Script, error) {
+	return a.scriptMgr.ListScripts()
+}
+
+// LoadScript 加载脚本
+func (a *App) LoadScript(scriptID string) (*script.Script, error) {
+	return a.scriptMgr.LoadScript(scriptID)
+}
+
+// UpdateScript 更新脚本
+func (a *App) UpdateScript(scriptData *script.Script) error {
+	return a.scriptMgr.UpdateScript(scriptData)
+}
+
+// DeleteScript 删除脚本
+func (a *App) DeleteScript(scriptID string) error {
+	return a.scriptMgr.DeleteScript(scriptID)
+}
+
+// ReplayScript 回放脚本
+func (a *App) ReplayScript(scriptID, sessionID string) error {
+	return a.scriptMgr.ReplayScript(scriptID, sessionID)
+}
+
+// ExportScript 导出脚本为Shell脚本
+func (a *App) ExportScript(scriptID string) (string, error) {
+	return a.scriptMgr.ExportScript(scriptID)
+}
+
+// GetScriptRecordingStatus 获取脚本录制状态
+func (a *App) GetScriptRecordingStatus() script.ScriptStatus {
+	return a.scriptMgr.GetRecordingStatus()
+}
+
+// processTerminalInput 处理终端输入，用于录制
+func (a *App) processTerminalInput(sessionID string, data []byte) {
+	// 获取或创建LineBuffer
+	lb, ok := a.lineBuffers[sessionID]
+	if !ok {
+		lb = terminal.NewLineBuffer()
+		a.lineBuffers[sessionID] = lb
+	}
+
+	// 直接处理整个字符串（不逐字节处理）
+	inputStr := string(data)
+	line, committed := lb.Handle(inputStr)
+
+	if committed {
+		// 记录到核心录制器（用于故障排查和脚本录制）
+		a.coreRecorder.RecordInput(sessionID, line)
+
+		// 同时记录到旧的录制器（保持兼容）
+		a.recorder.AddEvent("terminal_input", line, map[string]interface{}{
+			"session_id": sessionID,
+		})
+
+		// 发送事件到前端
+		runtime.EventsEmit(a.ctx, "script-command-recorded", line)
+
+		// 打印调试日志
+		log.Printf("[ScriptRecording] Recorded command from session %s: %q", sessionID, line)
+	}
+
+	// 定期发送录制状态更新
+	status := a.coreRecorder.GetStatus()
+	if status.IsRecording {
+		runtime.EventsEmit(a.ctx, "script-recording-status", status)
+	}
 }

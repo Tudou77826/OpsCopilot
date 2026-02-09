@@ -3,6 +3,7 @@
 import {main} from '../models';
 import {config} from '../models';
 import {sessionmanager} from '../models';
+import {script} from '../models';
 import {session_recorder} from '../models';
 import {sshclient} from '../models';
 
@@ -18,7 +19,11 @@ export function Connect(arg1:main.ConnectConfig):Promise<main.ConnectResult>;
 
 export function DeleteSavedSession(arg1:string):Promise<string>;
 
+export function DeleteScript(arg1:string):Promise<void>;
+
 export function DuplicateSession(arg1:string):Promise<main.ConnectResult>;
+
+export function ExportScript(arg1:string):Promise<string>;
 
 export function FTCancel(arg1:string):Promise<string>;
 
@@ -56,6 +61,10 @@ export function GetQuickCommandGroups():Promise<Array<string>>;
 
 export function GetSavedSessions():Promise<Array<sessionmanager.Session>>;
 
+export function GetScriptList():Promise<Array<script.Script>>;
+
+export function GetScriptRecordingStatus():Promise<script.ScriptStatus>;
+
 export function GetSessionTimeline():Promise<session_recorder.TroubleshootingSession>;
 
 export function GetSettings():Promise<config.AppConfig>;
@@ -65,6 +74,8 @@ export function HasActiveWork():Promise<Record<string, any>>;
 export function ImportConfigFromDirectory(arg1:string):Promise<string>;
 
 export function LoadQuickCommands():Promise<Array<config.QuickCommand>>;
+
+export function LoadScript(arg1:string):Promise<script.Script>;
 
 export function LocalList(arg1:string):Promise<string>;
 
@@ -82,6 +93,8 @@ export function PolishRootCause(arg1:string):Promise<string>;
 
 export function RenameSavedSession(arg1:string,arg2:string):Promise<string>;
 
+export function ReplayScript(arg1:string,arg2:string):Promise<void>;
+
 export function ResizeTerminal(arg1:string,arg2:number,arg3:number):Promise<void>;
 
 export function SaveHighlightRules(arg1:Array<config.HighlightRule>):Promise<string>;
@@ -90,11 +103,19 @@ export function SaveQuickCommands(arg1:Array<config.QuickCommand>):Promise<strin
 
 export function SaveSettings(arg1:config.AppConfig):Promise<string>;
 
+export function SendCommand(arg1:string,arg2:string):Promise<void>;
+
+export function StartScriptRecording(arg1:string,arg2:string,arg3:string):Promise<script.Script>;
+
 export function StartSession(arg1:string):Promise<string>;
+
+export function StopScriptRecording():Promise<script.Script>;
 
 export function StopSession(arg1:string,arg2:string):Promise<string>;
 
 export function UpdateSavedSession(arg1:string,arg2:sshclient.ConnectConfig):Promise<string>;
+
+export function UpdateScript(arg1:script.Script):Promise<void>;
 
 export function UpdateSessionTimeline(arg1:Array<session_recorder.TimelineEvent>):Promise<string>;
 
