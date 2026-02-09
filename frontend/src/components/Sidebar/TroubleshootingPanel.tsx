@@ -53,6 +53,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
     const [viewMode, setViewMode] = useState<'opscopilot' | 'external' | 'integrated'>('opscopilot');
     const [troubleshootResult, setTroubleshootResult] = useState<TroubleshootResult | null>(null);
     const [externalScriptEnhanced, setExternalScriptEnhanced] = useState(false);
+    const [showExternalHelp, setShowExternalHelp] = useState(false);
 
     const extractDocFromReadingMessage = (message: string): string | null => {
         const idx = message.indexOf('正在阅读文档:');
@@ -541,7 +542,10 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                                 </label>
                                 <span style={styles.toggleText}>外部脚本增强</span>
                             </div>
-                            <div style={styles.helpIcon} title="启用后，将联合外部诊断脚本进行深度分析，适合复杂问题的排查">
+                            <div
+                                style={styles.helpIcon}
+                                onClick={() => setShowExternalHelp(!showExternalHelp)}
+                            >
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <circle cx="12" cy="12" r="10"/>
                                     <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
@@ -549,6 +553,28 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                                 </svg>
                             </div>
                         </div>
+
+                        {/* 外部脚本帮助说明 */}
+                        {showExternalHelp && (
+                            <div style={styles.externalHelpBox}>
+                                <div style={styles.helpTitle}>什么是外部脚本增强？</div>
+                                <div style={styles.helpContent}>
+                                    外部脚本增强允许您联合自定义的诊断脚本进行深度分析，适合复杂问题的排查。
+                                </div>
+                                <div style={styles.helpSection}>
+                                    <div style={styles.helpSectionTitle}>⚠️ 需要自行配置</div>
+                                    <div style={styles.helpSectionContent}>
+                                        此功能需要您按照规范编写诊断脚本并在设置中配置脚本路径。
+                                    </div>
+                                </div>
+                                <div style={styles.helpSection}>
+                                    <div style={styles.helpSectionTitle}>📋 脚本规范</div>
+                                    <div style={styles.helpSectionContent}>
+                                        脚本需接收 <code style={styles.inlineCode}>-Problem</code> 和 <code style={styles.inlineCode}>-OutputDir</code> 参数，并在输出目录生成 <code style={styles.inlineCode}>conclusion.md</code> 文件。
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         <button onClick={handleStart} style={styles.primaryButton}>
                             开始排查
@@ -1228,9 +1254,51 @@ const styles = {
         width: '20px',
         height: '20px',
         color: '#888',
-        cursor: 'help',
+        cursor: 'pointer',
         borderRadius: '4px',
         transition: 'all 0.15s ease',
+    },
+    externalHelpBox: {
+        padding: '12px',
+        backgroundColor: '#1e1e1e',
+        borderRadius: '6px',
+        border: '1px solid #3a3a3a',
+        marginTop: '8px',
+    },
+    helpTitle: {
+        fontSize: '13px',
+        fontWeight: '600',
+        color: '#e0e0e0',
+        marginBottom: '8px',
+    },
+    helpContent: {
+        fontSize: '12px',
+        color: '#b0b0b0',
+        lineHeight: '1.5',
+        marginBottom: '10px',
+    },
+    helpSection: {
+        marginBottom: '8px',
+    },
+    helpSectionTitle: {
+        fontSize: '12px',
+        fontWeight: '500',
+        color: '#ccc',
+        marginBottom: '4px',
+    },
+    helpSectionContent: {
+        fontSize: '12px',
+        color: '#999',
+        lineHeight: '1.4',
+        paddingLeft: '4px',
+    },
+    inlineCode: {
+        backgroundColor: '#2a2a2a',
+        color: '#4ec9b0',
+        padding: '2px 6px',
+        borderRadius: '3px',
+        fontFamily: 'Consolas, "Courier New", monospace',
+        fontSize: '11px',
     },
     switchLabel: {
         display: 'flex',
@@ -1277,12 +1345,6 @@ if (!existing) {
             background-color: white;
             border-radius: 50%;
             transition: transform 0.2s ease;
-        }
-
-        /* Help icon hover */
-        [data-help-icon]:hover {
-            background-color: #3a3a3a;
-            color: #aaa;
         }
     `;
     document.head.appendChild(styleSheet);
