@@ -9,7 +9,7 @@ import {sshclient} from '../models';
 
 export function AskAI(arg1:string):Promise<string>;
 
-export function AskTroubleshoot(arg1:string):Promise<string>;
+export function AskTroubleshoot(arg1:string,arg2:boolean):Promise<string>;
 
 export function Broadcast(arg1:Array<string>,arg2:string):Promise<void>;
 

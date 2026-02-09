@@ -73,7 +73,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         if (!input.trim()) {
             setMessages([{
                 role: 'ai',
-                content: '请先在下方输入您遇到的问题，然后点击“发送”开始排查。',
+                content: '请先在下方输入您遇到的问题，然后点击"发送"开始排查。',
                 timestamp: Date.now()
             }]);
             return;
@@ -81,7 +81,10 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
 
         setIsInvestigating(true);
         if (onStart) onStart();
-        
+
+        // Reset troubleshootResult to clear previous structured response
+        setTroubleshootResult(null);
+
         const problem = input;
         
         setMessages(prev => [...prev, {
@@ -138,20 +141,25 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
             // @ts-ignore
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskTroubleshoot) {
                 // @ts-ignore
-                const response = await window.go.main.App.AskTroubleshoot(problem);
+                const response = await window.go.main.App.AskTroubleshoot(problem, externalScriptEnhanced);
                 let parsedResponse = response;
                 let result: TroubleshootResult | null = null;
 
                 try {
-                    const jsonMatch = response.match(/\{[\s\S]*\}/);
-                    if (jsonMatch) {
-                        result = JSON.parse(jsonMatch[0]);
+                    // Only try to parse as JSON if it starts with '{' (JSON object)
+                    if (response.trim().startsWith('{')) {
+                        result = JSON.parse(response);
+                        // Validate that it's a proper TroubleshootResult
                         if (result && result.opsCopilotReady) {
                             parsedResponse = result.opsCopilotAnswer;
+                        } else {
+                            // Not a valid structured response, treat as plain text
+                            result = null;
                         }
                     }
                 } catch (e) {
                     console.error('Failed to parse troubleshoot result:', e);
+                    result = null;
                 }
 
                 if (result) {
@@ -311,20 +319,25 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
             // @ts-ignore
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskTroubleshoot) {
                 // @ts-ignore
-                const response = await window.go.main.App.AskTroubleshoot(userMsg.content);
+                const response = await window.go.main.App.AskTroubleshoot(userMsg.content, externalScriptEnhanced);
                 let parsedResponse = response;
                 let result: TroubleshootResult | null = null;
-                
+
                 try {
-                    const jsonMatch = response.match(/\{[\s\S]*\}/);
-                    if (jsonMatch) {
-                        result = JSON.parse(jsonMatch[0]);
+                    // Only try to parse as JSON if it starts with '{' (JSON object)
+                    if (response.trim().startsWith('{')) {
+                        result = JSON.parse(response);
+                        // Validate that it's a proper TroubleshootResult
                         if (result && result.opsCopilotReady) {
                             parsedResponse = result.opsCopilotAnswer;
+                        } else {
+                            // Not a valid structured response, treat as plain text
+                            result = null;
                         }
                     }
                 } catch (e) {
                     console.error('Failed to parse troubleshoot result:', e);
+                    result = null;
                 }
 
                 if (result) {
@@ -512,6 +525,31 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                             placeholder="例如：服务器 CPU 占用率过高..."
                             style={{...styles.textarea, minHeight: '80px', backgroundColor: '#333'}}
                         />
+
+                        {/* 外部脚本增强模式开关 */}
+                        <div style={styles.enhancedModeToggle}>
+                            <div style={styles.toggleContainer}>
+                                <label style={styles.switchLabel} title={externalScriptEnhanced ? '已启用外部脚本增强' : '已禁用外部脚本增强'}>
+                                    <input
+                                        type="checkbox"
+                                        checked={externalScriptEnhanced}
+                                        onChange={(e) => setExternalScriptEnhanced(e.target.checked)}
+                                        style={styles.switchCheckbox}
+                                        className="troubleshoot-switch-checkbox"
+                                    />
+                                    <span style={styles.switchSlider} className="troubleshoot-switch-slider"></span>
+                                </label>
+                                <span style={styles.toggleText}>外部脚本增强</span>
+                            </div>
+                            <div style={styles.helpIcon} title="启用后，将联合外部诊断脚本进行深度分析，适合复杂问题的排查">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                                </svg>
+                            </div>
+                        </div>
+
                         <button onClick={handleStart} style={styles.primaryButton}>
                             开始排查
                         </button>
@@ -519,75 +557,75 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                 </div>
             ) : (
                 <div style={styles.chatContainer}>
+                    {troubleshootResult && (
+                        <div style={styles.viewSwitcher}>
+                            <button
+                                role="tab"
+                                aria-selected={viewMode === 'opscopilot'}
+                                onClick={() => setViewMode('opscopilot')}
+                                disabled={!troubleshootResult.opsCopilotReady}
+                                style={{
+                                    ...(viewMode === 'opscopilot' ? styles.activeViewBtn : styles.viewBtn),
+                                    opacity: troubleshootResult.opsCopilotReady ? 1 : 0.6,
+                                    cursor: troubleshootResult.opsCopilotReady ? 'pointer' : 'default'
+                                }}
+                            >
+                                <span style={styles.tabIcon}>
+                                    {troubleshootResult.opsCopilotReady === true ? (
+                                        <span style={styles.statusIcon} aria-label="完成">✓</span>
+                                    ) : troubleshootResult.opsCopilotReady === false ? (
+                                        <span style={styles.statusIconError} aria-label="失败">✗</span>
+                                    ) : (
+                                        <span style={styles.loadingSpinner} aria-label="加载中">⏳</span>
+                                    )}
+                                </span>
+                                <span style={styles.tabLabel}>OpsCopilot</span>
+                            </button>
+                            <button
+                                role="tab"
+                                aria-selected={viewMode === 'external'}
+                                onClick={() => setViewMode('external')}
+                                disabled={!troubleshootResult.externalReady}
+                                style={{
+                                    ...(viewMode === 'external' ? styles.activeViewBtn : styles.viewBtn),
+                                    opacity: troubleshootResult.externalReady ? 1 : 0.6,
+                                    cursor: troubleshootResult.externalReady ? 'pointer' : 'default'
+                                }}
+                            >
+                                <span style={styles.tabIcon}>
+                                    {troubleshootResult.externalReady === true ? (
+                                        <span style={styles.statusIcon} aria-label="完成">✓</span>
+                                    ) : troubleshootResult.externalReady === false ? (
+                                        <span style={styles.statusIconError} aria-label="失败">✗</span>
+                                    ) : (
+                                        <span style={styles.loadingSpinner} aria-label="加载中">⏳</span>
+                                    )}
+                                </span>
+                                <span style={styles.tabLabel}>外部定位</span>
+                            </button>
+                            <button
+                                role="tab"
+                                aria-selected={viewMode === 'integrated'}
+                                onClick={() => setViewMode('integrated')}
+                                disabled={!troubleshootResult.integratedReady}
+                                style={{
+                                    ...(viewMode === 'integrated' ? styles.activeViewBtn : styles.viewBtn),
+                                    opacity: troubleshootResult.integratedReady ? 1 : 0.6,
+                                    cursor: troubleshootResult.integratedReady ? 'pointer' : 'default'
+                                }}
+                            >
+                                <span style={styles.tabIcon}>
+                                    {troubleshootResult.integratedReady === true ? (
+                                        <span style={styles.statusIcon} aria-label="完成">✓</span>
+                                    ) : (
+                                        <span style={styles.loadingSpinner} aria-label="加载中">⏳</span>
+                                    )}
+                                </span>
+                                <span style={styles.tabLabel}>综合答复</span>
+                            </button>
+                        </div>
+                    )}
                     <div style={styles.messageList}>
-                        {troubleshootResult && (
-                            <div style={styles.viewSwitcher}>
-                                <button
-                                    role="tab"
-                                    aria-selected={viewMode === 'opscopilot'}
-                                    onClick={() => setViewMode('opscopilot')}
-                                    disabled={!troubleshootResult.opsCopilotReady}
-                                    style={{
-                                        ...(viewMode === 'opscopilot' ? styles.activeViewBtn : styles.viewBtn),
-                                        opacity: troubleshootResult.opsCopilotReady ? 1 : 0.6,
-                                        cursor: troubleshootResult.opsCopilotReady ? 'pointer' : 'default'
-                                    }}
-                                >
-                                    <span style={styles.tabIcon}>
-                                        {troubleshootResult.opsCopilotReady === true ? (
-                                            <span style={styles.statusIcon} aria-label="完成">✓</span>
-                                        ) : troubleshootResult.opsCopilotReady === false ? (
-                                            <span style={styles.statusIconError} aria-label="失败">✗</span>
-                                        ) : (
-                                            <span style={styles.loadingSpinner} aria-label="加载中">⏳</span>
-                                        )}
-                                    </span>
-                                    <span style={styles.tabLabel}>OpsCopilot</span>
-                                </button>
-                                <button
-                                    role="tab"
-                                    aria-selected={viewMode === 'external'}
-                                    onClick={() => setViewMode('external')}
-                                    disabled={!troubleshootResult.externalReady}
-                                    style={{
-                                        ...(viewMode === 'external' ? styles.activeViewBtn : styles.viewBtn),
-                                        opacity: troubleshootResult.externalReady ? 1 : 0.6,
-                                        cursor: troubleshootResult.externalReady ? 'pointer' : 'default'
-                                    }}
-                                >
-                                    <span style={styles.tabIcon}>
-                                        {troubleshootResult.externalReady === true ? (
-                                            <span style={styles.statusIcon} aria-label="完成">✓</span>
-                                        ) : troubleshootResult.externalReady === false ? (
-                                            <span style={styles.statusIconError} aria-label="失败">✗</span>
-                                        ) : (
-                                            <span style={styles.loadingSpinner} aria-label="加载中">⏳</span>
-                                        )}
-                                    </span>
-                                    <span style={styles.tabLabel}>外部定位</span>
-                                </button>
-                                <button
-                                    role="tab"
-                                    aria-selected={viewMode === 'integrated'}
-                                    onClick={() => setViewMode('integrated')}
-                                    disabled={!troubleshootResult.integratedReady}
-                                    style={{
-                                        ...(viewMode === 'integrated' ? styles.activeViewBtn : styles.viewBtn),
-                                        opacity: troubleshootResult.integratedReady ? 1 : 0.6,
-                                        cursor: troubleshootResult.integratedReady ? 'pointer' : 'default'
-                                    }}
-                                >
-                                    <span style={styles.tabIcon}>
-                                        {troubleshootResult.integratedReady === true ? (
-                                            <span style={styles.statusIcon} aria-label="完成">✓</span>
-                                        ) : (
-                                            <span style={styles.loadingSpinner} aria-label="加载中">⏳</span>
-                                        )}
-                                    </span>
-                                    <span style={styles.tabLabel}>综合答复</span>
-                                </button>
-                            </div>
-                        )}
                         {troubleshootResult ? (
                             <div style={{
                                 ...styles.messageItem,
@@ -807,14 +845,18 @@ const styles = {
     },
     chatContainer: {
         flex: 1,
-        overflowY: 'auto' as const,
-        padding: '10px',
+        display: 'flex',
+        flexDirection: 'column' as const,
         minHeight: 0, // Critical for nested flex scrolling
+        overflow: 'hidden' as const,
     },
     messageList: {
         display: 'flex',
         flexDirection: 'column' as const,
         gap: '10px',
+        overflowY: 'auto' as const,
+        padding: '10px',
+        flex: 1,
     },
     messageItem: {
         maxWidth: '85%',
@@ -972,11 +1014,10 @@ const styles = {
     viewSwitcher: {
         display: 'flex',
         gap: '4px',
-        marginBottom: '12px',
-        padding: '4px',
-        backgroundColor: '#1e1e1e',
-        borderRadius: '6px',
-        border: '1px solid #333',
+        padding: '8px 10px',
+        backgroundColor: '#252526',
+        borderBottom: '1px solid #3e3e42',
+        flexShrink: 0,
     },
     tabIcon: {
         fontSize: '14px',
@@ -1160,7 +1201,53 @@ const styles = {
         color: '#888',
         fontSize: '11px',
         paddingLeft: '16px',
-    }
+    },
+    enhancedModeToggle: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '10px 12px',
+        backgroundColor: '#2a2a2a',
+        borderRadius: '6px',
+        border: '1px solid #3a3a3a',
+    },
+    toggleContainer: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+    },
+    toggleText: {
+        color: '#ccc',
+        fontSize: '13px',
+        fontWeight: '400',
+    },
+    helpIcon: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '20px',
+        height: '20px',
+        color: '#888',
+        cursor: 'help',
+        borderRadius: '4px',
+        transition: 'all 0.15s ease',
+    },
+    switchLabel: {
+        display: 'flex',
+        alignItems: 'center',
+        cursor: 'pointer',
+        userSelect: 'none' as const,
+    },
+    switchCheckbox: {
+        display: 'none',
+    },
+    switchSlider: {
+        width: '36px',
+        height: '20px',
+        borderRadius: '10px',
+        position: 'relative' as const,
+        transition: 'all 0.2s ease',
+    },
 };
 
 const existing = document.getElementById('opscopilot-animations');
@@ -1169,6 +1256,34 @@ if (!existing) {
     styleSheet.id = 'opscopilot-animations';
     styleSheet.textContent = `
         @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* Troubleshooting switch toggle styles */
+        .troubleshoot-switch-slider {
+            background-color: #424242;
+        }
+        .troubleshoot-switch-checkbox:checked + .troubleshoot-switch-slider {
+            background-color: #4ade80;
+        }
+        .troubleshoot-switch-checkbox:checked + .troubleshoot-switch-slider::after {
+            transform: translateX(16px);
+        }
+        .troubleshoot-switch-slider::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            background-color: white;
+            border-radius: 50%;
+            transition: transform 0.2s ease;
+        }
+
+        /* Help icon hover */
+        [data-help-icon]:hover {
+            background-color: #3a3a3a;
+            color: #aaa;
+        }
     `;
     document.head.appendChild(styleSheet);
 }

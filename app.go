@@ -585,11 +585,25 @@ func (a *App) AskAI(question string) string {
 }
 
 // AskTroubleshoot handles the troubleshooting request from frontend and returns structured JSON
-func (a *App) AskTroubleshoot(problem string) string {
+// enableExternal: whether to use external script integration (advanced feature)
+func (a *App) AskTroubleshoot(problem string, enableExternal bool) string {
+	// Check if external script integration should be enabled
 	scriptPath := ""
-	if a.configMgr.Config.Experimental.ExternalTroubleshootScriptPath != "" {
+	if enableExternal && a.configMgr.Config.Experimental.ExternalTroubleshootScriptPath != "" {
 		scriptPath = a.configMgr.Config.Experimental.ExternalTroubleshootScriptPath
 	}
+
+	// If external script is not enabled, return simple text answer (backward compatible)
+	if scriptPath == "" {
+		knowledgeDir := a.resolveKnowledgeBase()
+		answer, err := a.aiService.AskTroubleshoot(a.ctx, problem, knowledgeDir)
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		return answer
+	}
+
+	// Otherwise, run with external script integration and return structured JSON
 	return a.runTroubleshootWithExternal(problem, scriptPath)
 }
 
