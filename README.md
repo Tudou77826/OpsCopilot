@@ -246,8 +246,8 @@ go install github.com/wailsapp/wails/v2/cmd/wails@latest
 ### 克隆项目
 
 ```bash
-git clone https://github.com/yourusername/opscopilot.git
-cd opscopilot
+git clone https://github.com/Tudou77826/OpsCopilot.git
+cd OpsCopilot
 ```
 
 ### 开发模式运行
@@ -277,7 +277,19 @@ wails build
   "llm": {
     "APIKey": "sk-your-api-key",
     "BaseURL": "https://api.openai.com/v1",
-    "Model": "gpt-4"
+    "FastModel": "gpt-4o-mini",
+    "ComplexModel": "gpt-4o"
+  },
+  "log": {
+    "dir": "logs"
+  },
+  "docs": {
+    "dir": "docs"
+  },
+  "terminal": {
+    "scrollback": 5000,
+    "search_enabled": true,
+    "highlight_enabled": true
   }
 }
 ```
@@ -292,9 +304,11 @@ wails build
 
 ```
 docs/
-├── linux_basics.md          # Linux 常用命令参考
-├── payment_system_sop.md    # 支付系统运维手册
-└── troubleshooting_history.md  # 历史故障记录（自动生成）
+├── database_maintenance.md        # 数据库维护文档
+├── network_troubleshooting.md     # 网络故障排查手册
+├── payment_system_sop.md          # 支付系统运维手册
+├── 外部定位脚本使用指南.md         # 外部脚本集成说明
+└── 外部脚本桥接使用指南.md         # 脚本桥接功能说明
 ```
 
 应用启动时会自动加载文档，作为 AI 问答的上下文。
@@ -306,7 +320,7 @@ docs/
 ### 主界面 - Tab 模式
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ [+ 新建连接] ⚙️  [Tab模式] [Grid模式]          🖥️💬🩺 │
+│ [+ 新建连接] ⚙️  [Tab模式] [Grid模式]          🖥️🩺💬🎬 │
 ├─────────────────────────────────────────────────────────┤
 │ ┌─────┬─────┬─────┬─────┐                              │
 │ │ Web │ DB  │ App │ MQ  │  ← Terminal Tabs             │
@@ -389,34 +403,62 @@ OpsCopilot/
 ├── app.go                     # Wails App 控制器
 ├── pkg/                       # Go 后端核心逻辑
 │   ├── ai/                    # AI 服务（LLM 调用、Prompt 管理）
+│   ├── app/                   # 应用状态管理
+│   ├── completion/            # 命令自动补全
 │   ├── config/                # 配置管理
+│   ├── filetransfer/          # 文件传输（SFTP/SCP）
 │   ├── knowledge/             # 知识库加载器
 │   ├── llm/                   # LLM Provider 抽象
+│   ├── recorder/              # 脚本录制
+│   ├── script/                # 外部脚本执行
 │   ├── secretstore/           # 密钥存储（操作系统 Keyring）
 │   ├── session/               # SSH Session 管理
 │   ├── session_recorder/      # 排查会话记录器
 │   ├── sessionmanager/        # 持久化会话管理
 │   ├── sshclient/             # SSH 客户端（含跳板机、自动提权）
-│   └── terminal/              # 终端数据解析（ANSI 处理）
+│   ├── terminal/              # 终端数据解析（ANSI 处理）
+│   ├── troubleshoot/          # 故障诊断
+│   └── xshell/                # Xshell 配置导入
 ├── frontend/                  # React 前端
 │   ├── src/
 │   │   ├── components/        # UI 组件
-│   │   │   ├── Terminal/      # xterm.js 终端组件
-│   │   │   ├── LayoutManager/ # Tab/Grid 布局管理
-│   │   │   ├── Sidebar/       # 侧边栏（会话、排查、问答）
-│   │   │   ├── SmartConnectModal/  # 智能连接对话框
-│   │   │   ├── SettingsModal/      # 设置面板
-│   │   │   └── ConfirmCloseModal/  # 关闭确认对话框
+│   │   │   ├── CommandQueryOverlay/      # 命令查询悬浮窗
+│   │   │   ├── ConfirmCloseModal/        # 关闭确认对话框
+│   │   │   ├── ConnectErrorModal/        # 连接错误提示
+│   │   │   ├── ConnectionConfigForm/     # 连接配置表单
+│   │   │   ├── FileTransfer/             # 文件传输组件
+│   │   │   ├── FileTransferWindow/       # 文件传输窗口
+│   │   │   ├── LayoutManager/            # Tab/Grid 布局管理
+│   │   │   ├── Monitoring/               # Java 监控面板
+│   │   │   ├── QuickCommandDrawer/       # 快捷命令抽屉
+│   │   │   ├── ScriptPanel/              # 脚本面板
+│   │   │   ├── SettingsModal/            # 设置面板
+│   │   │   ├── Sidebar/                  # 侧边栏
+│   │   │   ├── SmartConnectModal/        # 智能连接对话框
+│   │   │   ├── StreamingPreviewWindow/   # 流式预览窗口
+│   │   │   └── Terminal/                 # xterm.js 终端组件
 │   │   ├── utils/             # 工具函数
 │   │   ├── types.ts           # TypeScript 类型定义
 │   │   └── App.tsx            # 根组件
 │   └── wailsjs/               # Wails 自动生成的绑定
 ├── docs/                      # 知识库文档目录
-│   ├── linux_basics.md
+│   ├── database_maintenance.md
+│   ├── network_troubleshooting.md
 │   ├── payment_system_sop.md
-│   └── troubleshooting_history.md
+│   ├── 外部定位脚本使用指南.md
+│   └── 外部脚本桥接使用指南.md
+├── scripts/                   # 外部脚本目录
+├── build/                     # 构建输出目录
+├── logs/                      # 日志目录
 ├── config.json                # 用户配置文件
+├── config.example.json         # 配置文件示例
 ├── sessions.json              # 持久化会话列表
+├── sessions.example.json      # 会话文件示例
+├── prompts.json               # AI Prompt 配置
+├── quick_commands.json        # 快捷命令配置
+├── highlight_rules.json       # 终端语法高亮规则
+├── start_dev.bat              # 开发模式启动脚本
+├── build_release.bat          # 生产构建脚本
 └── wails.json                 # Wails 项目配置
 ```
 
@@ -468,8 +510,7 @@ OpsCopilot/
 
 ## 📬 联系方式
 
-- Issues: [GitHub Issues](https://github.com/yourusername/opscopilot/issues)
-- Email: your.email@example.com
+- Issues: [GitHub Issues](https://github.com/Tudou77826/OpsCopilot/issues)
 
 ---
 
