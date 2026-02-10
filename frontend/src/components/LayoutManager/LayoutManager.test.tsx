@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import LayoutManager from './LayoutManager';
+import { SessionStatus } from '../../types';
 import { vi, describe, it, expect } from 'vitest';
 
 // Mock TerminalComponent
@@ -9,8 +10,8 @@ vi.mock('../Terminal/Terminal', () => ({
 
 describe('LayoutManager', () => {
     const mockTerminals = [
-        { id: 'session-1', title: 'Session 1' },
-        { id: 'session-2', title: 'Session 2' },
+        { id: 'session-1', title: 'Session 1', status: SessionStatus.CONNECTED },
+        { id: 'session-2', title: 'Session 2', status: SessionStatus.CONNECTED },
     ];
     const mockOnTerminalData = vi.fn();
     const mockTerminalRefs = { current: new Map() };

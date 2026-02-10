@@ -317,6 +317,12 @@ function App() {
                             : t
                     ));
 
+                    // 移除旧的监听器，避免重复接收数据
+                    const oldCancel = unlisteners.current.get(sessionId);
+                    if (oldCancel) {
+                        oldCancel();
+                    }
+
                     // 重新监听终端数据（使用原sessionId）
                     // @ts-ignore
                     const cancel = window.runtime.EventsOn(`terminal-data:${sessionId}`, (data: string) => {
@@ -480,7 +486,9 @@ function App() {
                 if (result.success) {
                     const newTerminal: TerminalSession = {
                         id: result.sessionId,
-                        title: `${term.title} (Copy)`
+                        title: `${term.title} (Copy)`,
+                        status: SessionStatus.CONNECTED,
+                        config: term.config
                     };
                     setTerminals(prev => [...prev, newTerminal]);
 
