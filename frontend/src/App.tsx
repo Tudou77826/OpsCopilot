@@ -10,12 +10,15 @@ import ConfirmCloseModal from './components/ConfirmCloseModal/ConfirmCloseModal'
 import FileTransferWindow from './components/FileTransferWindow/FileTransferWindow';
 import CommandQueryOverlay, { CommandQueryResult } from './components/CommandQueryOverlay/CommandQueryOverlay';
 import ConnectErrorModal from './components/ConnectErrorModal/ConnectErrorModal';
-import { ConnectionConfig } from './types';
+import { ConnectionConfig, SessionStatus, SessionDisconnectedEvent } from './types';
 import { HighlightRule, TerminalConfig } from './components/Terminal/highlightTypes';
 
 interface TerminalSession {
     id: string;
     title: string;
+    status: SessionStatus;
+    config?: ConnectionConfig;
+    disconnectReason?: string;
 }
 
 function App() {
@@ -72,6 +75,7 @@ function App() {
     useEffect(() => {
         // Listen for session closed events from backend
         let cancelClose: (() => void) | undefined;
+        let cancelDisconnected: (() => void) | undefined;
         let cancelConfirmClose: (() => void) | undefined;
 
         // @ts-ignore
@@ -79,6 +83,17 @@ function App() {
             // @ts-ignore
             cancelClose = window.runtime.EventsOn("session-closed", (id: string) => {
                 removeTerminal(id);
+            });
+
+            // Listen for session-disconnected events (保留会话，不关闭tab)
+            // @ts-ignore
+            cancelDisconnected = window.runtime.EventsOn("session-disconnected", (event: SessionDisconnectedEvent) => {
+                console.log("[App] Session disconnected:", event);
+                setTerminals(prev => prev.map(t =>
+                    t.id === event.sessionId
+                        ? { ...t, status: SessionStatus.DISCONNECTED, disconnectReason: event.message }
+                        : t
+                ));
             });
 
             // Listen for confirm-close event from backend
@@ -91,6 +106,7 @@ function App() {
         }
         return () => {
             if (cancelClose) cancelClose();
+            if (cancelDisconnected) cancelDisconnected();
             if (cancelConfirmClose) cancelConfirmClose();
             // Cleanup all terminal listeners
             unlisteners.current.forEach(u => u());
@@ -247,7 +263,9 @@ function App() {
                     const newSessionId = result.sessionId;
                     const newTerminal: TerminalSession = {
                         id: newSessionId,
-                        title: config.name || `${config.user}@${config.host}`
+                        title: config.name || `${config.user}@${config.host}`,
+                        status: SessionStatus.CONNECTED,
+                        config: config,  // 保存配置用于重连
                     };
 
                     setTerminals(prev => [...prev, newTerminal]);
@@ -273,6 +291,50 @@ function App() {
             setStatus("就绪");
             const connectLabel = config?.name || (config?.user && config?.host ? `${config.user}@${config.host}` : (config?.host || '未知目标'));
             enqueueConnectError(`连接失败：${connectLabel}`, errMsg || '未知错误');
+        }
+    };
+
+    const handleReconnect = async (sessionId: string) => {
+        const term = terminals.find(t => t.id === sessionId);
+        if (!term || !term.config) {
+            enqueueConnectError("重连失败", "会话配置不存在");
+            return;
+        }
+
+        setStatus("正在重连...");
+        try {
+            // @ts-ignore
+            if (window.go && window.go.main && window.go.main.App && window.go.main.App.ReconnectSession) {
+                // @ts-ignore
+                const result = await window.go.main.App.ReconnectSession(sessionId);
+
+                if (result.success) {
+                    setStatus("已重连");
+                    // 更新状态为已连接
+                    setTerminals(prev => prev.map(t =>
+                        t.id === sessionId
+                            ? { ...t, status: SessionStatus.CONNECTED }
+                            : t
+                    ));
+
+                    // 重新监听终端数据（使用原sessionId）
+                    // @ts-ignore
+                    const cancel = window.runtime.EventsOn(`terminal-data:${sessionId}`, (data: string) => {
+                        terminalRefs.current.get(sessionId)?.write(data);
+                    });
+                    unlisteners.current.set(sessionId, cancel);
+                } else {
+                    setStatus("重连失败");
+                    enqueueConnectError("重连失败", result.message || '未知错误');
+                }
+            } else {
+                setStatus("重连失败");
+                enqueueConnectError("重连失败", "运行时未就绪");
+            }
+        } catch (e) {
+            setStatus("重连失败");
+            const errMsg = (e as any)?.message ? String((e as any).message) : String(e);
+            enqueueConnectError("重连失败", errMsg || '未知错误');
         }
     };
 
@@ -530,6 +592,7 @@ function App() {
                         onRenameTerminal={handleRenameTerminal}
                         onDuplicateTerminal={handleDuplicateTerminal}
                         onActiveTerminalChange={setActiveTerminalId}
+                        onReconnect={handleReconnect}
                         onClose={() => { }}
                         isBroadcastMode={isBroadcastMode}
                         broadcastIds={broadcastIds}

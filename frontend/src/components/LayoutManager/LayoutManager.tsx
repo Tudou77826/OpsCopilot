@@ -1,10 +1,14 @@
 import React, { useRef, useState } from 'react';
 import TerminalComponent, { TerminalRef } from '../Terminal/Terminal';
 import { HighlightRule, TerminalConfig } from '../Terminal/highlightTypes';
+import { SessionStatus } from '../../types';
 
 interface TerminalSession {
     id: string;
     title: string;
+    status: SessionStatus;
+    config?: any;
+    disconnectReason?: string;
 }
 
 interface LayoutManagerProps {
@@ -16,6 +20,7 @@ interface LayoutManagerProps {
     onCloseTerminal: (id: string) => void;
     onRenameTerminal: (id: string, newTitle: string) => void;
     onDuplicateTerminal?: (id: string) => void;
+    onReconnect?: (id: string) => void;
     onClose?: () => void; // Optional onClose prop
     onActiveTerminalChange?: (id: string | null) => void;
     isBroadcastMode?: boolean;
@@ -26,7 +31,7 @@ interface LayoutManagerProps {
     highlightRules?: HighlightRule[];
 }
 
-const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTerminalData, terminalRefs, onCloseTerminal, onRenameTerminal, onDuplicateTerminal, onActiveTerminalChange, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast, completionDelay, terminalConfig, highlightRules }) => {
+const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTerminalData, terminalRefs, onCloseTerminal, onRenameTerminal, onDuplicateTerminal, onReconnect, onActiveTerminalChange, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast, completionDelay, terminalConfig, highlightRules }) => {
     const [activeTab, setActiveTab] = useState<string>(terminals[0]?.id || '');
     const [editingTab, setEditingTab] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
@@ -174,7 +179,8 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
                             aria-selected={activeTab === term.id}
                             style={{
                                 ...styles.tab,
-                                ...(activeTab === term.id ? styles.activeTab : {})
+                                ...(activeTab === term.id ? styles.activeTab : {}),
+                                ...(term.status === SessionStatus.DISCONNECTED ? styles.disconnectedTab : {})
                             }}
                             onClick={() => handleTabClick(term.id)}
                             onDoubleClick={() => handleTabDoubleClick(term.id, term.title)}
@@ -193,8 +199,16 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
                             ) : (
                                 <div style={styles.tabContentInner}>
                                     <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+                                        {/* 状态指示器 */}
+                                        <span style={{
+                                            ...styles.statusIndicator,
+                                            ...(term.status === SessionStatus.CONNECTED
+                                                ? styles.statusConnected
+                                                : styles.statusDisconnected)
+                                        }} />
+
                                         {isBroadcastMode && (
-                                            <span 
+                                            <span
                                                 style={{
                                                     ...styles.broadcastIcon,
                                                     color: broadcastIds?.includes(term.id) ? '#4caf50' : '#666',
@@ -210,8 +224,22 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
                                             </span>
                                         )}
                                         <span style={styles.tabTitle}>{term.title}</span>
+
+                                        {/* 断开时显示重连按钮 */}
+                                        {term.status === SessionStatus.DISCONNECTED && (
+                                            <button
+                                                style={styles.reconnectBtn}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onReconnect && onReconnect(term.id);
+                                                }}
+                                                title="重新连接"
+                                            >
+                                                重连
+                                            </button>
+                                        )}
                                     </div>
-                                    <span 
+                                    <span
                                         style={styles.closeBtn}
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -270,7 +298,23 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
                                 </div>
                             )}
                             <div style={{flex: 1, position: 'relative', overflow: 'hidden'}}>
-                                <TerminalComponent 
+                                {/* 断开覆盖层 */}
+                                {term.status === SessionStatus.DISCONNECTED && (
+                                    <div style={styles.disconnectedOverlay}>
+                                        <div style={styles.disconnectedMessage}>
+                                            <h3>连接已断开</h3>
+                                            <p>{term.disconnectReason || '未知错误'}</p>
+                                            <button
+                                                style={styles.reconnectButton}
+                                                onClick={() => onReconnect && onReconnect(term.id)}
+                                            >
+                                                重新连接
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <TerminalComponent
                                     id={term.id}
                                     sessionID={term.id}
                                     onData={(data) => onTerminalData(term.id, data)}
@@ -447,6 +491,76 @@ const styles = {
         color: '#fff',
         backgroundColor: '#1e1e1e',
         borderTop: '1px solid #007acc',
+    },
+    disconnectedTab: {
+        backgroundColor: '#3a2d2d',
+        color: '#ff6b6b',
+    },
+    statusIndicator: {
+        display: 'inline-block',
+        width: '8px',
+        height: '8px',
+        borderRadius: '50%',
+        marginRight: '6px',
+        flexShrink: 0,
+    },
+    statusConnected: {
+        backgroundColor: '#4caf50',
+    },
+    statusDisconnected: {
+        backgroundColor: '#ff6b6b',
+    },
+    reconnectBtn: {
+        backgroundColor: '#4caf50',
+        color: 'white',
+        border: 'none',
+        padding: '2px 8px',
+        borderRadius: '3px',
+        cursor: 'pointer',
+        fontSize: '11px',
+        marginLeft: '6px',
+        flexShrink: 0,
+        ':hover': {
+            backgroundColor: '#45a049',
+        }
+    },
+    disconnectedOverlay: {
+        position: 'absolute' as const,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(30, 30, 30, 0.95)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10,
+    },
+    disconnectedMessage: {
+        textAlign: 'center' as const,
+        color: '#ccc',
+        h3: {
+            color: '#ff6b6b',
+            marginBottom: '12px',
+            fontSize: '18px',
+        },
+        p: {
+            marginBottom: '20px',
+            fontSize: '14px',
+        },
+    },
+    reconnectButton: {
+        backgroundColor: '#4caf50',
+        color: 'white',
+        border: 'none',
+        padding: '10px 24px',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        fontSize: '14px',
+        fontWeight: 'bold',
+        ':hover': {
+            backgroundColor: '#45a049',
+        }
     },
     tabContent: {
         flex: 1,

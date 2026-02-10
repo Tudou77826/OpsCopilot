@@ -8,3 +8,15 @@ export interface ConnectionConfig {
     bastion?: ConnectionConfig;
     group?: string;
 }
+
+export enum SessionStatus {
+    CONNECTED = 'connected',
+    DISCONNECTED = 'disconnected',
+}
+
+export interface SessionDisconnectedEvent {
+    sessionId: string;
+    reason: string;
+    message: string;
+    timestamp: number;
+}

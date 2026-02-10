@@ -52,6 +52,8 @@ type App struct {
 	ftMu              sync.Mutex
 	ftCancels         map[string]context.CancelFunc
 	lineBuffers       map[string]*terminal.LineBuffer
+	sessionStates     map[string]*SessionState // 会话状态追踪
+	sessionStateMu    sync.RWMutex
 }
 
 // NewApp creates a new App application struct
@@ -123,6 +125,7 @@ func NewApp() *App {
 		isForceQuitting:   false,
 		ftCancels:         make(map[string]context.CancelFunc),
 		lineBuffers:       make(map[string]*terminal.LineBuffer),
+		sessionStates:     make(map[string]*SessionState),
 	}
 
 	// Set the CommandSender to app itself
@@ -262,6 +265,24 @@ type ConnectConfig struct {
 	Group        string         `json:"group"`
 }
 
+// DisconnectReason 会话断开原因
+type DisconnectReason string
+
+const (
+	DisconnectNormal  DisconnectReason = "normal"  // 用户主动关闭
+	DisconnectError   DisconnectReason = "error"   // 连接错误
+	DisconnectEOF     DisconnectReason = "eof"     // 远程关闭
+	DisconnectTimeout DisconnectReason = "timeout" // 超时
+)
+
+// SessionState 会话状态追踪
+type SessionState struct {
+	ID               string
+	Config           ConnectConfig
+	Status           string // "active", "disconnected"
+	DisconnectReason string
+}
+
 type TroubleshootResult struct {
 	OpsCopilotAnswer string `json:"opsCopilotAnswer"`
 	ExternalAnswer   string `json:"externalAnswer"`
@@ -334,6 +355,9 @@ func (a *App) Connect(config ConnectConfig) ConnectResult {
 	// Store config mapping for duplication
 	a.activeConfigs[sessionID] = config
 
+	// Store session state for reconnection
+	a.storeSessionState(sessionID, config)
+
 	// Auto-save session to persistent storage
 	if err := a.savedSessionMgr.Upsert(*clientConfig, config.Group); err != nil {
 		fmt.Printf("Warning: Failed to auto-save session: %v\n", err)
@@ -345,13 +369,36 @@ func (a *App) Connect(config ConnectConfig) ConnectResult {
 		for {
 			n, err := stdout.Read(buf)
 			if err != nil {
-				if err != io.EOF {
-					runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, fmt.Sprintf("\r\nConnection Error: %v\r\n", err))
+				var reason DisconnectReason
+				var message string
+
+				if err == io.EOF {
+					reason = DisconnectEOF
+					message = "远程主机关闭了连接"
 				} else {
-					runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, "\r\nConnection Closed\r\n")
+					reason = DisconnectError
+					message = fmt.Sprintf("连接错误: %v", err)
 				}
-				// Notify session closed
-				runtime.EventsEmit(a.ctx, "session-closed", sessionID)
+
+				// 发送错误消息到终端
+				if err != io.EOF {
+					runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, fmt.Sprintf("\r\n[断开] %s\r\n", message))
+				} else {
+					runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, "\r\n[断开] 连接已关闭\r\n")
+				}
+
+				// 发送断开事件（保留会话，不关闭tab）
+				runtime.EventsEmit(a.ctx, "session-disconnected", map[string]interface{}{
+					"sessionId": sessionID,
+					"reason":    string(reason),
+					"message":   message,
+					"timestamp": time.Now().Unix(),
+				})
+
+				// 更新会话状态
+				a.updateSessionState(sessionID, "disconnected", string(reason))
+
+				// 从会话管理器移除（清理SSH资源）
 				a.sessionMgr.Remove(sessionID)
 				break
 			}
@@ -1624,4 +1671,62 @@ func (a *App) processTerminalInput(sessionID string, data []byte) {
 	if status.IsRecording {
 		runtime.EventsEmit(a.ctx, "script-recording-status", status)
 	}
+}
+
+// storeSessionState 存储会话状态（在Connect成功后调用）
+func (a *App) storeSessionState(sessionID string, config ConnectConfig) {
+	a.sessionStateMu.Lock()
+	defer a.sessionStateMu.Unlock()
+
+	a.sessionStates[sessionID] = &SessionState{
+		ID:     sessionID,
+		Config: config,
+		Status: "active",
+	}
+}
+
+// updateSessionState 更新会话状态
+func (a *App) updateSessionState(sessionID, status, reason string) {
+	a.sessionStateMu.Lock()
+	defer a.sessionStateMu.Unlock()
+
+	if state, ok := a.sessionStates[sessionID]; ok {
+		state.Status = status
+		state.DisconnectReason = reason
+	}
+}
+
+// ReconnectSession 重新连接断开的会话
+func (a *App) ReconnectSession(sessionID string) ConnectResult {
+	a.sessionStateMu.RLock()
+	state, ok := a.sessionStates[sessionID]
+	a.sessionStateMu.RUnlock()
+
+	if !ok {
+		return ConnectResult{
+			Success: false,
+			Message: "会话不存在或已过期",
+		}
+	}
+
+	if state.Status != "disconnected" {
+		return ConnectResult{
+			Success: false,
+			Message: "会话未断开，无法重连",
+		}
+	}
+
+	// 使用原配置重新连接
+	result := a.Connect(state.Config)
+
+	// 如果连接成功，使用原sessionID（保持tab不变）
+	if result.Success {
+		// 更新状态
+		a.updateSessionState(sessionID, "active", "")
+
+		// 返回原sessionID，前端可以复用tab
+		result.SessionID = sessionID
+	}
+
+	return result
 }
