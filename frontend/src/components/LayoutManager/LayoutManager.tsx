@@ -298,22 +298,6 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
                                 </div>
                             )}
                             <div style={{flex: 1, position: 'relative', overflow: 'hidden'}}>
-                                {/* 断开覆盖层 */}
-                                {term.status === SessionStatus.DISCONNECTED && (
-                                    <div style={styles.disconnectedOverlay}>
-                                        <div style={styles.disconnectedMessage}>
-                                            <h3>连接已断开</h3>
-                                            <p>{term.disconnectReason || '未知错误'}</p>
-                                            <button
-                                                style={styles.reconnectButton}
-                                                onClick={() => onReconnect && onReconnect(term.id)}
-                                            >
-                                                重新连接
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
                                 <TerminalComponent
                                     id={term.id}
                                     sessionID={term.id}
@@ -520,44 +504,6 @@ const styles = {
         fontSize: '11px',
         marginLeft: '6px',
         flexShrink: 0,
-        ':hover': {
-            backgroundColor: '#45a049',
-        }
-    },
-    disconnectedOverlay: {
-        position: 'absolute' as const,
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(30, 30, 30, 0.95)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 10,
-    },
-    disconnectedMessage: {
-        textAlign: 'center' as const,
-        color: '#ccc',
-        h3: {
-            color: '#ff6b6b',
-            marginBottom: '12px',
-            fontSize: '18px',
-        },
-        p: {
-            marginBottom: '20px',
-            fontSize: '14px',
-        },
-    },
-    reconnectButton: {
-        backgroundColor: '#4caf50',
-        color: 'white',
-        border: 'none',
-        padding: '10px 24px',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        fontSize: '14px',
-        fontWeight: 'bold',
         ':hover': {
             backgroundColor: '#45a049',
         }

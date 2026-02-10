@@ -41,6 +41,19 @@ func (m *Manager) Add(client *sshclient.Client, stdin io.WriteCloser, sshSession
 	return id
 }
 
+// AddWithID adds a session with a specific ID (for reconnection)
+func (m *Manager) AddWithID(id string, client *sshclient.Client, stdin io.WriteCloser, sshSession *ssh.Session) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.sessions[id] = &Session{
+		ID:         id,
+		Client:     client,
+		Stdin:      stdin,
+		SSHSession: sshSession,
+	}
+}
+
 func (m *Manager) Get(id string) (*Session, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

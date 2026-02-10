@@ -300,6 +300,11 @@ type ConnectResult struct {
 }
 
 func (a *App) Connect(config ConnectConfig) ConnectResult {
+	return a.ConnectWithID(config, "")
+}
+
+// ConnectWithID connects with a specific sessionID (for reconnection)
+func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) ConnectResult {
 	// 尝试从 SecretStore 保存密码（如果提供了）
 	if config.Password != "" {
 		_ = a.secretStore.Set("OpsCopilot-SSH", config.Host+":"+config.User, config.Password)
@@ -350,7 +355,13 @@ func (a *App) Connect(config ConnectConfig) ConnectResult {
 	}
 
 	// Add to session manager (with SSH session for resizing)
-	sessionID := a.sessionMgr.Add(client, stdin, sshSession)
+	var sessionID string
+	if specifiedSessionID != "" {
+		a.sessionMgr.AddWithID(specifiedSessionID, client, stdin, sshSession)
+		sessionID = specifiedSessionID
+	} else {
+		sessionID = a.sessionMgr.Add(client, stdin, sshSession)
+	}
 
 	// Store config mapping for duplication
 	a.activeConfigs[sessionID] = config
@@ -1716,17 +1727,10 @@ func (a *App) ReconnectSession(sessionID string) ConnectResult {
 		}
 	}
 
-	// 使用原配置重新连接
-	result := a.Connect(state.Config)
+	// 使用原配置和原sessionID重新连接
+	result := a.ConnectWithID(state.Config, sessionID)
 
-	// 如果连接成功，使用原sessionID（保持tab不变）
-	if result.Success {
-		// 更新状态
-		a.updateSessionState(sessionID, "active", "")
-
-		// 返回原sessionID，前端可以复用tab
-		result.SessionID = sessionID
-	}
-
+	// 如果连接失败，保持disconnected状态
+	// 如果连接成功，ConnectWithID已经更新了状态
 	return result
 }

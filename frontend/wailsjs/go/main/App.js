@@ -170,6 +170,10 @@ export function PolishRootCause(arg1) {
   return window['go']['main']['App']['PolishRootCause'](arg1);
 }
 
+export function ReconnectSession(arg1) {
+  return window['go']['main']['App']['ReconnectSession'](arg1);
+}
+
 export function RenameSavedSession(arg1, arg2) {
   return window['go']['main']['App']['RenameSavedSession'](arg1, arg2);
 }
