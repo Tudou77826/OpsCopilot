@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import KeysMap from './KeysMap';
 import HighlightRulesModal from './HighlightRulesModal';
 import { HighlightRule, TerminalConfig } from '../Terminal/highlightTypes';
@@ -83,6 +83,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         { id: 'experimental', label: '高级选项', icon: '🔧', category: '系统' },
     ];
 
+    // Filter navigation items based on search query
+    const filteredNavItems = useMemo(() => {
+        if (!searchQuery.trim()) {
+            return navItems;
+        }
+        const query = searchQuery.toLowerCase();
+        return navItems.filter(item =>
+            item.label.toLowerCase().includes(query) ||
+            item.category.toLowerCase().includes(query) ||
+            item.id.toLowerCase().includes(query)
+        );
+    }, [searchQuery, navItems]);
+
     useEffect(() => {
         if (isOpen) {
             loadSettings();
@@ -127,6 +140,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isOpen, config]);
+
+    // Auto-select first result when searching
+    useEffect(() => {
+        if (searchQuery.trim() && filteredNavItems.length > 0) {
+            const firstVisible = filteredNavItems[0];
+            if (activeTab !== firstVisible.id) {
+                setActiveTab(firstVisible.id);
+            }
+        }
+    }, [searchQuery, filteredNavItems]);
 
     const loadSettings = async () => {
         setLoading(true);
@@ -444,6 +467,83 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             case 'experimental':
                 return (
                     <div style={styles.settingsGroup}>
+                        <div style={styles.groupTitle}>目录设置</div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>日志目录</label>
+                            <input
+                                style={styles.input}
+                                value={config.log?.dir || ''}
+                                onChange={(e) => handleChange('log', 'dir', e.target.value)}
+                                placeholder="例如：C:\\Users\\xxx\\Logs"
+                            />
+                            <div style={styles.settingDescription}>
+                                日志文件存储目录，留空使用默认路径
+                            </div>
+                        </div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>知识库目录</label>
+                            <input
+                                style={styles.input}
+                                value={config.docs?.dir || ''}
+                                onChange={(e) => handleChange('docs', 'dir', e.target.value)}
+                                placeholder="例如：C:\\Users\\xxx\\Documents\\knowledge"
+                            />
+                            <div style={styles.settingDescription}>
+                                本地文档知识库目录，用于 AI 问答增强
+                            </div>
+                        </div>
+                        <div style={styles.groupTitle}>快捷键设置</div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>命令查询快捷键</label>
+                            <input
+                                style={styles.input}
+                                value={formatShortcutLabel(config.command_query_shortcut)}
+                                onChange={(e) => {
+                                    setConfig({
+                                        ...config,
+                                        command_query_shortcut: e.target.value
+                                    });
+                                }}
+                                placeholder="例如：Ctrl+K"
+                            />
+                            <div style={styles.settingDescription}>
+                                呼出命令查询弹窗的快捷键组合（支持 Ctrl+字母、Ctrl+Shift+字母 等格式）
+                            </div>
+                        </div>
+                        <div style={styles.groupTitle}>高级功能</div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>命令补全延迟时间 (毫秒)</label>
+                            <input
+                                style={styles.input}
+                                type="number"
+                                min="0"
+                                max="2000"
+                                step="50"
+                                value={config.completion_delay || 150}
+                                onChange={(e) => {
+                                    const value = parseInt(e.target.value) || 150;
+                                    setConfig({
+                                        ...config,
+                                        completion_delay: Math.max(0, Math.min(2000, value))
+                                    });
+                                }}
+                            />
+                            <div style={styles.settingDescription}>
+                                设置命令自动补全的触发延迟时间（毫秒）。设置为 0 表示立即触发，设置为 2000 表示延迟 2 秒触发
+                            </div>
+                        </div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>外部定位脚本路径</label>
+                            <input
+                                style={styles.input}
+                                value={config.experimental?.external_troubleshoot_script_path || ''}
+                                onChange={(e) => handleChange('experimental', 'external_troubleshoot_script_path', e.target.value)}
+                                placeholder="例如：C:\\scripts\\troubleshoot.bat"
+                            />
+                            <div style={styles.settingDescription}>
+                                外部定位脚本（.bat/.ps1）会在问题排查时并行执行，提供另一种定位思路
+                            </div>
+                        </div>
                         <div style={styles.groupTitle}>配置管理</div>
                         <div style={styles.settingItem}>
                             <label style={styles.settingLabel}>导入旧版本配置</label>
@@ -469,40 +569,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                     支持导入 config.json / prompts.json / quick_commands.json / highlight_rules.json；导入前会自动备份当前配置到 .bak 文件
                                 </div>
                             )}
-                        </div>
-                        <div style={styles.groupTitle}>高级功能</div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>外部定位脚本路径</label>
-                            <input
-                                style={styles.input}
-                                value={config.experimental?.external_troubleshoot_script_path || ''}
-                                onChange={(e) => handleChange('experimental', 'external_troubleshoot_script_path', e.target.value)}
-                                placeholder="例如：C:\\scripts\\troubleshoot.bat"
-                            />
-                            <div style={styles.settingDescription}>
-                                外部定位脚本（.bat/.ps1）会在问题排查时并行执行，提供另一种定位思路
-                            </div>
-                        </div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>命令补全延迟时间 (毫秒)</label>
-                            <input
-                                style={styles.input}
-                                type="number"
-                                min="0"
-                                max="2000"
-                                step="50"
-                                value={config.completion_delay || 150}
-                                onChange={(e) => {
-                                    const value = parseInt(e.target.value) || 150;
-                                    setConfig({
-                                        ...config,
-                                        completion_delay: Math.max(0, Math.min(2000, value))
-                                    });
-                                }}
-                            />
-                            <div style={styles.settingDescription}>
-                                设置命令自动补全的触发延迟时间（毫秒）。设置为 0 表示立即触发，设置为 2000 表示延迟 2 秒触发
-                            </div>
                         </div>
                     </div>
                 );
@@ -557,19 +623,23 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             />
                         </div>
                         <nav style={styles.nav}>
-                            {navItems.map((item) => (
-                                <div
-                                    key={item.id}
-                                    style={{
-                                        ...styles.navItem,
-                                        ...(activeTab === item.id ? styles.navItemActive : {})
-                                    }}
-                                    onClick={() => setActiveTab(item.id)}
-                                >
-                                    <span style={styles.navIcon}>{item.icon}</span>
-                                    <span style={styles.navText}>{item.label}</span>
-                                </div>
-                            ))}
+                            {filteredNavItems.length > 0 ? (
+                                filteredNavItems.map((item) => (
+                                    <div
+                                        key={item.id}
+                                        style={{
+                                            ...styles.navItem,
+                                            ...(activeTab === item.id ? styles.navItemActive : {})
+                                        }}
+                                        onClick={() => setActiveTab(item.id)}
+                                    >
+                                        <span style={styles.navIcon}>{item.icon}</span>
+                                        <span style={styles.navText}>{item.label}</span>
+                                    </div>
+                                ))
+                            ) : (
+                                <div style={styles.noResults}>没有找到匹配的设置项</div>
+                            )}
                         </nav>
                     </div>
 
@@ -730,6 +800,12 @@ const styles = {
     },
     navText: {
         flex: 1,
+    },
+    noResults: {
+        padding: '20px 12px',
+        textAlign: 'center' as const,
+        color: '#888',
+        fontSize: '13px',
     },
     contentArea: {
         flex: 1,
