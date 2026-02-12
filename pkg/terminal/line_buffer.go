@@ -23,9 +23,13 @@ func (lb *LineBuffer) Handle(input string) (string, bool) {
 	for i < len(runes) {
 		r := runes[i]
 
-		// Skip all escape sequences completely (don't process them)
+		// Handle escape sequences (cursor movement, etc.)
 		if r == '\x1b' {
-			i = lb.skipEscapeSequence(runes, i)
+			seq, nextIdx := lb.extractEscapeSequence(runes, i)
+			if seq != "" {
+				lb.handleSequence(seq)
+			}
+			i = nextIdx
 			continue
 		}
 
@@ -55,10 +59,10 @@ func (lb *LineBuffer) Handle(input string) (string, bool) {
 	return "", false
 }
 
-// skipEscapeSequence skips a complete escape sequence and returns the next index
-func (lb *LineBuffer) skipEscapeSequence(runes []rune, start int) int {
+// extractEscapeSequence extracts a complete escape sequence and returns (sequence, nextIndex)
+func (lb *LineBuffer) extractEscapeSequence(runes []rune, start int) (string, int) {
 	if start >= len(runes) || runes[start] != '\x1b' {
-		return start + 1
+		return "", start + 1
 	}
 
 	// ESC + [ (CSI sequence - most common)
@@ -68,7 +72,8 @@ func (lb *LineBuffer) skipEscapeSequence(runes []rune, start int) int {
 		end := start + 2
 		for end < len(runes) {
 			if runes[end] >= 0x40 && runes[end] <= 0x7E {
-				return end + 1
+				seq := string(runes[start : end+1])
+				return seq, end + 1
 			}
 			end++
 			// Prevent malicious data from causing infinite loops
@@ -76,16 +81,17 @@ func (lb *LineBuffer) skipEscapeSequence(runes []rune, start int) int {
 				break
 			}
 		}
-		return end
+		return "", end
 	}
 
 	// ESC + O (PF1-PF4 function keys)
 	if start+1 < len(runes) && runes[start+1] == 'O' {
 		end := start + 2
 		if end < len(runes) {
-			return end + 1
+			seq := string(runes[start : end+1])
+			return seq, end + 1
 		}
-		return end
+		return "", end
 	}
 
 	// Other escape sequences - skip up to 4 characters
@@ -99,7 +105,12 @@ func (lb *LineBuffer) skipEscapeSequence(runes []rune, start int) int {
 		}
 	}
 
-	return end
+	// Return the sequence if we found one
+	if end > start+1 {
+		seq := string(runes[start:end])
+		return seq, end
+	}
+	return "", end
 }
 
 func (lb *LineBuffer) Reset() {
