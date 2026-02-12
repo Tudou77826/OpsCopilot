@@ -58,3 +58,14 @@ config.json
 sessions.json
 .env.local
 logs/opscopilot.log
+
+# Development artifacts
+.trae/
+.doc/
+
+# Backup files
+*.backup
+*.bak
+
+# Thread dumps
+thread_dump*.txt
