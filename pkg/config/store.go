@@ -22,8 +22,8 @@ type AppConfig struct {
 	HighlightRules       []HighlightRule    `json:"highlight_rules"`
 }
 
+// ExperimentalConfig 实验性功能配置（保留结构以便未来扩展）
 type ExperimentalConfig struct {
-	ExternalTroubleshootScriptPath string `json:"external_troubleshoot_script_path"`
 }
 
 type TerminalConfig struct {
@@ -101,9 +101,7 @@ func NewManager() *Manager {
 		QuickCommands:        []QuickCommand{},
 		CompletionDelay:      150, // Default 150ms
 		CommandQueryShortcut: "Ctrl+K",
-		Experimental: ExperimentalConfig{
-			ExternalTroubleshootScriptPath: "",
-		},
+		Experimental:         ExperimentalConfig{},
 		Terminal: TerminalConfig{
 			Scrollback:       5000,
 			SearchEnabled:    true,
@@ -440,9 +438,6 @@ func (m *Manager) ImportFromDirectory(dirPath string) error {
 			}
 			if old.Docs.Dir != "" {
 				updated.Docs.Dir = old.Docs.Dir
-			}
-			if old.Experimental.ExternalTroubleshootScriptPath != "" {
-				updated.Experimental.ExternalTroubleshootScriptPath = old.Experimental.ExternalTroubleshootScriptPath
 			}
 
 			imported = append(imported, "config.json")

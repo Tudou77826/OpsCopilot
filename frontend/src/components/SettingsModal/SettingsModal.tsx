@@ -21,8 +21,7 @@ interface AppConfig {
         dir: string;
     };
     experimental?: {
-        monitoring?: boolean;
-        external_troubleshoot_script_path?: string;
+        // 保留结构以便未来扩展
     };
     terminal?: TerminalConfig;
     highlight_rules?: HighlightRule[];
@@ -170,9 +169,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         FastModel: fastModel,
                         ComplexModel: complexModel,
                     },
-                    experimental: {
-                        external_troubleshoot_script_path: cfg.experimental?.external_troubleshoot_script_path || '',
-                    },
+                    experimental: cfg.experimental || {},
                     terminal,
                     highlight_rules,
                     command_query_shortcut: cfg.command_query_shortcut || 'Ctrl+K',
@@ -532,16 +529,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 设置命令自动补全的触发延迟时间（毫秒）。设置为 0 表示立即触发，设置为 2000 表示延迟 2 秒触发
                             </div>
                         </div>
+                        <div style={styles.groupTitle}>MCP 工具扩展</div>
                         <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>MCP 服务器路径</label>
-                            <input
-                                style={styles.input}
-                                value={config.experimental?.external_troubleshoot_script_path || ''}
-                                onChange={(e) => handleChange('experimental', 'external_troubleshoot_script_path', e.target.value)}
-                                placeholder="例如：C:\\mcp-servers\\diagnostic-server.exe"
-                            />
+                            <label style={styles.settingLabel}>MCP 配置</label>
                             <div style={styles.settingDescription}>
-                                MCP (Model Context Protocol) 服务器路径。配置后，AI 在问题排查时可调用 MCP 提供的诊断工具
+                                MCP (Model Context Protocol) 工具扩展配置请编辑 <code style={{background: '#333', padding: '2px 6px', borderRadius: '3px'}}>logs/mcp.json</code> 文件。
+                                配置格式请参考 <code style={{background: '#333', padding: '2px 6px', borderRadius: '3px'}}>tools/README.md</code>。
                             </div>
                         </div>
                         <div style={styles.groupTitle}>配置管理</div>

@@ -306,9 +306,7 @@ wails build
 docs/
 ├── database_maintenance.md        # 数据库维护文档
 ├── network_troubleshooting.md     # 网络故障排查手册
-├── payment_system_sop.md          # 支付系统运维手册
-├── 外部定位脚本使用指南.md         # 外部脚本集成说明
-└── 外部脚本桥接使用指南.md         # 脚本桥接功能说明
+└── payment_system_sop.md          # 支付系统运维手册
 ```
 
 应用启动时会自动加载文档，作为 AI 问答的上下文。
@@ -409,8 +407,9 @@ OpsCopilot/
 │   ├── filetransfer/          # 文件传输（SFTP/SCP）
 │   ├── knowledge/             # 知识库加载器
 │   ├── llm/                   # LLM Provider 抽象
+│   ├── mcp/                   # MCP 工具扩展
 │   ├── recorder/              # 脚本录制
-│   ├── script/                # 外部脚本执行
+│   ├── script/                # 脚本录制管理
 │   ├── secretstore/           # 密钥存储（操作系统 Keyring）
 │   ├── session/               # SSH Session 管理
 │   ├── session_recorder/      # 排查会话记录器
@@ -443,15 +442,13 @@ OpsCopilot/
 │   └── wailsjs/               # Wails 自动生成的绑定
 ├── docs/                      # 知识库文档目录
 │   ├── database_maintenance.md
-│   ├── network_troubleshooting.md
-│   ├── payment_system_sop.md
-│   ├── 外部定位脚本使用指南.md
-│   └── 外部脚本桥接使用指南.md
-├── scripts/                   # 外部脚本目录
+│   └── network_troubleshooting.md
+├── tools/                     # MCP 工具使用说明
+│   └── README.md
 ├── build/                     # 构建输出目录
 ├── logs/                      # 日志目录
 ├── config.json                # 用户配置文件
-├── config.example.json         # 配置文件示例
+├── config.example.json        # 配置文件示例
 ├── sessions.json              # 持久化会话列表
 ├── sessions.example.json      # 会话文件示例
 ├── prompts.json               # AI Prompt 配置

@@ -212,12 +212,6 @@ func (a *App) startup(ctx context.Context) {
 		// 将 MCP 管理器设置到 AIService
 		a.aiService.SetMCPManager(a.mcpManager)
 	}
-
-	// 兼容旧配置：如果有配置外部脚本路径但 mcp.json 为空，则使用旧配置启动
-	if a.configMgr.Config.Experimental.ExternalTroubleshootScriptPath != "" {
-		// mcp.json 为空时，使用旧配置作为单一 MCP 服务器
-		log.Printf("[MCP] Using legacy config for MCP: %s", a.configMgr.Config.Experimental.ExternalTroubleshootScriptPath)
-	}
 }
 
 // beforeClose is called before the application closes
