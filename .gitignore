@@ -69,3 +69,7 @@ logs/opscopilot.log
 
 # Thread dumps
 thread_dump*.txt
+
+# Claude Code
+.claude/
+CLAUDE.md
