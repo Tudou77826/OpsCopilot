@@ -8,6 +8,7 @@ import (
 	"opscopilot/pkg/config"
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/llm"
+	"opscopilot/pkg/mcp"
 	"opscopilot/pkg/sshclient"
 	"regexp"
 	"strings"
@@ -20,6 +21,13 @@ type AIService struct {
 	fastProvider    llm.Provider
 	complexProvider llm.Provider
 	cfgMgr          *config.Manager
+	mcpClient       mcp.Client // MCP 客户端（可选）
+	mcpManager      MCPManagerProvider // MCP 管理器（可选）
+}
+
+// MCPManagerProvider MCP 管理器接口
+type MCPManagerProvider interface {
+	GetAllClients() map[string]mcp.Client
 }
 
 type CommandQueryResult struct {
@@ -32,7 +40,18 @@ func NewAIService(fastProvider llm.Provider, complexProvider llm.Provider, cfgMg
 		fastProvider:    fastProvider,
 		complexProvider: complexProvider,
 		cfgMgr:          cfgMgr,
+		mcpClient:       nil, // 将在 App 启动后设置
 	}
+}
+
+// SetMCPClient 设置 MCP 客户端（旧接口，保持兼容）
+func (s *AIService) SetMCPClient(client mcp.Client) {
+	s.mcpClient = client
+}
+
+// SetMCPManager 设置 MCP 管理器
+func (s *AIService) SetMCPManager(manager MCPManagerProvider) {
+	s.mcpManager = manager
 }
 
 func (s *AIService) UpdateProviders(fastProvider llm.Provider, complexProvider llm.Provider) {

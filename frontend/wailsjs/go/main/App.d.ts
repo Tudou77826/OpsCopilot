@@ -17,6 +17,8 @@ export function CloseSession(arg1:string):Promise<void>;
 
 export function Connect(arg1:main.ConnectConfig):Promise<main.ConnectResult>;
 
+export function ConnectWithID(arg1:main.ConnectConfig,arg2:string):Promise<main.ConnectResult>;
+
 export function DeleteSavedSession(arg1:string):Promise<string>;
 
 export function DeleteScript(arg1:string):Promise<void>;
@@ -56,6 +58,8 @@ export function GenerateLinuxCommand(arg1:string):Promise<string>;
 export function GetCompletions(arg1:string,arg2:number):Promise<string>;
 
 export function GetHighlightRules():Promise<Array<config.HighlightRule>>;
+
+export function GetMCPStatus():Promise<string>;
 
 export function GetQuickCommandGroups():Promise<Array<string>>;
 

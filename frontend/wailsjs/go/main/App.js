@@ -22,6 +22,10 @@ export function Connect(arg1) {
   return window['go']['main']['App']['Connect'](arg1);
 }
 
+export function ConnectWithID(arg1, arg2) {
+  return window['go']['main']['App']['ConnectWithID'](arg1, arg2);
+}
+
 export function DeleteSavedSession(arg1) {
   return window['go']['main']['App']['DeleteSavedSession'](arg1);
 }
@@ -100,6 +104,10 @@ export function GetCompletions(arg1, arg2) {
 
 export function GetHighlightRules() {
   return window['go']['main']['App']['GetHighlightRules']();
+}
+
+export function GetMCPStatus() {
+  return window['go']['main']['App']['GetMCPStatus']();
 }
 
 export function GetQuickCommandGroups() {

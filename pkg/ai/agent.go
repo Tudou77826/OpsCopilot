@@ -8,6 +8,7 @@ import (
 	"log"
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/llm"
+	"opscopilot/pkg/mcp"
 	"os"
 	"sort"
 	"strings"
@@ -30,13 +31,15 @@ type AgentRunOptions struct {
 const agentToolPrompt = "You are OpsCopilot running in Agent mode. You have access to a local knowledge base and the following tools:\n" +
 	"1) search_knowledge: search within documentation content and return top matches with snippets\n" +
 	"2) list_knowledge_files: list available markdown docs\n" +
-	"3) read_knowledge_file: read a specific markdown doc by relative path\n\n" +
+	"3) read_knowledge_file: read a specific markdown doc by relative path\n" +
+	"4) MCP tools: Additional diagnostic tools available through MCP (if configured)\n\n" +
 	"Rules:\n" +
 	"- You MUST call search_knowledge at least once before answering.\n" +
 	"- When calling search_knowledge, keep the query short (keywords/phrases), not the full problem statement.\n" +
 	"- Use the search results to choose which file(s) to read (usually 1-3) before answering.\n" +
 	"- Call list_knowledge_files only if search results are empty or you need to explore the available docs.\n" +
 	"- Only read files that are relevant to the user's question.\n" +
+	"- If MCP tools are available, you may use them for advanced diagnostic capabilities.\n" +
 	"- If the knowledge base does not contain the answer, say so and then answer from general knowledge.\n" +
 	"- Always follow additional system instructions about output format.\n" +
 	"- Always answer in the same language as the user."
@@ -73,6 +76,33 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 				Parameters:  toolDefs[knowledge.ToolReadFile],
 			},
 		},
+	}
+
+	// 添加 MCP 工具（如果可用）
+	// 优先使用 MCP Manager，如果没有则使用单个 mcpClient
+	if s.mcpManager != nil {
+		clients := s.mcpManager.GetAllClients()
+		for serverName, client := range clients {
+			if client.IsReady() {
+				mcpTools, err := client.ListTools(ctx)
+				if err != nil {
+					log.Printf("[Agent][%s] Warning: Failed to list MCP tools from %s: %v", runID, serverName, err)
+				} else if len(mcpTools) > 0 {
+					log.Printf("[Agent][%s] Adding %d MCP tools from %s to agent", runID, len(mcpTools), serverName)
+					mcpLLMTools := mcp.ToLLMTools(mcpTools)
+					tools = append(tools, mcpLLMTools...)
+				}
+			}
+		}
+	} else if s.mcpClient != nil && s.mcpClient.IsReady() {
+		mcpTools, err := s.mcpClient.ListTools(ctx)
+		if err != nil {
+			log.Printf("[Agent][%s] Warning: Failed to list MCP tools: %v", runID, err)
+		} else if len(mcpTools) > 0 {
+			log.Printf("[Agent][%s] Adding %d MCP tools to agent", runID, len(mcpTools))
+			mcpLLMTools := mcp.ToLLMTools(mcpTools)
+			tools = append(tools, mcpLLMTools...)
+		}
 	}
 
 	messages := []llm.ChatMessage{{Role: "system", Content: agentToolPrompt}}
@@ -236,8 +266,82 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 				}
 
 			default:
-				toolResult = fmt.Sprintf("Error: Unknown tool %s", tc.Function.Name)
-				log.Printf("[Agent][%s] ToolErr name=%s unknownTool=true", runID, tc.Function.Name)
+				// 检查是否为 MCP 工具
+				if mcp.IsMCPTool(tc.Function.Name) {
+					log.Printf("[Agent][%s] Executing MCP tool: %s", runID, tc.Function.Name)
+					emitStatus(ctx, runID, "mcp_call", fmt.Sprintf("正在调用 MCP 工具: %s...", tc.Function.Name))
+
+					var args map[string]interface{}
+					if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
+						toolResult = fmt.Sprintf("Error parsing MCP tool arguments: %v", err)
+						log.Printf("[Agent][%s] MCPToolErr name=%s parseArgsErr=%v", runID, tc.Function.Name, err)
+					} else {
+						// 尝试从 MCP Manager 查找能处理此工具的客户端
+						var result string
+						var err error
+
+						if s.mcpManager != nil {
+							clients := s.mcpManager.GetAllClients()
+							// 遍历所有客户端，找到能处理此工具的
+							for serverName, client := range clients {
+								if client.IsReady() {
+									// 先列出工具，看是否包含此工具
+									tools, listErr := client.ListTools(ctx)
+									if listErr != nil {
+										continue
+									}
+
+									// 检查工具是否在这个客户端中
+									found := false
+									for _, tool := range tools {
+										if tool.Name == tc.Function.Name {
+											found = true
+											break
+										}
+									}
+
+									if found {
+										toolAt := time.Now()
+										result, err = client.CallTool(ctx, tc.Function.Name, args)
+										toolCost := time.Since(toolAt)
+										if err != nil {
+											toolResult = mcp.FormatToolCallResult(tc.Function.Name, "", err)
+											log.Printf("[Agent][%s] MCPToolErr name=%s server=%s cost=%s err=%v", runID, tc.Function.Name, serverName, toolCost, err)
+										} else {
+											toolResult = mcp.FormatToolCallResult(tc.Function.Name, result, nil)
+											log.Printf("[Agent][%s] MCPToolOk name=%s server=%s cost=%s resultLen=%d", runID, tc.Function.Name, serverName, toolCost, len(result))
+										}
+										break
+									}
+								}
+							}
+
+							// 如果所有客户端都无法处理，返回错误
+							if result == "" && err == nil {
+								toolResult = fmt.Sprintf("Error: No MCP server found that can handle tool %s", tc.Function.Name)
+								log.Printf("[Agent][%s] MCPToolErr name=%s noServerFound=true", runID, tc.Function.Name)
+							}
+						} else if s.mcpClient != nil && s.mcpClient.IsReady() {
+							// 回退到单个客户端模式
+							toolAt := time.Now()
+							result, err = s.mcpClient.CallTool(ctx, tc.Function.Name, args)
+							toolCost := time.Since(toolAt)
+							if err != nil {
+								toolResult = mcp.FormatToolCallResult(tc.Function.Name, "", err)
+								log.Printf("[Agent][%s] MCPToolErr name=%s cost=%s err=%v", runID, tc.Function.Name, toolCost, err)
+							} else {
+								toolResult = mcp.FormatToolCallResult(tc.Function.Name, result, nil)
+								log.Printf("[Agent][%s] MCPToolOk name=%s cost=%s resultLen=%d", runID, tc.Function.Name, toolCost, len(result))
+							}
+						} else {
+							toolResult = fmt.Sprintf("Error: MCP not available for tool %s", tc.Function.Name)
+							log.Printf("[Agent][%s] MCPToolErr name=%s notAvailable=true", runID, tc.Function.Name)
+						}
+					}
+				} else {
+					toolResult = fmt.Sprintf("Error: Unknown tool %s", tc.Function.Name)
+					log.Printf("[Agent][%s] ToolErr name=%s unknownTool=true", runID, tc.Function.Name)
+				}
 			}
 
 			messages = append(messages, llm.ChatMessage{

@@ -533,15 +533,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             </div>
                         </div>
                         <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>外部定位脚本路径</label>
+                            <label style={styles.settingLabel}>MCP 服务器路径</label>
                             <input
                                 style={styles.input}
                                 value={config.experimental?.external_troubleshoot_script_path || ''}
                                 onChange={(e) => handleChange('experimental', 'external_troubleshoot_script_path', e.target.value)}
-                                placeholder="例如：C:\\scripts\\troubleshoot.bat"
+                                placeholder="例如：C:\\mcp-servers\\diagnostic-server.exe"
                             />
                             <div style={styles.settingDescription}>
-                                外部定位脚本（.bat/.ps1）会在问题排查时并行执行，提供另一种定位思路
+                                MCP (Model Context Protocol) 服务器路径。配置后，AI 在问题排查时可调用 MCP 提供的诊断工具
                             </div>
                         </div>
                         <div style={styles.groupTitle}>配置管理</div>

@@ -9,6 +9,10 @@ import 'highlight.js/styles/github-dark.css';
 // @ts-ignore
 import { EventsOn } from '../../../wailsjs/runtime/runtime';
 
+interface MCPStatus {
+    servers: Record<string, boolean>;
+}
+
 interface Message {
     role: 'user' | 'ai';
     content: string;
@@ -52,8 +56,9 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [viewMode, setViewMode] = useState<'opscopilot' | 'external' | 'integrated'>('opscopilot');
     const [troubleshootResult, setTroubleshootResult] = useState<TroubleshootResult | null>(null);
-    const [externalScriptEnhanced, setExternalScriptEnhanced] = useState(false);
+    const [mcpToolEnhanced, setMcpToolEnhanced] = useState(false);
     const [showExternalHelp, setShowExternalHelp] = useState(false);
+    const [mcpStatus, setMcpStatus] = useState<MCPStatus | null>(null);
 
     const extractDocFromReadingMessage = (message: string): string | null => {
         const idx = message.indexOf('正在阅读文档:');
@@ -69,6 +74,29 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
     useEffect(() => {
         scrollToBottom();
     }, [messages, agentStatus]);
+
+    // Load MCP status on mount
+    useEffect(() => {
+        const loadMcpStatus = async () => {
+            try {
+                console.log('[MCP] Loading status...');
+                // @ts-ignore
+                if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetMCPStatus) {
+                    // @ts-ignore
+                    const statusStr = await window.go.main.App.GetMCPStatus();
+                    console.log('[MCP] Raw status:', statusStr);
+                    const status = JSON.parse(statusStr) as MCPStatus;
+                    console.log('[MCP] Parsed status:', status);
+                    setMcpStatus(status);
+                } else {
+                    console.log('[MCP] GetMCPStatus not available');
+                }
+            } catch (e) {
+                console.error('[MCP] Failed to load status:', e);
+            }
+        };
+        loadMcpStatus();
+    }, []); // Empty deps - load once on mount
 
     const handleStart = async () => {
         if (!input.trim()) {
@@ -142,7 +170,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
             // @ts-ignore
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskTroubleshoot) {
                 // @ts-ignore
-                const response = await window.go.main.App.AskTroubleshoot(problem, externalScriptEnhanced);
+                const response = await window.go.main.App.AskTroubleshoot(problem, mcpToolEnhanced);
                 let parsedResponse = response;
                 let result: TroubleshootResult | null = null;
 
@@ -320,7 +348,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
             // @ts-ignore
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskTroubleshoot) {
                 // @ts-ignore
-                const response = await window.go.main.App.AskTroubleshoot(userMsg.content, externalScriptEnhanced);
+                const response = await window.go.main.App.AskTroubleshoot(userMsg.content, mcpToolEnhanced);
                 let parsedResponse = response;
                 let result: TroubleshootResult | null = null;
 
@@ -527,20 +555,20 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                             style={{...styles.textarea, minHeight: '80px', backgroundColor: '#333'}}
                         />
 
-                        {/* 外部脚本增强模式开关 */}
+                        {/* MCP 工具增强模式开关 */}
                         <div style={styles.enhancedModeToggle}>
                             <div style={styles.toggleContainer}>
-                                <label style={styles.switchLabel} title={externalScriptEnhanced ? '已启用外部脚本增强' : '已禁用外部脚本增强'}>
+                                <label style={styles.switchLabel} title={mcpToolEnhanced ? '已启用 MCP 工具增强' : '已禁用 MCP 工具增强'}>
                                     <input
                                         type="checkbox"
-                                        checked={externalScriptEnhanced}
-                                        onChange={(e) => setExternalScriptEnhanced(e.target.checked)}
+                                        checked={mcpToolEnhanced}
+                                        onChange={(e) => setMcpToolEnhanced(e.target.checked)}
                                         style={styles.switchCheckbox}
                                         className="troubleshoot-switch-checkbox"
                                     />
                                     <span style={styles.switchSlider} className="troubleshoot-switch-slider"></span>
                                 </label>
-                                <span style={styles.toggleText}>外部脚本增强</span>
+                                <span style={styles.toggleText}>MCP 工具增强</span>
                             </div>
                             <div
                                 style={styles.helpIcon}
@@ -554,24 +582,55 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                             </div>
                         </div>
 
-                        {/* 外部脚本帮助说明 */}
+                        {/* MCP 工具帮助说明 */}
                         {showExternalHelp && (
                             <div style={styles.externalHelpBox}>
-                                <div style={styles.helpTitle}>什么是外部脚本增强？</div>
+                                <div style={styles.helpTitle}>什么是 MCP 工具增强？</div>
                                 <div style={styles.helpContent}>
-                                    外部脚本增强允许您联合自定义的诊断脚本进行深度分析，适合复杂问题的排查。
+                                    MCP (Model Context Protocol) 工具增强允许 AI 调用配置的诊断工具进行深度分析，适合复杂问题的排查。
                                 </div>
                                 <div style={styles.helpSection}>
-                                    <div style={styles.helpSectionTitle}>⚠️ 需要自行配置</div>
+                                    <div style={styles.helpSectionTitle}>⚠️ 需要配置 MCP 服务器</div>
                                     <div style={styles.helpSectionContent}>
-                                        此功能需要您按照规范编写诊断脚本并在设置中配置脚本路径。
+                                        此功能需要在设置中配置 MCP 服务器路径，或创建 <code style={styles.inlineCode}>mcp.json</code> 配置文件。
                                     </div>
                                 </div>
                                 <div style={styles.helpSection}>
-                                    <div style={styles.helpSectionTitle}>📋 脚本规范</div>
+                                    <div style={styles.helpSectionTitle}>📋 MCP 协议</div>
                                     <div style={styles.helpSectionContent}>
-                                        脚本需接收 <code style={styles.inlineCode}>-Problem</code> 和 <code style={styles.inlineCode}>-OutputDir</code> 参数，并在输出目录生成 <code style={styles.inlineCode}>conclusion.md</code> 文件。
+                                        MCP 是一种标准化协议，允许 LLM 调用外部工具。服务器需实现 tools/list 和 tools/call 方法。
                                     </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* MCP 服务器状态显示 */}
+                        {mcpStatus && mcpStatus.servers && Object.keys(mcpStatus.servers).length > 0 ? (
+                            <div style={styles.mcpStatusBox}>
+                                <div style={styles.mcpStatusTitle}>MCP 服务器状态</div>
+                                <div style={styles.mcpServerList}>
+                                    {Object.entries(mcpStatus.servers).map(([serverName, isReady]) => (
+                                        <div key={serverName} style={styles.mcpServerItem}>
+                                            <span style={{
+                                                ...styles.mcpStatusDot,
+                                                backgroundColor: isReady ? '#4ade80' : '#f44336'
+                                            }} />
+                                            <span style={styles.mcpServerName}>{serverName}</span>
+                                            <span style={{
+                                                ...styles.mcpStatusText,
+                                                color: isReady ? '#4ade80' : '#f44336'
+                                            }}>
+                                                {isReady ? '已连接' : '未连接'}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div style={{...styles.mcpStatusBox, opacity: 0.6}}>
+                                <div style={styles.mcpStatusTitle}>MCP 状态</div>
+                                <div style={{fontSize: '12px', color: '#999'}}>
+                                    {!mcpStatus ? '加载中...' : '未配置 MCP 服务器'}
                                 </div>
                             </div>
                         )}
@@ -746,10 +805,32 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                             </div>
 
                             {/* 增强模式状态显示（只读） */}
-                            {externalScriptEnhanced && (
+                            {mcpToolEnhanced && (
                                 <div style={styles.enhancedModeStatus}>
                                     <div style={styles.statusItem}>
-                                        <span style={styles.statusLabel}>🔧 增强模式已启用</span>
+                                        <span style={styles.statusLabel}>🔧 MCP 工具增强已启用</span>
+                                        {mcpStatus && mcpStatus.servers && Object.keys(mcpStatus.servers).length > 0 && (
+                                            <div style={styles.serverStatusList}>
+                                                {Object.entries(mcpStatus.servers).map(([serverName, isReady]) => (
+                                                    <div key={serverName} style={styles.serverStatusItem}>
+                                                        <span style={{
+                                                            ...styles.serverStatusDot,
+                                                            backgroundColor: isReady ? '#4ade80' : '#f44336'
+                                                        }} />
+                                                        <span style={styles.serverStatusName}>{serverName}</span>
+                                                        <span style={{
+                                                            ...styles.serverStatusText,
+                                                            color: isReady ? '#4ade80' : '#f44336'
+                                                        }}>
+                                                            {isReady ? '已连接' : '未连接'}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {mcpStatus && mcpStatus.servers && Object.keys(mcpStatus.servers).length === 0 && (
+                                            <div style={styles.statusDetail}>未配置 MCP 服务器</div>
+                                        )}
                                     </div>
                                 </div>
                             )}
@@ -1299,6 +1380,68 @@ const styles = {
         borderRadius: '3px',
         fontFamily: 'Consolas, "Courier New", monospace',
         fontSize: '11px',
+    },
+    serverStatusList: {
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '4px',
+        marginTop: '8px',
+    },
+    serverStatusItem: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+    },
+    serverStatusDot: {
+        width: '6px',
+        height: '6px',
+        borderRadius: '50%',
+    },
+    serverStatusName: {
+        color: '#bbb',
+        fontSize: '11px',
+    },
+    serverStatusText: {
+        fontSize: '11px',
+        fontWeight: '500',
+    },
+    mcpStatusBox: {
+        padding: '10px 12px',
+        backgroundColor: '#1e1e1e',
+        borderRadius: '6px',
+        border: '1px solid #3a3a3a',
+        marginTop: '10px',
+    },
+    mcpStatusTitle: {
+        fontSize: '12px',
+        fontWeight: '600',
+        color: '#e0e0e0',
+        marginBottom: '8px',
+    },
+    mcpServerList: {
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '4px',
+    },
+    mcpServerItem: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '4px 0',
+    },
+    mcpStatusDot: {
+        width: '8px',
+        height: '8px',
+        borderRadius: '50%',
+    },
+    mcpServerName: {
+        color: '#bbb',
+        fontSize: '13px',
+        flex: 1,
+    },
+    mcpStatusText: {
+        fontSize: '12px',
+        fontWeight: '500',
     },
     switchLabel: {
         display: 'flex',

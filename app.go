@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -23,6 +22,7 @@ import (
 	"opscopilot/pkg/config"
 	"opscopilot/pkg/filetransfer"
 	"opscopilot/pkg/llm"
+	"opscopilot/pkg/mcp"
 	"opscopilot/pkg/recorder"
 	"opscopilot/pkg/script"
 	"opscopilot/pkg/secretstore"
@@ -47,6 +47,7 @@ type App struct {
 	troubleMgr        *troubleshoot.Manager      // 故障排查管理器
 	scriptMgr         *script.Manager             // 脚本管理器
 	completionService *completion.Service
+	mcpManager        *mcp.Manager                // MCP 服务器管理器
 	activeConfigs     map[string]ConnectConfig
 	isForceQuitting   bool // Flag to skip confirmation on force quit
 	ftMu              sync.Mutex
@@ -195,6 +196,28 @@ func (a *App) startup(ctx context.Context) {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
 	log.Println("App started")
+
+	// 初始化 MCP 管理器
+	mcpConfigPath := filepath.Join(logDir, "mcp.json")
+	a.mcpManager = mcp.NewManager(mcpConfigPath)
+	if err := a.mcpManager.Load(); err != nil {
+		log.Printf("[MCP] Failed to load MCP config: %v", err)
+	} else {
+		// 启动所有配置的 MCP 服务器
+		if err := a.mcpManager.StartAll(); err != nil {
+			log.Printf("[MCP] Failed to start MCP servers: %v", err)
+		} else {
+			log.Println("[MCP] MCP servers initialized successfully")
+		}
+		// 将 MCP 管理器设置到 AIService
+		a.aiService.SetMCPManager(a.mcpManager)
+	}
+
+	// 兼容旧配置：如果有配置外部脚本路径但 mcp.json 为空，则使用旧配置启动
+	if a.configMgr.Config.Experimental.ExternalTroubleshootScriptPath != "" {
+		// mcp.json 为空时，使用旧配置作为单一 MCP 服务器
+		log.Printf("[MCP] Using legacy config for MCP: %s", a.configMgr.Config.Experimental.ExternalTroubleshootScriptPath)
+	}
 }
 
 // beforeClose is called before the application closes
@@ -203,6 +226,7 @@ func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 	// If this is a forced quit, skip confirmation and allow close
 	if a.isForceQuitting {
 		log.Println("[beforeClose] Force quitting, allowing close")
+		a.cleanupMCPClient()
 		return false
 	}
 
@@ -239,8 +263,42 @@ func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 	}
 
 	log.Println("[beforeClose] No active work, allowing close")
+	a.cleanupMCPClient()
 	// No active work, allow close
 	return false
+}
+
+// cleanupMCPClient 清理 MCP 客户端资源
+func (a *App) cleanupMCPClient() {
+	if a.mcpManager != nil {
+		log.Println("[MCP] Stopping MCP servers")
+		if err := a.mcpManager.StopAll(); err != nil {
+			log.Printf("[MCP] Error stopping MCP servers: %v", err)
+		}
+	}
+}
+
+// GetMCPStatus 获取 MCP 服务器状态（供前端调用）
+func (a *App) GetMCPStatus() string {
+	if a.mcpManager == nil {
+		log.Println("[GetMCPStatus] MCP Manager is nil")
+		return `{"servers": {}}`
+	}
+
+	status := a.mcpManager.GetStatus()
+	log.Printf("[GetMCPStatus] Returning status: %+v", status)
+	result := map[string]interface{}{
+		"servers": status,
+	}
+
+	jsonBytes, err := json.Marshal(result)
+	if err != nil {
+		log.Printf("[GetMCPStatus] Failed to marshal: %v", err)
+		return fmt.Sprintf(`{"error": "Failed to marshal status: %v"}`, err)
+	}
+
+	log.Printf("[GetMCPStatus] Returning JSON: %s", string(jsonBytes))
+	return string(jsonBytes)
 }
 
 // ForceQuit forces the application to quit without confirmation
@@ -281,16 +339,6 @@ type SessionState struct {
 	Config           ConnectConfig
 	Status           string // "active", "disconnected"
 	DisconnectReason string
-}
-
-type TroubleshootResult struct {
-	OpsCopilotAnswer string `json:"opsCopilotAnswer"`
-	ExternalAnswer   string `json:"externalAnswer"`
-	IntegratedAnswer string `json:"integratedAnswer"`
-	OpsCopilotReady  bool   `json:"opsCopilotReady"`
-	ExternalReady    bool   `json:"externalReady"`
-	IntegratedReady  bool   `json:"integratedReady"`
-	ExternalError    string `json:"externalError,omitempty"`
 }
 
 type ConnectResult struct {
@@ -642,196 +690,16 @@ func (a *App) AskAI(question string) string {
 	return answer
 }
 
-// AskTroubleshoot handles the troubleshooting request from frontend and returns structured JSON
-// enableExternal: whether to use external script integration (advanced feature)
+// AskTroubleshoot handles the troubleshooting request from frontend
+// enableExternal: whether to enable MCP tools (controlled by ExternalTroubleshootScriptPath config)
+// 当 enableExternal 为 true 且配置了 MCP 服务器时，Agent 会自动使用 MCP 工具进行诊断
 func (a *App) AskTroubleshoot(problem string, enableExternal bool) string {
-	// Check if external script integration should be enabled
-	scriptPath := ""
-	if enableExternal && a.configMgr.Config.Experimental.ExternalTroubleshootScriptPath != "" {
-		scriptPath = a.configMgr.Config.Experimental.ExternalTroubleshootScriptPath
-	}
-
-	// If external script is not enabled, return simple text answer (backward compatible)
-	if scriptPath == "" {
-		knowledgeDir := a.resolveKnowledgeBase()
-		answer, err := a.aiService.AskTroubleshoot(a.ctx, problem, knowledgeDir)
-		if err != nil {
-			return fmt.Sprintf("Error: %v", err)
-		}
-		return answer
-	}
-
-	// Otherwise, run with external script integration and return structured JSON
-	return a.runTroubleshootWithExternal(problem, scriptPath)
-}
-
-func (a *App) runTroubleshootWithExternal(problem, scriptPath string) string {
 	knowledgeDir := a.resolveKnowledgeBase()
-	result := &TroubleshootResult{
-		OpsCopilotAnswer: "",
-		ExternalAnswer:   "",
-		IntegratedAnswer: "",
-		OpsCopilotReady:  false,
-		ExternalReady:    false,
-		IntegratedReady:  false,
-	}
-
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	opsCopilotDone := make(chan struct{})
-	integratedDone := make(chan struct{})
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		answer, err := a.aiService.AskTroubleshoot(a.ctx, problem, knowledgeDir)
-		mu.Lock()
-		defer mu.Unlock()
-		if err != nil {
-			result.OpsCopilotAnswer = fmt.Sprintf("Error: %v", err)
-		} else {
-			result.OpsCopilotAnswer = answer
-		}
-		result.OpsCopilotReady = true
-		close(opsCopilotDone)
-	}()
-
-	if scriptPath != "" {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			// 创建临时输出目录
-			tempDir := filepath.Join(os.TempDir(), "OpsCopilot", "troubleshoot")
-			if err := os.MkdirAll(tempDir, 0755); err != nil {
-				mu.Lock()
-				result.ExternalError = fmt.Sprintf("创建临时目录失败: %v", err)
-				result.ExternalReady = true
-				mu.Unlock()
-				return
-			}
-
-			// 构建参数字符串 - 只传递固定参数
-			var args []string
-			args = append(args, "-Problem", problem)
-			args = append(args, "-OutputDir", tempDir)
-
-			var cmd *exec.Cmd
-			ext := strings.ToLower(filepath.Ext(scriptPath))
-
-			// 根据文件扩展名选择执行方式
-			if ext == ".ps1" {
-				// PowerShell 脚本
-				psArgs := []string{"-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath}
-				psArgs = append(psArgs, args...)
-				cmd = exec.Command("powershell", psArgs...)
-			} else if ext == ".bat" || ext == ".cmd" {
-				// 批处理文件 - 使用 cmd.exe
-				cmdArgs := []string{"/C", scriptPath}
-				cmdArgs = append(cmdArgs, args...)
-				cmd = exec.Command("cmd", cmdArgs...)
-			} else {
-				// 默认使用 cmd.exe
-				cmdArgs := []string{"/C", scriptPath}
-				cmdArgs = append(cmdArgs, args...)
-				cmd = exec.Command("cmd", cmdArgs...)
-			}
-
-			output, err := cmd.CombinedOutput()
-			mu.Lock()
-			defer mu.Unlock()
-			if err != nil {
-				result.ExternalError = fmt.Sprintf("外部脚本执行失败: %v\n脚本路径: %s", err, scriptPath)
-			} else {
-				// 尝试读取脚本生成的结论文件
-				conclusionFile := filepath.Join(tempDir, "conclusion.md")
-				if content, err := os.ReadFile(conclusionFile); err == nil {
-					// 如果结论文件存在，读取文件内容
-					result.ExternalAnswer = string(content)
-				} else {
-					// 如果结论文件不存在，使用脚本输出
-					result.ExternalAnswer = string(output)
-				}
-			}
-			result.ExternalReady = true
-		}()
-	}
-
-	go func() {
-		wg.Wait()
-		mu.Lock()
-		if result.OpsCopilotReady && result.ExternalReady && result.ExternalError == "" {
-			// 发送状态事件：开始综合分析
-			runID := uuid.NewString()
-			runtime.EventsEmit(a.ctx, "agent:status", map[string]string{
-				"runId":   runID,
-				"stage":   "integrating",
-				"message": "正在综合分析多个定位结果...",
-			})
-
-			integratedPrompt := fmt.Sprintf(`You are a smart OpsCopilot assistant. Your task is to synthesize findings from multiple troubleshooting tools and provide a unified, structured troubleshooting plan.
-
-Response Format:
-1. Return ONLY a valid JSON object.
-2. DO NOT wrap the JSON in markdown code blocks (no ` + "```json" + `).
-3. The JSON must have this structure:
-{
-  "summary": "Comprehensive analysis summarizing the root cause hypothesis, key findings from logs/code review, and overall assessment. Use markdown formatting for readability.",
-  "steps": [
-    {
-      "title": "Step title",
-      "description": "Detailed explanation of what to check and why",
-      "expected_outcome": "What we expect to find"
-    }
-  ],
-  "commands": [
-    {
-      "command": "command to run",
-      "description": "what this command does and why"
-    }
-  ]
-}
-
-Instructions:
-- The "summary" field should contain the synthesized analysis including:
-  * Root cause hypothesis from external script (code review findings)
-  * Key log patterns and anomalies detected
-  * Assessment of uncertainty and confidence level
-  * Important context that doesn't fit into steps/commands
-- Use markdown formatting in summary (headers, bullet points, code blocks for logs, etc.)
-- The "steps" field contains actionable investigation steps
-- The "commands" field contains ready-to-run diagnostic commands
-- Remove duplicates and resolve conflicts between the two sources
-- Preserve important insights even if uncertain
-
-Findings to synthesize:
-
-=== OpsCopilot Conclusion ===
-%s
-
-=== External Tool Conclusion ===
-%s`, result.OpsCopilotAnswer, result.ExternalAnswer)
-
-			integrated, err := a.aiService.AskWithContext(a.ctx, integratedPrompt, knowledgeDir)
-			if err != nil {
-				result.IntegratedAnswer = fmt.Sprintf("综合失败: %v", err)
-			} else {
-				result.IntegratedAnswer = integrated
-			}
-		}
-		result.IntegratedReady = true
-		mu.Unlock()
-		close(integratedDone)
-	}()
-
-	// 等待综合分析完成后再返回
-	<-integratedDone
-	jsonBytes, err := json.Marshal(result)
+	answer, err := a.aiService.AskTroubleshoot(a.ctx, problem, knowledgeDir)
 	if err != nil {
-		return fmt.Sprintf(`{"error": "Failed to marshal result: %v"}`, err)
+		return fmt.Sprintf("Error: %v", err)
 	}
-
-	return string(jsonBytes)
+	return answer
 }
 
 func (a *App) GetSettings() config.AppConfig {
