@@ -534,8 +534,25 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             <label style={styles.settingLabel}>MCP 配置</label>
                             <div style={styles.settingDescription}>
                                 MCP (Model Context Protocol) 工具扩展配置请编辑 <code style={{background: '#333', padding: '2px 6px', borderRadius: '3px'}}>logs/mcp.json</code> 文件。
-                                配置格式请参考 <code style={{background: '#333', padding: '2px 6px', borderRadius: '3px'}}>tools/README.md</code>。
                             </div>
+                            <pre style={{
+                                background: '#1e1e1e',
+                                padding: '10px 12px',
+                                borderRadius: '6px',
+                                fontSize: '12px',
+                                color: '#d4d4d4',
+                                marginTop: '8px',
+                                overflow: 'auto',
+                                fontFamily: 'Consolas, "Courier New", monospace'
+                            }}>{`{
+  "mcpServers": {
+    "服务器名": {
+      "command": "可执行文件路径",
+      "args": ["参数"],
+      "env": { "环境变量": "值" }
+    }
+  }
+}`}</pre>
                         </div>
                         <div style={styles.groupTitle}>配置管理</div>
                         <div style={styles.settingItem}>
