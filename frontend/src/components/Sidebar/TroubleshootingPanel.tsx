@@ -555,85 +555,47 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                             style={{...styles.textarea, minHeight: '80px', backgroundColor: '#333'}}
                         />
 
-                        {/* MCP 工具增强模式开关 */}
-                        <div style={styles.enhancedModeToggle}>
-                            <div style={styles.toggleContainer}>
-                                <label style={styles.switchLabel} title={mcpToolEnhanced ? '已启用 MCP 工具增强' : '已禁用 MCP 工具增强'}>
-                                    <input
-                                        type="checkbox"
-                                        checked={mcpToolEnhanced}
-                                        onChange={(e) => setMcpToolEnhanced(e.target.checked)}
-                                        style={styles.switchCheckbox}
-                                        className="troubleshoot-switch-checkbox"
-                                    />
-                                    <span style={styles.switchSlider} className="troubleshoot-switch-slider"></span>
-                                </label>
-                                <span style={styles.toggleText}>MCP 工具增强</span>
-                            </div>
-                            <div
-                                style={styles.helpIcon}
-                                onClick={() => setShowExternalHelp(!showExternalHelp)}
-                            >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <circle cx="12" cy="12" r="10"/>
-                                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                                    <line x1="12" y1="17" x2="12.01" y2="17"/>
-                                </svg>
-                            </div>
-                        </div>
-
-                        {/* MCP 工具帮助说明 */}
-                        {showExternalHelp && (
-                            <div style={styles.externalHelpBox}>
-                                <div style={styles.helpTitle}>什么是 MCP 工具增强？</div>
-                                <div style={styles.helpContent}>
-                                    MCP (Model Context Protocol) 工具增强允许 AI 调用配置的诊断工具进行深度分析，适合复杂问题的排查。
-                                </div>
-                                <div style={styles.helpSection}>
-                                    <div style={styles.helpSectionTitle}>⚠️ 需要配置 MCP 服务器</div>
-                                    <div style={styles.helpSectionContent}>
-                                        此功能需要在设置中配置 MCP 服务器路径，或创建 <code style={styles.inlineCode}>mcp.json</code> 配置文件。
+                        {/* 高级选项 - 默认折叠，包含 MCP 工具增强 */}
+                        <details style={styles.advancedOptions}>
+                            <summary style={styles.advancedSummary}>高级选项</summary>
+                            <div style={styles.advancedContent}>
+                                {/* MCP 工具增强模式开关 */}
+                                <div style={styles.enhancedModeToggle}>
+                                    <div style={styles.toggleContainer}>
+                                        <label style={styles.switchLabel} title={mcpToolEnhanced ? '已启用 MCP 工具增强' : '已禁用 MCP 工具增强'}>
+                                            <input
+                                                type="checkbox"
+                                                checked={mcpToolEnhanced}
+                                                onChange={(e) => setMcpToolEnhanced(e.target.checked)}
+                                                style={styles.switchCheckbox}
+                                                className="troubleshoot-switch-checkbox"
+                                            />
+                                            <span style={styles.switchSlider} className="troubleshoot-switch-slider"></span>
+                                        </label>
+                                        <span style={styles.toggleText}>工具增强</span>
+                                    </div>
+                                    <div
+                                        style={styles.helpIcon}
+                                        onClick={() => setShowExternalHelp(!showExternalHelp)}
+                                    >
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <circle cx="12" cy="12" r="10"/>
+                                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                                            <line x1="12" y1="17" x2="12.01" y2="17"/>
+                                        </svg>
                                     </div>
                                 </div>
-                                <div style={styles.helpSection}>
-                                    <div style={styles.helpSectionTitle}>📋 MCP 协议</div>
-                                    <div style={styles.helpSectionContent}>
-                                        MCP 是一种标准化协议，允许 LLM 调用外部工具。服务器需实现 tools/list 和 tools/call 方法。
-                                    </div>
-                                </div>
-                            </div>
-                        )}
 
-                        {/* MCP 服务器状态显示 */}
-                        {mcpStatus && mcpStatus.servers && Object.keys(mcpStatus.servers).length > 0 ? (
-                            <div style={styles.mcpStatusBox}>
-                                <div style={styles.mcpStatusTitle}>MCP 服务器状态</div>
-                                <div style={styles.mcpServerList}>
-                                    {Object.entries(mcpStatus.servers).map(([serverName, isReady]) => (
-                                        <div key={serverName} style={styles.mcpServerItem}>
-                                            <span style={{
-                                                ...styles.mcpStatusDot,
-                                                backgroundColor: isReady ? '#4ade80' : '#f44336'
-                                            }} />
-                                            <span style={styles.mcpServerName}>{serverName}</span>
-                                            <span style={{
-                                                ...styles.mcpStatusText,
-                                                color: isReady ? '#4ade80' : '#f44336'
-                                            }}>
-                                                {isReady ? '已连接' : '未连接'}
-                                            </span>
+                                {/* MCP 工具帮助说明 */}
+                                {showExternalHelp && (
+                                    <div style={styles.externalHelpBox}>
+                                        <div style={styles.helpContent}>
+                                            启用后可调用配置的诊断工具进行深度分析。需要在设置中配置服务器。
                                         </div>
-                                    ))}
-                                </div>
+                                    </div>
+                                )}
                             </div>
-                        ) : (
-                            <div style={{...styles.mcpStatusBox, opacity: 0.6}}>
-                                <div style={styles.mcpStatusTitle}>MCP 状态</div>
-                                <div style={{fontSize: '12px', color: '#999'}}>
-                                    {!mcpStatus ? '加载中...' : '未配置 MCP 服务器'}
-                                </div>
-                            </div>
-                        )}
+                        </details>
 
                         <button onClick={handleStart} style={styles.primaryButton}>
                             开始排查
@@ -804,34 +766,19 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                                 </button>
                             </div>
 
-                            {/* 增强模式状态显示（只读） */}
+                            {/* 增强模式状态显示（只读） - 简化为小标签 */}
                             {mcpToolEnhanced && (
-                                <div style={styles.enhancedModeStatus}>
-                                    <div style={styles.statusItem}>
-                                        <span style={styles.statusLabel}>🔧 MCP 工具增强已启用</span>
-                                        {mcpStatus && mcpStatus.servers && Object.keys(mcpStatus.servers).length > 0 && (
-                                            <div style={styles.serverStatusList}>
-                                                {Object.entries(mcpStatus.servers).map(([serverName, isReady]) => (
-                                                    <div key={serverName} style={styles.serverStatusItem}>
-                                                        <span style={{
-                                                            ...styles.serverStatusDot,
-                                                            backgroundColor: isReady ? '#4ade80' : '#f44336'
-                                                        }} />
-                                                        <span style={styles.serverStatusName}>{serverName}</span>
-                                                        <span style={{
-                                                            ...styles.serverStatusText,
-                                                            color: isReady ? '#4ade80' : '#f44336'
-                                                        }}>
-                                                            {isReady ? '已连接' : '未连接'}
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                        {mcpStatus && mcpStatus.servers && Object.keys(mcpStatus.servers).length === 0 && (
-                                            <div style={styles.statusDetail}>未配置 MCP 服务器</div>
-                                        )}
-                                    </div>
+                                <div style={styles.enhancedModeTag}>
+                                    <span style={styles.enhancedModeTagText}>工具增强</span>
+                                    {mcpStatus && mcpStatus.servers && Object.keys(mcpStatus.servers).length > 0 && (
+                                        <span style={styles.enhancedModeTagDot}
+                                            title={Object.entries(mcpStatus.servers)
+                                                .map(([name, ready]) => `${name}: ${ready ? '已连接' : '未连接'}`)
+                                                .join('\n')}
+                                        >
+                                            {Object.values(mcpStatus.servers).some(Boolean) ? '●' : '○'}
+                                        </span>
+                                    )}
                                 </div>
                             )}
 
@@ -1023,6 +970,7 @@ const styles = {
     spinner: {
         display: 'inline-block',
         animation: 'spin 2s linear infinite',
+        fontStyle: 'normal',
     },
     statusHistory: {
         padding: '6px 12px 10px 12px',
@@ -1443,6 +1391,58 @@ const styles = {
         fontSize: '12px',
         fontWeight: '500',
     },
+    advancedOptions: {
+        width: '100%',
+        fontSize: '12px',
+    },
+    advancedSummary: {
+        padding: '6px 0',
+        color: '#888',
+        cursor: 'pointer',
+        userSelect: 'none' as const,
+        outline: 'none',
+        listStyle: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
+    },
+    advancedContent: {
+        padding: '8px 0',
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '8px',
+    },
+    mcpStatusBoxCompact: {
+        display: 'flex',
+        flexWrap: 'wrap' as const,
+        gap: '8px',
+    },
+    mcpServerItemCompact: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
+    },
+    mcpServerNameCompact: {
+        color: '#999',
+        fontSize: '11px',
+    },
+    enhancedModeTag: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '4px',
+        padding: '2px 8px',
+        backgroundColor: '#2a3a2a',
+        borderRadius: '4px',
+        fontSize: '11px',
+    },
+    enhancedModeTagText: {
+        color: '#7a9a7a',
+    },
+    enhancedModeTagDot: {
+        color: '#4ade80',
+        fontSize: '8px',
+        cursor: 'help',
+    },
     switchLabel: {
         display: 'flex',
         alignItems: 'center',
@@ -1488,6 +1488,20 @@ if (!existing) {
             background-color: white;
             border-radius: 50%;
             transition: transform 0.2s ease;
+        }
+
+        /* Advanced options details/summary styles */
+        details summary::-webkit-details-marker {
+            display: none;
+        }
+        details summary::before {
+            content: '▸';
+            display: inline-block;
+            font-size: 10px;
+            transition: transform 0.2s ease;
+        }
+        details[open] summary::before {
+            transform: rotate(90deg);
         }
     `;
     document.head.appendChild(styleSheet);

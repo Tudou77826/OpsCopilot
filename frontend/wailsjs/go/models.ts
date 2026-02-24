@@ -77,7 +77,7 @@ export namespace config {
 	    }
 	}
 	export class ExperimentalConfig {
-	    external_troubleshoot_script_path: string;
+	
 	
 	    static createFrom(source: any = {}) {
 	        return new ExperimentalConfig(source);
@@ -85,7 +85,7 @@ export namespace config {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.external_troubleshoot_script_path = source["external_troubleshoot_script_path"];
+	
 	    }
 	}
 	export class QuickCommand {
@@ -158,7 +158,8 @@ export namespace config {
 	    quick_commands: QuickCommand[];
 	    completion_delay: number;
 	    command_query_shortcut: string;
-	    experimental: ExperimentalConfig;
+	    // Go type: ExperimentalConfig
+	    experimental: any;
 	    terminal: TerminalConfig;
 	    highlight_rules: HighlightRule[];
 	
@@ -175,7 +176,7 @@ export namespace config {
 	        this.quick_commands = this.convertValues(source["quick_commands"], QuickCommand);
 	        this.completion_delay = source["completion_delay"];
 	        this.command_query_shortcut = source["command_query_shortcut"];
-	        this.experimental = this.convertValues(source["experimental"], ExperimentalConfig);
+	        this.experimental = this.convertValues(source["experimental"], null);
 	        this.terminal = this.convertValues(source["terminal"], TerminalConfig);
 	        this.highlight_rules = this.convertValues(source["highlight_rules"], HighlightRule);
 	    }
@@ -198,7 +199,6 @@ export namespace config {
 		    return a;
 		}
 	}
-	
 	
 	
 	
