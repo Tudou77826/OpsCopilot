@@ -65,7 +65,105 @@ func (c *stdioClient) Start(ctx context.Context, serverPath string, args ...stri
 	}
 
 	c.started = true
+
+	// MCP 协议要求先发送 initialize 请求
+	if err := c.initialize(); err != nil {
+		c.started = false
+		return fmt.Errorf("failed to initialize MCP connection: %w", err)
+	}
+
 	return nil
+}
+
+// initialize 发送 MCP 初始化握手
+func (c *stdioClient) initialize() error {
+	// 发送 initialize 请求
+	req := JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      0,
+		Method:  "initialize",
+		Params: map[string]interface{}{
+			"protocolVersion": "2024-11-05",
+			"capabilities": map[string]interface{}{
+				"tools": map[string]interface{}{},
+			},
+			"clientInfo": map[string]interface{}{
+				"name":    "opscopilot",
+				"version": "1.0.0",
+			},
+		},
+	}
+
+	if err := c.sendRequestLocked(req); err != nil {
+		return fmt.Errorf("failed to send initialize request: %w", err)
+	}
+
+	resp, err := c.readResponseLocked()
+	if err != nil {
+		return fmt.Errorf("failed to read initialize response: %w", err)
+	}
+
+	if resp.Error != nil {
+		return fmt.Errorf("initialize error: %s", resp.Error.Message)
+	}
+
+	fmt.Printf("[MCP] Initialize response received: %+v\n", resp.Result)
+
+	// 发送 notifications/initialized（可选但推荐）
+	initializedReq := JSONRPCRequest{
+		JSONRPC: "2.0",
+		Method:  "notifications/initialized",
+	}
+	// 这个通知不需要响应，所以忽略错误
+	_ = c.sendRequestLocked(initializedReq)
+
+	return nil
+}
+
+// sendRequestLocked 发送请求（调用时已持有锁）
+func (c *stdioClient) sendRequestLocked(req JSONRPCRequest) error {
+	data, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+
+	// 添加换行符（MCP 协议使用行分隔的 JSON）
+	data = append(data, '\n')
+
+	_, err = c.stdin.Write(data)
+	return err
+}
+
+// readResponseLocked 读取响应（调用时已持有锁）
+func (c *stdioClient) readResponseLocked() (*JSONRPCResponse, error) {
+	type result struct {
+		data []byte
+		err  error
+	}
+
+	resultCh := make(chan result, 1)
+
+	go func() {
+		reader := bufio.NewReader(c.stdout)
+		line, err := reader.ReadBytes('\n')
+		resultCh <- result{line, err}
+	}()
+
+	select {
+	case res := <-resultCh:
+		if res.err != nil {
+			return nil, res.err
+		}
+
+		var resp JSONRPCResponse
+		if err := json.Unmarshal(res.data, &resp); err != nil {
+			return nil, err
+		}
+		return &resp, nil
+
+	case <-time.After(30 * time.Second):
+		return nil, fmt.Errorf("timeout reading response from MCP server")
+	}
 }
 
 func (c *stdioClient) Stop(ctx context.Context) error {
@@ -101,12 +199,12 @@ func (c *stdioClient) IsReady() bool {
 
 // ListTools 获取 MCP 服务器提供的工具列表
 func (c *stdioClient) ListTools(ctx context.Context) ([]Tool, error) {
-	c.mu.RLock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if !c.started {
-		c.mu.RUnlock()
 		return nil, fmt.Errorf("MCP client not started")
 	}
-	c.mu.RUnlock()
 
 	// 构建 tools/list 请求
 	req := JSONRPCRequest{
@@ -116,12 +214,12 @@ func (c *stdioClient) ListTools(ctx context.Context) ([]Tool, error) {
 	}
 
 	// 发送请求
-	if err := c.sendRequest(req); err != nil {
+	if err := c.sendRequestLocked(req); err != nil {
 		return nil, fmt.Errorf("failed to send tools/list request: %w", err)
 	}
 
 	// 读取响应
-	resp, err := c.readResponse()
+	resp, err := c.readResponseLocked()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
@@ -141,17 +239,18 @@ func (c *stdioClient) ListTools(ctx context.Context) ([]Tool, error) {
 		return nil, fmt.Errorf("failed to unmarshal tools list result: %w", err)
 	}
 
+	fmt.Printf("[MCP] Listed %d tools\n", len(result.Tools))
 	return result.Tools, nil
 }
 
 // CallTool 调用 MCP 工具并返回结果
 func (c *stdioClient) CallTool(ctx context.Context, name string, args map[string]interface{}) (string, error) {
-	c.mu.RLock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if !c.started {
-		c.mu.RUnlock()
 		return "", fmt.Errorf("MCP client not started")
 	}
-	c.mu.RUnlock()
 
 	// 构建 tools/call 请求
 	req := JSONRPCRequest{
@@ -165,12 +264,12 @@ func (c *stdioClient) CallTool(ctx context.Context, name string, args map[string
 	}
 
 	// 发送请求
-	if err := c.sendRequest(req); err != nil {
+	if err := c.sendRequestLocked(req); err != nil {
 		return "", fmt.Errorf("failed to send tools/call request: %w", err)
 	}
 
 	// 读取响应
-	resp, err := c.readResponse()
+	resp, err := c.readResponseLocked()
 	if err != nil {
 		return "", fmt.Errorf("failed to read response: %w", err)
 	}
@@ -202,61 +301,6 @@ func (c *stdioClient) CallTool(ctx context.Context, name string, args map[string
 	}
 
 	return string(contentJSON), nil
-}
-
-// sendRequest 发送 JSON-RPC 请求到 MCP 服务器
-func (c *stdioClient) sendRequest(req JSONRPCRequest) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	data, err := json.Marshal(req)
-	if err != nil {
-		return err
-	}
-
-	// 添加换行符（MCP 协议使用行分隔的 JSON）
-	data = append(data, '\n')
-
-	_, err = c.stdin.Write(data)
-	return err
-}
-
-// readResponse 从 MCP 服务器读取 JSON-RPC 响应
-func (c *stdioClient) readResponse() (*JSONRPCResponse, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// 设置读取超时
-	// 注意：这里使用通道超时模式，因为 Read 本身不支持 context
-	type result struct {
-		data []byte
-		err  error
-	}
-
-	resultCh := make(chan result, 1)
-
-	go func() {
-		// 读取一行（以换行符分隔）
-		reader := bufio.NewReader(c.stdout)
-		line, err := reader.ReadBytes('\n')
-		resultCh <- result{line, err}
-	}()
-
-	select {
-	case res := <-resultCh:
-		if res.err != nil {
-			return nil, res.err
-		}
-
-		var resp JSONRPCResponse
-		if err := json.Unmarshal(res.data, &resp); err != nil {
-			return nil, err
-		}
-		return &resp, nil
-
-	case <-time.After(30 * time.Second):
-		return nil, fmt.Errorf("timeout reading response from MCP server")
-	}
 }
 
 // NewClient 创建 MCP 客户端实例
