@@ -14,7 +14,7 @@ import (
 // Client 定义 MCP 客户端接口
 type Client interface {
 	// Start 启动 MCP 服务器进程并建立连接
-	Start(ctx context.Context, serverPath string) error
+	Start(ctx context.Context, serverPath string, args ...string) error
 
 	// Stop 停止 MCP 服务器
 	Stop(ctx context.Context) error
@@ -39,12 +39,12 @@ type stdioClient struct {
 	started   bool
 }
 
-func (c *stdioClient) Start(ctx context.Context, serverPath string) error {
+func (c *stdioClient) Start(ctx context.Context, serverPath string, args ...string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.serverCmd = serverPath
-	c.cmd = exec.CommandContext(ctx, serverPath)
+	c.cmd = exec.CommandContext(ctx, serverPath, args...)
 
 	// 设置平台特定的进程属性（隐藏窗口等）
 	c.setPlatformCmdAttr()

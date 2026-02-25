@@ -152,21 +152,15 @@ func (m *Manager) StartAll() error {
 		}
 
 		client := NewClient()
-		// 构建完整命令
-		cmd := serverConfig.Command
-		if len(serverConfig.Args) > 0 {
-			// 对于 stdio 模式，我们直接启动可执行文件
-			// 参数已经在启动时处理
-		}
-
 		ctx := context.Background()
-		if err := client.Start(ctx, cmd); err != nil {
+		if err := client.Start(ctx, serverConfig.Command, serverConfig.Args...); err != nil {
 			// 记录错误但继续启动其他服务器
 			fmt.Printf("[MCP] Failed to start server %s: %v\n", name, err)
 			continue
 		}
 
 		m.clients[name] = client
+		fmt.Printf("[MCP] Server %s started successfully\n", name)
 	}
 
 	return nil
