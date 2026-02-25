@@ -533,7 +533,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         <div style={styles.settingItem}>
                             <label style={styles.settingLabel}>MCP 配置</label>
                             <div style={styles.settingDescription}>
-                                MCP (Model Context Protocol) 工具扩展配置请编辑 <code style={{background: '#333', padding: '2px 6px', borderRadius: '3px'}}>logs/mcp.json</code> 文件。
+                                MCP (Model Context Protocol) 工具扩展配置请编辑程序目录下的 <code style={{background: '#333', padding: '2px 6px', borderRadius: '3px'}}>mcp.json</code> 文件。
                             </div>
                             <pre style={{
                                 background: '#1e1e1e',
