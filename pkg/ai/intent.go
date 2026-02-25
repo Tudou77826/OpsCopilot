@@ -12,6 +12,7 @@ import (
 	"opscopilot/pkg/sshclient"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -206,25 +207,148 @@ func (s *AIService) AskWithContext(ctx context.Context, question string, knowled
 	return resp, nil
 }
 
+// TroubleshootResult 故障排查结果结构
+type TroubleshootResult struct {
+	OpsCopilotAnswer  string `json:"opsCopilotAnswer"`
+	ExternalAnswer    string `json:"externalAnswer"`
+	IntegratedAnswer  string `json:"integratedAnswer"`
+	OpsCopilotReady   bool   `json:"opsCopilotReady"`
+	ExternalReady     bool   `json:"externalReady"`
+	IntegratedReady   bool   `json:"integratedReady"`
+	ExternalError     string `json:"externalError,omitempty"`
+}
+
 func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowledgeDir string, enableMCP bool) (string, error) {
 	prompt := s.cfgMgr.Config.Prompts["troubleshoot_prompt"]
 	if prompt == "" {
 		prompt = config.DefaultTroubleshootPrompt
 	}
 
-	resp, err := s.RunAgent(ctx, AgentRunOptions{
-		Question:     problem,
-		KnowledgeDir: knowledgeDir,
-		SystemPrompt: prompt,
-		RetryMax:     5,
-		EnableMCP:    enableMCP,
-	})
-	if err != nil {
-		return "", err
+	result := TroubleshootResult{
+		OpsCopilotReady:  false,
+		ExternalReady:    false,
+		IntegratedReady:  false,
 	}
 
-	// Clean JSON response (remove markdown code blocks)
-	return CleanJSONResponse(resp), nil
+	// 如果不启用 MCP，只运行知识库问答
+	if !enableMCP {
+		resp, err := s.RunAgent(ctx, AgentRunOptions{
+			Question:     problem,
+			KnowledgeDir: knowledgeDir,
+			SystemPrompt: prompt,
+			RetryMax:     5,
+			EnableMCP:    false,
+		})
+		if err != nil {
+			return "", err
+		}
+		return CleanJSONResponse(resp), nil
+	}
+
+	// 启用 MCP 时，并行运行知识库问答和 MCP 诊断
+	var opsCopilotAnswer, externalAnswer string
+	var opsCopilotErr, externalErr error
+	var wg sync.WaitGroup
+
+	// 知识库问答
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		resp, err := s.RunAgent(ctx, AgentRunOptions{
+			Question:     problem,
+			KnowledgeDir: knowledgeDir,
+			SystemPrompt: prompt,
+			RetryMax:     5,
+			EnableMCP:    false, // 知识库问答不使用 MCP
+		})
+		if err != nil {
+			opsCopilotErr = err
+			return
+		}
+		opsCopilotAnswer = CleanJSONResponse(resp)
+	}()
+
+	// MCP 诊断
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		resp, err := s.RunAgent(ctx, AgentRunOptions{
+			Question:     problem,
+			KnowledgeDir: knowledgeDir,
+			SystemPrompt: "你是 MCP 诊断助手。请使用可用的 MCP 工具对用户的问题进行诊断分析。\n\n规则：\n- 优先使用 MCP 工具获取诊断信息\n- 如果没有 MCP 工具可用，说明这一点\n- 用中文回答\n- 提供结构化的诊断报告",
+			RetryMax:     5,
+			EnableMCP:    true, // MCP 诊断使用 MCP 工具
+		})
+		if err != nil {
+			externalErr = err
+			return
+		}
+		externalAnswer = CleanJSONResponse(resp)
+	}()
+
+	wg.Wait()
+
+	// 设置知识库问答结果
+	if opsCopilotErr != nil {
+		log.Printf("[AskTroubleshoot] OpsCopilot error: %v", opsCopilotErr)
+		result.OpsCopilotAnswer = fmt.Sprintf("知识库分析失败: %v", opsCopilotErr)
+		result.OpsCopilotReady = false
+	} else {
+		result.OpsCopilotAnswer = opsCopilotAnswer
+		result.OpsCopilotReady = true
+	}
+
+	// 设置 MCP 诊断结果
+	if externalErr != nil {
+		log.Printf("[AskTroubleshoot] MCP error: %v", externalErr)
+		result.ExternalError = fmt.Sprintf("MCP 诊断失败: %v", externalErr)
+		result.ExternalAnswer = ""
+		result.ExternalReady = false
+	} else {
+		result.ExternalAnswer = externalAnswer
+		result.ExternalReady = true
+	}
+
+	// 生成综合答复
+	if result.OpsCopilotReady && result.ExternalReady {
+		integratedPrompt := fmt.Sprintf(`请综合以下两个来源的诊断信息，生成一份完整的故障排查报告。
+
+## 知识库分析结果
+%s
+
+## MCP 诊断结果
+%s
+
+## 要求
+1. 综合两个来源的信息
+2. 如果有冲突，以 MCP 诊断的实时数据为准
+3. 提供明确的排查步骤和建议
+4. 用中文回答`, result.OpsCopilotAnswer, result.ExternalAnswer)
+
+		integratedResp, err := s.fastProvider.ChatCompletion(ctx, []llm.ChatMessage{
+			{Role: "system", Content: "你是专业的运维诊断助手，负责综合多个来源的诊断信息生成报告。"},
+			{Role: "user", Content: integratedPrompt},
+		})
+		if err != nil {
+			log.Printf("[AskTroubleshoot] Integrated answer error: %v", err)
+			result.IntegratedAnswer = "综合答复生成失败"
+			result.IntegratedReady = false
+		} else {
+			result.IntegratedAnswer = integratedResp
+			result.IntegratedReady = true
+		}
+	} else {
+		// 如果任一失败，使用知识库结果作为综合答复
+		result.IntegratedAnswer = result.OpsCopilotAnswer
+		result.IntegratedReady = result.OpsCopilotReady
+	}
+
+	// 返回 JSON 格式
+	jsonData, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(jsonData), nil
 }
 
 func (s *AIService) GenerateConclusion(timeline string, rootCause string) (string, error) {
