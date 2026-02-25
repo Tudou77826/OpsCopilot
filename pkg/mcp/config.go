@@ -46,6 +46,7 @@ func (m *Manager) Load() error {
 
 	// 检查配置文件是否存在
 	if _, err := os.Stat(m.configPath); os.IsNotExist(err) {
+		fmt.Printf("[MCP.Load] Config file not found: %s\n", m.configPath)
 		// 配置文件不存在，创建空配置
 		m.config = &MCPConfig{
 			Servers: make(map[string]MCPServerConfig),
@@ -53,10 +54,13 @@ func (m *Manager) Load() error {
 		return nil
 	}
 
+	fmt.Printf("[MCP.Load] Loading config from: %s\n", m.configPath)
 	data, err := os.ReadFile(m.configPath)
 	if err != nil {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
+
+	fmt.Printf("[MCP.Load] Config content: %s\n", string(data))
 
 	var config MCPConfig
 	if err := json.Unmarshal(data, &config); err != nil {
@@ -64,6 +68,10 @@ func (m *Manager) Load() error {
 	}
 
 	m.config = &config
+	fmt.Printf("[MCP.Load] Loaded %d server configs\n", len(config.Servers))
+	for name, cfg := range config.Servers {
+		fmt.Printf("[MCP.Load] Server '%s': command=%s, args=%v\n", name, cfg.Command, cfg.Args)
+	}
 	return nil
 }
 

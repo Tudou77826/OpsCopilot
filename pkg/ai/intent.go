@@ -281,17 +281,30 @@ func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowled
 
 		// 首先检查是否有可用的 MCP 工具
 		hasMCPTools := false
+		log.Printf("[AskTroubleshoot.MCP] Checking for MCP tools...")
 		if s.mcpManager != nil {
 			clients := s.mcpManager.GetAllClients()
-			for _, client := range clients {
+			log.Printf("[AskTroubleshoot.MCP] Got %d clients from manager", len(clients))
+			for serverName, client := range clients {
+				log.Printf("[AskTroubleshoot.MCP] Checking server '%s', IsReady=%v", serverName, client.IsReady())
 				if client.IsReady() {
 					tools, err := client.ListTools(ctx)
-					if err == nil && len(tools) > 0 {
-						hasMCPTools = true
-						break
+					if err != nil {
+						log.Printf("[AskTroubleshoot.MCP] Failed to list tools from '%s': %v", serverName, err)
+					} else {
+						log.Printf("[AskTroubleshoot.MCP] Server '%s' has %d tools", serverName, len(tools))
+						if len(tools) > 0 {
+							hasMCPTools = true
+							for _, t := range tools {
+								log.Printf("[AskTroubleshoot.MCP] Tool: %s - %s", t.Name, t.Description)
+							}
+							break
+						}
 					}
 				}
 			}
+		} else {
+			log.Printf("[AskTroubleshoot.MCP] MCP Manager is nil!")
 		}
 
 		if !hasMCPTools {
