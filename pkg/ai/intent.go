@@ -272,10 +272,32 @@ func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowled
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+
+		// 首先检查是否有可用的 MCP 工具
+		hasMCPTools := false
+		if s.mcpManager != nil {
+			clients := s.mcpManager.GetAllClients()
+			for _, client := range clients {
+				if client.IsReady() {
+					tools, err := client.ListTools(ctx)
+					if err == nil && len(tools) > 0 {
+						hasMCPTools = true
+						break
+					}
+				}
+			}
+		}
+
+		if !hasMCPTools {
+			log.Printf("[AskTroubleshoot] No MCP tools available")
+			externalAnswer = "## MCP 诊断结果\n\n**当前没有可用的 MCP 诊断工具。**\n\n请确保：\n1. 已在 `mcp.json` 中正确配置 MCP 服务器\n2. MCP 服务器已正确启动\n3. MCP 服务器提供了诊断工具\n\n您可以在设置页面查看 MCP 服务器状态。"
+			return
+		}
+
 		resp, err := s.RunAgent(ctx, AgentRunOptions{
 			Question:     problem,
-			KnowledgeDir: knowledgeDir,
-			SystemPrompt: "你是 MCP 诊断助手。请使用可用的 MCP 工具对用户的问题进行诊断分析。\n\n规则：\n- 优先使用 MCP 工具获取诊断信息\n- 如果没有 MCP 工具可用，说明这一点\n- 用中文回答\n- 提供结构化的诊断报告",
+			KnowledgeDir: "", // MCP 诊断不需要知识库
+			SystemPrompt: "你是 MCP 诊断助手。请使用可用的 MCP 工具对用户的问题进行诊断分析。\n\n规则：\n- 必须使用 MCP 工具获取诊断信息\n- 不要编造或幻觉出任何工具\n- 只使用实际可用的 MCP 工具\n- 用中文回答\n- 提供结构化的诊断报告",
 			RetryMax:     5,
 			EnableMCP:    true, // MCP 诊断使用 MCP 工具
 		})

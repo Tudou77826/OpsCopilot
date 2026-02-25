@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -146,6 +148,9 @@ func (m *Manager) StartAll() error {
 		return nil
 	}
 
+	// 获取配置文件所在目录作为基准目录
+	baseDir := filepath.Dir(m.configPath)
+
 	for name, serverConfig := range m.config.Servers {
 		if _, exists := m.clients[name]; exists {
 			continue // 已启动
@@ -153,7 +158,22 @@ func (m *Manager) StartAll() error {
 
 		client := NewClient()
 		ctx := context.Background()
-		if err := client.Start(ctx, serverConfig.Command, serverConfig.Args...); err != nil {
+
+		// 解析命令路径
+		cmd := serverConfig.Command
+		// 如果是相对路径，相对于配置文件目录解析
+		if !filepath.IsAbs(cmd) && !strings.Contains(cmd, string(os.PathSeparator)) && !strings.HasPrefix(cmd, "./") {
+			// 可能是系统命令，尝试直接查找
+			if _, err := exec.LookPath(cmd); err == nil {
+				// 是系统命令
+			}
+		} else if !filepath.IsAbs(cmd) {
+			// 相对路径，相对于配置文件目录解析
+			cmd = filepath.Join(baseDir, cmd)
+		}
+
+		fmt.Printf("[MCP] Starting server %s with command: %s, args: %v\n", name, cmd, serverConfig.Args)
+		if err := client.Start(ctx, cmd, serverConfig.Args...); err != nil {
 			// 记录错误但继续启动其他服务器
 			fmt.Printf("[MCP] Failed to start server %s: %v\n", name, err)
 			continue
