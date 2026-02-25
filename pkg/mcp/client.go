@@ -46,6 +46,9 @@ func (c *stdioClient) Start(ctx context.Context, serverPath string) error {
 	c.serverCmd = serverPath
 	c.cmd = exec.CommandContext(ctx, serverPath)
 
+	// 设置平台特定的进程属性（隐藏窗口等）
+	c.setPlatformCmdAttr()
+
 	var err error
 	c.stdin, err = c.cmd.StdinPipe()
 	if err != nil {

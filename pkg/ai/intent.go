@@ -206,7 +206,7 @@ func (s *AIService) AskWithContext(ctx context.Context, question string, knowled
 	return resp, nil
 }
 
-func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowledgeDir string) (string, error) {
+func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowledgeDir string, enableMCP bool) (string, error) {
 	prompt := s.cfgMgr.Config.Prompts["troubleshoot_prompt"]
 	if prompt == "" {
 		prompt = config.DefaultTroubleshootPrompt
@@ -217,6 +217,7 @@ func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowled
 		KnowledgeDir: knowledgeDir,
 		SystemPrompt: prompt,
 		RetryMax:     5,
+		EnableMCP:    enableMCP,
 	})
 	if err != nil {
 		return "", err

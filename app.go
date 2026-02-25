@@ -198,7 +198,14 @@ func (a *App) startup(ctx context.Context) {
 	log.Println("App started")
 
 	// 初始化 MCP 管理器
-	mcpConfigPath := filepath.Join(logDir, "mcp.json")
+	// MCP 配置文件放在可执行文件所在目录（根目录）
+	var mcpConfigPath string
+	if execPath, err := os.Executable(); err == nil {
+		mcpConfigPath = filepath.Join(filepath.Dir(execPath), "mcp.json")
+	} else {
+		mcpConfigPath = filepath.Join(logDir, "mcp.json") // 回退到 log 目录
+	}
+	log.Printf("[MCP] Config path: %s", mcpConfigPath)
 	a.mcpManager = mcp.NewManager(mcpConfigPath)
 	if err := a.mcpManager.Load(); err != nil {
 		log.Printf("[MCP] Failed to load MCP config: %v", err)
@@ -685,11 +692,12 @@ func (a *App) AskAI(question string) string {
 }
 
 // AskTroubleshoot handles the troubleshooting request from frontend
-// enableExternal: whether to enable MCP tools (controlled by ExternalTroubleshootScriptPath config)
+// enableExternal: whether to enable MCP tools (controlled by user toggle in UI)
 // 当 enableExternal 为 true 且配置了 MCP 服务器时，Agent 会自动使用 MCP 工具进行诊断
 func (a *App) AskTroubleshoot(problem string, enableExternal bool) string {
 	knowledgeDir := a.resolveKnowledgeBase()
-	answer, err := a.aiService.AskTroubleshoot(a.ctx, problem, knowledgeDir)
+	log.Printf("[AskTroubleshoot] Problem: %s, EnableMCP: %v", problem, enableExternal)
+	answer, err := a.aiService.AskTroubleshoot(a.ctx, problem, knowledgeDir, enableExternal)
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
 	}

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "mock-diagnostic": {
+      "command": "./tools/mcp-mock/mcp-mock.exe",
+      "args": [],
+      "description": "模拟诊断服务器，用于测试 MCP 集成功能"
+    }
+  }
+}

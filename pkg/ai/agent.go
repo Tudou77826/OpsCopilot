@@ -26,13 +26,14 @@ type AgentRunOptions struct {
 	KnowledgeDir string
 	SystemPrompt string
 	RetryMax     int
+	EnableMCP    bool // 是否启用 MCP 工具增强
 }
 
 const agentToolPrompt = "You are OpsCopilot running in Agent mode. You have access to a local knowledge base and the following tools:\n" +
 	"1) search_knowledge: search within documentation content and return top matches with snippets\n" +
 	"2) list_knowledge_files: list available markdown docs\n" +
 	"3) read_knowledge_file: read a specific markdown doc by relative path\n" +
-	"4) MCP tools: Additional diagnostic tools available through MCP (if configured)\n\n" +
+	"4) MCP tools: Additional diagnostic tools available through MCP (if configured and enabled)\n\n" +
 	"Rules:\n" +
 	"- You MUST call search_knowledge at least once before answering.\n" +
 	"- When calling search_knowledge, keep the query short (keywords/phrases), not the full problem statement.\n" +
@@ -40,6 +41,8 @@ const agentToolPrompt = "You are OpsCopilot running in Agent mode. You have acce
 	"- Call list_knowledge_files only if search results are empty or you need to explore the available docs.\n" +
 	"- Only read files that are relevant to the user's question.\n" +
 	"- If MCP tools are available, you may use them for advanced diagnostic capabilities.\n" +
+	"- When calling MCP diagnostic tools, provide a clear and structured problem description, not just raw user input.\n" +
+	"- Structure the problem description for MCP tools: include symptoms, context, and what you've already checked.\n" +
 	"- If the knowledge base does not contain the answer, say so and then answer from general knowledge.\n" +
 	"- Always follow additional system instructions about output format.\n" +
 	"- Always answer in the same language as the user."
@@ -78,31 +81,35 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 		},
 	}
 
-	// 添加 MCP 工具（如果可用）
+	// 添加 MCP 工具（如果启用且可用）
 	// 优先使用 MCP Manager，如果没有则使用单个 mcpClient
-	if s.mcpManager != nil {
-		clients := s.mcpManager.GetAllClients()
-		for serverName, client := range clients {
-			if client.IsReady() {
-				mcpTools, err := client.ListTools(ctx)
-				if err != nil {
-					log.Printf("[Agent][%s] Warning: Failed to list MCP tools from %s: %v", runID, serverName, err)
-				} else if len(mcpTools) > 0 {
-					log.Printf("[Agent][%s] Adding %d MCP tools from %s to agent", runID, len(mcpTools), serverName)
-					mcpLLMTools := mcp.ToLLMTools(mcpTools)
-					tools = append(tools, mcpLLMTools...)
+	if opts.EnableMCP {
+		if s.mcpManager != nil {
+			clients := s.mcpManager.GetAllClients()
+			for serverName, client := range clients {
+				if client.IsReady() {
+					mcpTools, err := client.ListTools(ctx)
+					if err != nil {
+						log.Printf("[Agent][%s] Warning: Failed to list MCP tools from %s: %v", runID, serverName, err)
+					} else if len(mcpTools) > 0 {
+						log.Printf("[Agent][%s] Adding %d MCP tools from %s to agent (MCP enabled)", runID, len(mcpTools), serverName)
+						mcpLLMTools := mcp.ToLLMTools(mcpTools)
+						tools = append(tools, mcpLLMTools...)
+					}
 				}
 			}
+		} else if s.mcpClient != nil && s.mcpClient.IsReady() {
+			mcpTools, err := s.mcpClient.ListTools(ctx)
+			if err != nil {
+				log.Printf("[Agent][%s] Warning: Failed to list MCP tools: %v", runID, err)
+			} else if len(mcpTools) > 0 {
+				log.Printf("[Agent][%s] Adding %d MCP tools to agent (MCP enabled)", runID, len(mcpTools))
+				mcpLLMTools := mcp.ToLLMTools(mcpTools)
+				tools = append(tools, mcpLLMTools...)
+			}
 		}
-	} else if s.mcpClient != nil && s.mcpClient.IsReady() {
-		mcpTools, err := s.mcpClient.ListTools(ctx)
-		if err != nil {
-			log.Printf("[Agent][%s] Warning: Failed to list MCP tools: %v", runID, err)
-		} else if len(mcpTools) > 0 {
-			log.Printf("[Agent][%s] Adding %d MCP tools to agent", runID, len(mcpTools))
-			mcpLLMTools := mcp.ToLLMTools(mcpTools)
-			tools = append(tools, mcpLLMTools...)
-		}
+	} else {
+		log.Printf("[Agent][%s] MCP tools disabled by user", runID)
 	}
 
 	messages := []llm.ChatMessage{{Role: "system", Content: agentToolPrompt}}
