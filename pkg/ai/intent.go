@@ -250,10 +250,15 @@ func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowled
 	var opsCopilotErr, externalErr error
 	var wg sync.WaitGroup
 
+	// 使用 channel 来实现"先完成先返回"的逻辑
+	opsCopilotDone := make(chan struct{})
+	mcpDone := make(chan struct{})
+
 	// 知识库问答
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer close(opsCopilotDone)
 		resp, err := s.RunAgent(ctx, AgentRunOptions{
 			Question:     problem,
 			KnowledgeDir: knowledgeDir,
@@ -272,6 +277,7 @@ func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowled
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer close(mcpDone)
 
 		// 首先检查是否有可用的 MCP 工具
 		hasMCPTools := false
@@ -308,7 +314,8 @@ func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowled
 		externalAnswer = CleanJSONResponse(resp)
 	}()
 
-	wg.Wait()
+	// 等待知识库问答完成（这是主要结果，必须等待）
+	<-opsCopilotDone
 
 	// 设置知识库问答结果
 	if opsCopilotErr != nil {
@@ -320,15 +327,24 @@ func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowled
 		result.OpsCopilotReady = true
 	}
 
-	// 设置 MCP 诊断结果
-	if externalErr != nil {
-		log.Printf("[AskTroubleshoot] MCP error: %v", externalErr)
-		result.ExternalError = fmt.Sprintf("MCP 诊断失败: %v", externalErr)
-		result.ExternalAnswer = ""
+	// 等待 MCP 结果，但设置超时（最多等待 30 秒）
+	select {
+	case <-mcpDone:
+		// MCP 完成
+		if externalErr != nil {
+			log.Printf("[AskTroubleshoot] MCP error: %v", externalErr)
+			result.ExternalError = fmt.Sprintf("MCP 诊断失败: %v", externalErr)
+			result.ExternalAnswer = ""
+			result.ExternalReady = false
+		} else {
+			result.ExternalAnswer = externalAnswer
+			result.ExternalReady = true
+		}
+	case <-time.After(30 * time.Second):
+		// MCP 超时，先返回知识库结果
+		log.Printf("[AskTroubleshoot] MCP timeout after 30s, returning LLM result first")
+		result.ExternalAnswer = "MCP 诊断正在进行中，请稍后刷新查看结果..."
 		result.ExternalReady = false
-	} else {
-		result.ExternalAnswer = externalAnswer
-		result.ExternalReady = true
 	}
 
 	// 生成综合答复
@@ -360,7 +376,7 @@ func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowled
 			result.IntegratedReady = true
 		}
 	} else {
-		// 如果任一失败，使用知识库结果作为综合答复
+		// 如果 MCP 未就绪，使用知识库结果作为综合答复
 		result.IntegratedAnswer = result.OpsCopilotAnswer
 		result.IntegratedReady = result.OpsCopilotReady
 	}
