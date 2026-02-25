@@ -1,4 +1,4 @@
-import React, { useEffect, forwardRef } from 'react';
+import React, { useEffect, forwardRef, useState, useCallback, useRef } from 'react';
 
 interface SearchPanelProps {
     visible: boolean;
@@ -28,6 +28,11 @@ const SearchPanel = forwardRef<HTMLInputElement, SearchPanelProps>(function Sear
     matchText
 }: SearchPanelProps, inputRef) {
 
+    // 拖动相关状态
+    const [position, setPosition] = useState({ left: 12, bottom: 12 });
+    const [isDragging, setIsDragging] = useState(false);
+    const dragStartRef = useRef({ x: 0, y: 0, left: 0, bottom: 0 });
+
     useEffect(() => {
         if (!visible) return;
         const id = window.setTimeout(() => {
@@ -38,10 +43,52 @@ const SearchPanel = forwardRef<HTMLInputElement, SearchPanelProps>(function Sear
         return () => window.clearTimeout(id);
     }, [visible]);
 
+    // 拖动处理
+    const handleMouseDown = useCallback((e: React.MouseEvent) => {
+        if ((e.target as HTMLElement).closest('input, button, label')) return;
+        e.preventDefault();
+        setIsDragging(true);
+        dragStartRef.current = {
+            x: e.clientX,
+            y: e.clientY,
+            left: position.left,
+            bottom: position.bottom
+        };
+    }, [position]);
+
+    useEffect(() => {
+        if (!isDragging) return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            const deltaX = e.clientX - dragStartRef.current.x;
+            const deltaY = e.clientY - dragStartRef.current.y;
+
+            setPosition({
+                left: dragStartRef.current.left + deltaX,
+                bottom: dragStartRef.current.bottom - deltaY
+            });
+        };
+
+        const handleMouseUp = () => {
+            setIsDragging(false);
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging]);
+
     if (!visible) return null;
 
     return (
-        <div style={styles.wrap}>
+        <div style={{ ...styles.wrap, left: position.left, bottom: position.bottom, cursor: isDragging ? 'grabbing' : 'default' }} onMouseDown={handleMouseDown}>
+            <div style={styles.dragHandle}>
+                <div style={styles.dragIndicator} />
+            </div>
             <div style={styles.row}>
                 <div style={styles.icon}>🔍</div>
                 <input
@@ -95,8 +142,8 @@ export default SearchPanel;
 const styles: Record<string, React.CSSProperties> = {
     wrap: {
         position: 'absolute',
-        left: '12px',
-        bottom: '12px',
+        left: 12,
+        bottom: 12,
         zIndex: 20,
         backgroundColor: '#141414',
         border: '1px solid #2a2a2a',
@@ -107,7 +154,20 @@ const styles: Record<string, React.CSSProperties> = {
         boxShadow: '0 6px 20px rgba(0,0,0,0.35)',
         display: 'flex',
         flexDirection: 'column',
-        gap: '6px'
+        gap: '6px',
+        userSelect: 'none'
+    },
+    dragHandle: {
+        display: 'flex',
+        justifyContent: 'center',
+        padding: '2px 0 4px',
+        cursor: 'grab'
+    },
+    dragIndicator: {
+        width: '36px',
+        height: '4px',
+        backgroundColor: '#3a3a3a',
+        borderRadius: '2px'
     },
     row: {
         display: 'flex',
