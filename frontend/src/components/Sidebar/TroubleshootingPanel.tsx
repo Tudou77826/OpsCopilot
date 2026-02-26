@@ -531,9 +531,9 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                 if (troubleshootResult.externalError) {
                     return <div style={{...styles.messageContent, color: '#ff6b6b'}}>{troubleshootResult.externalError}</div>;
                 }
-                return renderMessageContent(troubleshootResult.externalAnswer || '外部定位结果加载中...');
+                return renderMessageContent(troubleshootResult.externalAnswer || '加载中...');
             case 'integrated':
-                return renderMessageContent(troubleshootResult.integratedAnswer || '综合答复生成中...');
+                return renderMessageContent(troubleshootResult.integratedAnswer || '生成中...');
             default:
                 return null;
         }
@@ -613,7 +613,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                                 disabled={!troubleshootResult.opsCopilotReady}
                                 style={{
                                     ...(viewMode === 'opscopilot' ? styles.activeViewBtn : styles.viewBtn),
-                                    opacity: troubleshootResult.opsCopilotReady ? 1 : 0.6,
+                                    opacity: troubleshootResult.opsCopilotReady ? 1 : 0.5,
                                     cursor: troubleshootResult.opsCopilotReady ? 'pointer' : 'default'
                                 }}
                             >
@@ -635,7 +635,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                                 disabled={!troubleshootResult.externalReady}
                                 style={{
                                     ...(viewMode === 'external' ? styles.activeViewBtn : styles.viewBtn),
-                                    opacity: troubleshootResult.externalReady ? 1 : 0.6,
+                                    opacity: troubleshootResult.externalReady ? 1 : 0.5,
                                     cursor: troubleshootResult.externalReady ? 'pointer' : 'default'
                                 }}
                             >
@@ -657,7 +657,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                                 disabled={!troubleshootResult.integratedReady}
                                 style={{
                                     ...(viewMode === 'integrated' ? styles.activeViewBtn : styles.viewBtn),
-                                    opacity: troubleshootResult.integratedReady ? 1 : 0.6,
+                                    opacity: troubleshootResult.integratedReady ? 1 : 0.5,
                                     cursor: troubleshootResult.integratedReady ? 'pointer' : 'default'
                                 }}
                             >
@@ -914,7 +914,7 @@ const styles = {
     },
     messageItem: {
         maxWidth: '85%',
-        padding: '8px 12px',
+        padding: '10px 14px',
         borderRadius: '8px',
         color: '#fff',
         wordBreak: 'break-word' as const,
@@ -1068,8 +1068,8 @@ const styles = {
     },
     viewSwitcher: {
         display: 'flex',
-        gap: '4px',
-        padding: '8px 10px',
+        gap: '0',
+        padding: '0',
         backgroundColor: '#252526',
         borderBottom: '1px solid #3e3e42',
         flexShrink: 0,
@@ -1104,12 +1104,14 @@ const styles = {
         flex: 1,
         padding: '8px 12px',
         backgroundColor: 'transparent',
-        color: '#999',
-        border: '1px solid transparent',
-        borderRadius: '4px',
+        color: '#888',
+        border: 'none',
+        borderRight: '1px solid #3e3e42',
+        borderRadius: '0',
         cursor: 'pointer',
-        fontSize: '13px',
-        transition: 'all 0.2s ease',
+        fontSize: '12px',
+        fontWeight: '400',
+        transition: 'all 0.15s ease',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1118,14 +1120,15 @@ const styles = {
     activeViewBtn: {
         flex: 1,
         padding: '8px 12px',
-        backgroundColor: '#007acc',
+        backgroundColor: '#37373d',
         color: '#fff',
-        border: '1px solid transparent',
-        borderRadius: '4px',
+        border: 'none',
+        borderRight: '1px solid #3e3e42',
+        borderRadius: '0',
         cursor: 'pointer',
-        fontSize: '13px',
-        fontWeight: '500',
-        transition: 'all 0.2s ease',
+        fontSize: '12px',
+        fontWeight: '400',
+        transition: 'all 0.15s ease',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

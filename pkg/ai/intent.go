@@ -316,7 +316,27 @@ func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowled
 		resp, err := s.RunAgent(ctx, AgentRunOptions{
 			Question:     problem,
 			KnowledgeDir: "", // MCP 诊断不需要知识库
-			SystemPrompt: "你是 MCP 诊断助手。请使用可用的 MCP 工具对用户的问题进行诊断分析。\n\n规则：\n- 必须使用 MCP 工具获取诊断信息\n- 不要编造或幻觉出任何工具\n- 只使用实际可用的 MCP 工具\n- 用中文回答\n- 提供结构化的诊断报告",
+			SystemPrompt: `你是外部诊断工具的调用助手。
+
+任务：
+1. 调用 MCP 工具获取诊断信息
+2. 根据返回结果，推测可能导致问题的原因
+3. 提供可能有用的日志关键词或命令
+
+输出格式：
+### 可能原因
+- 列出 2-3 个最可能的原因
+
+### 日志关键词
+- 列出可用于定位问题的日志关键词
+
+### 建议命令
+- 列出相关的排查命令
+
+规则：
+- 必须使用 MCP 工具，不要编造
+- 用中文回答
+- 简洁直接，不要冗余`,
 			RetryMax:     5,
 			EnableMCP:    true, // MCP 诊断使用 MCP 工具
 		})
@@ -362,22 +382,31 @@ func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowled
 
 	// 生成综合答复
 	if result.OpsCopilotReady && result.ExternalReady {
-		integratedPrompt := fmt.Sprintf(`请综合以下两个来源的诊断信息，生成一份完整的故障排查报告。
+		integratedPrompt := fmt.Sprintf(`请综合以下诊断信息，输出格式化的排查报告。
 
-## 知识库分析结果
+## 知识库分析
 %s
 
-## MCP 诊断结果
+## 外部工具分析
 %s
 
-## 要求
-1. 综合两个来源的信息
-2. 如果有冲突，以 MCP 诊断的实时数据为准
-3. 提供明确的排查步骤和建议
-4. 用中文回答`, result.OpsCopilotAnswer, result.ExternalAnswer)
+## 输出要求
+按以下格式输出，不要添加额外内容：
+
+### 问题分析
+- 简要总结问题本质
+
+### 可能原因
+- 列出 2-3 个最可能的原因
+
+### 日志关键词
+- 列出可用于定位的关键词
+
+### 建议操作
+- 列出具体排查步骤或命令`, result.OpsCopilotAnswer, result.ExternalAnswer)
 
 		integratedResp, err := s.fastProvider.ChatCompletion(ctx, []llm.ChatMessage{
-			{Role: "system", Content: "你是专业的运维诊断助手，负责综合多个来源的诊断信息生成报告。"},
+			{Role: "system", Content: "你是运维诊断助手，负责综合多个来源的信息生成简洁的排查报告。用中文回答。"},
 			{Role: "user", Content: integratedPrompt},
 		})
 		if err != nil {

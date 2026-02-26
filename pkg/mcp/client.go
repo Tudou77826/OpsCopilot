@@ -35,6 +35,7 @@ type stdioClient struct {
 	serverCmd string
 	stdin     io.WriteCloser
 	stdout    io.ReadCloser
+	reader    *bufio.Reader // 持久化的缓冲读取器
 	mu        sync.RWMutex
 	started   bool
 }
@@ -59,6 +60,9 @@ func (c *stdioClient) Start(ctx context.Context, serverPath string, args ...stri
 	if err != nil {
 		return err
 	}
+
+	// 创建持久化的缓冲读取器
+	c.reader = bufio.NewReader(c.stdout)
 
 	if err := c.cmd.Start(); err != nil {
 		return err
@@ -144,8 +148,8 @@ func (c *stdioClient) readResponseLocked() (*JSONRPCResponse, error) {
 	resultCh := make(chan result, 1)
 
 	go func() {
-		reader := bufio.NewReader(c.stdout)
-		line, err := reader.ReadBytes('\n')
+		// 使用持久化的缓冲读取器
+		line, err := c.reader.ReadBytes('\n')
 		resultCh <- result{line, err}
 	}()
 
@@ -239,7 +243,6 @@ func (c *stdioClient) ListTools(ctx context.Context) ([]Tool, error) {
 		return nil, fmt.Errorf("failed to unmarshal tools list result: %w", err)
 	}
 
-	fmt.Printf("[MCP] Listed %d tools\n", len(result.Tools))
 	return result.Tools, nil
 }
 

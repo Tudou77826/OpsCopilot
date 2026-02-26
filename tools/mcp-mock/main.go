@@ -67,6 +67,11 @@ func main() {
 }
 
 func handleRequest(req JSONRPCRequest) {
+	// 通知消息没有 ID，不需要响应
+	if req.ID == nil {
+		return
+	}
+
 	switch req.Method {
 	case "initialize":
 		sendResult(req.ID, map[string]interface{}{
@@ -136,48 +141,23 @@ func handleToolCall(req JSONRPCRequest) {
 }
 
 func generateDiagnosticResponse(problem string) string {
-	// 返回模拟的中文定位指导
-	return fmt.Sprintf(`## MCP 诊断分析报告
+	return fmt.Sprintf(`### 可能原因
 
-**问题描述**: %s
+- 连接超时或拒绝（服务未启动/端口占用）
+- 认证失败（凭据错误/权限不足）
+- 资源耗尽（内存/CPU 不足）
 
-### 初步分析
+### 日志关键词
 
-这是一个模拟的 MCP 诊断响应。在实际场景中，MCP 服务器会连接到真实的诊断系统进行分析。
+    [ERROR] connection refused
+    [WARN] timeout
+    [ERROR] auth failed
 
-### 建议排查步骤
+### 建议命令
 
-1. **检查基础配置**
-   - 确认相关服务是否正常运行
-   - 检查配置文件是否正确
-
-2. **查看日志信息**
-   - 检查应用日志中的错误信息
-   - 关注异常堆栈和错误码
-
-3. **网络连通性测试**
-   - 验证网络连接是否正常
-   - 检查防火墙规则
-
-4. **资源使用情况**
-   - 检查 CPU、内存使用率
-   - 确认磁盘空间充足
-
-### 可能的原因
-
-- 配置错误或缺失
-- 服务依赖问题
-- 资源不足
-- 网络问题
-
-### 建议解决方案
-
-1. 根据上述排查步骤逐一检查
-2. 参考官方文档获取详细配置指南
-3. 如果问题持续，请联系技术支持
-
----
-*此响应由 Mock MCP 服务器生成，用于测试 MCP 集成功能。*`, problem)
+    systemctl status <service>
+    netstat -tlnp | grep <port>
+    top -p <pid>`, problem)
 }
 
 func sendResult(id interface{}, result interface{}) {
