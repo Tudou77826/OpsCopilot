@@ -9,6 +9,8 @@ import (
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/llm"
 	"opscopilot/pkg/mcp"
+	"opscopilot/pkg/tools"
+	knowledgetools "opscopilot/pkg/tools/knowledge"
 	"os"
 	"sort"
 	"strings"
@@ -51,35 +53,22 @@ const agentToolPrompt = "You are OpsCopilot running in Agent mode. You have acce
 func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string, error) {
 	runID := uuid.NewString()
 	startAt := time.Now()
-	termCache := map[string][]knowledge.WeightedTerm{}
+	termCache := &simpleTermCache{data: make(map[string][]knowledge.WeightedTerm)}
 
-	toolDefs := knowledge.GetToolDefinitions()
-	tools := []llm.Tool{
-		{
-			Type: "function",
-			Function: llm.FunctionDefinition{
-				Name:        knowledge.ToolSearch,
-				Description: "Search within all documentation content and return top matches with snippets. Use this first to find relevant docs by content.",
-				Parameters:  toolDefs[knowledge.ToolSearch],
-			},
-		},
-		{
-			Type: "function",
-			Function: llm.FunctionDefinition{
-				Name:        knowledge.ToolListFiles,
-				Description: "List all available documentation files in the knowledge base. Use this first to explore available topics.",
-				Parameters:  toolDefs[knowledge.ToolListFiles],
-			},
-		},
-		{
-			Type: "function",
-			Function: llm.FunctionDefinition{
-				Name:        knowledge.ToolReadFile,
-				Description: "Read the content of a specific documentation file. Only read files that are relevant to the user's question.",
-				Parameters:  toolDefs[knowledge.ToolReadFile],
-			},
-		},
-	}
+	// 创建工具注册器并注册知识库工具
+	registry := tools.NewRegistry()
+	registry.Register(knowledgetools.NewSearchTool(
+		opts.KnowledgeDir,
+		s,
+		knowledgetools.WithOriginalQuery(opts.Question),
+		knowledgetools.WithTermCache(termCache),
+		knowledgetools.WithRetryMax(opts.RetryMax),
+	))
+	registry.Register(knowledgetools.NewListFilesTool(opts.KnowledgeDir))
+	registry.Register(knowledgetools.NewReadFileTool(opts.KnowledgeDir))
+
+	// 构建LLM工具列表
+	llmTools := registry.ToLLMTools()
 
 	// 添加 MCP 工具（如果启用且可用）
 	// 优先使用 MCP Manager，如果没有则使用单个 mcpClient
@@ -94,7 +83,7 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 					} else if len(mcpTools) > 0 {
 						log.Printf("[Agent][%s] Adding %d MCP tools from %s to agent (MCP enabled)", runID, len(mcpTools), serverName)
 						mcpLLMTools := mcp.ToLLMTools(mcpTools)
-						tools = append(tools, mcpLLMTools...)
+						llmTools = append(llmTools, mcpLLMTools...)
 					}
 				}
 			}
@@ -105,7 +94,7 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 			} else if len(mcpTools) > 0 {
 				log.Printf("[Agent][%s] Adding %d MCP tools to agent (MCP enabled)", runID, len(mcpTools))
 				mcpLLMTools := mcp.ToLLMTools(mcpTools)
-				tools = append(tools, mcpLLMTools...)
+				llmTools = append(llmTools, mcpLLMTools...)
 			}
 		}
 	} else {
@@ -128,13 +117,13 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 		}
 	}
 
-	log.Printf("[Agent][%s] Start questionLen=%d knowledgeDir=%q knowledgeExists=%t tools=%d", runID, len(opts.Question), opts.KnowledgeDir, knowledgeExists, len(tools))
+	log.Printf("[Agent][%s] Start questionLen=%d knowledgeDir=%q knowledgeExists=%t tools=%d", runID, len(opts.Question), opts.KnowledgeDir, knowledgeExists, len(llmTools))
 
 	for i := 0; i < maxSteps; i++ {
 		emitStatus(ctx, runID, "thinking", "正在思考下一步...")
 		stepAt := time.Now()
 		resp, err := retryChatWithTools(ctx, runID, opts.RetryMax, func() (*llm.ChatResponse, error) {
-			return provider.ChatWithTools(ctx, messages, tools)
+			return provider.ChatWithTools(ctx, messages, llmTools)
 		})
 		llmCost := time.Since(stepAt)
 		if err != nil {
@@ -168,187 +157,102 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 
 			log.Printf("[Agent][%s] ExecuteTool name=%s", runID, tc.Function.Name)
 
-			switch tc.Function.Name {
-			case knowledge.ToolSearch:
-				var args struct {
-					Query string `json:"query"`
-					TopK  int    `json:"top_k"`
-				}
+			// 优先使用注册器中的工具（知识库工具）
+			if tool, ok := registry.Get(tc.Function.Name); ok {
+				var args map[string]interface{}
 				if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
 					toolResult = fmt.Sprintf("Error parsing arguments: %v", err)
 					log.Printf("[Agent][%s] ToolErr name=%s parseArgsErr=%v", runID, tc.Function.Name, err)
 				} else {
-					topK := args.TopK
-					if topK <= 0 {
-						topK = 5
-					}
-					modelKey := strings.TrimSpace(args.Query)
-					originalKey := strings.TrimSpace(opts.Question)
-					key := chooseSearchKey(originalKey, modelKey)
-
-					if modelKey != "" && key != modelKey && modelKey != originalKey {
-						emitStatus(ctx, runID, "searching", fmt.Sprintf("正在生成检索关键词（KEY: %s，ModelKey: %s）...", shortText(key, 90), shortText(modelKey, 60)))
-					} else {
-						emitStatus(ctx, runID, "searching", fmt.Sprintf("正在生成检索关键词（KEY: %s）...", shortText(key, 120)))
-					}
-
-					terms := termCache[key]
-					if len(terms) == 0 {
-						extracted, err := s.extractWeightedTerms(ctx, runID, opts.RetryMax, key)
-						if err == nil && len(extracted) > 0 {
-							terms = extracted
-							termCache[key] = terms
-						}
-					}
-					if modelKey != "" && modelKey != key && !containsHan(modelKey) {
-						terms = append(terms, knowledge.WeightedTerm{Term: strings.ToLower(modelKey), Weight: 2})
-					}
-
-					termsText := ""
-					if len(terms) > 0 {
-						termsText = formatWeightedTerms(terms, 6, 120)
-					}
-					if termsText != "" {
-						emitStatus(ctx, runID, "searching", fmt.Sprintf("正在检索相关内容（KEY: %s，Terms: %s，TopK: %d）...", shortText(key, 80), termsText, topK))
-					} else {
-						emitStatus(ctx, runID, "searching", fmt.Sprintf("正在检索相关内容（KEY: %s，TopK: %d）...", shortText(key, 120), topK))
-					}
 					toolAt := time.Now()
-					var hits []knowledge.SearchHit
-					var err error
-					if len(terms) > 0 {
-						hits, err = knowledge.SearchWithTerms(opts.KnowledgeDir, key, terms, topK)
-					} else {
-						hits, err = knowledge.Search(opts.KnowledgeDir, key, topK)
+					statusEmitter := func(stage, message string) {
+						emitStatus(ctx, runID, stage, message)
 					}
+					result, err := tool.Execute(ctx, args, statusEmitter)
 					toolCost := time.Since(toolAt)
 					if err != nil {
-						toolResult = fmt.Sprintf("Error searching knowledge: %v", err)
+						toolResult = fmt.Sprintf("Error: %v", err)
 						log.Printf("[Agent][%s] ToolErr name=%s cost=%s err=%v", runID, tc.Function.Name, toolCost, err)
 					} else {
-						js, _ := json.Marshal(hits)
-						toolResult = string(js)
-						log.Printf("[Agent][%s] ToolOk name=%s cost=%s hits=%d", runID, tc.Function.Name, toolCost, len(hits))
+						toolResult = result
+						log.Printf("[Agent][%s] ToolOk name=%s cost=%s resultLen=%d", runID, tc.Function.Name, toolCost, len(toolResult))
 					}
 				}
+			} else if mcp.IsMCPTool(tc.Function.Name) {
+				// MCP工具处理
+				log.Printf("[Agent][%s] Executing MCP tool: %s", runID, tc.Function.Name)
+				emitStatus(ctx, runID, "mcp_call", fmt.Sprintf("正在调用 MCP 工具: %s...", tc.Function.Name))
 
-			case knowledge.ToolListFiles:
-				emitStatus(ctx, runID, "searching", "正在检索文档列表...")
-				toolAt := time.Now()
-				files, err := knowledge.ListFiles(opts.KnowledgeDir)
-				toolCost := time.Since(toolAt)
-				if err != nil {
-					toolResult = fmt.Sprintf("Error listing files: %v", err)
-					log.Printf("[Agent][%s] ToolErr name=%s cost=%s err=%v", runID, tc.Function.Name, toolCost, err)
-				} else {
-					js, _ := json.Marshal(files)
-					toolResult = string(js)
-					log.Printf("[Agent][%s] ToolOk name=%s cost=%s files=%d", runID, tc.Function.Name, toolCost, len(files))
-				}
-
-			case knowledge.ToolReadFile:
-				var args struct {
-					Path string `json:"path"`
-				}
+				var args map[string]interface{}
 				if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
-					toolResult = fmt.Sprintf("Error parsing arguments: %v", err)
-					log.Printf("[Agent][%s] ToolErr name=%s parseArgsErr=%v", runID, tc.Function.Name, err)
+					toolResult = fmt.Sprintf("Error parsing MCP tool arguments: %v", err)
+					log.Printf("[Agent][%s] MCPToolErr name=%s parseArgsErr=%v", runID, tc.Function.Name, err)
 				} else {
-					emitStatus(ctx, runID, "reading", fmt.Sprintf("正在阅读文档: %s...", args.Path))
-					toolAt := time.Now()
-					content, err := knowledge.ReadFile(opts.KnowledgeDir, args.Path)
-					toolCost := time.Since(toolAt)
-					if err != nil {
-						toolResult = fmt.Sprintf("Error reading file: %v", err)
-						log.Printf("[Agent][%s] ToolErr name=%s cost=%s path=%q err=%v", runID, tc.Function.Name, toolCost, args.Path, err)
-					} else {
-						if len(content) > 20000 {
-							toolResult = content[:20000] + "\n...(truncated)..."
-							log.Printf("[Agent][%s] ToolOk name=%s cost=%s path=%q contentLen=%d truncated=true", runID, tc.Function.Name, toolCost, args.Path, len(content))
-						} else {
-							toolResult = content
-							log.Printf("[Agent][%s] ToolOk name=%s cost=%s path=%q contentLen=%d truncated=false", runID, tc.Function.Name, toolCost, args.Path, len(content))
-						}
-					}
-				}
+					// 尝试从 MCP Manager 查找能处理此工具的客户端
+					var result string
+					var err error
 
-			default:
-				// 检查是否为 MCP 工具
-				if mcp.IsMCPTool(tc.Function.Name) {
-					log.Printf("[Agent][%s] Executing MCP tool: %s", runID, tc.Function.Name)
-					emitStatus(ctx, runID, "mcp_call", fmt.Sprintf("正在调用 MCP 工具: %s...", tc.Function.Name))
+					if s.mcpManager != nil {
+						clients := s.mcpManager.GetAllClients()
+						// 遍历所有客户端，找到能处理此工具的
+						for serverName, client := range clients {
+							if client.IsReady() {
+								// 先列出工具，看是否包含此工具
+								mcpTools, listErr := client.ListTools(ctx)
+								if listErr != nil {
+									continue
+								}
 
-					var args map[string]interface{}
-					if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
-						toolResult = fmt.Sprintf("Error parsing MCP tool arguments: %v", err)
-						log.Printf("[Agent][%s] MCPToolErr name=%s parseArgsErr=%v", runID, tc.Function.Name, err)
-					} else {
-						// 尝试从 MCP Manager 查找能处理此工具的客户端
-						var result string
-						var err error
-
-						if s.mcpManager != nil {
-							clients := s.mcpManager.GetAllClients()
-							// 遍历所有客户端，找到能处理此工具的
-							for serverName, client := range clients {
-								if client.IsReady() {
-									// 先列出工具，看是否包含此工具
-									tools, listErr := client.ListTools(ctx)
-									if listErr != nil {
-										continue
-									}
-
-									// 检查工具是否在这个客户端中
-									found := false
-									for _, tool := range tools {
-										if tool.Name == tc.Function.Name {
-											found = true
-											break
-										}
-									}
-
-									if found {
-										toolAt := time.Now()
-										result, err = client.CallTool(ctx, tc.Function.Name, args)
-										toolCost := time.Since(toolAt)
-										if err != nil {
-											toolResult = mcp.FormatToolCallResult(tc.Function.Name, "", err)
-											log.Printf("[Agent][%s] MCPToolErr name=%s server=%s cost=%s err=%v", runID, tc.Function.Name, serverName, toolCost, err)
-										} else {
-											toolResult = mcp.FormatToolCallResult(tc.Function.Name, result, nil)
-											log.Printf("[Agent][%s] MCPToolOk name=%s server=%s cost=%s resultLen=%d", runID, tc.Function.Name, serverName, toolCost, len(result))
-										}
+								// 检查工具是否在这个客户端中
+								found := false
+								for _, tool := range mcpTools {
+									if tool.Name == tc.Function.Name {
+										found = true
 										break
 									}
 								}
-							}
 
-							// 如果所有客户端都无法处理，返回错误
-							if result == "" && err == nil {
-								toolResult = fmt.Sprintf("Error: No MCP server found that can handle tool %s", tc.Function.Name)
-								log.Printf("[Agent][%s] MCPToolErr name=%s noServerFound=true", runID, tc.Function.Name)
+								if found {
+									toolAt := time.Now()
+									result, err = client.CallTool(ctx, tc.Function.Name, args)
+									toolCost := time.Since(toolAt)
+									if err != nil {
+										toolResult = mcp.FormatToolCallResult(tc.Function.Name, "", err)
+										log.Printf("[Agent][%s] MCPToolErr name=%s server=%s cost=%s err=%v", runID, tc.Function.Name, serverName, toolCost, err)
+									} else {
+										toolResult = mcp.FormatToolCallResult(tc.Function.Name, result, nil)
+										log.Printf("[Agent][%s] MCPToolOk name=%s server=%s cost=%s resultLen=%d", runID, tc.Function.Name, serverName, toolCost, len(result))
+									}
+									break
+								}
 							}
-						} else if s.mcpClient != nil && s.mcpClient.IsReady() {
-							// 回退到单个客户端模式
-							toolAt := time.Now()
-							result, err = s.mcpClient.CallTool(ctx, tc.Function.Name, args)
-							toolCost := time.Since(toolAt)
-							if err != nil {
-								toolResult = mcp.FormatToolCallResult(tc.Function.Name, "", err)
-								log.Printf("[Agent][%s] MCPToolErr name=%s cost=%s err=%v", runID, tc.Function.Name, toolCost, err)
-							} else {
-								toolResult = mcp.FormatToolCallResult(tc.Function.Name, result, nil)
-								log.Printf("[Agent][%s] MCPToolOk name=%s cost=%s resultLen=%d", runID, tc.Function.Name, toolCost, len(result))
-							}
-						} else {
-							toolResult = fmt.Sprintf("Error: MCP not available for tool %s", tc.Function.Name)
-							log.Printf("[Agent][%s] MCPToolErr name=%s notAvailable=true", runID, tc.Function.Name)
 						}
+
+						// 如果所有客户端都无法处理，返回错误
+						if result == "" && err == nil {
+							toolResult = fmt.Sprintf("Error: No MCP server found that can handle tool %s", tc.Function.Name)
+							log.Printf("[Agent][%s] MCPToolErr name=%s noServerFound=true", runID, tc.Function.Name)
+						}
+					} else if s.mcpClient != nil && s.mcpClient.IsReady() {
+						// 回退到单个客户端模式
+						toolAt := time.Now()
+						result, err = s.mcpClient.CallTool(ctx, tc.Function.Name, args)
+						toolCost := time.Since(toolAt)
+						if err != nil {
+							toolResult = mcp.FormatToolCallResult(tc.Function.Name, "", err)
+							log.Printf("[Agent][%s] MCPToolErr name=%s cost=%s err=%v", runID, tc.Function.Name, toolCost, err)
+						} else {
+							toolResult = mcp.FormatToolCallResult(tc.Function.Name, result, nil)
+							log.Printf("[Agent][%s] MCPToolOk name=%s cost=%s resultLen=%d", runID, tc.Function.Name, toolCost, len(result))
+						}
+					} else {
+						toolResult = fmt.Sprintf("Error: MCP not available for tool %s", tc.Function.Name)
+						log.Printf("[Agent][%s] MCPToolErr name=%s notAvailable=true", runID, tc.Function.Name)
 					}
-				} else {
-					toolResult = fmt.Sprintf("Error: Unknown tool %s", tc.Function.Name)
-					log.Printf("[Agent][%s] ToolErr name=%s unknownTool=true", runID, tc.Function.Name)
 				}
+			} else {
+				toolResult = fmt.Sprintf("Error: Unknown tool %s", tc.Function.Name)
+				log.Printf("[Agent][%s] ToolErr name=%s unknownTool=true", runID, tc.Function.Name)
 			}
 
 			messages = append(messages, llm.ChatMessage{
@@ -707,4 +611,27 @@ func retryChatCompletion(ctx context.Context, runID string, maxAttempts int, fn 
 		}
 	}
 	return "", lastErr
+}
+
+// ExtractWeightedTerms 实现TermExtractor接口，提取加权关键词
+func (s *AIService) ExtractWeightedTerms(ctx context.Context, text string) ([]knowledge.WeightedTerm, error) {
+	return s.extractWeightedTerms(ctx, "", 3, text)
+}
+
+// ExtractWeightedTermsWithRetry 实现TermExtractorWithRetry接口
+func (s *AIService) ExtractWeightedTermsWithRetry(ctx context.Context, text string, maxAttempts int) ([]knowledge.WeightedTerm, error) {
+	return s.extractWeightedTerms(ctx, "", maxAttempts, text)
+}
+
+// simpleTermCache 简单的词项缓存实现
+type simpleTermCache struct {
+	data map[string][]knowledge.WeightedTerm
+}
+
+func (c *simpleTermCache) Get(key string) []knowledge.WeightedTerm {
+	return c.data[key]
+}
+
+func (c *simpleTermCache) Set(key string, terms []knowledge.WeightedTerm) {
+	c.data[key] = terms
 }
