@@ -89,7 +89,7 @@ func (m *Manager) StopRecording() (*Script, error) {
 	}
 
 	// 更新基础录制会话
-	m.current.RecordingSession = *baseSession
+	m.current.SyncFromRecordingSession(baseSession)
 
 	// 将基础命令转换为可编辑的脚本命令
 	m.current.Commands = make([]ScriptCommand, len(baseSession.Commands))
@@ -152,7 +152,7 @@ func (m *Manager) LoadScript(scriptID string) (*Script, error) {
 	}
 
 	// 同步基础会话数据
-	script.RecordingSession = *session
+	script.SyncFromRecordingSession(session)
 
 	return script, nil
 }
@@ -166,14 +166,14 @@ func (m *Manager) ListScripts() ([]*Script, error) {
 
 	scripts := make([]*Script, 0, len(sessions))
 	for _, session := range sessions {
-		script := &Script{
-			RecordingSession: *session,
-		}
+		script := &Script{}
+		script.SyncFromRecordingSession(session)
 
 		// 尝试加载扩展数据
 		filename := filepath.Join(m.storagePath, fmt.Sprintf("script_%s.json", session.ID))
 		if data, err := os.ReadFile(filename); err == nil {
 			if err := json.Unmarshal(data, script); err == nil {
+				script.SyncFromRecordingSession(session)
 				// 成功加载扩展数据，继续使用这个script对象
 				scripts = append(scripts, script)
 				continue

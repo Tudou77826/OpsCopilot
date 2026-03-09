@@ -4,7 +4,7 @@ import {main} from '../models';
 import {config} from '../models';
 import {sessionmanager} from '../models';
 import {script} from '../models';
-import {session_recorder} from '../models';
+import {recorder} from '../models';
 import {sshclient} from '../models';
 
 export function AskAI(arg1:string):Promise<string>;
@@ -69,7 +69,7 @@ export function GetScriptList():Promise<Array<script.Script>>;
 
 export function GetScriptRecordingStatus():Promise<script.ScriptStatus>;
 
-export function GetSessionTimeline():Promise<session_recorder.TroubleshootingSession>;
+export function GetSessionTimeline():Promise<recorder.RecordingSession>;
 
 export function GetSettings():Promise<config.AppConfig>;
 
@@ -123,6 +123,6 @@ export function UpdateSavedSession(arg1:string,arg2:sshclient.ConnectConfig):Pro
 
 export function UpdateScript(arg1:script.Script):Promise<void>;
 
-export function UpdateSessionTimeline(arg1:Array<session_recorder.TimelineEvent>):Promise<string>;
+export function UpdateSessionTimeline(arg1:Array<recorder.TimelineEvent>):Promise<string>;
 
 export function Write(arg1:string,arg2:string):Promise<void>;
