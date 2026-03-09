@@ -10,6 +10,14 @@ const (
 	RecordingTypeScript        RecordingType = "script"       // 命令脚本
 )
 
+// TimelineEvent 时间线事件（用于故障排查）
+type TimelineEvent struct {
+	Timestamp time.Time              `json:"timestamp"`
+	Type      string                 `json:"type"` // e.g., "user_query", "ai_suggestion", "terminal_input", "terminal_output"
+	Content   string                 `json:"content"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+}
+
 // RecordingSession 录制会话（基类）
 type RecordingSession struct {
 	ID        string            `json:"id"`
@@ -22,6 +30,16 @@ type RecordingSession struct {
 	User      string            `json:"user"`       // 用户信息
 	Commands  []RecordedCommand `json:"commands"`   // 录制的命令列表
 	Metadata  map[string]interface{} `json:"metadata,omitempty"` // 扩展元数据
+
+	// 时间线事件（用于故障排查）
+	Timeline []TimelineEvent `json:"timeline,omitempty"`
+
+	// 故障排查专用字段
+	Problem     string   `json:"problem,omitempty"`
+	Context     []string `json:"context,omitempty"`
+	RootCause   string   `json:"root_cause,omitempty"`
+	Conclusion  string   `json:"conclusion,omitempty"`
+	Suggestions []string `json:"suggestions,omitempty"`
 }
 
 // RecordedCommand 录制的单条命令

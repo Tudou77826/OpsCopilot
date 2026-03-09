@@ -27,10 +27,8 @@ import (
 	"opscopilot/pkg/script"
 	"opscopilot/pkg/secretstore"
 	"opscopilot/pkg/session"
-	"opscopilot/pkg/session_recorder"
 	"opscopilot/pkg/sessionmanager"
 	"opscopilot/pkg/sshclient"
-	"opscopilot/pkg/terminal"
 	"opscopilot/pkg/troubleshoot"
 )
 
@@ -42,17 +40,15 @@ type App struct {
 	secretStore       secretstore.SecretStore
 	aiService         *ai.AIService
 	configMgr         *config.Manager
-	recorder          *session_recorder.Recorder // 保留用于兼容
-	coreRecorder      *recorder.Recorder         // 核心录制引擎
-	troubleMgr        *troubleshoot.Manager      // 故障排查管理器
-	scriptMgr         *script.Manager             // 脚本管理器
+	coreRecorder      *recorder.Recorder     // 统一录制引擎
+	troubleMgr        *troubleshoot.Manager  // 故障排查管理器
+	scriptMgr         *script.Manager        // 脚本管理器
 	completionService *completion.Service
-	mcpManager        *mcp.Manager                // MCP 服务器管理器
+	mcpManager        *mcp.Manager           // MCP 服务器管理器
 	activeConfigs     map[string]ConnectConfig
 	isForceQuitting   bool // Flag to skip confirmation on force quit
 	ftMu              sync.Mutex
 	ftCancels         map[string]context.CancelFunc
-	lineBuffers       map[string]*terminal.LineBuffer
 	sessionStates     map[string]*SessionState // 会话状态追踪
 	sessionStateMu    sync.RWMutex
 }
@@ -82,10 +78,7 @@ func NewApp() *App {
 	complexProvider := llm.NewOpenAIProvider(llmConfig.APIKey, llmConfig.BaseURL, complexModel)
 	aiService := ai.NewAIService(fastProvider, complexProvider, configMgr)
 
-	// Initialize Recorder
-	oldRecorder := session_recorder.NewRecorder("sessions")
-
-	// Initialize Core Recorder Engine
+	// Initialize Core Recorder Engine (统一录制器)
 	recordingsPath := filepath.Join(configMgr.Config.Log.Dir, "recordings")
 	coreRecorder := recorder.NewRecorder(recordingsPath)
 
@@ -117,7 +110,6 @@ func NewApp() *App {
 		secretStore:       secretstore.NewKeyringStore(),
 		aiService:         aiService,
 		configMgr:         configMgr,
-		recorder:          oldRecorder,
 		coreRecorder:      coreRecorder,
 		troubleMgr:        troubleMgr,
 		scriptMgr:         scriptMgr,
@@ -125,7 +117,6 @@ func NewApp() *App {
 		activeConfigs:     make(map[string]ConnectConfig),
 		isForceQuitting:   false,
 		ftCancels:         make(map[string]context.CancelFunc),
-		lineBuffers:       make(map[string]*terminal.LineBuffer),
 		sessionStates:     make(map[string]*SessionState),
 	}
 
@@ -236,7 +227,7 @@ func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 	hasTerminals := len(activeSessions) > 0
 
 	// Check if there's an ongoing troubleshooting session
-	hasTroubleshooting := a.recorder.GetCurrentSession() != nil
+	hasTroubleshooting := a.coreRecorder.GetCurrentSession() != nil
 
 	// If there's any active work, we need to ask for confirmation
 	if hasTerminals || hasTroubleshooting {
@@ -467,8 +458,8 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 				runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, dataStr)
 
 				// Record output
-				if a.recorder != nil {
-					a.recorder.AddEvent("terminal_output", dataStr, map[string]interface{}{
+				if a.coreRecorder != nil {
+					a.coreRecorder.AddEvent("terminal_output", dataStr, map[string]interface{}{
 						"session_id": sessionID,
 					})
 				}
@@ -494,37 +485,45 @@ func (a *App) Write(sessionID string, data string) {
 			runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, fmt.Sprintf("\r\nWrite Error: %v\r\n", err))
 		}
 
-		// Record input (使用旧的录制器，保持兼容)
+		// 记录输入到录制器（内部使用 LineBuffer 处理）
 		a.recordInput(sessionID, data)
-
-		// 处理输入用于新的录制引擎
-		a.processTerminalInput(sessionID, []byte(data))
 	}
 }
 
-// recordInput cleans and records terminal input
+// recordInput 记录终端输入到录制器
 func (a *App) recordInput(sessionID string, data string) {
-	if a.recorder == nil {
+	if a.coreRecorder == nil {
 		return
 	}
 
-	// Pass raw data to recorder, which now uses LineBuffer to handle ANSI codes and editing
-	a.recorder.AddEvent("terminal_input", data, map[string]interface{}{
+	// Pass raw data to recorder, which uses LineBuffer to handle ANSI codes and editing
+	// Returns the committed line if Enter was pressed
+	line, committed, err := a.coreRecorder.AddEvent("terminal_input", data, map[string]interface{}{
 		"session_id": sessionID,
 	})
+	if err != nil {
+		log.Printf("[recordInput] Error recording input: %v", err)
+		return
+	}
+
+	// 如果命令被提交，发送事件到前端（用于脚本录制）
+	if committed && line != "" {
+		runtime.EventsEmit(a.ctx, "script-command-recorded", line)
+		log.Printf("[ScriptRecording] Recorded command from session %s: %q", sessionID, line)
+	}
 }
 
 // StartSession starts a new troubleshooting session
 func (a *App) StartSession(problem string) string {
 	// TODO: Get list of active context files if available
 	contextFiles := []string{}
-	session := a.recorder.StartSession(problem, contextFiles)
+	session := a.coreRecorder.StartSession(problem, contextFiles)
 	return session.ID
 }
 
 // StopSession stops the current troubleshooting session, generates conclusion, and saves it
 func (a *App) StopSession(rootCause string, conclusion string) string {
-	currentSession := a.recorder.GetCurrentSession()
+	currentSession := a.coreRecorder.GetCurrentSession()
 	if currentSession == nil {
 		return "Error: No active session"
 	}
@@ -545,7 +544,7 @@ func (a *App) StopSession(rootCause string, conclusion string) string {
 	}
 
 	// Stop and Save Session (JSON)
-	if err := a.recorder.StopSession(rootCause, conclusion); err != nil {
+	if err := a.coreRecorder.StopSession(rootCause, conclusion); err != nil {
 		return fmt.Sprintf("Error saving session: %v", err)
 	}
 
@@ -592,8 +591,8 @@ func (a *App) Broadcast(sessionIDs []string, data string) {
 	a.sessionMgr.Broadcast(sessionIDs, data)
 
 	// Record broadcast input using specialized method for deduplication
-	if a.recorder != nil {
-		a.recorder.AddBroadcastInput(sessionIDs, data)
+	if a.coreRecorder != nil {
+		a.coreRecorder.AddBroadcastInput(sessionIDs, data)
 	}
 }
 
@@ -1335,8 +1334,8 @@ func (a *App) GenerateLinuxCommand(request string) string {
 }
 
 // GetSessionTimeline returns the current session data including timeline and problem
-func (a *App) GetSessionTimeline() *session_recorder.TroubleshootingSession {
-	session := a.recorder.GetCurrentSession()
+func (a *App) GetSessionTimeline() *recorder.RecordingSession {
+	session := a.coreRecorder.GetCurrentSession()
 	if session == nil {
 		return nil
 	}
@@ -1344,8 +1343,8 @@ func (a *App) GetSessionTimeline() *session_recorder.TroubleshootingSession {
 }
 
 // UpdateSessionTimeline updates the current session timeline
-func (a *App) UpdateSessionTimeline(events []session_recorder.TimelineEvent) string {
-	err := a.recorder.UpdateTimeline(events)
+func (a *App) UpdateSessionTimeline(events []recorder.TimelineEvent) string {
+	err := a.coreRecorder.UpdateTimeline(events)
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
 	}
@@ -1412,7 +1411,7 @@ func (a *App) UpdateSavedSession(id string, config sshclient.ConnectConfig) stri
 // HasActiveWork checks if there are active terminal sessions or ongoing troubleshooting session
 func (a *App) HasActiveWork() map[string]interface{} {
 	hasTerminals := len(a.sessionMgr.List()) > 0
-	hasTroubleshooting := a.recorder.GetCurrentSession() != nil
+	hasTroubleshooting := a.coreRecorder.GetCurrentSession() != nil
 
 	return map[string]interface{}{
 		"hasActiveTerminals":        hasTerminals,
@@ -1469,10 +1468,19 @@ func (a *App) StartScriptRecording(name, description, sessionID string) (*script
 		return nil, fmt.Errorf("session not found: %s", sessionID)
 	}
 
-	// 从配置中获取主机信息
+	// 从配置中获取主机信息（优先从 activeConfigs， 如果没有则从 sessionStates 获取）
 	config, ok := a.activeConfigs[sessionID]
 	if !ok {
-		return nil, fmt.Errorf("session config not found")
+		// 尝试从 sessionStates 获取
+		a.sessionStateMu.RLock()
+		state, exists := a.sessionStates[sessionID]
+		a.sessionStateMu.RUnlock()
+		if !exists {
+			return nil, fmt.Errorf("session config not found: %s", sessionID)
+		}
+		config = state.Config
+		// 恢复到 activeConfigs 以便后续使用
+		a.activeConfigs[sessionID] = config
 	}
 
 	return a.scriptMgr.StartRecording(name, description, sessionID, config.Host, config.User)
@@ -1516,42 +1524,6 @@ func (a *App) ExportScript(scriptID string) (string, error) {
 // GetScriptRecordingStatus 获取脚本录制状态
 func (a *App) GetScriptRecordingStatus() script.ScriptStatus {
 	return a.scriptMgr.GetRecordingStatus()
-}
-
-// processTerminalInput 处理终端输入，用于录制
-func (a *App) processTerminalInput(sessionID string, data []byte) {
-	// 获取或创建LineBuffer
-	lb, ok := a.lineBuffers[sessionID]
-	if !ok {
-		lb = terminal.NewLineBuffer()
-		a.lineBuffers[sessionID] = lb
-	}
-
-	// 直接处理整个字符串（不逐字节处理）
-	inputStr := string(data)
-	line, committed := lb.Handle(inputStr)
-
-	if committed {
-		// 记录到核心录制器（用于故障排查和脚本录制）
-		a.coreRecorder.RecordInput(sessionID, line)
-
-		// 同时记录到旧的录制器（保持兼容）
-		a.recorder.AddEvent("terminal_input", line, map[string]interface{}{
-			"session_id": sessionID,
-		})
-
-		// 发送事件到前端
-		runtime.EventsEmit(a.ctx, "script-command-recorded", line)
-
-		// 打印调试日志
-		log.Printf("[ScriptRecording] Recorded command from session %s: %q", sessionID, line)
-	}
-
-	// 定期发送录制状态更新
-	status := a.coreRecorder.GetStatus()
-	if status.IsRecording {
-		runtime.EventsEmit(a.ctx, "script-recording-status", status)
-	}
 }
 
 // storeSessionState 存储会话状态（在Connect成功后调用）
