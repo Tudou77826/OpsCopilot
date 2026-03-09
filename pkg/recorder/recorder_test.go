@@ -321,6 +321,62 @@ func TestStopSession(t *testing.T) {
     if savedSession.Conclusion != conclusion {
         t.Errorf("Expected conclusion %q, got %q", conclusion, savedSession.Conclusion)
     }
+
+    // 验证 StopSession 后可以开始新的录制（修复录制冲突问题的关键测试）
+    _, err = rec.Start(RecordingTypeScript, "session-2", "host", "user")
+    if err != nil {
+        t.Fatalf("Expected to start new recording after StopSession, got error: %v", err)
+    }
+
+    // 验证状态正确
+    status := rec.GetStatus()
+    if !status.IsRecording {
+        t.Error("Expected IsRecording to be true after starting new recording")
+    }
+    if status.Type != RecordingTypeScript {
+        t.Errorf("Expected Type to be %v, got %v", RecordingTypeScript, status.Type)
+    }
+}
+
+func TestCancelSession(t *testing.T) {
+    tmpDir := t.TempDir()
+    rec := NewRecorder(tmpDir)
+
+    // 开始一个故障排查会话
+    rec.StartSession("Test problem for cancel", []string{"ctx1"})
+    rec.RecordRawInput("test-session", "l")
+    rec.RecordRawInput("test-session", "s")
+    rec.RecordRawInput("test-session", "\r")
+
+    // 验证会话正在进行
+    status := rec.GetStatus()
+    if !status.IsRecording {
+        t.Fatal("Expected IsRecording to be true")
+    }
+
+    // 取消会话
+    err := rec.CancelSession()
+    if err != nil {
+        t.Fatalf("Failed to cancel session: %v", err)
+    }
+
+    // 验证会话已清除
+    status = rec.GetStatus()
+    if status.IsRecording {
+        t.Error("Expected IsRecording to be false after cancel")
+    }
+
+    // 验证取消后可以开始新的录制
+    _, err = rec.Start(RecordingTypeScript, "session-2", "host", "user")
+    if err != nil {
+        t.Fatalf("Expected to start new recording after CancelSession, got error: %v", err)
+    }
+
+    // 验证取消的会话没有被保存（文件不应该存在）
+    files, _ := os.ReadDir(filepath.Join(tmpDir, string(RecordingTypeTroubleshoot)))
+    if len(files) != 0 {
+        t.Errorf("Expected no saved files after cancel, got %d files", len(files))
+    }
 }
 func TestTimelineEvents(t *testing.T) {
     tmpDir := t.TempDir()

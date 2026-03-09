@@ -557,6 +557,14 @@ func (a *App) StopSession(rootCause string, conclusion string) string {
 	return conclusion
 }
 
+// CancelSession 取消当前故障排查会话（不保存，仅清除状态）
+func (a *App) CancelSession() string {
+	if err := a.coreRecorder.CancelSession(); err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	return "cancelled"
+}
+
 // appendConclusionToDocs appends the conclusion to the troubleshooting history markdown file
 func (a *App) appendConclusionToDocs(conclusion string) error {
 	docsDir := a.resolveKnowledgeBase()

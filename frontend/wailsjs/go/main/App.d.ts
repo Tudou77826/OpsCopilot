@@ -13,6 +13,8 @@ export function AskTroubleshoot(arg1:string,arg2:boolean):Promise<string>;
 
 export function Broadcast(arg1:Array<string>,arg2:string):Promise<void>;
 
+export function CancelSession():Promise<string>;
+
 export function CloseSession(arg1:string):Promise<void>;
 
 export function Connect(arg1:main.ConnectConfig):Promise<main.ConnectResult>;

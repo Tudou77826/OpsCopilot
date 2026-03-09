@@ -290,7 +290,29 @@ func (r *Recorder) StopSession(rootCause string, conclusion string) error {
 	r.current.Conclusion = conclusion
 
 	// 保存到文件
-	return r.save(r.current)
+	err := r.save(r.current)
+	if err != nil {
+		return err
+	}
+
+	// 清除当前会话，允许后续录制
+	r.current = nil
+	return nil
+}
+
+// CancelSession 取消当前会话（不保存，仅清除状态）
+func (r *Recorder) CancelSession() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.current == nil {
+		return fmt.Errorf("no active session")
+	}
+
+	// 仅清除当前会话，不保存
+	r.current = nil
+	r.lineBuffers = make(map[string]*terminal.LineBuffer)
+	return nil
 }
 
 // UpdateTimeline 更新时间线

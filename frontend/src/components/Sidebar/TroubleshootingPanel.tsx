@@ -225,8 +225,14 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         setInput('');
     };
 
-    const handleCancelClick = () => {
+    const handleCancelClick = async () => {
         if (confirm('确定要取消定位吗？这将清空当前的所有记录。')) {
+            try {
+                // @ts-ignore
+                await window.go.main.App.CancelSession();
+            } catch (err) {
+                console.error('CancelSession error:', err);
+            }
             handleReset();
         }
     };

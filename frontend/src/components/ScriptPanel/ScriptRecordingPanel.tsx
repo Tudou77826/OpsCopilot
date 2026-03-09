@@ -64,7 +64,19 @@ const ScriptRecordingPanel: React.FC<ScriptRecordingPanelProps> = ({ activeSessi
             // 立即更新状态
             await fetchRecordingStatus();
         } catch (err: any) {
-            alert('开始录制失败: ' + err.message);
+            // 更友好的错误提示 - Wails 错误可能是字符串或对象
+            console.error('StartScriptRecording error:', err);
+            let errorMessage = '未知错误';
+            if (typeof err === 'string') {
+                errorMessage = err;
+            } else if (err?.message) {
+                errorMessage = err.message;
+            } else if (err?.error) {
+                errorMessage = err.error;
+            } else if (err?.toString && typeof err.toString === 'function') {
+                errorMessage = err.toString();
+            }
+            alert(`无法开始录制\n\n${errorMessage}`);
             await fetchRecordingStatus(); // 刷新状态
         }
     };

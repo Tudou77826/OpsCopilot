@@ -57,13 +57,22 @@ func (m *Manager) StartRecording(name, description, sessionID, host, user string
 	defer m.mu.Unlock()
 
 	if m.current != nil {
-		return nil, fmt.Errorf("already recording")
+		return nil, fmt.Errorf("已有正在进行的脚本录制，请先停止当前录制")
+	}
+
+	// 检查核心录制器是否有活动的录制会话
+	status := m.recorder.GetStatus()
+	if status.IsRecording {
+		if status.Type == recorder.RecordingTypeTroubleshoot {
+			return nil, fmt.Errorf("当前正在进行故障定位记录，请先结束故障定位后再开始脚本录制")
+		}
+		return nil, fmt.Errorf("当前已有录制会话正在进行中")
 	}
 
 	// 开始录制
 	session, err := m.recorder.Start(recorder.RecordingTypeScript, sessionID, host, user)
 	if err != nil {
-		return nil, fmt.Errorf("failed to start recording: %w", err)
+		return nil, fmt.Errorf("开始录制失败: %w", err)
 	}
 
 	// 创建脚本
