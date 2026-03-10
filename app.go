@@ -29,6 +29,7 @@ import (
 	"opscopilot/pkg/session"
 	"opscopilot/pkg/sessionmanager"
 	"opscopilot/pkg/sshclient"
+	"opscopilot/pkg/terminal"
 	"opscopilot/pkg/troubleshoot"
 )
 
@@ -40,17 +41,19 @@ type App struct {
 	secretStore       secretstore.SecretStore
 	aiService         *ai.AIService
 	configMgr         *config.Manager
-	coreRecorder      *recorder.Recorder     // 统一录制引擎
-	troubleMgr        *troubleshoot.Manager  // 故障排查管理器
-	scriptMgr         *script.Manager        // 脚本管理器
+	coreRecorder      *recorder.Recorder               // 统一录制引擎
+	troubleMgr        *troubleshoot.Manager            // 故障排查管理器
+	scriptMgr         *script.Manager                  // 脚本管理器
 	completionService *completion.Service
-	mcpManager        *mcp.Manager           // MCP 服务器管理器
+	mcpManager        *mcp.Manager                     // MCP 服务器管理器
 	activeConfigs     map[string]ConnectConfig
-	isForceQuitting   bool // Flag to skip confirmation on force quit
+	isForceQuitting   bool                             // Flag to skip confirmation on force quit
 	ftMu              sync.Mutex
 	ftCancels         map[string]context.CancelFunc
-	sessionStates     map[string]*SessionState // 会话状态追踪
+	sessionStates     map[string]*SessionState         // 会话状态追踪
 	sessionStateMu    sync.RWMutex
+	commandExtractors map[string]*terminal.CommandExtractor // 命令提取器（Tab 补全修正）
+	extractorMu       sync.RWMutex                     // 命令提取器锁
 }
 
 // NewApp creates a new App application struct
@@ -130,6 +133,9 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+
+	// 初始化命令提取器
+	a.commandExtractors = make(map[string]*terminal.CommandExtractor)
 
 	// 初始化日志文件
 	logDir := a.configMgr.Config.Log.Dir
@@ -409,6 +415,11 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 	// Store session state for reconnection
 	a.storeSessionState(sessionID, config)
 
+	// 创建命令提取器（用于 Tab 补全修正）
+	a.extractorMu.Lock()
+	a.commandExtractors[sessionID] = terminal.NewCommandExtractor()
+	a.extractorMu.Unlock()
+
 	// Auto-save session to persistent storage
 	if err := a.savedSessionMgr.Upsert(*clientConfig, config.Group); err != nil {
 		fmt.Printf("Warning: Failed to auto-save session: %v\n", err)
@@ -449,6 +460,11 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 				// 更新会话状态
 				a.updateSessionState(sessionID, "disconnected", string(reason))
 
+				// 清理命令提取器
+				a.extractorMu.Lock()
+				delete(a.commandExtractors, sessionID)
+				a.extractorMu.Unlock()
+
 				// 从会话管理器移除（清理SSH资源）
 				a.sessionMgr.Remove(sessionID)
 				break
@@ -462,6 +478,22 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 					a.coreRecorder.AddEvent("terminal_output", dataStr, map[string]interface{}{
 						"session_id": sessionID,
 					})
+				}
+
+				// 尝试从输出中提取命令（仅用于 Tab 补全修正）
+				a.extractorMu.RLock()
+				extractor, ok := a.commandExtractors[sessionID]
+				a.extractorMu.RUnlock()
+
+				if ok && extractor != nil {
+					if cmd, found := extractor.ProcessOutput(dataStr); found {
+						if a.coreRecorder != nil {
+							// 更新最后一条命令（Tab 补全场景）
+							if a.coreRecorder.UpdateLastCommand(sessionID, cmd) {
+								log.Printf("[Recorder] Corrected command via output (tab completion): %q", cmd)
+							}
+						}
+					}
 				}
 			}
 		}
@@ -498,7 +530,7 @@ func (a *App) recordInput(sessionID string, data string) {
 
 	// Pass raw data to recorder, which uses LineBuffer to handle ANSI codes and editing
 	// Returns the committed line if Enter was pressed
-	line, committed, err := a.coreRecorder.AddEvent("terminal_input", data, map[string]interface{}{
+	result, err := a.coreRecorder.AddEvent("terminal_input", data, map[string]interface{}{
 		"session_id": sessionID,
 	})
 	if err != nil {
@@ -506,10 +538,20 @@ func (a *App) recordInput(sessionID string, data string) {
 		return
 	}
 
-	// 如果命令被提交，发送事件到前端（用于脚本录制）
-	if committed && line != "" {
-		runtime.EventsEmit(a.ctx, "script-command-recorded", line)
-		log.Printf("[ScriptRecording] Recorded command from session %s: %q", sessionID, line)
+	// 获取命令提取器
+	a.extractorMu.RLock()
+	extractor, extractorOk := a.commandExtractors[sessionID]
+	a.extractorMu.RUnlock()
+
+	// 如果命令被提交且有内容
+	if result.Committed && result.Line != "" {
+		runtime.EventsEmit(a.ctx, "script-command-recorded", result.Line)
+		log.Printf("[ScriptRecording] Recorded command from session %s: %q", sessionID, result.Line)
+
+		// 设置待匹配的命令前缀（用于检测 Tab 补全修正）
+		if extractorOk && extractor != nil {
+			extractor.SetPendingInput(result.Line)
+		}
 	}
 }
 

@@ -126,30 +126,40 @@ func (r *Recorder) RecordRawInput(sessionID string, rawData string) error {
 	}
 
 	// 处理输入
-	if line, committed := lb.Handle(rawData); committed {
+	result := lb.Handle(rawData)
+	if result.Committed {
 		// 添加到时间线
-		r.addTimelineEventLocked("terminal_input", line, map[string]interface{}{
-			"session_id": sessionID,
+		r.addTimelineEventLocked("terminal_input", result.Line, map[string]interface{}{
+			"session_id":         sessionID,
+			"history_navigation": result.HistoryNavigation,
 		})
 
 		// 同时添加到命令列表（仅当有内容时）
-		if line != "" {
-			r.addCommandLocked(line)
+		if result.Line != "" {
+			r.addCommandLocked(result.Line)
 		}
 	}
 
 	return nil
 }
 
+// AddEventResult 是 AddEvent 的返回结果
+type AddEventResult struct {
+	Line              string // 提交的命令行
+	Committed         bool   // 是否已提交
+	HistoryNavigation bool   // 是否使用了历史导航
+}
+
 // AddEvent 添加时间线事件
-// 返回值: (命令内容, 是否提交, 错误)
-// 当 terminal_input 事件触发命令提交时，返回命令内容供调用方使用
-func (r *Recorder) AddEvent(eventType string, content string, metadata map[string]interface{}) (string, bool, error) {
+// 返回值包含命令内容、提交状态和历史导航标记
+func (r *Recorder) AddEvent(eventType string, content string, metadata map[string]interface{}) (AddEventResult, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	result := AddEventResult{}
+
 	if r.current == nil {
-		return "", false, fmt.Errorf("not recording")
+		return result, fmt.Errorf("not recording")
 	}
 
 	// 对于 terminal_input 事件，使用 LineBuffer 处理
@@ -158,7 +168,7 @@ func (r *Recorder) AddEvent(eventType string, content string, metadata map[strin
 		if !ok || sessionID == "" {
 			// 如果没有 session ID，直接添加事件
 			r.addTimelineEventLocked(eventType, content, metadata)
-			return "", false, nil
+			return result, nil
 		}
 
 		lb, exists := r.lineBuffers[sessionID]
@@ -168,19 +178,25 @@ func (r *Recorder) AddEvent(eventType string, content string, metadata map[strin
 		}
 
 		// 通过 LineBuffer 处理
-		if line, committed := lb.Handle(content); committed {
-			if line != "" {
-				r.addTimelineEventLocked(eventType, line, metadata)
-				r.addCommandLocked(line)
-				return line, true, nil // 返回提交的命令
+		handleResult := lb.Handle(content)
+		result.Committed = handleResult.Committed
+		result.HistoryNavigation = handleResult.HistoryNavigation
+
+		if handleResult.Committed {
+			result.Line = handleResult.Line
+			if handleResult.Line != "" {
+				r.addTimelineEventLocked(eventType, handleResult.Line, map[string]interface{}{
+					"session_id":         sessionID,
+					"history_navigation": handleResult.HistoryNavigation,
+				})
+				r.addCommandLocked(handleResult.Line)
 			}
-			return "", true, nil // 空命令也返回提交状态
 		}
-		return "", false, nil
+		return result, nil
 	}
 
 	r.addTimelineEventLocked(eventType, content, metadata)
-	return "", false, nil
+	return result, nil
 }
 
 // AddBroadcastInput 处理广播输入，对多个会话去重
@@ -202,10 +218,9 @@ func (r *Recorder) AddBroadcastInput(sessionIDs []string, content string) error 
 			r.lineBuffers[sessionID] = lb
 		}
 
-		if line, committed := lb.Handle(content); committed {
-			if line != "" {
-				committedLines[line] = append(committedLines[line], sessionID)
-			}
+		handleResult := lb.Handle(content)
+		if handleResult.Committed && handleResult.Line != "" {
+			committedLines[handleResult.Line] = append(committedLines[handleResult.Line], sessionID)
 		}
 	}
 
@@ -251,6 +266,70 @@ func (r *Recorder) addCommandLocked(commandLine string) {
 		Timestamp: timestamp,
 	}
 	r.current.Commands = append(r.current.Commands, cmd)
+}
+
+// UpdateLastCommand 更新最近一条命令的内容（用于 Tab 补全修正）
+// 当从服务器输出中检测到补全后的完整命令时，修正之前记录的不完整命令
+func (r *Recorder) UpdateLastCommand(sessionID string, newContent string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.current == nil || len(r.current.Commands) == 0 {
+		return false
+	}
+
+	// 更新最后一条命令
+	lastIdx := len(r.current.Commands) - 1
+	r.current.Commands[lastIdx].Content = newContent
+	r.current.Commands[lastIdx].Corrected = true // 标记为已修正
+
+	// 同时更新时间线中对应的 terminal_input 事件
+	for i := len(r.current.Timeline) - 1; i >= 0; i-- {
+		event := r.current.Timeline[i]
+		if event.Type == "terminal_input" {
+			if sid, ok := event.Metadata["session_id"].(string); ok && sid == sessionID {
+				r.current.Timeline[i].Content = newContent
+				break
+			}
+		}
+	}
+
+	return true
+}
+
+// AddCommandFromOutput 从输出中添加命令（用于历史导航）
+// 当用户通过上下键选择历史命令时，命令内容从输出中提取
+func (r *Recorder) AddCommandFromOutput(sessionID string, commandLine string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.current == nil {
+		return false
+	}
+
+	// 过滤空命令
+	if len(commandLine) == 0 {
+		return false
+	}
+
+	// 添加时间线事件
+	r.addTimelineEventLocked("terminal_input", commandLine, map[string]interface{}{
+		"session_id":         sessionID,
+		"history_navigation": true,
+		"extracted_from_output": true,
+	})
+
+	// 添加命令
+	timestamp := time.Since(r.current.StartTime).Milliseconds()
+	cmd := RecordedCommand{
+		Index:     len(r.current.Commands),
+		Content:   commandLine,
+		Timestamp: timestamp,
+		Corrected: true, // 标记为从输出中提取
+	}
+	r.current.Commands = append(r.current.Commands, cmd)
+
+	return true
 }
 
 // Stop 停止录制

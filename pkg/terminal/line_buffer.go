@@ -2,8 +2,9 @@ package terminal
 
 // LineBuffer maintains the state of a terminal input line
 type LineBuffer struct {
-	buffer []rune
-	cursor int
+	buffer            []rune
+	cursor            int
+	historyNavigation bool // 标记是否使用了上下键历史导航（用于信息目的）
 }
 
 func NewLineBuffer() *LineBuffer {
@@ -13,8 +14,15 @@ func NewLineBuffer() *LineBuffer {
 	}
 }
 
-// Handle processes input string and returns (committed_line, true) if Enter is pressed
-func (lb *LineBuffer) Handle(input string) (string, bool) {
+// HandleResult 是 Handle 方法的返回结果
+type HandleResult struct {
+	Line              string // 提交的命令行
+	Committed         bool   // 是否已提交（按了 Enter）
+	HistoryNavigation bool   // 是否使用了历史导航（上下键），仅用于信息
+}
+
+// Handle processes input string and returns HandleResult
+func (lb *LineBuffer) Handle(input string) HandleResult {
 	// Enhanced ANSI sequence parser
 	// We need to iterate runes to handle multibyte characters correctly
 	runes := []rune(input)
@@ -37,26 +45,40 @@ func (lb *LineBuffer) Handle(input string) (string, bool) {
 		switch r {
 		case '\r', '\n':
 			line := string(lb.buffer)
+			historyNav := lb.historyNavigation
 			lb.Reset()
-			return line, true
+			return HandleResult{
+				Line:              line,
+				Committed:         true,
+				HistoryNavigation: historyNav,
+			}
 		case '\x7f', '\x08': // Backspace
 			lb.backspace()
+			// 退格时重置历史导航标记（用户在编辑命令）
+			lb.historyNavigation = false
 		default:
 			// Only record printable characters
 			// ASCII printable: 32-126
 			// Multi-byte characters (like Chinese) are > 126
 			if r >= 32 && r <= 126 {
 				lb.insert(r)
+				// 用户输入字符时重置历史导航标记
+				lb.historyNavigation = false
 			} else if r > 126 {
 				// Multi-byte UTF-8 characters (Chinese, Japanese, etc.)
 				lb.insert(r)
+				lb.historyNavigation = false
 			}
 			// Ignore control characters (0-31, except \r, \n, \x7f, \x08)
 		}
 		i++
 	}
 
-	return "", false
+	return HandleResult{
+		Line:              "",
+		Committed:         false,
+		HistoryNavigation: lb.historyNavigation,
+	}
 }
 
 // extractEscapeSequence extracts a complete escape sequence and returns (sequence, nextIndex)
@@ -116,6 +138,7 @@ func (lb *LineBuffer) extractEscapeSequence(runes []rune, start int) (string, in
 func (lb *LineBuffer) Reset() {
 	lb.buffer = make([]rune, 0)
 	lb.cursor = 0
+	lb.historyNavigation = false
 }
 
 func (lb *LineBuffer) insert(r rune) {
@@ -151,6 +174,12 @@ func (lb *LineBuffer) handleSequence(seq string) {
 		if lb.cursor < len(lb.buffer) {
 			lb.cursor++
 		}
+	case "\x1b[A", "\x1b[B": // Up / Down - 历史命令导航
+		// 设置历史导航标记，表示命令可能来自历史记录
+		lb.historyNavigation = true
+		// 清空当前缓冲区（Shell 会回显历史命令）
+		lb.buffer = make([]rune, 0)
+		lb.cursor = 0
 	case "\x1b[H", "\x1b[1~": // Home
 		lb.cursor = 0
 	case "\x1b[F", "\x1b[4~": // End

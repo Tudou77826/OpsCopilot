@@ -44,11 +44,12 @@ type RecordingSession struct {
 
 // RecordedCommand 录制的单条命令
 type RecordedCommand struct {
-	Index     int    `json:"index"`     // 命令序号
-	Content   string `json:"content"`   // 命令内容
-	Output    string `json:"output,omitempty"` // 命令输出（可选）
-	Timestamp int64  `json:"timestamp"` // 录制时间戳（相对开始时间的毫秒数）
-	Duration  int    `json:"duration,omitempty"` // 执行时长（毫秒，可选）
+	Index     int    `json:"index"`                      // 命令序号
+	Content   string `json:"content"`                    // 命令内容
+	Output    string `json:"output,omitempty"`           // 命令输出（可选）
+	Timestamp int64  `json:"timestamp"`                  // 录制时间戳（相对开始时间的毫秒数）
+	Duration  int    `json:"duration,omitempty"`         // 执行时长（毫秒，可选）
+	Corrected bool   `json:"corrected,omitempty"`        // 是否通过 Tab 补全/历史回显修正
 }
 
 // RecorderStatus 录制器状态

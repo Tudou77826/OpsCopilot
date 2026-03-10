@@ -281,6 +281,7 @@ export namespace recorder {
 	    output?: string;
 	    timestamp: number;
 	    duration?: number;
+	    corrected?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new RecordedCommand(source);
@@ -293,6 +294,7 @@ export namespace recorder {
 	        this.output = source["output"];
 	        this.timestamp = source["timestamp"];
 	        this.duration = source["duration"];
+	        this.corrected = source["corrected"];
 	    }
 	}
 	export class TimelineEvent {
@@ -406,6 +408,7 @@ export namespace script {
 	    output?: string;
 	    timestamp: number;
 	    duration?: number;
+	    corrected?: boolean;
 	    comment: string;
 	    delay: number;
 	    enabled: boolean;
@@ -421,6 +424,7 @@ export namespace script {
 	        this.output = source["output"];
 	        this.timestamp = source["timestamp"];
 	        this.duration = source["duration"];
+	        this.corrected = source["corrected"];
 	        this.comment = source["comment"];
 	        this.delay = source["delay"];
 	        this.enabled = source["enabled"];

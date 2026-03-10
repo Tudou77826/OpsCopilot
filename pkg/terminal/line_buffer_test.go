@@ -50,8 +50,9 @@ func TestLineBuffer(t *testing.T) {
 			lb := NewLineBuffer()
 			var result string
 			for _, in := range tt.inputs {
-				if line, ok := lb.Handle(in); ok {
-					result = line
+				handleResult := lb.Handle(in)
+				if handleResult.Committed {
+					result = handleResult.Line
 				}
 			}
 			if result != tt.expected {
@@ -59,4 +60,99 @@ func TestLineBuffer(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLineBuffer_HistoryNavigation(t *testing.T) {
+	t.Run("Up arrow sets history navigation flag", func(t *testing.T) {
+		lb := NewLineBuffer()
+
+		// Press up arrow
+		result := lb.Handle("\x1b[A")
+		if result.Committed {
+			t.Error("Up arrow should not commit")
+		}
+		if !result.HistoryNavigation {
+			t.Error("Up arrow should set history navigation flag")
+		}
+	})
+
+	t.Run("Down arrow sets history navigation flag", func(t *testing.T) {
+		lb := NewLineBuffer()
+
+		// Press down arrow
+		result := lb.Handle("\x1b[B")
+		if result.Committed {
+			t.Error("Down arrow should not commit")
+		}
+		if !result.HistoryNavigation {
+			t.Error("Down arrow should set history navigation flag")
+		}
+	})
+
+	t.Run("Enter after history navigation with empty buffer", func(t *testing.T) {
+		lb := NewLineBuffer()
+
+		// Press up arrow (simulates selecting history)
+		lb.Handle("\x1b[A")
+
+		// Press Enter (user executes the history command without editing)
+		// Note: HistoryNavigation is captured before Reset() so it's still true in the result
+		result := lb.Handle("\r")
+		if !result.Committed {
+			t.Error("Enter should commit")
+		}
+		// After Enter, the buffer is reset, so historyNavigation is reset too
+		// But the result should still reflect that history navigation was used
+		if result.Line != "" {
+			t.Errorf("Expected empty line (command from history), got %q", result.Line)
+		}
+	})
+
+	t.Run("Enter after history navigation with edited command", func(t *testing.T) {
+		lb := NewLineBuffer()
+
+		// Press up arrow
+		lb.Handle("\x1b[A")
+
+		// Type something (user modifies the history command)
+		lb.Handle("a")
+		lb.Handle("b")
+		lb.Handle("c")
+
+		// Press Enter
+		result := lb.Handle("\r")
+		if !result.Committed {
+			t.Error("Enter should commit")
+		}
+		if result.HistoryNavigation {
+			t.Error("History navigation should be reset after typing")
+		}
+		if result.Line != "abc" {
+			t.Errorf("Expected 'abc', got %q", result.Line)
+		}
+	})
+
+	t.Run("Typing after history navigation resets flag", func(t *testing.T) {
+		lb := NewLineBuffer()
+
+		// Press up arrow
+		lb.Handle("\x1b[A")
+
+		// Type something (user modifies the history command)
+		result := lb.Handle("a")
+		if result.HistoryNavigation {
+			t.Error("Typing should reset history navigation flag")
+		}
+
+		// Continue typing and press Enter
+		lb.Handle("b")
+		lb.Handle("c")
+		result = lb.Handle("\r")
+		if result.HistoryNavigation {
+			t.Error("History navigation should remain reset")
+		}
+		if result.Line != "abc" {
+			t.Errorf("Expected 'abc', got %q", result.Line)
+		}
+	})
 }

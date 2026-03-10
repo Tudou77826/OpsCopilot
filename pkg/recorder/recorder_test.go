@@ -459,43 +459,43 @@ func TestAddEventReturnsCommittedLine(t *testing.T) {
     }
 
     // Test that AddEvent returns the committed line when Enter is pressed
-    line, committed, err := rec.AddEvent("terminal_input", "h", map[string]interface{}{
+    result, err := rec.AddEvent("terminal_input", "h", map[string]interface{}{
         "session_id": "session-1",
     })
     if err != nil {
         t.Fatalf("Failed to add event: %v", err)
     }
-    if committed {
+    if result.Committed {
         t.Error("Expected not committed yet")
     }
-    if line != "" {
-        t.Errorf("Expected empty line, got %q", line)
+    if result.Line != "" {
+        t.Errorf("Expected empty line, got %q", result.Line)
     }
 
     // Continue typing and press Enter
-    line, committed, err = rec.AddEvent("terminal_input", "i", map[string]interface{}{
+    result, err = rec.AddEvent("terminal_input", "i", map[string]interface{}{
         "session_id": "session-1",
     })
     if err != nil {
         t.Fatalf("Failed to add event: %v", err)
     }
-    if committed {
+    if result.Committed {
         t.Error("Expected not committed yet")
     }
 
     // Press Enter
-    line, committed, err = rec.AddEvent("terminal_input", "\r", map[string]interface{}{
+    result, err = rec.AddEvent("terminal_input", "\r", map[string]interface{}{
         "session_id": "session-1",
     })
     if err != nil {
         t.Fatalf("Failed to add event: %v", err)
     }
-    if !committed {
+    if !result.Committed {
         t.Error("Expected to be committed")
     }
     expected := "hi"
-    if line != expected {
-        t.Errorf("Expected line %q, got %q", expected, line)
+    if result.Line != expected {
+        t.Errorf("Expected line %q, got %q", expected, result.Line)
     }
 
     session, err := rec.Stop()
