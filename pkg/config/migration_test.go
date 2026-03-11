@@ -27,7 +27,7 @@ func TestConfigMigration_OldLLMModelToFastAndComplex(t *testing.T) {
 		"docs": map[string]any{
 			"dir": "",
 		},
-		"completion_delay": 150,
+		"completion_delay": 1500,
 	}
 	b, err := json.MarshalIndent(oldCfg, "", "  ")
 	if err != nil {
