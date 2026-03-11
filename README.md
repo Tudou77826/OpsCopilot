@@ -14,6 +14,8 @@
 </div>
 
 ---
+## 📦 下载地址
+https://github.com/Tudou77826/OpsCopilot/releases
 
 ## 📖 项目简介
 
