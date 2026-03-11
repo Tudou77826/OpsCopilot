@@ -162,7 +162,9 @@ mysqldumpslow -s t /var/log/mysql/slow.log | head -10
 
 ### 5. ⌨️ 智能命令补全
 
-<!-- 截图占位 -->
+<img width="1638" height="586" alt="image" src="https://github.com/user-attachments/assets/c22e9981-04fa-4443-b3d3-8a7f67a57066" />
+<img width="1574" height="1135" alt="image" src="https://github.com/user-attachments/assets/b27463bb-8906-4099-bff8-abda347403ae" />
+
 
 内置 Linux 命令知识库，支持命令名、选项、常用组合的智能补全：
 
@@ -187,7 +189,8 @@ mysqldumpslow -s t /var/log/mysql/slow.log | head -10
 
 ### 6. 🚀 LLM 指令快查（Ctrl+K）
 
-<!-- 截图占位 -->
+<img width="1644" height="513" alt="image" src="https://github.com/user-attachments/assets/e2e5d4e1-5e8e-4471-88b3-f4c6e967d12f" />
+
 
 忘记命令？用自然语言描述，AI 帮你生成：
 
