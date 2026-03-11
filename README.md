@@ -89,7 +89,7 @@ AI 策略：
 - 中文优先策略，优化中文知识库搜索效果
 
 ### 3. 🧠 定位助手（Agent 模式）
-<img width="2153" height="1280" alt="image" src="https://github.com/user-attachments/assets/c30f937b-0c7f-4f3b-a20e-74257268518e" />
+<img width="1768" height="1280" alt="image" src="https://github.com/user-attachments/assets/559fff6d-9fd8-41d8-901d-66ce169adca8" />
 
 输入故障现象，AI 自主调用工具进行诊断：
 
