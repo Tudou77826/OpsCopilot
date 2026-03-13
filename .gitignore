@@ -73,3 +73,4 @@ thread_dump*.txt
 # Claude Code
 .claude/
 CLAUDE.md
+recordings/
