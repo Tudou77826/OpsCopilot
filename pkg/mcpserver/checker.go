@@ -77,6 +77,7 @@ var allowedCommands = []string{
 	`^id(\s|$)`,
 	`^date(\s|$)`,
 	`^env(\s|$)`,
+	`^pwd(\s|$)`,
 }
 
 // CommandChecker 命令检查器
