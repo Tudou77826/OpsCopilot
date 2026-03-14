@@ -16,7 +16,8 @@ import (
 // Config MCP Server 配置
 type Config struct {
 	SessionsFile   string // sessions.json 路径
-	RecordingsDir  string
+	RecordingsDir  string // 录制文件存储目录
+	KnowledgeDir   string // 知识库目录（用于归档排查经验）
 	MaxTotalBytes  int
 	MaxLineLength  int
 	HeadLines      int
@@ -67,8 +68,8 @@ func NewServer(config *Config) (*Server, error) {
 		recorder:    recorder.NewRecorder(config.RecordingsDir),
 	}
 
-	// 创建 MCP 适配器
-	s.mcpRecorder = NewMCPRecorderAdapter(s.recorder)
+	// 创建 MCP 适配器（传入知识库目录用于归档）
+	s.mcpRecorder = NewMCPRecorderAdapter(s.recorder, config.KnowledgeDir)
 
 	// 使用现有的 sessionmanager 加载 sessions.json
 	s.sessionMgr = sessionmanager.NewManager()

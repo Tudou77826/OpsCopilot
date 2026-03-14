@@ -25,10 +25,17 @@ func main() {
 		recordingsDir = "recordings"
 	}
 
+	// 获取知识库目录（用于归档排查经验）
+	knowledgeDir := os.Getenv("OPSCOPILOT_KNOWLEDGE_DIR")
+	if knowledgeDir == "" {
+		knowledgeDir = "docs"
+	}
+
 	// 创建服务器配置
 	serverConfig := &mcpserver.Config{
 		SessionsFile:   sessionsFile,
 		RecordingsDir:  recordingsDir,
+		KnowledgeDir:   knowledgeDir,
 		MaxTotalBytes:  10240,
 		MaxLineLength:  500,
 		HeadLines:      5,
