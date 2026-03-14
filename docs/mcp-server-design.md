@@ -1411,4 +1411,117 @@ func (m *MCPRecordingManager) save(session *RecordingSession) error {
 
 ---
 
+## 14. 使用指南
+
+### 14.1 构建
+
+```bash
+# 方式1：完整构建（包含主程序和 MCP Server）
+build_release.bat
+
+# 方式2：仅构建 MCP Server
+go build -o mcp-server.exe ./cmd/mcp-server/
+```
+
+构建产物位于 `build/bin/` 目录：
+- `OpsCopilot.exe` - 主程序（桌面应用）
+- `mcp-server.exe` - MCP Server（供 Claude Code 调用）
+
+### 14.2 配置 Claude Code
+
+1. **创建 MCP 配置文件**
+
+编辑 `~/.claude/mcp.json`（Windows: `C:\Users\<用户名>\.claude\mcp.json`）：
+
+```json
+{
+  "mcpServers": {
+    "opscopilot": {
+      "command": "D:/OpsCopilot/mcp-server.exe",
+      "env": {
+        "OPSCOPILOT_SESSIONS_FILE": "D:/OpsCopilot/sessions.json",
+        "OPSCOPILOT_RECORDINGS_DIR": "D:/OpsCopilot/recordings",
+        "OPSCOPILOT_KNOWLEDGE_DIR": "D:/OpsCopilot/docs"
+      }
+    }
+  }
+}
+```
+
+2. **环境变量说明**
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `OPSCOPILOT_SESSIONS_FILE` | sessions.json 路径 | `sessions.json` |
+| `OPSCOPILOT_RECORDINGS_DIR` | 录制文件存储目录 | `recordings` |
+| `OPSCOPILOT_KNOWLEDGE_DIR` | 知识库目录（归档排查经验） | `docs` |
+
+3. **启用 MCP Server**
+
+编辑 `~/.claude/settings.json`：
+
+```json
+{
+  "enabledMcpjsonServers": ["opscopilot"]
+}
+```
+
+### 14.3 使用示例
+
+在 Claude Code 中，可以直接调用 MCP 工具：
+
+```
+帮我排查服务器 39.108.107.148 的磁盘空间使用情况
+```
+
+Claude Code 会自动：
+1. 调用 `session_start` 开始排查会话
+2. 调用 `server_connect` 连接服务器
+3. 调用 `ssh_exec` 执行 `df -h`、`du -sh` 等命令
+4. 调用 `session_end` 结束会话，归档到知识库
+
+### 14.4 分发给其他用户
+
+1. **打包发布**
+
+```
+build/bin/
+├── OpsCopilot.exe          # 主程序
+├── mcp-server.exe          # MCP Server
+├── config.json             # 配置文件（可选）
+├── prompts.json            # 提示词（可选）
+└── sessions.json           # 服务器配置（用户自己创建）
+```
+
+2. **用户配置步骤**
+
+   a. 解压到任意目录（如 `D:\OpsCopilot`）
+
+   b. 在 OpsCopilot 主程序中配置服务器连接（或手动编辑 `sessions.json`）
+
+   c. 配置 Claude Code 的 `mcp.json`（参考 14.2）
+
+   d. 重启 Claude Code
+
+3. **注意事项**
+
+- MCP Server 依赖 OpsCopilot 的 `sessions.json` 和密码存储（OS Keyring）
+- 用户需要先在 OpsCopilot 主程序中连接过服务器，密码才会存储到 Keyring
+- `sessions.json` 存储服务器配置，Keyring 存储密码
+
+### 14.5 可用工具列表
+
+| 工具 | 功能 |
+|------|------|
+| `server_list` | 列出可用服务器 |
+| `server_connect` | 连接服务器 |
+| `server_disconnect` | 断开连接 |
+| `ssh_exec` | 执行只读命令 |
+| `session_start` | 开始排查会话 |
+| `session_status` | 查看会话状态 |
+| `session_end` | 结束会话并归档 |
+| `get_hints` | 获取排查提示 |
+
+---
+
 *文档结束*

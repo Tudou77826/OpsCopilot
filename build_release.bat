@@ -44,6 +44,17 @@ if exist "highlight_rules.json" (
     echo [INFO]   - highlight_rules.json
 )
 
+:: 构建 MCP Server
+echo [INFO] Building MCP Server...
+go build -o "build\bin\mcp-server.exe" ./cmd/mcp-server/
+if %errorlevel% neq 0 (
+    echo [ERROR] MCP Server build failed.
+    pause
+    exit /b 1
+)
+echo [INFO]   - mcp-server.exe
+
 echo [SUCCESS] Build complete. Executable is in build/bin/
 echo [INFO] Configuration files have been copied to build/bin/
+echo [INFO] MCP Server has been built for Claude Code integration.
 endlocal
