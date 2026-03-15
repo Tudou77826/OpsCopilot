@@ -464,13 +464,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 );
 
             case 'whitelist':
-                return (
-                    <CommandWhitelistPanel
-                        onSave={() => {
-                            setMsg('白名单配置已保存！');
-                        }}
-                    />
-                );
+                return <CommandWhitelistPanel />;
 
             case 'experimental':
                 return (
