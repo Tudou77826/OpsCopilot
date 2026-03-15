@@ -1,6 +1,7 @@
 package mcpserver
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"strings"
@@ -25,10 +26,11 @@ func (s *Server) toolServerList() (interface{}, error) {
 
 	// 已连接的服务器
 	for name, conn := range s.connections {
+		lastActive := time.Unix(0, conn.LastActive.Load())
 		connected = append(connected, map[string]interface{}{
 			"name":          name,
 			"connected_at":  conn.ConnectedAt,
-			"idle_seconds":  int(time.Since(conn.LastActive).Seconds()),
+			"idle_seconds":  int(time.Since(lastActive).Seconds()),
 		})
 	}
 
@@ -96,7 +98,7 @@ func (s *Server) toolServerConnect(args map[string]interface{}) (interface{}, er
 
 	// 检查是否已连接
 	if conn, exists := s.connections[serverName]; exists {
-		conn.LastActive = time.Now()
+		conn.LastActive.Store(time.Now().UnixNano())
 		return map[string]interface{}{
 			"success": true,
 			"server":  serverName,
@@ -202,13 +204,14 @@ func (s *Server) toolServerConnect(args map[string]interface{}) (interface{}, er
 	}
 
 	// 保存连接（包括 root 密码用于 sudo）
-	s.connections[serverName] = &Connection{
+	conn := &Connection{
 		Name:         serverName,
 		Client:       client,
 		RootPassword: rootPassword,
 		ConnectedAt:  time.Now(),
-		LastActive:   time.Now(),
 	}
+	conn.LastActive.Store(time.Now().UnixNano())
+	s.connections[serverName] = conn
 
 	return map[string]interface{}{
 		"success":       true,
@@ -307,8 +310,8 @@ func (s *Server) toolSSHExec(args map[string]interface{}) (interface{}, error) {
 		output = err.Error()
 	}
 
-	// 更新最后活动时间
-	conn.LastActive = time.Now()
+	// 更新最后活动时间（使用原子操作，并发安全）
+	conn.LastActive.Store(time.Now().UnixNano())
 
 	// 处理输出
 	controller := NewOutputController(s.config.MaxTotalBytes, maxLineLength, s.config.HeadLines)
@@ -430,86 +433,28 @@ func (s *Server) toolGetHints(args map[string]interface{}) (interface{}, error) 
 		return nil, fmt.Errorf("缺少 problem 参数")
 	}
 
-	context, _ := args["context"].(string)
+	problemContext, _ := args["context"].(string)
 
-	// TODO: 集成知识库搜索
-	// 目前返回通用排查思路
-	hints := s.getTroubleshootHints(problem, context)
+	// 检查 AIService 是否可用
+	if s.aiService == nil {
+		return nil, fmt.Errorf("AI 服务未初始化，请检查 config.json 中的 LLM 配置（需要配置 llm.APIKey）")
+	}
 
+	// 组合问题和上下文
+	fullProblem := problem
+	if problemContext != "" {
+		fullProblem = problem + "\n\n上下文：" + problemContext
+	}
+
+	// 调用 AskTroubleshoot（enableMCP=false，不使用 MCP 工具）
+	result, err := s.aiService.AskTroubleshoot(context.Background(), fullProblem, s.config.KnowledgeDir, false)
+	if err != nil {
+		return nil, fmt.Errorf("定位指导生成失败: %w", err)
+	}
+
+	// 返回 Markdown 格式的定位指导
 	return map[string]interface{}{
-		"hints":       hints,
-		"confidence":  0.7,
-		"note":        "基于问题关键词的通用排查建议，后续将集成知识库搜索",
+		"content": result,  // Markdown 文本
+		"format":  "markdown",
 	}, nil
-}
-
-// getTroubleshootHints 获取排查提示（简化版）
-func (s *Server) getTroubleshootHints(problem, context string) []map[string]interface{} {
-	hints := make([]map[string]interface{}, 0)
-
-	problemLower := strings.ToLower(problem)
-	contextLower := strings.ToLower(context)
-	combined := problemLower + " " + contextLower
-
-	// CPU 相关
-	if strings.Contains(combined, "cpu") || strings.Contains(combined, "高负载") {
-		hints = append(hints, map[string]interface{}{
-			"title":       "CPU 使用率高排查",
-			"description": "当 CPU 使用率异常时的一般排查思路",
-			"commands":    []string{"top -bn1 | head -20", "ps aux --sort=-%cpu | head", "mpstat 1 5"},
-			"key_points":  []string{"关注占用最高的进程", "检查是否有僵尸进程", "查看系统负载和 CPU 核心数"},
-		})
-	}
-
-	// 内存相关
-	if strings.Contains(combined, "内存") || strings.Contains(combined, "memory") || strings.Contains(combined, "oom") {
-		hints = append(hints, map[string]interface{}{
-			"title":       "内存使用率高排查",
-			"description": "当内存不足或 OOM 时的排查思路",
-			"commands":    []string{"free -h", "ps aux --sort=-%mem | head", "cat /proc/meminfo"},
-			"key_points":  []string{"检查可用内存和缓存", "找出内存占用最高的进程", "检查是否有内存泄漏"},
-		})
-	}
-
-	// 磁盘相关
-	if strings.Contains(combined, "磁盘") || strings.Contains(combined, "disk") || strings.Contains(combined, "空间") {
-		hints = append(hints, map[string]interface{}{
-			"title":       "磁盘空间不足排查",
-			"description": "当磁盘空间不足时的排查思路",
-			"commands":    []string{"df -h", "du -sh /* 2>/dev/null | sort -rh | head", "lsof | grep deleted"},
-			"key_points":  []string{"找出占用空间最大的目录", "检查已删除但未释放的文件", "检查日志文件大小"},
-		})
-	}
-
-	// 网络相关
-	if strings.Contains(combined, "网络") || strings.Contains(combined, "network") || strings.Contains(combined, "连接") || strings.Contains(combined, "connection") {
-		hints = append(hints, map[string]interface{}{
-			"title":       "网络连接问题排查",
-			"description": "当网络连接异常时的排查思路",
-			"commands":    []string{"netstat -tlnp", "ss -tunap", "ip addr", "ping -c 4 <目标>"},
-			"key_points":  []string{"检查端口监听状态", "检查网络接口配置", "测试网络连通性"},
-		})
-	}
-
-	// 服务相关
-	if strings.Contains(combined, "服务") || strings.Contains(combined, "service") || strings.Contains(combined, "启动") {
-		hints = append(hints, map[string]interface{}{
-			"title":       "服务状态检查",
-			"description": "检查 systemd 服务状态和日志",
-			"commands":    []string{"systemctl status <service>", "journalctl -u <service> -n 100", "systemctl list-units --failed"},
-			"key_points":  []string{"检查服务是否运行", "查看最近的错误日志", "检查依赖服务状态"},
-		})
-	}
-
-	// 如果没有匹配到任何场景，返回通用建议
-	if len(hints) == 0 {
-		hints = append(hints, map[string]interface{}{
-			"title":       "通用排查步骤",
-			"description": "问题排查的基本步骤",
-			"commands":    []string{"uptime", "dmesg | tail -50", "free -h", "df -h", "ps aux --sort=-%cpu | head"},
-			"key_points":  []string{"检查系统负载和资源使用", "查看系统日志", "找出异常进程"},
-		})
-	}
-
-	return hints
 }

@@ -1,12 +1,17 @@
 package mcpserver
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"opscopilot/pkg/ai"
+	"opscopilot/pkg/config"
+	"opscopilot/pkg/llm"
 	"opscopilot/pkg/recorder"
 	"opscopilot/pkg/secretstore"
 	"opscopilot/pkg/sessionmanager"
@@ -33,7 +38,9 @@ type Server struct {
 	checker       *CommandChecker
 	recorder      *recorder.Recorder       // 复用主程序录制器
 	mcpRecorder   *MCPRecorderAdapter      // MCP 适配器
+	aiService     *ai.AIService            // AI 服务（用于 get_hints）
 	mu            sync.RWMutex
+	stopChan      chan struct{}            // 停止清理 goroutine 的信号
 }
 
 // Connection SSH 连接
@@ -42,7 +49,7 @@ type Connection struct {
 	Client       *sshclient.Client
 	RootPassword string // 用于 sudo 提权
 	ConnectedAt  time.Time
-	LastActive   time.Time
+	LastActive   atomic.Int64 // Unix 纳秒时间戳，支持并发读写
 }
 
 // NewServer 创建 MCP Server
@@ -58,7 +65,7 @@ func NewServer(config *Config) (*Server, error) {
 		config.HeadLines = 5
 	}
 	if config.IdleTimeoutMin == 0 {
-		config.IdleTimeoutMin = 30
+		config.IdleTimeoutMin = 15 // 默认 15 分钟空闲超时
 	}
 
 	s := &Server{
@@ -66,10 +73,14 @@ func NewServer(config *Config) (*Server, error) {
 		connections: make(map[string]*Connection),
 		checker:     NewCommandChecker(),
 		recorder:    recorder.NewRecorder(config.RecordingsDir),
+		stopChan:    make(chan struct{}),
 	}
 
 	// 创建 MCP 适配器（传入知识库目录用于归档）
 	s.mcpRecorder = NewMCPRecorderAdapter(s.recorder, config.KnowledgeDir)
+
+	// 启动连接空闲超时清理 goroutine
+	go s.startIdleConnectionCleaner()
 
 	// 使用现有的 sessionmanager 加载 sessions.json
 	s.sessionMgr = sessionmanager.NewManager()
@@ -95,7 +106,42 @@ func NewServer(config *Config) (*Server, error) {
 	// 使用现有的 secretstore
 	s.secretStore = secretstore.NewKeyringStore()
 
+	// 初始化 AI 服务（复用 OpsCopilot 的配置）
+	if err := s.initAIService(); err != nil {
+		fmt.Fprintf(os.Stderr, "[MCP] Warning: Failed to init AI service: %v\n", err)
+		// 不阻止启动，只是 get_hints 功能降级
+	}
+
 	return s, nil
+}
+
+// initAIService 初始化 AI 服务
+func (s *Server) initAIService() error {
+	// 1. 加载 config.json
+	configMgr := config.NewManager()
+	if err := configMgr.Load(); err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	// 2. 检查 API Key 是否配置
+	llmCfg := configMgr.Config.LLM
+	if llmCfg.APIKey == "" {
+		return fmt.Errorf("LLM API Key not configured")
+	}
+
+	// 3. 创建 LLM Provider
+	fastProvider := llm.NewOpenAIProvider(llmCfg.APIKey, llmCfg.BaseURL, llmCfg.FastModel)
+	complexProvider := llm.NewOpenAIProvider(llmCfg.APIKey, llmCfg.BaseURL, llmCfg.ComplexModel)
+
+	// 4. 创建 AIService
+	s.aiService = ai.NewAIService(fastProvider, complexProvider, configMgr)
+
+	// 5. 设置空的事件发射器（MCP Server 不需要 UI 事件，避免 Wails runtime 调用）
+	ai.SetEventEmitter(func(ctx context.Context, optionalData string, optionalData2 ...interface{}) {
+		// No-op for MCP server
+	})
+
+	return nil
 }
 
 // GetAvailableServers 获取所有可用的服务器配置
@@ -105,6 +151,9 @@ func (s *Server) GetAvailableServers() []*sessionmanager.Session {
 
 // Shutdown 关闭服务器
 func (s *Server) Shutdown() {
+	// 停止清理 goroutine
+	close(s.stopChan)
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -113,6 +162,43 @@ func (s *Server) Shutdown() {
 		if conn.Client != nil {
 			conn.Client.Close()
 			fmt.Fprintf(os.Stderr, "[MCP] Closed connection to %s\n", name)
+		}
+	}
+}
+
+// startIdleConnectionCleaner 定期检查并断开空闲连接
+func (s *Server) startIdleConnectionCleaner() {
+	// 每分钟检查一次
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.stopChan:
+			return
+		case <-ticker.C:
+			s.cleanIdleConnections()
+		}
+	}
+}
+
+// cleanIdleConnections 清理空闲超时的连接
+func (s *Server) cleanIdleConnections() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	idleTimeout := time.Duration(s.config.IdleTimeoutMin) * time.Minute
+	now := time.Now()
+
+	for name, conn := range s.connections {
+		lastActive := time.Unix(0, conn.LastActive.Load())
+		idleDuration := now.Sub(lastActive)
+		if idleDuration > idleTimeout {
+			if conn.Client != nil {
+				conn.Client.Close()
+			}
+			delete(s.connections, name)
+			fmt.Fprintf(os.Stderr, "[MCP] Disconnected idle server '%s' (idle for %v)\n", name, idleDuration.Round(time.Second))
 		}
 	}
 }

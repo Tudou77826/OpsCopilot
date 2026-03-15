@@ -15,7 +15,7 @@ func TestMCPRecorderAdapter_StartSession(t *testing.T) {
 
 	// 创建录制器和适配器
 	r := recorder.NewRecorder(tmpDir)
-	adapter := NewMCPRecorderAdapter(r)
+	adapter := NewMCPRecorderAdapter(r, "")
 
 	// 开始会话
 	session, err := adapter.StartSession("测试问题")
@@ -42,7 +42,7 @@ func TestMCPRecorderAdapter_RecordCommand(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	r := recorder.NewRecorder(tmpDir)
-	adapter := NewMCPRecorderAdapter(r)
+	adapter := NewMCPRecorderAdapter(r, tmpDir) // 使用 tmpDir 作为知识库目录
 
 	// 没有活动会话时记录命令应该失败
 	err := adapter.RecordCommand("server1", "ls -la", "output", 0, time.Second, "")
@@ -81,7 +81,7 @@ func TestMCPRecorderAdapter_EndSession(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	r := recorder.NewRecorder(tmpDir)
-	adapter := NewMCPRecorderAdapter(r)
+	adapter := NewMCPRecorderAdapter(r, tmpDir) // 使用 tmpDir 作为知识库目录
 
 	// 开始会话
 	_, _ = adapter.StartSession("测试问题")
@@ -125,7 +125,7 @@ func TestMCPRecorderAdapter_GetSessionStatus(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	r := recorder.NewRecorder(tmpDir)
-	adapter := NewMCPRecorderAdapter(r)
+	adapter := NewMCPRecorderAdapter(r, tmpDir) // 使用 tmpDir 作为知识库目录
 
 	// 没有活动会话
 	status := adapter.GetSessionStatus()
@@ -154,7 +154,7 @@ func TestMCPRecorderAdapter_OutputTruncation(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	r := recorder.NewRecorder(tmpDir)
-	adapter := NewMCPRecorderAdapter(r)
+	adapter := NewMCPRecorderAdapter(r, tmpDir) // 使用 tmpDir 作为知识库目录
 
 	_, _ = adapter.StartSession("测试问题")
 

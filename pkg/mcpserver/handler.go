@@ -184,8 +184,16 @@ func (s *Server) handleToolsList(req *JSONRPCRequest) {
 			},
 		},
 		{
-			Name:        "get_hints",
-			Description: "基于知识库获取排查思路提示。\n\n输入问题描述，返回可能相关的排查方法、常用命令和注意事项。",
+			Name: "get_hints",
+			Description: `基于知识库获取排查思路提示。
+
+输入问题描述，返回 Markdown 格式的定位指导文档。
+
+适用场景：
+- 开始排查前获取思路
+- 遇到问题时寻求指导
+
+注意：需要 OpsCopilot 配置了 LLM API（config.json 中的 llm.APIKey）`,
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
