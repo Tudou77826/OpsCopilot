@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { WhitelistConfig, Policy, Command, RiskAssessment } from './types';
 
 interface CommandWhitelistPanelProps {
@@ -9,16 +9,57 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
   const [config, setConfig] = useState<WhitelistConfig | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState('');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [expandedPolicy, setExpandedPolicy] = useState<string | null>(null);
   const [editingPolicy, setEditingPolicy] = useState<Policy | null>(null);
   const [testingCommand, setTestingCommand] = useState('');
   const [testResult, setTestResult] = useState<RiskAssessment | null>(null);
   const [testing, setTesting] = useState(false);
 
+  // 用于防抖保存
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const initialLoadRef = useRef(true);
+
   useEffect(() => {
     loadConfig();
   }, []);
+
+  // 自动保存（防抖）
+  useEffect(() => {
+    // 跳过初始加载
+    if (initialLoadRef.current) {
+      initialLoadRef.current = false;
+      return;
+    }
+    if (!config) return;
+
+    // 清除之前的定时器
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // 设置新的防抖保存
+    setSaveStatus('saving');
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        // @ts-ignore
+        await window.go.main.App.SaveCommandWhitelist(config);
+        setSaveStatus('saved');
+        onSave?.();
+        // 3秒后清除状态
+        setTimeout(() => setSaveStatus('idle'), 3000);
+      } catch (err) {
+        console.error('自动保存失败:', err);
+        setSaveStatus('error');
+      }
+    }, 500); // 500ms 防抖
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [config]);
 
   const loadConfig = async () => {
     setLoading(true);
@@ -27,25 +68,9 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
       const result = await window.go.main.App.GetCommandWhitelist();
       setConfig(result);
     } catch (err) {
-      setMsg(`加载配置失败: ${err}`);
+      console.error('加载配置失败:', err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleSave = async () => {
-    if (!config) return;
-    setSaving(true);
-    setMsg('');
-    try {
-      // @ts-ignore
-      await window.go.main.App.SaveCommandWhitelist(config);
-      setMsg('保存成功');
-      onSave?.();
-    } catch (err) {
-      setMsg(`保存失败: ${err}`);
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -318,27 +343,19 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
         </div>
       </div>
 
-      {/* 保存按钮 */}
-      <div style={styles.footer}>
-        {msg && (
-          <span style={{
-            ...styles.msg,
-            color: msg.includes('成功') ? '#4caf50' : '#f44336',
-          }}>
-            {msg}
-          </span>
-        )}
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          style={{
-            ...styles.saveBtn,
-            ...(saving ? styles.saveBtnDisabled : {}),
-          }}
-        >
-          {saving ? '保存中...' : '保存配置'}
-        </button>
-      </div>
+      {/* 保存状态指示器 */}
+      {saveStatus !== 'idle' && (
+        <div style={{
+          ...styles.saveStatus,
+          ...(saveStatus === 'saving' ? styles.saveStatusSaving : {}),
+          ...(saveStatus === 'saved' ? styles.saveStatusSaved : {}),
+          ...(saveStatus === 'error' ? styles.saveStatusError : {}),
+        }}>
+          {saveStatus === 'saving' && '保存中...'}
+          {saveStatus === 'saved' && '已保存'}
+          {saveStatus === 'error' && '保存失败'}
+        </div>
+      )}
 
       {/* 策略编辑模态框 */}
       {editingPolicy && (
@@ -848,30 +865,29 @@ const styles: Record<string, React.CSSProperties> = {
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  // 底部样式
-  footer: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    gap: '12px',
-    paddingTop: '8px',
-  },
-  msg: {
-    fontSize: '13px',
-  },
-  saveBtn: {
-    padding: '10px 24px',
-    borderRadius: '4px',
-    border: 'none',
-    backgroundColor: '#007acc',
-    color: '#fff',
-    cursor: 'pointer',
-    fontSize: '13px',
+  // 保存状态样式
+  saveStatus: {
+    position: 'fixed',
+    bottom: '20px',
+    right: '20px',
+    padding: '8px 16px',
+    borderRadius: '20px',
+    fontSize: '12px',
     fontWeight: 500,
+    zIndex: 1000,
+    transition: 'opacity 0.3s',
   },
-  saveBtnDisabled: {
-    backgroundColor: '#444',
-    cursor: 'not-allowed',
+  saveStatusSaving: {
+    backgroundColor: '#2d3a4a',
+    color: '#9cdcfe',
+  },
+  saveStatusSaved: {
+    backgroundColor: '#1a2a24',
+    color: '#4caf50',
+  },
+  saveStatusError: {
+    backgroundColor: '#2a1818',
+    color: '#f44336',
   },
 };
 
