@@ -28,7 +28,6 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
       setConfig(result);
     } catch (err) {
       setMsg(`加载配置失败: ${err}`);
-      // 使用默认配置
     } finally {
       setLoading(false);
     }
@@ -132,93 +131,68 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
     }
   };
 
+  const getRiskBgColor = (level: string) => {
+    switch (level) {
+      case 'low': return '#1a2a24';
+      case 'medium': return '#2a2518';
+      case 'high': return '#2a1818';
+      default: return '#252526';
+    }
+  };
+
   const getCategoryColor = (category: string) => {
     return category === 'read_only' ? '#4caf50' : '#ff9800';
   };
 
   if (loading) {
-    return <div style={{ padding: '20px', textAlign: 'center' }}>加载中...</div>;
+    return <div style={styles.loading}>加载中...</div>;
   }
 
   if (!config) {
-    return <div style={{ padding: '20px', textAlign: 'center' }}>无法加载配置</div>;
+    return <div style={styles.loading}>无法加载配置</div>;
   }
 
   return (
-    <div style={{ padding: '16px' }}>
+    <div style={styles.container}>
       {/* 全局设置 */}
-      <div style={{
-        marginBottom: '20px',
-        padding: '16px',
-        background: '#f5f5f5',
-        borderRadius: '8px',
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}>
-          <div>
-            <span style={{ fontWeight: 'bold' }}>LLM 风险检查</span>
-            <span style={{
-              marginLeft: '8px',
-              color: '#666',
-              fontSize: '13px',
-            }}>
-              对未知命令使用 LLM 进行风险评估
-            </span>
-          </div>
-          <button
-            onClick={handleToggleLLMCheck}
-            style={{
-              padding: '8px 16px',
-              background: config.llm_check_enabled ? '#4caf50' : '#ccc',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            {config.llm_check_enabled ? '已启用' : '已禁用'}
-          </button>
+      <div style={styles.section}>
+        <div style={styles.sectionHeader}>
+          <span style={styles.sectionTitle}>LLM 风险检查</span>
+          <label style={styles.switch}>
+            <input
+              type="checkbox"
+              checked={config.llm_check_enabled}
+              onChange={handleToggleLLMCheck}
+            />
+            <span style={styles.slider}></span>
+          </label>
+        </div>
+        <div style={styles.sectionDesc}>
+          启用后，对于不在白名单中的命令，将使用 LLM 进行风险评估
         </div>
       </div>
 
       {/* 命令测试区域 */}
-      <div style={{
-        marginBottom: '20px',
-        padding: '16px',
-        background: '#fff3e0',
-        borderRadius: '8px',
-        border: '1px solid #ffe0b2',
-      }}>
-        <div style={{ fontWeight: 'bold', marginBottom: '12px' }}>
-          🔍 命令风险测试
+      <div style={styles.section}>
+        <div style={styles.sectionTitle}>命令风险测试</div>
+        <div style={styles.sectionDesc}>
+          输入命令测试 LLM 风险评估功能
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={styles.testInputRow}>
           <input
             type="text"
             value={testingCommand}
             onChange={(e) => setTestingCommand(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleTestCommand()}
             placeholder="输入命令进行风险评估..."
-            style={{
-              flex: 1,
-              padding: '8px 12px',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-              fontSize: '14px',
-            }}
+            style={styles.input}
           />
           <button
             onClick={handleTestCommand}
             disabled={testing || !testingCommand.trim()}
             style={{
-              padding: '8px 16px',
-              background: '#2196f3',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: testing ? 'wait' : 'pointer',
+              ...styles.primaryBtn,
+              ...(testing || !testingCommand.trim() ? styles.primaryBtnDisabled : {}),
             }}
           >
             {testing ? '评估中...' : '评估'}
@@ -226,32 +200,22 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
         </div>
         {testResult && (
           <div style={{
-            marginTop: '12px',
-            padding: '12px',
-            background: '#fff',
-            borderRadius: '4px',
-            border: `1px solid ${getRiskColor(testResult.risk_level)}`,
+            ...styles.testResult,
+            borderColor: getRiskColor(testResult.risk_level),
+            backgroundColor: getRiskBgColor(testResult.risk_level),
           }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: '8px',
-            }}>
+            <div style={styles.testResultHeader}>
               <span style={{
-                padding: '2px 8px',
-                background: getRiskColor(testResult.risk_level),
-                color: 'white',
-                borderRadius: '4px',
-                fontSize: '12px',
+                ...styles.riskBadge,
+                backgroundColor: getRiskColor(testResult.risk_level),
               }}>
                 {testResult.risk_level.toUpperCase()}
               </span>
-              <span>{testResult.reason}</span>
+              <span style={styles.testResultReason}>{testResult.reason}</span>
             </div>
             {testResult.suggestions && (
-              <div style={{ color: '#666', fontSize: '13px' }}>
-                💡 {testResult.suggestions}
+              <div style={styles.testResultSuggestion}>
+                {testResult.suggestions}
               </div>
             )}
           </div>
@@ -259,182 +223,107 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
       </div>
 
       {/* 策略列表 */}
-      <div style={{ marginBottom: '16px' }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}>
-          <h3 style={{ margin: 0 }}>策略列表</h3>
-          <button
-            onClick={handleAddPolicy}
-            style={{
-              padding: '8px 16px',
-              background: '#2196f3',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
+      <div style={styles.section}>
+        <div style={styles.toolbar}>
+          <span style={styles.sectionTitle}>策略列表</span>
+          <button onClick={handleAddPolicy} style={styles.primaryBtn}>
             + 添加策略
           </button>
         </div>
+
+        <div style={styles.policyList}>
+          {config.policies.map((policy) => (
+            <div key={policy.id} style={styles.policyItem}>
+              {/* 策略头部 */}
+              <div
+                onClick={() => setExpandedPolicy(expandedPolicy === policy.id ? null : policy.id)}
+                style={styles.policyHeader}
+              >
+                <div style={styles.policyInfo}>
+                  <div style={styles.policyName}>{policy.name}</div>
+                  <div style={styles.policyMeta}>
+                    <span>IP 段: {policy.ip_ranges.length > 0 ? policy.ip_ranges.join(', ') : '未配置'}</span>
+                    <span style={styles.metaSeparator}>|</span>
+                    <span>命令: {policy.commands.filter(c => c.enabled).length}/{policy.commands.length}</span>
+                  </div>
+                </div>
+                <div style={styles.policyActions}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingPolicy(policy);
+                    }}
+                    style={styles.editBtn}
+                  >
+                    编辑
+                  </button>
+                  {policy.id !== 'default' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeletePolicy(policy.id);
+                      }}
+                      style={styles.deleteBtn}
+                    >
+                      删除
+                    </button>
+                  )}
+                  <span style={styles.expandIcon}>
+                    {expandedPolicy === policy.id ? '▾' : '▸'}
+                  </span>
+                </div>
+              </div>
+
+              {/* 策略详情（展开时显示） */}
+              {expandedPolicy === policy.id && (
+                <div style={styles.policyContent}>
+                  {policy.description && (
+                    <div style={styles.policyDesc}>{policy.description}</div>
+                  )}
+                  <div style={styles.commandSection}>
+                    <div style={styles.commandSectionTitle}>命令规则</div>
+                    {policy.commands.length === 0 ? (
+                      <div style={styles.emptyText}>暂无命令规则</div>
+                    ) : (
+                      <div style={styles.commandList}>
+                        {policy.commands.map((cmd, idx) => (
+                          <div key={idx} style={styles.commandItem}>
+                            <div style={styles.commandInfo}>
+                              <code style={styles.commandPattern}>{cmd.pattern}</code>
+                              <span style={{
+                                ...styles.categoryBadge,
+                                backgroundColor: getCategoryColor(cmd.category),
+                              }}>
+                                {cmd.category === 'read_only' ? '只读' : '写入'}
+                              </span>
+                              <span style={styles.commandDesc}>{cmd.description}</span>
+                            </div>
+                            <label style={styles.switchSmall}>
+                              <input
+                                type="checkbox"
+                                checked={cmd.enabled}
+                                onChange={() => toggleCommand(policy.id, idx)}
+                              />
+                              <span style={styles.sliderSmall}></span>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
-      {config.policies.map((policy) => (
-        <div
-          key={policy.id}
-          style={{
-            marginBottom: '12px',
-            border: '1px solid #e0e0e0',
-            borderRadius: '8px',
-            overflow: 'hidden',
-          }}
-        >
-          {/* 策略头部 */}
-          <div
-            onClick={() => setExpandedPolicy(expandedPolicy === policy.id ? null : policy.id)}
-            style={{
-              padding: '12px 16px',
-              background: '#fafafa',
-              cursor: 'pointer',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 'bold' }}>{policy.name}</div>
-              <div style={{ fontSize: '12px', color: '#666' }}>
-                IP 段: {policy.ip_ranges.length > 0 ? policy.ip_ranges.join(', ') : '未配置'}
-                <span style={{ margin: '0 8px' }}>|</span>
-                命令: {policy.commands.filter(c => c.enabled).length}/{policy.commands.length}
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEditingPolicy(policy);
-                }}
-                style={{
-                  padding: '4px 8px',
-                  background: '#fff',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-              >
-                编辑
-              </button>
-              {policy.id !== 'default' && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDeletePolicy(policy.id);
-                  }}
-                  style={{
-                    padding: '4px 8px',
-                    background: '#fff',
-                    border: '1px solid #f44336',
-                    color: '#f44336',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  删除
-                </button>
-              )}
-              <span style={{ fontSize: '16px' }}>
-                {expandedPolicy === policy.id ? '▼' : '▶'}
-              </span>
-            </div>
-          </div>
-
-          {/* 策略详情（展开时显示） */}
-          {expandedPolicy === policy.id && (
-            <div style={{ padding: '16px', background: '#fff' }}>
-              <div style={{ fontSize: '14px', color: '#666', marginBottom: '12px' }}>
-                {policy.description}
-              </div>
-              <div style={{ marginBottom: '8px', fontWeight: 'bold' }}>
-                命令规则:
-              </div>
-              {policy.commands.length === 0 ? (
-                <div style={{ color: '#999', padding: '8px' }}>
-                  暂无命令规则
-                </div>
-              ) : (
-                <div style={{
-                  maxHeight: '200px',
-                  overflowY: 'auto',
-                  border: '1px solid #eee',
-                  borderRadius: '4px',
-                }}>
-                  {policy.commands.map((cmd, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        padding: '8px 12px',
-                        borderBottom: idx < policy.commands.length - 1 ? '1px solid #f0f0f0' : 'none',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        background: cmd.enabled ? '#fff' : '#f9f9f9',
-                      }}
-                    >
-                      <div style={{ flex: 1 }}>
-                        <code style={{ fontSize: '13px' }}>{cmd.pattern}</code>
-                        <span style={{
-                          marginLeft: '8px',
-                          padding: '2px 6px',
-                          background: getCategoryColor(cmd.category),
-                          color: 'white',
-                          borderRadius: '3px',
-                          fontSize: '11px',
-                        }}>
-                          {cmd.category === 'read_only' ? '只读' : '写入'}
-                        </span>
-                        <span style={{ marginLeft: '8px', color: '#666', fontSize: '12px' }}>
-                          {cmd.description}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => toggleCommand(policy.id, idx)}
-                        style={{
-                          padding: '4px 8px',
-                          background: cmd.enabled ? '#4caf50' : '#ccc',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '12px',
-                        }}
-                      >
-                        {cmd.enabled ? '启用' : '禁用'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      ))}
-
       {/* 保存按钮 */}
-      <div style={{
-        marginTop: '24px',
-        display: 'flex',
-        justifyContent: 'flex-end',
-        gap: '12px',
-        alignItems: 'center',
-      }}>
+      <div style={styles.footer}>
         {msg && (
           <span style={{
+            ...styles.msg,
             color: msg.includes('成功') ? '#4caf50' : '#f44336',
-            fontSize: '14px',
           }}>
             {msg}
           </span>
@@ -443,13 +332,8 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
           onClick={handleSave}
           disabled={saving}
           style={{
-            padding: '10px 24px',
-            background: '#4caf50',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: saving ? 'wait' : 'pointer',
-            fontSize: '14px',
+            ...styles.saveBtn,
+            ...(saving ? styles.saveBtnDisabled : {}),
           }}
         >
           {saving ? '保存中...' : '保存配置'}
@@ -468,7 +352,7 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
   );
 };
 
-// 简单的策略编辑器组件
+// 策略编辑器组件
 const PolicyEditor: React.FC<{
   policy: Policy;
   onSave: (policy: Policy) => void;
@@ -521,284 +405,667 @@ const PolicyEditor: React.FC<{
   };
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0,0,0,0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-    }}>
-      <div style={{
-        background: 'white',
-        borderRadius: '8px',
-        padding: '24px',
-        width: '600px',
-        maxHeight: '80vh',
-        overflowY: 'auto',
-      }}>
-        <h3 style={{ marginTop: 0 }}>编辑策略</h3>
-
-        {/* 基本信息 */}
-        <div style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-            策略名称
-          </label>
-          <input
-            type="text"
-            value={editing.name}
-            onChange={(e) => setEditing({ ...editing, name: e.target.value })}
-            style={{
-              width: '100%',
-              padding: '8px',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-            }}
-          />
+    <div style={editorStyles.overlay}>
+      <div style={editorStyles.modal}>
+        <div style={editorStyles.header}>
+          <h3 style={editorStyles.title}>编辑策略</h3>
+          <button onClick={onCancel} style={editorStyles.closeBtn}>×</button>
         </div>
 
-        <div style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-            描述
-          </label>
-          <input
-            type="text"
-            value={editing.description}
-            onChange={(e) => setEditing({ ...editing, description: e.target.value })}
-            style={{
-              width: '100%',
-              padding: '8px',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-            }}
-          />
-        </div>
-
-        {/* IP 段配置 */}
-        <div style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
-            IP 段（每行一个，支持 CIDR 格式如 192.168.1.0/24 或 * 表示所有）
-          </label>
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+        <div style={editorStyles.body}>
+          {/* 基本信息 */}
+          <div style={editorStyles.field}>
+            <label style={editorStyles.label}>策略名称</label>
             <input
               type="text"
-              value={newIPRange}
-              onChange={(e) => setNewIPRange(e.target.value)}
-              placeholder="例如: 192.168.1.0/24 或 *"
-              style={{
-                flex: 1,
-                padding: '8px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-              }}
+              value={editing.name}
+              onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+              style={editorStyles.input}
             />
-            <button
-              onClick={handleAddIPRange}
-              style={{
-                padding: '8px 16px',
-                background: '#2196f3',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-              }}
-            >
-              添加
-            </button>
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-            {editing.ip_ranges.map((ip, idx) => (
-              <span
-                key={idx}
-                style={{
-                  padding: '4px 8px',
-                  background: '#e3f2fd',
-                  borderRadius: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                }}
-              >
-                {ip}
-                <button
-                  onClick={() => handleRemoveIPRange(idx)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: '#f44336',
-                  }}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* 命令规则 */}
-        <div style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
-            命令规则
-          </label>
-          <div style={{
-            border: '1px solid #eee',
-            borderRadius: '4px',
-            marginBottom: '12px',
-            maxHeight: '200px',
-            overflowY: 'auto',
-          }}>
-            {editing.commands.map((cmd, idx) => (
-              <div
-                key={idx}
-                style={{
-                  padding: '8px 12px',
-                  borderBottom: idx < editing.commands.length - 1 ? '1px solid #f0f0f0' : 'none',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-              >
-                <div>
-                  <code style={{ fontSize: '12px' }}>{cmd.pattern}</code>
-                  <span style={{
-                    marginLeft: '8px',
-                    fontSize: '11px',
-                    padding: '2px 4px',
-                    background: cmd.category === 'read_only' ? '#e8f5e9' : '#fff3e0',
-                    color: cmd.category === 'read_only' ? '#2e7d32' : '#e65100',
-                    borderRadius: '3px',
-                  }}>
-                    {cmd.category === 'read_only' ? '只读' : '写入'}
-                  </span>
-                </div>
-                <button
-                  onClick={() => handleRemoveCommand(idx)}
-                  style={{
-                    padding: '2px 8px',
-                    background: '#fff',
-                    border: '1px solid #f44336',
-                    color: '#f44336',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                  }}
-                >
-                  删除
-                </button>
-              </div>
-            ))}
-            {editing.commands.length === 0 && (
-              <div style={{ padding: '12px', color: '#999', textAlign: 'center' }}>
-                暂无命令规则
-              </div>
-            )}
           </div>
 
-          {/* 添加新命令 */}
-          <div style={{
-            background: '#f9f9f9',
-            padding: '12px',
-            borderRadius: '4px',
-          }}>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+          <div style={editorStyles.field}>
+            <label style={editorStyles.label}>描述</label>
+            <input
+              type="text"
+              value={editing.description}
+              onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+              style={editorStyles.input}
+              placeholder="可选的策略描述"
+            />
+          </div>
+
+          {/* IP 段配置 */}
+          <div style={editorStyles.field}>
+            <label style={editorStyles.label}>IP 段</label>
+            <div style={editorStyles.hint}>支持 CIDR 格式（如 192.168.1.0/24）或 * 表示所有</div>
+            <div style={editorStyles.inputRow}>
               <input
                 type="text"
-                value={newCommand.pattern || ''}
-                onChange={(e) => setNewCommand({ ...newCommand, pattern: e.target.value })}
-                placeholder="正则表达式，如: ^ls(\\s|$)"
-                style={{
-                  flex: 1,
-                  padding: '8px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontFamily: 'monospace',
-                }}
+                value={newIPRange}
+                onChange={(e) => setNewIPRange(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddIPRange()}
+                placeholder="例如: 192.168.1.0/24"
+                style={editorStyles.input}
               />
-              <select
-                value={newCommand.category || 'read_only'}
-                onChange={(e) => setNewCommand({ ...newCommand, category: e.target.value as 'read_only' | 'write' })}
-                style={{
-                  padding: '8px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                }}
-              >
-                <option value="read_only">只读</option>
-                <option value="write">写入</option>
-              </select>
+              <button onClick={handleAddIPRange} style={editorStyles.addBtn}>添加</button>
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input
-                type="text"
-                value={newCommand.description || ''}
-                onChange={(e) => setNewCommand({ ...newCommand, description: e.target.value })}
-                placeholder="命令描述"
-                style={{
-                  flex: 1,
-                  padding: '8px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                }}
-              />
-              <button
-                onClick={handleAddCommand}
-                disabled={!newCommand.pattern?.trim()}
-                style={{
-                  padding: '8px 16px',
-                  background: newCommand.pattern?.trim() ? '#4caf50' : '#ccc',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: newCommand.pattern?.trim() ? 'pointer' : 'not-allowed',
-                }}
-              >
-                添加命令
-              </button>
+            <div style={editorStyles.tagList}>
+              {editing.ip_ranges.map((ip, idx) => (
+                <span key={idx} style={editorStyles.tag}>
+                  {ip}
+                  <button
+                    onClick={() => handleRemoveIPRange(idx)}
+                    style={editorStyles.tagRemove}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* 命令规则 */}
+          <div style={editorStyles.field}>
+            <label style={editorStyles.label}>命令规则</label>
+            <div style={editorStyles.commandList}>
+              {editing.commands.map((cmd, idx) => (
+                <div key={idx} style={editorStyles.commandItem}>
+                  <div style={editorStyles.commandInfo}>
+                    <code style={editorStyles.commandPattern}>{cmd.pattern}</code>
+                    <span style={{
+                      ...editorStyles.categoryBadge,
+                      backgroundColor: cmd.category === 'read_only' ? '#2e5a3a' : '#5a4a2e',
+                      color: cmd.category === 'read_only' ? '#8fdf9a' : '#f0c060',
+                    }}>
+                      {cmd.category === 'read_only' ? '只读' : '写入'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveCommand(idx)}
+                    style={editorStyles.removeBtn}
+                  >
+                    删除
+                  </button>
+                </div>
+              ))}
+              {editing.commands.length === 0 && (
+                <div style={editorStyles.emptyText}>暂无命令规则</div>
+              )}
+            </div>
+
+            {/* 添加新命令 */}
+            <div style={editorStyles.addCommandSection}>
+              <div style={editorStyles.inputRow}>
+                <input
+                  type="text"
+                  value={newCommand.pattern || ''}
+                  onChange={(e) => setNewCommand({ ...newCommand, pattern: e.target.value })}
+                  placeholder="正则表达式，如: ^ls(\\s|$)"
+                  style={{ ...editorStyles.input, fontFamily: 'monospace' }}
+                />
+                <select
+                  value={newCommand.category || 'read_only'}
+                  onChange={(e) => setNewCommand({ ...newCommand, category: e.target.value as 'read_only' | 'write' })}
+                  style={editorStyles.select}
+                >
+                  <option value="read_only">只读</option>
+                  <option value="write">写入</option>
+                </select>
+              </div>
+              <div style={editorStyles.inputRow}>
+                <input
+                  type="text"
+                  value={newCommand.description || ''}
+                  onChange={(e) => setNewCommand({ ...newCommand, description: e.target.value })}
+                  placeholder="命令描述（可选）"
+                  style={editorStyles.input}
+                />
+                <button
+                  onClick={handleAddCommand}
+                  disabled={!newCommand.pattern?.trim()}
+                  style={{
+                    ...editorStyles.addBtn,
+                    ...(!newCommand.pattern?.trim() ? editorStyles.addBtnDisabled : {}),
+                  }}
+                >
+                  添加命令
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
         {/* 操作按钮 */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'flex-end',
-          gap: '12px',
-          marginTop: '24px',
-        }}>
-          <button
-            onClick={onCancel}
-            style={{
-              padding: '10px 20px',
-              background: '#fff',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
+        <div style={editorStyles.footer}>
+          <button onClick={onCancel} style={editorStyles.cancelBtn}>
             取消
           </button>
-          <button
-            onClick={() => onSave(editing)}
-            style={{
-              padding: '10px 20px',
-              background: '#2196f3',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
+          <button onClick={() => onSave(editing)} style={editorStyles.saveBtn}>
             保存
           </button>
         </div>
       </div>
     </div>
   );
+};
+
+// 主面板样式
+const styles: Record<string, React.CSSProperties> = {
+  container: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+    padding: '8px 0',
+  },
+  loading: {
+    padding: '40px',
+    textAlign: 'center',
+    color: '#888',
+    fontSize: '14px',
+  },
+  section: {
+    padding: '16px',
+    backgroundColor: '#1e1e1e',
+    borderRadius: '6px',
+    border: '1px solid #3c3c3c',
+  },
+  sectionHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  sectionTitle: {
+    color: '#fff',
+    fontSize: '14px',
+    fontWeight: 600,
+  },
+  sectionDesc: {
+    color: '#888',
+    fontSize: '12px',
+    marginTop: '8px',
+  },
+  toolbar: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  // Switch 样式
+  switch: {
+    position: 'relative',
+    display: 'inline-block',
+    width: '40px',
+    height: '20px',
+    flexShrink: 0,
+  },
+  slider: {
+    position: 'absolute',
+    cursor: 'pointer',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#555',
+    transition: '0.3s',
+    borderRadius: '20px',
+  },
+  switchSmall: {
+    position: 'relative',
+    display: 'inline-block',
+    width: '32px',
+    height: '16px',
+    flexShrink: 0,
+  },
+  sliderSmall: {
+    position: 'absolute',
+    cursor: 'pointer',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#555',
+    transition: '0.3s',
+    borderRadius: '16px',
+  },
+  // 输入框样式
+  input: {
+    flex: 1,
+    padding: '8px 12px',
+    borderRadius: '4px',
+    border: '1px solid #3c3c3c',
+    backgroundColor: '#252526',
+    color: '#fff',
+    outline: 'none',
+    fontSize: '13px',
+  },
+  testInputRow: {
+    display: 'flex',
+    gap: '8px',
+    marginTop: '12px',
+  },
+  testResult: {
+    marginTop: '12px',
+    padding: '12px',
+    borderRadius: '4px',
+    border: '1px solid',
+  },
+  testResultHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+  },
+  riskBadge: {
+    padding: '2px 8px',
+    borderRadius: '4px',
+    color: '#fff',
+    fontSize: '11px',
+    fontWeight: 600,
+  },
+  testResultReason: {
+    color: '#ccc',
+    fontSize: '13px',
+  },
+  testResultSuggestion: {
+    marginTop: '8px',
+    color: '#888',
+    fontSize: '12px',
+  },
+  // 按钮样式
+  primaryBtn: {
+    padding: '8px 16px',
+    borderRadius: '4px',
+    border: 'none',
+    backgroundColor: '#007acc',
+    color: '#fff',
+    cursor: 'pointer',
+    fontSize: '13px',
+    fontWeight: 500,
+  },
+  primaryBtnDisabled: {
+    backgroundColor: '#444',
+    cursor: 'not-allowed',
+  },
+  editBtn: {
+    padding: '4px 10px',
+    borderRadius: '4px',
+    border: '1px solid #5a5a5a',
+    backgroundColor: '#3c3c3c',
+    color: '#fff',
+    cursor: 'pointer',
+    fontSize: '12px',
+  },
+  deleteBtn: {
+    padding: '4px 10px',
+    borderRadius: '4px',
+    border: '1px solid #5a3a3a',
+    backgroundColor: 'transparent',
+    color: '#f44336',
+    cursor: 'pointer',
+    fontSize: '12px',
+  },
+  // 策略列表样式
+  policyList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    marginTop: '12px',
+  },
+  policyItem: {
+    border: '1px solid #3c3c3c',
+    borderRadius: '6px',
+    overflow: 'hidden',
+    backgroundColor: '#252526',
+  },
+  policyHeader: {
+    padding: '12px 16px',
+    backgroundColor: '#2d2d2d',
+    cursor: 'pointer',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  policyInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+  },
+  policyName: {
+    color: '#fff',
+    fontSize: '13px',
+    fontWeight: 500,
+  },
+  policyMeta: {
+    color: '#888',
+    fontSize: '11px',
+  },
+  metaSeparator: {
+    margin: '0 8px',
+  },
+  policyActions: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+  },
+  expandIcon: {
+    color: '#888',
+    fontSize: '12px',
+    marginLeft: '4px',
+  },
+  policyContent: {
+    padding: '16px',
+    borderTop: '1px solid #3c3c3c',
+    backgroundColor: '#1e1e1e',
+  },
+  policyDesc: {
+    color: '#888',
+    fontSize: '12px',
+    marginBottom: '12px',
+  },
+  commandSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  commandSectionTitle: {
+    color: '#ccc',
+    fontSize: '12px',
+    fontWeight: 500,
+  },
+  emptyText: {
+    color: '#666',
+    fontSize: '12px',
+    padding: '12px',
+    textAlign: 'center',
+  },
+  commandList: {
+    border: '1px solid #3c3c3c',
+    borderRadius: '4px',
+    overflow: 'hidden',
+    maxHeight: '200px',
+    overflowY: 'auto',
+  },
+  commandItem: {
+    padding: '10px 12px',
+    borderBottom: '1px solid #2d2d2d',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#1e1e1e',
+  },
+  commandInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    flex: 1,
+    minWidth: 0,
+  },
+  commandPattern: {
+    color: '#9cdcfe',
+    fontSize: '12px',
+    fontFamily: 'monospace',
+  },
+  categoryBadge: {
+    padding: '2px 6px',
+    borderRadius: '3px',
+    color: '#fff',
+    fontSize: '10px',
+    fontWeight: 500,
+    flexShrink: 0,
+  },
+  commandDesc: {
+    color: '#888',
+    fontSize: '11px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  // 底部样式
+  footer: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: '12px',
+    paddingTop: '8px',
+  },
+  msg: {
+    fontSize: '13px',
+  },
+  saveBtn: {
+    padding: '10px 24px',
+    borderRadius: '4px',
+    border: 'none',
+    backgroundColor: '#007acc',
+    color: '#fff',
+    cursor: 'pointer',
+    fontSize: '13px',
+    fontWeight: 500,
+  },
+  saveBtnDisabled: {
+    backgroundColor: '#444',
+    cursor: 'not-allowed',
+  },
+};
+
+// 编辑器模态框样式
+const editorStyles: Record<string, React.CSSProperties> = {
+  overlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2100,
+  },
+  modal: {
+    backgroundColor: '#252526',
+    borderRadius: '8px',
+    width: '560px',
+    maxHeight: '80vh',
+    display: 'flex',
+    flexDirection: 'column',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+  },
+  header: {
+    padding: '16px 20px',
+    borderBottom: '1px solid #3c3c3c',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#1e1e1e',
+  },
+  title: {
+    margin: 0,
+    fontSize: '15px',
+    color: '#fff',
+    fontWeight: 600,
+  },
+  closeBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#ccc',
+    fontSize: '20px',
+    cursor: 'pointer',
+    padding: '0',
+    width: '28px',
+    height: '28px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: '4px',
+  },
+  body: {
+    flex: 1,
+    overflowY: 'auto',
+    padding: '20px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+  },
+  field: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+  label: {
+    color: '#ccc',
+    fontSize: '13px',
+    fontWeight: 500,
+  },
+  hint: {
+    color: '#888',
+    fontSize: '11px',
+  },
+  input: {
+    padding: '8px 12px',
+    borderRadius: '4px',
+    border: '1px solid #3c3c3c',
+    backgroundColor: '#1e1e1e',
+    color: '#fff',
+    outline: 'none',
+    fontSize: '13px',
+  },
+  select: {
+    padding: '8px 12px',
+    borderRadius: '4px',
+    border: '1px solid #3c3c3c',
+    backgroundColor: '#1e1e1e',
+    color: '#fff',
+    outline: 'none',
+    fontSize: '13px',
+    cursor: 'pointer',
+    width: '100px',
+  },
+  inputRow: {
+    display: 'flex',
+    gap: '8px',
+  },
+  addBtn: {
+    padding: '8px 16px',
+    borderRadius: '4px',
+    border: 'none',
+    backgroundColor: '#007acc',
+    color: '#fff',
+    cursor: 'pointer',
+    fontSize: '13px',
+    whiteSpace: 'nowrap',
+  },
+  addBtnDisabled: {
+    backgroundColor: '#444',
+    cursor: 'not-allowed',
+  },
+  tagList: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '8px',
+    marginTop: '8px',
+  },
+  tag: {
+    padding: '4px 8px',
+    backgroundColor: '#2d3a4a',
+    borderRadius: '4px',
+    color: '#9cdcfe',
+    fontSize: '12px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+  },
+  tagRemove: {
+    background: 'none',
+    border: 'none',
+    color: '#888',
+    cursor: 'pointer',
+    fontSize: '14px',
+    padding: '0',
+    lineHeight: 1,
+  },
+  commandList: {
+    border: '1px solid #3c3c3c',
+    borderRadius: '4px',
+    marginBottom: '12px',
+    maxHeight: '180px',
+    overflowY: 'auto',
+  },
+  commandItem: {
+    padding: '8px 12px',
+    borderBottom: '1px solid #2d2d2d',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#1e1e1e',
+  },
+  commandInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    flex: 1,
+    minWidth: 0,
+  },
+  commandPattern: {
+    color: '#9cdcfe',
+    fontSize: '11px',
+    fontFamily: 'monospace',
+  },
+  categoryBadge: {
+    padding: '2px 6px',
+    borderRadius: '3px',
+    fontSize: '10px',
+    fontWeight: 500,
+    flexShrink: 0,
+  },
+  removeBtn: {
+    padding: '2px 8px',
+    borderRadius: '4px',
+    border: '1px solid #5a3a3a',
+    backgroundColor: 'transparent',
+    color: '#f44336',
+    cursor: 'pointer',
+    fontSize: '11px',
+  },
+  emptyText: {
+    padding: '16px',
+    color: '#666',
+    fontSize: '12px',
+    textAlign: 'center',
+  },
+  addCommandSection: {
+    backgroundColor: '#2d2d2d',
+    padding: '12px',
+    borderRadius: '4px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  footer: {
+    padding: '16px 20px',
+    borderTop: '1px solid #3c3c3c',
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '12px',
+    backgroundColor: '#1e1e1e',
+  },
+  cancelBtn: {
+    padding: '8px 20px',
+    borderRadius: '4px',
+    border: '1px solid #5a5a5a',
+    backgroundColor: 'transparent',
+    color: '#ccc',
+    cursor: 'pointer',
+    fontSize: '13px',
+  },
+  saveBtn: {
+    padding: '8px 20px',
+    borderRadius: '4px',
+    border: 'none',
+    backgroundColor: '#007acc',
+    color: '#fff',
+    cursor: 'pointer',
+    fontSize: '13px',
+    fontWeight: 500,
+  },
 };
 
 export default CommandWhitelistPanel;
