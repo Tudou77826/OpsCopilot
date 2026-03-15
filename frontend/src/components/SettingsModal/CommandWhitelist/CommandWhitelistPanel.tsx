@@ -360,6 +360,7 @@ const PolicyEditor: React.FC<{
 }> = ({ policy, onSave, onCancel }) => {
   const [editing, setEditing] = useState<Policy>({ ...policy });
   const [newIPRange, setNewIPRange] = useState('');
+  const [showCidrHelp, setShowCidrHelp] = useState(false);
   const [newCommand, setNewCommand] = useState<Partial<Command>>({
     pattern: '',
     category: 'read_only',
@@ -438,7 +439,35 @@ const PolicyEditor: React.FC<{
           {/* IP 段配置 */}
           <div style={editorStyles.field}>
             <label style={editorStyles.label}>IP 段</label>
-            <div style={editorStyles.hint}>支持 CIDR 格式（如 192.168.1.0/24）或 * 表示所有</div>
+            <div style={editorStyles.hintRow}>
+              <span>支持 CIDR 格式（如 192.168.1.0/24）或 * 表示所有</span>
+              <span
+                style={editorStyles.helpIcon}
+                onClick={() => setShowCidrHelp(!showCidrHelp)}
+                title="点击查看 CIDR 说明"
+              >
+                ?
+              </span>
+            </div>
+            {showCidrHelp && (
+              <div style={editorStyles.helpBox}>
+                <div style={editorStyles.helpTitle}>CIDR 格式说明</div>
+                <div style={editorStyles.helpContent}>
+                  <p><code>192.168.1.0/24</code> 表示一个 IP 地址范围：</p>
+                  <ul>
+                    <li><strong>192.168.1.0</strong> - 网络地址</li>
+                    <li><strong>/24</strong> - 前 24 位是网络部分（相当于子网掩码 255.255.255.0）</li>
+                    <li><strong>IP 范围</strong> - 192.168.1.1 ~ 192.168.1.254（共 254 个地址）</li>
+                  </ul>
+                  <div style={editorStyles.helpExample}>
+                    <strong>常见示例：</strong><br/>
+                    <code>*.*.*.0/24</code> - 匹配同网段 254 个地址<br/>
+                    <code>10.0.0.0/8</code> - 匹配 10.x.x.x（约 1600 万地址）<br/>
+                    <code>* </code> - 匹配所有 IP
+                  </div>
+                </div>
+              </div>
+            )}
             <div style={editorStyles.inputRow}>
               <input
                 type="text"
@@ -917,6 +946,52 @@ const editorStyles: Record<string, React.CSSProperties> = {
   },
   hint: {
     color: '#888',
+    fontSize: '11px',
+  },
+  hintRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    color: '#888',
+    fontSize: '11px',
+  },
+  helpIcon: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '14px',
+    height: '14px',
+    borderRadius: '50%',
+    backgroundColor: '#3c3c3c',
+    color: '#aaa',
+    fontSize: '10px',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    userSelect: 'none',
+  },
+  helpBox: {
+    marginTop: '8px',
+    padding: '12px',
+    backgroundColor: '#1e1e1e',
+    border: '1px solid #3c3c3c',
+    borderRadius: '6px',
+    fontSize: '12px',
+  },
+  helpTitle: {
+    color: '#fff',
+    fontWeight: 600,
+    marginBottom: '8px',
+  },
+  helpContent: {
+    color: '#ccc',
+    lineHeight: 1.6,
+  },
+  helpExample: {
+    marginTop: '8px',
+    padding: '8px',
+    backgroundColor: '#252526',
+    borderRadius: '4px',
+    fontFamily: 'monospace',
     fontSize: '11px',
   },
   input: {
