@@ -8,7 +8,6 @@ interface CommandWhitelistPanelProps {
 const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave }) => {
   const [config, setConfig] = useState<WhitelistConfig | null>(null);
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [expandedPolicy, setExpandedPolicy] = useState<string | null>(null);
   const [editingPolicy, setEditingPolicy] = useState<Policy | null>(null);
@@ -18,7 +17,10 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
 
   // 用于防抖保存
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const initialLoadRef = useRef(true);
+  // 追踪初始加载是否完成
+  const initialLoadCompleteRef = useRef(false);
+  // 保存上一次的配置，用于比较是否有变化
+  const prevConfigRef = useRef<string>('');
 
   useEffect(() => {
     loadConfig();
@@ -26,12 +28,18 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
 
   // 自动保存（防抖）
   useEffect(() => {
-    // 跳过初始加载
-    if (initialLoadRef.current) {
-      initialLoadRef.current = false;
+    // 跳过初始加载完成前的保存
+    if (!initialLoadCompleteRef.current) {
       return;
     }
     if (!config) return;
+
+    // 检查配置是否真的有变化
+    const configStr = JSON.stringify(config);
+    if (configStr === prevConfigRef.current) {
+      return;
+    }
+    prevConfigRef.current = configStr;
 
     // 清除之前的定时器
     if (saveTimeoutRef.current) {
@@ -67,6 +75,10 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
       // @ts-ignore
       const result = await window.go.main.App.GetCommandWhitelist();
       setConfig(result);
+      // 记录初始配置，用于后续比较
+      prevConfigRef.current = JSON.stringify(result);
+      // 标记初始加载完成
+      initialLoadCompleteRef.current = true;
     } catch (err) {
       console.error('加载配置失败:', err);
     } finally {
