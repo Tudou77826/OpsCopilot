@@ -273,6 +273,119 @@ export namespace main {
 
 }
 
+export namespace mcpserver {
+	
+	export class Command {
+	    pattern: string;
+	    category: string;
+	    description: string;
+	    enabled: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Command(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.pattern = source["pattern"];
+	        this.category = source["category"];
+	        this.description = source["description"];
+	        this.enabled = source["enabled"];
+	    }
+	}
+	export class Policy {
+	    id: string;
+	    name: string;
+	    description: string;
+	    ip_ranges: string[];
+	    commands: Command[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Policy(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.ip_ranges = source["ip_ranges"];
+	        this.commands = this.convertValues(source["commands"], Command);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class RiskAssessment {
+	    is_risky: boolean;
+	    risk_level: string;
+	    reason: string;
+	    suggestions: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RiskAssessment(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.is_risky = source["is_risky"];
+	        this.risk_level = source["risk_level"];
+	        this.reason = source["reason"];
+	        this.suggestions = source["suggestions"];
+	    }
+	}
+	export class WhitelistConfig {
+	    version: string;
+	    llm_check_enabled: boolean;
+	    policies: Policy[];
+	
+	    static createFrom(source: any = {}) {
+	        return new WhitelistConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.llm_check_enabled = source["llm_check_enabled"];
+	        this.policies = this.convertValues(source["policies"], Policy);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace recorder {
 	
 	export class RecordedCommand {

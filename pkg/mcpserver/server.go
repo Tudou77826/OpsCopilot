@@ -23,6 +23,7 @@ type Config struct {
 	SessionsFile   string // sessions.json 路径
 	RecordingsDir  string // 录制文件存储目录
 	KnowledgeDir   string // 知识库目录（用于归档排查经验）
+	WhitelistPath  string // 白名单配置文件路径（可选）
 	MaxTotalBytes  int
 	MaxLineLength  int
 	HeadLines      int
@@ -31,21 +32,24 @@ type Config struct {
 
 // Server MCP Server 实现 - 复用 OpsCopilot 现有能力
 type Server struct {
-	config        *Config
-	sessionMgr    *sessionmanager.Manager  // 复用现有的 session 管理器
-	secretStore   secretstore.SecretStore  // 复用现有的密码存储
-	connections   map[string]*Connection   // 活跃的 SSH 连接
-	checker       *CommandChecker
-	recorder      *recorder.Recorder       // 复用主程序录制器
-	mcpRecorder   *MCPRecorderAdapter      // MCP 适配器
-	aiService     *ai.AIService            // AI 服务（用于 get_hints）
-	mu            sync.RWMutex
-	stopChan      chan struct{}            // 停止清理 goroutine 的信号
+	config           *Config
+	sessionMgr       *sessionmanager.Manager  // 复用现有的 session 管理器
+	secretStore      secretstore.SecretStore  // 复用现有的密码存储
+	connections      map[string]*Connection   // 活跃的 SSH 连接
+	checker          *CommandChecker          // 简单检查器（向后兼容）
+	whitelistManager *WhitelistManager        // 白名单管理器（新）
+	llmChecker       *LLMChecker              // LLM 风险检查器（新）
+	recorder         *recorder.Recorder       // 复用主程序录制器
+	mcpRecorder      *MCPRecorderAdapter      // MCP 适配器
+	aiService        *ai.AIService            // AI 服务（用于 get_hints）
+	mu               sync.RWMutex
+	stopChan         chan struct{}            // 停止清理 goroutine 的信号
 }
 
 // Connection SSH 连接
 type Connection struct {
 	Name         string
+	Host         string            // 服务器 IP 地址（用于白名单匹配）
 	Client       *sshclient.Client
 	RootPassword string // 用于 sudo 提权
 	ConnectedAt  time.Time
@@ -112,6 +116,20 @@ func NewServer(config *Config) (*Server, error) {
 		// 不阻止启动，只是 get_hints 功能降级
 	}
 
+	// 初始化白名单管理器
+	whitelistPath := "command_whitelist.json"
+	if config.WhitelistPath != "" {
+		whitelistPath = config.WhitelistPath
+	}
+	whitelistMgr, err := NewWhitelistManager(whitelistPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[MCP] Warning: Failed to load whitelist config: %v, using defaults\n", err)
+		// 使用默认配置
+		whitelistMgr, _ = NewWhitelistManager("")
+		whitelistMgr.config = DefaultWhitelistConfig()
+	}
+	s.whitelistManager = whitelistMgr
+
 	return s, nil
 }
 
@@ -136,7 +154,10 @@ func (s *Server) initAIService() error {
 	// 4. 创建 AIService
 	s.aiService = ai.NewAIService(fastProvider, complexProvider, configMgr)
 
-	// 5. 设置空的事件发射器（MCP Server 不需要 UI 事件，避免 Wails runtime 调用）
+	// 5. 初始化 LLM 检查器（使用 fast provider）
+	s.llmChecker = NewLLMChecker(fastProvider)
+
+	// 6. 设置空的事件发射器（MCP Server 不需要 UI 事件，避免 Wails runtime 调用）
 	ai.SetEventEmitter(func(ctx context.Context, optionalData string, optionalData2 ...interface{}) {
 		// No-op for MCP server
 	})

@@ -10,6 +10,10 @@ export function AskTroubleshoot(arg1, arg2) {
   return window['go']['main']['App']['AskTroubleshoot'](arg1, arg2);
 }
 
+export function AssessCommandRisk(arg1) {
+  return window['go']['main']['App']['AssessCommandRisk'](arg1);
+}
+
 export function Broadcast(arg1, arg2) {
   return window['go']['main']['App']['Broadcast'](arg1, arg2);
 }
@@ -100,6 +104,10 @@ export function GenerateConclusionWithContext(arg1, arg2) {
 
 export function GenerateLinuxCommand(arg1) {
   return window['go']['main']['App']['GenerateLinuxCommand'](arg1);
+}
+
+export function GetCommandWhitelist() {
+  return window['go']['main']['App']['GetCommandWhitelist']();
 }
 
 export function GetCompletions(arg1, arg2) {
@@ -196,6 +204,10 @@ export function ReplayScript(arg1, arg2) {
 
 export function ResizeTerminal(arg1, arg2, arg3) {
   return window['go']['main']['App']['ResizeTerminal'](arg1, arg2, arg3);
+}
+
+export function SaveCommandWhitelist(arg1) {
+  return window['go']['main']['App']['SaveCommandWhitelist'](arg1);
 }
 
 export function SaveHighlightRules(arg1) {

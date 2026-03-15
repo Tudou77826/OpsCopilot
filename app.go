@@ -23,6 +23,7 @@ import (
 	"opscopilot/pkg/filetransfer"
 	"opscopilot/pkg/llm"
 	"opscopilot/pkg/mcp"
+	"opscopilot/pkg/mcpserver"
 	"opscopilot/pkg/recorder"
 	"opscopilot/pkg/script"
 	"opscopilot/pkg/secretstore"
@@ -46,6 +47,8 @@ type App struct {
 	scriptMgr         *script.Manager                  // 脚本管理器
 	completionService *completion.Service
 	mcpManager        *mcp.Manager                     // MCP 服务器管理器
+	whitelistMgr      *mcpserver.WhitelistManager      // 命令白名单管理器
+	llmChecker        *mcpserver.LLMChecker            // LLM 风险检查器
 	activeConfigs     map[string]ConnectConfig
 	isForceQuitting   bool                             // Flag to skip confirmation on force quit
 	ftMu              sync.Mutex
@@ -121,6 +124,16 @@ func NewApp() *App {
 		isForceQuitting:   false,
 		ftCancels:         make(map[string]context.CancelFunc),
 		sessionStates:     make(map[string]*SessionState),
+	}
+
+	// 初始化白名单管理器
+	whitelistPath := "command_whitelist.json"
+	if whitelistMgr, err := mcpserver.NewWhitelistManager(whitelistPath); err != nil {
+		fmt.Printf("Warning: Failed to initialize whitelist manager: %v\n", err)
+	} else {
+		app.whitelistMgr = whitelistMgr
+		// 初始化 LLM 检查器（复用 fast provider）
+		app.llmChecker = mcpserver.NewLLMChecker(fastProvider)
 	}
 
 	// Set the CommandSender to app itself
@@ -784,6 +797,30 @@ func (a *App) SaveSettings(cfg config.AppConfig) string {
 	a.aiService.UpdateProviders(fastProvider, complexProvider)
 
 	return ""
+}
+
+// GetCommandWhitelist 获取命令白名单配置
+func (a *App) GetCommandWhitelist() (*mcpserver.WhitelistConfig, error) {
+	if a.whitelistMgr == nil {
+		return nil, fmt.Errorf("白名单管理器未初始化")
+	}
+	return a.whitelistMgr.GetConfig(), nil
+}
+
+// SaveCommandWhitelist 保存命令白名单配置
+func (a *App) SaveCommandWhitelist(config mcpserver.WhitelistConfig) error {
+	if a.whitelistMgr == nil {
+		return fmt.Errorf("白名单管理器未初始化")
+	}
+	return a.whitelistMgr.UpdateConfig(&config)
+}
+
+// AssessCommandRisk 使用 LLM 评估命令风险
+func (a *App) AssessCommandRisk(command string) (*mcpserver.RiskAssessment, error) {
+	if a.llmChecker == nil {
+		return nil, fmt.Errorf("LLM 检查器未初始化")
+	}
+	return a.llmChecker.AssessCommand(context.Background(), command)
 }
 
 func (a *App) ImportConfigFromDirectory(dirPath string) string {

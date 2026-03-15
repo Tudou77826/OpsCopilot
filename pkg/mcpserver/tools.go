@@ -206,6 +206,7 @@ func (s *Server) toolServerConnect(args map[string]interface{}) (interface{}, er
 	// 保存连接（包括 root 密码用于 sudo）
 	conn := &Connection{
 		Name:         serverName,
+		Host:         serverConfig.Host, // 保存 IP 用于白名单匹配
 		Client:       client,
 		RootPassword: rootPassword,
 		ConnectedAt:  time.Now(),
@@ -267,16 +268,31 @@ func (s *Server) toolSSHExec(args map[string]interface{}) (interface{}, error) {
 		maxLineLength = int(v)
 	}
 
-	// 检查命令是否允许
-	checkResult := s.checker.Check(command)
-	if !checkResult.Allowed {
-		return nil, fmt.Errorf("%s", checkResult.Reason)
-	}
-
-	// 获取连接
+	// 获取连接（先获取以确定服务器 IP）
 	s.mu.RLock()
 	conn, exists := s.connections[serverName]
 	s.mu.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("服务器 '%s' 未连接，请先使用 server_connect 连接", serverName)
+	}
+
+	// 检查命令是否允许（使用白名单管理器）
+	var checkResult CheckResult
+	if s.whitelistManager != nil {
+		checkResult = s.whitelistManager.Check(command, conn.Host)
+	} else {
+		// 回退到简单检查器
+		simpleResult := s.checker.Check(command)
+		checkResult = CheckResult{
+			Allowed: simpleResult.Allowed,
+			Reason:  simpleResult.Reason,
+		}
+	}
+
+	if !checkResult.Allowed {
+		return nil, fmt.Errorf("%s", checkResult.Reason)
+	}
 
 	if !exists {
 		return nil, fmt.Errorf("服务器 '%s' 未连接，请先使用 server_connect 连接", serverName)

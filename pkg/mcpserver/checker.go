@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// 只读命令白名单
+// allowedCommands 只读命令白名单（向后兼容：当没有配置文件时使用）
 // 设计原则：只保留运维排查最常用的命令
 var allowedCommands = []string{
 	// === 文件查看 ===
@@ -80,7 +80,14 @@ var allowedCommands = []string{
 	`^pwd(\s|$)`,
 }
 
-// CommandChecker 命令检查器
+// SimpleCheckResult 简单检查结果（向后兼容）
+type SimpleCheckResult struct {
+	Allowed bool
+	Reason  string
+}
+
+// CommandChecker 命令检查器（向后兼容的简单实现）
+// 当 WhitelistManager 不可用时使用
 type CommandChecker struct {
 	allowedPatterns []*regexp.Regexp
 }
@@ -99,19 +106,13 @@ func NewCommandChecker() *CommandChecker {
 	return c
 }
 
-// CheckResult 检查结果
-type CheckResult struct {
-	Allowed bool
-	Reason  string
-}
-
 // Check 检查命令是否允许执行
-func (c *CommandChecker) Check(command string) CheckResult {
+func (c *CommandChecker) Check(command string) SimpleCheckResult {
 	command = strings.TrimSpace(command)
 
 	// 空命令
 	if command == "" {
-		return CheckResult{
+		return SimpleCheckResult{
 			Allowed: false,
 			Reason:  "命令不能为空",
 		}
@@ -120,7 +121,7 @@ func (c *CommandChecker) Check(command string) CheckResult {
 	// 检查白名单
 	for _, pattern := range c.allowedPatterns {
 		if pattern.MatchString(command) {
-			return CheckResult{
+			return SimpleCheckResult{
 				Allowed: true,
 				Reason:  "",
 			}
@@ -128,7 +129,7 @@ func (c *CommandChecker) Check(command string) CheckResult {
 	}
 
 	// 不在白名单
-	return CheckResult{
+	return SimpleCheckResult{
 		Allowed: false,
 		Reason: fmt.Sprintf(
 			"命令 '%s' 不在只读白名单中。\n\n"+
