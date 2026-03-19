@@ -93,22 +93,28 @@ func (s *Server) handleToolsList(req *JSONRPCRequest) {
 		},
 		{
 			Name: "ssh_exec",
-			Description: `在远程服务器上执行只读诊断命令。
+			Description: `在远程服务器上执行命令。
 
-⚠️ 重要：仅支持只读命令！
+命令执行受白名单策略控制，不同服务器可能有不同的命令权限。
+白名单可通过 OpsCopilot Web UI 进行细粒度配置。
 
-可用命令：
+常见允许的命令类别（具体取决于配置）：
 - 文件：cat, head, tail, ls, find, grep, awk, jq
 - 进程：ps, top, pgrep, pstree
 - 资源：free, df, du, uptime, iostat, vmstat
-- 网络：netstat, ss, ip, ping, curl -I
+- 网络：netstat, ss, ip, ping, curl
 - 服务：systemctl status, journalctl, dmesg
 - 容器：docker ps/logs, kubectl get/logs
 - Java：jps, jstat, jstack, jmap -histo
 
-非只读命令（如 rm, mv, chmod, systemctl restart）会被拒绝。
+⚠️ 注意：
+- 实际可用命令取决于服务器 IP 对应的白名单策略
+- 如果命令被拒绝，错误信息会显示该 IP 可用的命令
+- 可联系管理员配置更多命令
 
-输出控制：返回内容限制为 10KB，单行超过 500 字会被截断。`,
+输出控制：
+- 总输出限制为 10KB
+- 可通过 max_line_length 参数控制单行最大长度（默认 500 字）`,
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -118,7 +124,7 @@ func (s *Server) handleToolsList(req *JSONRPCRequest) {
 					},
 					"command": map[string]interface{}{
 						"type":        "string",
-						"description": "要执行的只读命令",
+						"description": "要执行的命令",
 					},
 					"max_line_length": map[string]interface{}{
 						"type":        "integer",

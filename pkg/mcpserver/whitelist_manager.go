@@ -119,13 +119,16 @@ func (m *WhitelistManager) Check(command string, serverIP string) CheckResult {
 		}
 	}
 
-	// 遍历所有策略，找到匹配的
+	// 收集匹配该 IP 的所有策略
+	var matchedPolicies []Policy
 	for _, policy := range m.config.Policies {
-		// 检查 IP 是否匹配
-		if !matchesIPRange(serverIP, policy.IPRanges) {
-			continue
+		if matchesIPRange(serverIP, policy.IPRanges) {
+			matchedPolicies = append(matchedPolicies, policy)
 		}
+	}
 
+	// 在匹配的策略中检查命令
+	for _, policy := range matchedPolicies {
 		// 遍历策略中的命令
 		for _, cmd := range policy.Commands {
 			if !cmd.Enabled {
@@ -149,10 +152,10 @@ func (m *WhitelistManager) Check(command string, serverIP string) CheckResult {
 		}
 	}
 
-	// 不在任何策略的白名单中
+	// 命令不在白名单中，返回详细的错误信息
 	return CheckResult{
 		Allowed: false,
-		Reason:  formatDeniedMessage(command),
+		Reason:  formatDeniedMessage(command, serverIP, matchedPolicies),
 	}
 }
 
@@ -184,20 +187,33 @@ func matchesIPRange(ip string, ranges []string) bool {
 }
 
 // formatDeniedMessage 格式化拒绝消息
-func formatDeniedMessage(command string) string {
-	return fmt.Sprintf(
-		"命令 '%s' 不在白名单中。\n\n"+
-			"白名单中的命令类别：\n"+
-			"- 文件：ls, cat, head, tail, find, grep, awk, jq\n"+
-			"- 进程：ps, top, pgrep, pstree\n"+
-			"- 资源：free, df, du, uptime, iostat, vmstat\n"+
-			"- 网络：netstat, ss, ip, ping, curl -I\n"+
-			"- 服务：systemctl status, journalctl, dmesg\n"+
-			"- 容器：docker ps/logs, kubectl get/logs\n"+
-			"- Java：jps, jstat, jstack, jmap -histo\n\n"+
-			"如需其他命令，请在设置中配置命令白名单。",
-		command,
-	)
+// 根据 serverIP 和匹配的策略生成详细的错误信息
+func formatDeniedMessage(command string, serverIP string, matchedPolicies []Policy) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("命令 '%s' 不在服务器 IP 的白名单策略中。\n\n", command))
+	sb.WriteString(fmt.Sprintf("当前服务器 IP: %s\n\n", serverIP))
+
+	if len(matchedPolicies) == 0 {
+		sb.WriteString("该 IP 未匹配任何白名单策略。\n")
+		sb.WriteString("请在 OpsCopilot 配置中添加针对该 IP 段的策略。\n")
+	} else {
+		sb.WriteString("该 IP 匹配的策略:\n")
+		for _, policy := range matchedPolicies {
+			sb.WriteString(fmt.Sprintf("- %s (IP段: %s)\n", policy.Name, strings.Join(policy.IPRanges, ", ")))
+			if len(policy.Commands) > 0 {
+				sb.WriteString("  允许的命令:\n")
+				for _, cmd := range policy.Commands {
+					if cmd.Enabled {
+						sb.WriteString(fmt.Sprintf("  - %s\n", cmd.Description))
+					}
+				}
+			}
+		}
+		sb.WriteString("\n白名单策略是基于 IP 段配置的，不同服务器可能有不同的命令权限。\n")
+		sb.WriteString("如需执行此命令，请联系管理员修改对应 IP 段的策略配置。\n")
+	}
+
+	return sb.String()
 }
 
 // GetPoliciesForIP 获取适用于指定 IP 的所有策略
