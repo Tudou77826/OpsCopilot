@@ -43,6 +43,14 @@ if exist "highlight_rules.json" (
     copy /Y "highlight_rules.json" "build\bin\" >nul
     echo [INFO]   - highlight_rules.json
 )
+if exist "command_whitelist.json" (
+    copy /Y "command_whitelist.json" "build\bin\" >nul
+    echo [INFO]   - command_whitelist.json
+)
+if exist "mcp-config.example.json" (
+    copy /Y "mcp-config.example.json" "build\bin\" >nul
+    echo [INFO]   - mcp-config.example.json
+)
 
 :: 构建 MCP Server
 echo [INFO] Building MCP Server...

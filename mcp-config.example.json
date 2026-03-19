@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "opscopilot": {
+      "command": "D:/dev/workspace-go/OpsCopilot/build/bin/mcp-server.exe",
+      "args": [],
+      "env": {
+        "OPSCOPILOT_SESSIONS_FILE": "D:/dev/workspace-go/OpsCopilot/build/bin/sessions.json",
+        "OPSCOPILOT_RECORDINGS_DIR": "D:/dev/workspace-go/OpsCopilot/build/bin/recordings",
+        "OPSCOPILOT_KNOWLEDGE_DIR": "D:/dev/workspace-go/OpsCopilot/build/bin/docs",
+        "OPSCOPILOT_WHITELIST_PATH": "D:/dev/workspace-go/OpsCopilot/build/bin/command_whitelist.json"
+      }
+    }
+  }
+}
