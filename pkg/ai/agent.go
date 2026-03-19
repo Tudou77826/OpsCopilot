@@ -101,10 +101,12 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 		log.Printf("[Agent][%s] MCP tools disabled by user", runID)
 	}
 
-	messages := []llm.ChatMessage{{Role: "system", Content: agentToolPrompt}}
+	// 合并 system messages 为一个，避免某些模型报错 "System message must be at the beginning"
+	systemPrompt := agentToolPrompt
 	if opts.SystemPrompt != "" {
-		messages = append(messages, llm.ChatMessage{Role: "system", Content: opts.SystemPrompt})
+		systemPrompt = agentToolPrompt + "\n\n" + opts.SystemPrompt
 	}
+	messages := []llm.ChatMessage{{Role: "system", Content: systemPrompt}}
 	messages = append(messages, llm.ChatMessage{Role: "user", Content: opts.Question})
 
 	provider := s.complexProvider
