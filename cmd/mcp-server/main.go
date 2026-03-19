@@ -31,11 +31,15 @@ func main() {
 		knowledgeDir = "docs"
 	}
 
+	// 获取白名单配置文件路径
+	whitelistPath := os.Getenv("OPSCOPILOT_WHITELIST_PATH")
+
 	// 创建服务器配置
 	serverConfig := &mcpserver.Config{
 		SessionsFile:   sessionsFile,
 		RecordingsDir:  recordingsDir,
 		KnowledgeDir:   knowledgeDir,
+		WhitelistPath:  whitelistPath,
 		MaxTotalBytes:  10240,
 		MaxLineLength:  500,
 		HeadLines:      5,

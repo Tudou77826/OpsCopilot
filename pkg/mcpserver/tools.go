@@ -280,6 +280,8 @@ func (s *Server) toolSSHExec(args map[string]interface{}) (interface{}, error) {
 	// 检查命令是否允许（使用白名单管理器）
 	var checkResult CheckResult
 	if s.whitelistManager != nil {
+		// 重新加载配置，确保使用最新的白名单（如 UI 刚修改过）
+		_ = s.whitelistManager.Reload()
 		checkResult = s.whitelistManager.Check(command, conn.Host)
 	} else {
 		// 回退到简单检查器

@@ -211,3 +211,59 @@ func TestWhitelistManager_SaveAndLoad(t *testing.T) {
 		t.Error("New policy not persisted")
 	}
 }
+
+func TestWhitelistManager_Reload(t *testing.T) {
+	tmpFile := "test_whitelist_reload.json"
+	defer os.Remove(tmpFile)
+
+	// 创建第一个管理器
+	mgr1, err := NewWhitelistManager(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to create manager: %v", err)
+	}
+
+	// 初始检查：reload-cmd 不应被允许
+	result := mgr1.Check("reload-cmd test", "192.168.1.100")
+	if result.Allowed {
+		t.Error("reload-cmd should not be allowed initially")
+	}
+
+	// 创建第二个管理器来修改配置（模拟 UI 或其他进程修改）
+	mgr2, err := NewWhitelistManager(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to create second manager: %v", err)
+	}
+
+	// 添加新命令到配置
+	config := mgr2.GetConfig()
+	for i := range config.Policies {
+		if config.Policies[i].ID == "default" {
+			config.Policies[i].Commands = append(config.Policies[i].Commands, Command{
+				Pattern:     "^reload-cmd",
+				Category:    CategoryReadOnly,
+				Description: "Reload test command",
+				Enabled:     true,
+			})
+		}
+	}
+	if err := mgr2.UpdateConfig(config); err != nil {
+		t.Fatalf("Failed to update config: %v", err)
+	}
+
+	// mgr1 仍然不知道新命令（因为还在使用旧的内存配置）
+	result = mgr1.Check("reload-cmd test", "192.168.1.100")
+	if result.Allowed {
+		t.Error("mgr1 should still not allow reload-cmd before reload")
+	}
+
+	// 调用 Reload 方法
+	if err := mgr1.Reload(); err != nil {
+		t.Fatalf("Failed to reload: %v", err)
+	}
+
+	// 现在 mgr1 应该能看到新命令
+	result = mgr1.Check("reload-cmd test", "192.168.1.100")
+	if !result.Allowed {
+		t.Error("mgr1 should allow reload-cmd after reload")
+	}
+}

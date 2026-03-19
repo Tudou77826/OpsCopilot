@@ -77,6 +77,12 @@ func (m *WhitelistManager) GetConfig() *WhitelistConfig {
 	return m.config
 }
 
+// Reload 重新从文件加载配置
+// 用于在运行时获取最新的白名单配置（如 UI 修改后）
+func (m *WhitelistManager) Reload() error {
+	return m.load()
+}
+
 // UpdateConfig 更新配置
 func (m *WhitelistManager) UpdateConfig(config *WhitelistConfig) error {
 	m.mu.Lock()
