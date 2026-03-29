@@ -46,6 +46,7 @@ function App() {
     const [commandQueryError, setCommandQueryError] = useState('');
     const commandQueryShortcut = 'Ctrl+K';
     const [connectErrors, setConnectErrors] = useState<{ title: string; message: string }[]>([]);
+    const statusResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Refs to hold latest state for callbacks
     const isBroadcastModeRef = useRef(isBroadcastMode);
@@ -70,6 +71,18 @@ function App() {
 
     const dismissConnectError = () => {
         setConnectErrors(prev => prev.slice(1));
+    };
+
+    const setStatusWithAutoReset = (message: string, timeoutMs = 3000) => {
+        if (statusResetTimerRef.current) {
+            clearTimeout(statusResetTimerRef.current);
+            statusResetTimerRef.current = null;
+        }
+        setStatus(message);
+        statusResetTimerRef.current = setTimeout(() => {
+            setStatus(prev => (prev === message ? "就绪" : prev));
+            statusResetTimerRef.current = null;
+        }, timeoutMs);
     };
 
     useEffect(() => {
@@ -105,6 +118,10 @@ function App() {
             });
         }
         return () => {
+            if (statusResetTimerRef.current) {
+                clearTimeout(statusResetTimerRef.current);
+                statusResetTimerRef.current = null;
+            }
             if (cancelClose) cancelClose();
             if (cancelDisconnected) cancelDisconnected();
             if (cancelConfirmClose) cancelConfirmClose();
@@ -437,7 +454,7 @@ function App() {
                 enqueueConnectError('独立文件管理器', message);
                 return;
             }
-            setStatus('已启动独立文件管理器');
+            setStatusWithAutoReset('已启动独立文件管理器');
         } catch (e: any) {
             enqueueConnectError('独立文件管理器', e.toString());
         }
