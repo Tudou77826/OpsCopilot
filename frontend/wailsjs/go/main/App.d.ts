@@ -98,6 +98,8 @@ export function LocalRename(arg1:string,arg2:string):Promise<string>;
 
 export function LocalStat(arg1:string):Promise<string>;
 
+export function OpenFileManager(arg1:string):Promise<string>;
+
 export function ParseIntent(arg1:string):Promise<Array<main.ConnectConfig>>;
 
 export function PolishRootCause(arg1:string):Promise<string>;

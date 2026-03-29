@@ -12,6 +12,8 @@ const (
 	ErrorCodeNotFound         ErrorCode = "NOT_FOUND"
 	ErrorCodeAuthFailed       ErrorCode = "AUTH_FAILED"
 	ErrorCodeNetwork          ErrorCode = "NETWORK"
+	ErrorCodeRelayFailed      ErrorCode = "RELAY_FAILED"
+	ErrorCodeRelayNoSpace     ErrorCode = "RELAY_NO_SPACE"
 )
 
 type TransferError struct {
