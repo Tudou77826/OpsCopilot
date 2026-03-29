@@ -263,6 +263,30 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
         return protocol.startsWith('scp');
     };
 
+    const isRootRelay = () => {
+        return protocol.includes('root-relay');
+    };
+
+    const getProtocolLabel = (p: string): string => {
+        const map: Record<string, string> = {
+            'sftp(login)': 'SFTP（密码登录）',
+            'sftp(key)': 'SFTP（密钥登录）',
+            'sftp(root)': 'SFTP（Root 直连）',
+            'sftp(root-relay)': 'SFTP（Root 中转模式）',
+            'su-relay(root-relay)': 'SU 中转（Root 中转模式）',
+            'scp(login)': 'SCP（兼容模式）',
+            'scp(fallback)': 'SCP（兼容模式）',
+            'scp(root)': 'SCP（Root 兼容模式）',
+        };
+        return map[p] || (p ? p : '连接方式未探测');
+    };
+
+    const getWorkModeLabel = (p: string): string => {
+        if (p.includes('root-relay')) return 'Root 中转';
+        if (p.startsWith('sftp') || p.startsWith('scp')) return '常规直连';
+        return '—';
+    };
+
     const sortEntries = (items: FileEntry[]) => {
         return items.slice().sort((a, b) => {
             if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
@@ -985,15 +1009,30 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
     return (
         <div style={{ padding: '12px', color: '#ddd', display: 'flex', flexDirection: 'column', gap: '10px', height: '100%', minHeight: 0, overflow: 'auto' }}>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' as const }}>
-                <div style={{ color: '#aaa' }}>会话</div>
-                <select style={styles.select} value={sessionId} onChange={(e) => setSessionId(e.target.value)}>
-                    {terminals.map(t => (
-                        <option key={t.id} value={t.id}>
-                            {t.title || t.id}
-                        </option>
-                    ))}
-                </select>
-                {protocol ? <div style={styles.badge}>{protocol}</div> : <div style={styles.badgeMuted}>未探测</div>}
+                <div style={styles.infoGrid}>
+                    <div style={styles.infoField}>
+                        <span style={styles.infoLabel}>当前会话</span>
+                        <select style={styles.select} value={sessionId} onChange={(e) => setSessionId(e.target.value)}>
+                            {terminals.map(t => (
+                                <option key={t.id} value={t.id}>
+                                    {t.title || t.id}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div style={styles.infoField}>
+                        <span style={styles.infoLabel}>连接方式</span>
+                        <span style={protocol ? styles.infoValue : styles.infoValueMuted}>
+                            {getProtocolLabel(protocol)}
+                        </span>
+                    </div>
+                    <div style={styles.infoField}>
+                        <span style={styles.infoLabel}>工作方式</span>
+                        <span style={protocol ? styles.infoValue : styles.infoValueMuted}>
+                            {getWorkModeLabel(protocol)}
+                        </span>
+                    </div>
+                </div>
                 <div style={{ flex: 1 }} />
                 <button style={styles.btnSecondary} onClick={() => setDrawerOpen(v => !v)}>
                     {drawerOpen ? '隐藏队列' : '显示队列'}
@@ -1001,6 +1040,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
             </div>
 
             {msg ? <div style={{ color: '#aaa', fontSize: '12px' }}>{msg}</div> : null}
+
+            {isRootRelay() ? (
+                <div style={styles.relayBanner}>
+                    当前无法 Root 直连，已切换为中转模式。通过普通登录会话与服务器临时目录 /tmp/opscopilot 完成文件中转，传输可能比直连模式稍慢。
+                </div>
+            ) : null}
 
             {!isSFTPSupported() && protocol.startsWith('scp') ? (
                 <div style={{ color: '#aaa', fontSize: '12px' }}>
@@ -1455,6 +1500,39 @@ const styles: Record<string, React.CSSProperties> = {
         fontFamily: 'monospace',
         fontSize: '12px',
         resize: 'none' as const
+    },
+    infoGrid: {
+        display: 'flex',
+        flexWrap: 'wrap' as const,
+        gap: '12px 20px',
+        alignItems: 'center'
+    },
+    infoField: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        fontSize: '12px'
+    },
+    infoLabel: {
+        color: '#888',
+        whiteSpace: 'nowrap' as const
+    },
+    infoValue: {
+        color: '#ddd',
+        whiteSpace: 'nowrap' as const
+    },
+    infoValueMuted: {
+        color: '#666',
+        whiteSpace: 'nowrap' as const
+    },
+    relayBanner: {
+        padding: '8px 10px',
+        borderRadius: '6px',
+        border: '1px solid #5a4a1a',
+        backgroundColor: '#2a2510',
+        color: '#d4c87a',
+        fontSize: '11px',
+        lineHeight: '1.6'
     }
 };
 
