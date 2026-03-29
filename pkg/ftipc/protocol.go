@@ -15,6 +15,9 @@ type IPCRequest struct {
 	DstPath   string `json:"dstPath,omitempty"`
 	LocalPath string `json:"localPath,omitempty"`
 	Recursive bool   `json:"recursive,omitempty"`
+	TaskID    string `json:"taskId,omitempty"`
+	MaxBytes  int64  `json:"maxBytes,omitempty"`
+	Content   string `json:"content,omitempty"`
 }
 
 // IPCResponse represents a response from the main application to the FTP manager.

@@ -32,7 +32,45 @@ interface FTResponse {
 interface FilesPanelProps {
     activeTerminalId: string | null;
     terminals: TerminalSessionLite[];
+    backend?: FileTransferBackend;
 }
+
+interface FileTransferBackend {
+    FTCheck: (sessionId: string) => Promise<string>;
+    FTList: (sessionId: string, remotePath: string) => Promise<string>;
+    FTStat: (sessionId: string, remotePath: string) => Promise<string>;
+    FTUpload: (sessionId: string, localPath: string, remotePath: string) => Promise<string>;
+    FTDownload: (sessionId: string, remotePath: string, localPath: string) => Promise<string>;
+    FTCancel: (taskId: string) => Promise<string>;
+    FTRemoteMkdir: (sessionId: string, remotePath: string) => Promise<string>;
+    FTRemoteRemove: (sessionId: string, remotePath: string) => Promise<string>;
+    FTRemoteRename: (sessionId: string, oldPath: string, newPath: string) => Promise<string>;
+    FTRemoteReadFile: (sessionId: string, remotePath: string, maxBytes: number) => Promise<string>;
+    FTRemoteWriteFile: (sessionId: string, remotePath: string, content: string) => Promise<string>;
+    LocalList: (localPath: string) => Promise<string>;
+    LocalMkdir: (localPath: string) => Promise<string>;
+    LocalRemove: (localPath: string) => Promise<string>;
+    LocalRename: (oldPath: string, newPath: string) => Promise<string>;
+}
+
+const appBackend = window.go.main.App as any;
+const defaultBackend: FileTransferBackend = {
+    FTCheck: (sessionId: string) => appBackend.FTCheck(sessionId),
+    FTList: (sessionId: string, remotePath: string) => appBackend.FTList(sessionId, remotePath),
+    FTStat: (sessionId: string, remotePath: string) => appBackend.FTStat(sessionId, remotePath),
+    FTUpload: (sessionId: string, localPath: string, remotePath: string) => appBackend.FTUpload(sessionId, localPath, remotePath),
+    FTDownload: (sessionId: string, remotePath: string, localPath: string) => appBackend.FTDownload(sessionId, remotePath, localPath),
+    FTCancel: (taskId: string) => appBackend.FTCancel(taskId),
+    FTRemoteMkdir: (sessionId: string, remotePath: string) => appBackend.FTRemoteMkdir(sessionId, remotePath),
+    FTRemoteRemove: (sessionId: string, remotePath: string) => appBackend.FTRemoteRemove(sessionId, remotePath),
+    FTRemoteRename: (sessionId: string, oldPath: string, newPath: string) => appBackend.FTRemoteRename(sessionId, oldPath, newPath),
+    FTRemoteReadFile: (sessionId: string, remotePath: string, maxBytes: number) => appBackend.FTRemoteReadFile(sessionId, remotePath, maxBytes),
+    FTRemoteWriteFile: (sessionId: string, remotePath: string, content: string) => appBackend.FTRemoteWriteFile(sessionId, remotePath, content),
+    LocalList: (localPath: string) => appBackend.LocalList(localPath),
+    LocalMkdir: (localPath: string) => appBackend.LocalMkdir(localPath),
+    LocalRemove: (localPath: string) => appBackend.LocalRemove(localPath),
+    LocalRename: (oldPath: string, newPath: string) => appBackend.LocalRename(oldPath, newPath),
+};
 
 type TaskState = {
     taskId: string;
@@ -133,7 +171,8 @@ function FilePane({ title, badge, path, pathInput, onPathInputChange, onGo, onUp
     );
 }
 
-const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals }) => {
+const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, backend }) => {
+    const api = backend || defaultBackend;
     const defaultSessionId = useMemo(() => activeTerminalId || (terminals[0]?.id ?? ''), [activeTerminalId, terminals]);
 
     const [sessionId, setSessionId] = useState(defaultSessionId);
@@ -256,8 +295,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals }) 
         const targetSessionId = sid || sessionIdRef.current;
         if (!targetSessionId) return;
         try {
-            // @ts-ignore
-            const raw = await window.go.main.App.FTCheck(targetSessionId);
+            const raw = await api.FTCheck(targetSessionId);
             const resp = parseResp(raw);
             if (!resp) {
                 setProtocol('');
@@ -278,8 +316,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals }) 
         setLoading(true);
         setMsg('');
         try {
-            // @ts-ignore
-            const raw = await window.go.main.App.LocalList(path);
+            const raw = await api.LocalList(path);
             const resp = parseResp(raw);
             if (!resp) {
                 setMsg('返回格式错误');
@@ -313,8 +350,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals }) 
         setLoading(true);
         setMsg('');
         try {
-            // @ts-ignore
-            const raw = await window.go.main.App.FTList(targetSessionId, path);
+            const raw = await api.FTList(targetSessionId, path);
             const resp = parseResp(raw);
             if (!resp) {
                 setMsg('返回格式错误');
@@ -471,8 +507,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals }) 
     const cancelTask = async (taskId: string) => {
         setLoading(true);
         try {
-            // @ts-ignore
-            await window.go.main.App.FTCancel(taskId);
+            await api.FTCancel(taskId);
         } finally {
             setLoading(false);
         }
@@ -518,8 +553,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals }) 
 
         if (protocolRef.current.startsWith('sftp')) {
             try {
-                // @ts-ignore
-                const raw = await window.go.main.App.FTStat(sessionIdRef.current, dst);
+                const raw = await api.FTStat(sessionIdRef.current, dst);
                 const resp = parseResp(raw);
                 if (resp && resp.ok) {
                     const ok = confirm(`远端已存在同名文件：\n${dst}\n\n是否覆盖？`);
@@ -535,8 +569,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals }) 
         setLoading(true);
         setMsg('');
         try {
-            // @ts-ignore
-            const raw = await window.go.main.App.FTUpload(sessionId, entry.path, dst);
+            const raw = await api.FTUpload(sessionId, entry.path, dst);
             const resp = parseResp(raw);
             if (!resp) {
                 setMsg('返回格式错误');
@@ -614,8 +647,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals }) 
         setLoading(true);
         setMsg('');
         try {
-            // @ts-ignore
-            const raw = await window.go.main.App.FTDownload(sessionId, entry.path, dst);
+            const raw = await api.FTDownload(sessionId, entry.path, dst);
             const resp = parseResp(raw);
             if (!resp) {
                 setMsg('返回格式错误');
@@ -664,8 +696,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals }) 
         setLoading(true);
         setMsg('');
         try {
-            // @ts-ignore
-            const raw = await window.go.main.App.FTDownload(sessionId, rp, lp);
+            const raw = await api.FTDownload(sessionId, rp, lp);
             const resp = parseResp(raw);
             if (!resp) {
                 setMsg('返回格式错误');
@@ -708,8 +739,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals }) 
         setLoading(true);
         setMsg('');
         try {
-            // @ts-ignore
-            const raw = await window.go.main.App.FTRemoteMkdir(sessionId, p);
+            const raw = await api.FTRemoteMkdir(sessionId, p);
             const resp = parseResp(raw);
             if (!resp) {
                 setMsg('返回格式错误');
@@ -742,8 +772,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals }) 
         setLoading(true);
         setMsg('');
         try {
-            // @ts-ignore
-            const raw = await window.go.main.App.FTRemoteRemove(sessionId, remoteSelected);
+            const raw = await api.FTRemoteRemove(sessionId, remoteSelected);
             const resp = parseResp(raw);
             if (!resp) {
                 setMsg('返回格式错误');
@@ -780,8 +809,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals }) 
         setLoading(true);
         setMsg('');
         try {
-            // @ts-ignore
-            const raw = await window.go.main.App.FTRemoteRename(sessionId, entry.path, newPath);
+            const raw = await api.FTRemoteRename(sessionId, entry.path, newPath);
             const resp = parseResp(raw);
             if (!resp) {
                 setMsg('返回格式错误');
@@ -818,8 +846,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals }) 
         setLoading(true);
         setMsg('');
         try {
-            // @ts-ignore
-            const raw = await window.go.main.App.FTRemoteReadFile(sessionId, entry.path, 262144);
+            const raw = await api.FTRemoteReadFile(sessionId, entry.path, 262144);
             const resp = parseResp(raw);
             if (!resp) {
                 setMsg('返回格式错误');
@@ -845,8 +872,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals }) 
         setEditSaving(true);
         setMsg('');
         try {
-            // @ts-ignore
-            const raw = await window.go.main.App.FTRemoteWriteFile(sessionId, editPath, editContent);
+            const raw = await api.FTRemoteWriteFile(sessionId, editPath, editContent);
             const resp = parseResp(raw);
             if (!resp) {
                 setMsg('返回格式错误');
@@ -872,8 +898,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals }) 
         setLoading(true);
         setMsg('');
         try {
-            // @ts-ignore
-            const raw = await window.go.main.App.LocalMkdir(p);
+            const raw = await api.LocalMkdir(p);
             const resp = parseResp(raw);
             if (!resp) {
                 setMsg('返回格式错误');
@@ -901,8 +926,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals }) 
         setLoading(true);
         setMsg('');
         try {
-            // @ts-ignore
-            const raw = await window.go.main.App.LocalRemove(localSelected);
+            const raw = await api.LocalRemove(localSelected);
             const resp = parseResp(raw);
             if (!resp) {
                 setMsg('返回格式错误');
@@ -934,8 +958,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals }) 
         setLoading(true);
         setMsg('');
         try {
-            // @ts-ignore
-            const raw = await window.go.main.App.LocalRename(entry.path, newPath);
+            const raw = await api.LocalRename(entry.path, newPath);
             const resp = parseResp(raw);
             if (!resp) {
                 setMsg('返回格式错误');

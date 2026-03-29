@@ -64,6 +64,27 @@ echo [INFO]   - mcp-server.exe
 
 :: 构建 FTP 文件管理器
 echo [INFO] Building FTP File Manager...
+echo [INFO] Building FTP frontend assets...
+call npm --prefix frontend-ftp install
+if %errorlevel% neq 0 (
+    echo [ERROR] FTP frontend dependencies install failed.
+    pause
+    exit /b 1
+)
+call npm --prefix frontend-ftp run build
+if %errorlevel% neq 0 (
+    echo [ERROR] FTP frontend build failed.
+    pause
+    exit /b 1
+)
+if exist "cmd\ftpmanager\static" rmdir /S /Q "cmd\ftpmanager\static"
+mkdir "cmd\ftpmanager\static"
+xcopy /E /I /Y "frontend-ftp\dist\*" "cmd\ftpmanager\static\" >nul
+if %errorlevel% neq 0 (
+    echo [ERROR] Copy FTP frontend assets failed.
+    pause
+    exit /b 1
+)
 go build -tags production -ldflags "-s -w" -o "build\bin\OpsFTP.exe" ./cmd/ftpmanager/
 if %errorlevel% neq 0 (
     echo [ERROR] FTP File Manager build failed.

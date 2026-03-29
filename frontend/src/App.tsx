@@ -423,6 +423,26 @@ function App() {
         }, 0);
     };
 
+    const handleOpenStandaloneFileTransfer = async () => {
+        if (!activeTerminalId) {
+            setStatus('请先选择会话');
+            return;
+        }
+        try {
+            // @ts-ignore
+            const raw = await window.go.main.App.OpenFileManager(activeTerminalId);
+            const resp = JSON.parse(raw || '{}');
+            if (!resp.ok) {
+                const message = resp?.error?.message || '启动独立文件管理器失败';
+                enqueueConnectError('独立文件管理器', message);
+                return;
+            }
+            setStatus('已启动独立文件管理器');
+        } catch (e: any) {
+            enqueueConnectError('独立文件管理器', e.toString());
+        }
+    };
+
     const handleCloseTerminal = (id: string) => {
         // Close session in backend
         // @ts-ignore
@@ -689,6 +709,7 @@ function App() {
                 onToggleBroadcast={handleToggleBroadcast}
                 onCompletionDelayChange={setCompletionDelay}
                 onOpenFileTransfer={() => setIsFileTransferOpen(true)}
+                onOpenStandaloneFileTransfer={handleOpenStandaloneFileTransfer}
                 onTerminalConfigChange={setTerminalConfig}
                 onHighlightRulesChange={setHighlightRules}
             />

@@ -37,6 +37,7 @@ interface SettingsModalProps {
     onToggleBroadcast?: (enabled: boolean) => void;
     onCompletionDelayChange?: (delay: number) => void;
     onOpenFileTransfer?: () => void;
+    onOpenStandaloneFileTransfer?: () => void;
     onTerminalConfigChange?: (cfg: TerminalConfig) => void;
     onHighlightRulesChange?: (rules: HighlightRule[]) => void;
 }
@@ -57,6 +58,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     onToggleBroadcast,
     onCompletionDelayChange,
     onOpenFileTransfer,
+    onOpenStandaloneFileTransfer,
     onTerminalConfigChange,
     onHighlightRulesChange
 }) => {
@@ -446,7 +448,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     <div style={styles.settingsGroup}>
                         <div style={styles.groupTitle}>文件传输</div>
                         <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>打开文件传输窗口</label>
+                            <label style={styles.settingLabel}>内置文件传输窗口</label>
                             <button
                                 onClick={() => {
                                     if (onOpenFileTransfer) onOpenFileTransfer();
@@ -458,6 +460,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             </button>
                             <div style={styles.settingDescription}>
                                 打开后可在终端旁边并行使用文件传输功能
+                            </div>
+                        </div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>独立文件管理器 (OpsFTP.exe)</label>
+                            <button
+                                onClick={() => {
+                                    if (onOpenStandaloneFileTransfer) onOpenStandaloneFileTransfer();
+                                    onClose();
+                                }}
+                                style={styles.secondaryButton}
+                            >
+                                打开独立窗口
+                            </button>
+                            <div style={styles.settingDescription}>
+                                通过 IPC 与主程序通信，使用独立文件管理进程
                             </div>
                         </div>
                     </div>

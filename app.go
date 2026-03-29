@@ -295,6 +295,7 @@ func (a *App) startup(ctx context.Context) {
 	if err := a.ipcServer.Start(); err != nil {
 		log.Printf("[IPC] 启动失败: %v", err)
 	} else {
+		a.registerFTIPCHandlers()
 		// 写入 IPC 配置到临时目录
 		tmpDir := filepath.Join(os.TempDir(), "opscopilot")
 		if err := a.ipcServer.WriteTokenFile(tmpDir); err != nil {
@@ -1376,7 +1377,11 @@ func (a *App) OpenFileManager(sessionID string) string {
 	ftpExe := filepath.Join(filepath.Dir(exePath), "OpsFTP.exe")
 
 	// Write IPC token to temp file for the FTP manager to read
-	tokenFile := filepath.Join(os.TempDir(), "opscopilot_ft_"+sessionID+".token")
+	tokenDir := filepath.Join(os.TempDir(), "opscopilot")
+	if err := os.MkdirAll(tokenDir, 0700); err != nil {
+		return mustJSON(ftResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeUnknown, Message: "创建 IPC 目录失败"}})
+	}
+	tokenFile := filepath.Join(tokenDir, "opscopilot_ft_"+sessionID+".token")
 	ipcInfo := a.ipcServer.Info()
 	if err := os.WriteFile(tokenFile, []byte(ipcInfo.Token), 0600); err != nil {
 		return mustJSON(ftResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeUnknown, Message: "写入 token 文件失败"}})
@@ -1629,6 +1634,140 @@ func toTransferErr(err error) *filetransfer.TransferError {
 		return te
 	}
 	return &filetransfer.TransferError{Code: filetransfer.ErrorCodeUnknown, Message: err.Error()}
+}
+
+func (a *App) registerFTIPCHandlers() {
+	if a.ipcServer == nil {
+		return
+	}
+	a.ipcServer.RegisterHandler("sessions", func(req ftipc.IPCRequest) ftipc.IPCResponse {
+		_ = req
+		return ftipc.IPCResponse{
+			OK:   true,
+			Data: a.listActiveTerminalsForIPC(),
+		}
+	})
+
+	rawHandler := func(fn func(req ftipc.IPCRequest) string) ftipc.ActionHandler {
+		return func(req ftipc.IPCRequest) ftipc.IPCResponse {
+			return wrapIPCJSON(fn(req))
+		}
+	}
+
+	a.ipcServer.RegisterHandler("ft_check", rawHandler(func(req ftipc.IPCRequest) string {
+		return a.FTCheck(req.SessionID)
+	}))
+	a.ipcServer.RegisterHandler("ft_list", rawHandler(func(req ftipc.IPCRequest) string {
+		return a.FTList(req.SessionID, req.Path)
+	}))
+	a.ipcServer.RegisterHandler("ft_stat", rawHandler(func(req ftipc.IPCRequest) string {
+		return a.FTStat(req.SessionID, req.Path)
+	}))
+	a.ipcServer.RegisterHandler("ft_upload", rawHandler(func(req ftipc.IPCRequest) string {
+		return a.FTUpload(req.SessionID, req.LocalPath, req.Path)
+	}))
+	a.ipcServer.RegisterHandler("ft_download", rawHandler(func(req ftipc.IPCRequest) string {
+		return a.FTDownload(req.SessionID, req.Path, req.LocalPath)
+	}))
+	a.ipcServer.RegisterHandler("ft_cancel", rawHandler(func(req ftipc.IPCRequest) string {
+		taskID := req.TaskID
+		if taskID == "" {
+			taskID = req.Path
+		}
+		return a.FTCancel(taskID)
+	}))
+	a.ipcServer.RegisterHandler("ft_remote_mkdir", rawHandler(func(req ftipc.IPCRequest) string {
+		return a.FTRemoteMkdir(req.SessionID, req.Path)
+	}))
+	a.ipcServer.RegisterHandler("ft_remote_remove", rawHandler(func(req ftipc.IPCRequest) string {
+		return a.FTRemoteRemove(req.SessionID, req.Path)
+	}))
+	a.ipcServer.RegisterHandler("ft_remote_rename", rawHandler(func(req ftipc.IPCRequest) string {
+		return a.FTRemoteRename(req.SessionID, req.Path, req.DstPath)
+	}))
+	a.ipcServer.RegisterHandler("ft_remote_read", rawHandler(func(req ftipc.IPCRequest) string {
+		return a.FTRemoteReadFile(req.SessionID, req.Path, req.MaxBytes)
+	}))
+	a.ipcServer.RegisterHandler("ft_remote_write", rawHandler(func(req ftipc.IPCRequest) string {
+		return a.FTRemoteWriteFile(req.SessionID, req.Path, req.Content)
+	}))
+	a.ipcServer.RegisterHandler("local_list", rawHandler(func(req ftipc.IPCRequest) string {
+		return a.LocalList(req.Path)
+	}))
+	a.ipcServer.RegisterHandler("local_mkdir", rawHandler(func(req ftipc.IPCRequest) string {
+		return a.LocalMkdir(req.Path)
+	}))
+	a.ipcServer.RegisterHandler("local_remove", rawHandler(func(req ftipc.IPCRequest) string {
+		return a.LocalRemove(req.Path)
+	}))
+	a.ipcServer.RegisterHandler("local_rename", rawHandler(func(req ftipc.IPCRequest) string {
+		return a.LocalRename(req.Path, req.DstPath)
+	}))
+}
+
+func (a *App) listActiveTerminalsForIPC() []map[string]string {
+	list := a.sessionMgr.List()
+	items := make([]map[string]string, 0, len(list))
+	for _, s := range list {
+		if s == nil {
+			continue
+		}
+		title := s.ID
+		if cfg, ok := a.getConfig(s.ID); ok {
+			if strings.TrimSpace(cfg.Name) != "" {
+				title = cfg.Name
+			} else if strings.TrimSpace(cfg.Host) != "" {
+				title = cfg.Host
+			}
+		}
+		items = append(items, map[string]string{
+			"id":    s.ID,
+			"title": title,
+		})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i]["title"] < items[j]["title"]
+	})
+	return items
+}
+
+func wrapIPCJSON(raw string) ftipc.IPCResponse {
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		return ftipc.IPCResponse{
+			OK: false,
+			Error: &ftipc.IPCError{
+				Code:    "PARSE_RESPONSE_ERROR",
+				Message: err.Error(),
+			},
+		}
+	}
+	ok, _ := payload["ok"].(bool)
+	if ok {
+		return ftipc.IPCResponse{
+			OK:   true,
+			Data: payload,
+		}
+	}
+	message := "操作失败"
+	if errVal, exists := payload["error"]; exists {
+		if errMap, mapOK := errVal.(map[string]any); mapOK {
+			if msgVal, msgOK := errMap["message"].(string); msgOK && msgVal != "" {
+				message = msgVal
+			}
+		}
+	}
+	if msgVal, msgOK := payload["message"].(string); msgOK && msgVal != "" {
+		message = msgVal
+	}
+	return ftipc.IPCResponse{
+		OK:   false,
+		Data: payload,
+		Error: &ftipc.IPCError{
+			Code:    "ACTION_FAILED",
+			Message: message,
+		},
+	}
 }
 
 func (a *App) GetHighlightRules() []config.HighlightRule {
