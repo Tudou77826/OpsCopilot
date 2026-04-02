@@ -35,7 +35,7 @@ const CompletionOverlay: React.FC<CompletionOverlayProps> = ({
     const overlayRef = useRef<HTMLDivElement>(null);
     const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-    // Keyboard handling
+    // Keyboard & mouse handling
     useEffect(() => {
         if (!visible) return;
 
@@ -46,8 +46,18 @@ const CompletionOverlay: React.FC<CompletionOverlayProps> = ({
             }
         };
 
+        const handleMouseDown = (e: MouseEvent) => {
+            if (overlayRef.current && !overlayRef.current.contains(e.target as Node)) {
+                onClose();
+            }
+        };
+
         window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
+        window.addEventListener('mousedown', handleMouseDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('mousedown', handleMouseDown);
+        };
     }, [visible, onClose]);
 
     // Scroll selected item into view

@@ -908,8 +908,8 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                 }
             }
 
-            // Tab key - handle completion
-            if (arg.key === 'Tab' && arg.type === 'keydown' && completionVisibleRef.current) {
+            // Shift+Tab - handle completion acceptance
+            if (arg.key === 'Tab' && arg.shiftKey && arg.type === 'keydown' && completionVisibleRef.current) {
                 arg.preventDefault();
                 const data = completionDataRef.current;
                 if (data.suggestions.length > 0 && selectedIndexRef.current >= 0) {
