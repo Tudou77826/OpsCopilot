@@ -187,7 +187,7 @@ func (a *App) getRelayTransport(sessionID string) *filetransfer.RootRelayTranspo
 		return nil
 	}
 
-	t := filetransfer.NewRootRelayTransport(sess.Client.SSHClient(), cfg.RootPassword)
+	t := filetransfer.NewRootRelayTransport(sess.Client.SSHClient(), cfg.RootPassword, cfg.User)
 	a.relayTransports[sessionID] = t
 	return t
 }
@@ -1413,7 +1413,13 @@ func (a *App) FTCheck(sessionID string) string {
 		if sftpErr == nil {
 			return mustJSON(ftResponse{OK: true, Message: "sftp(root-relay)"})
 		}
-		// Even SFTP not available, but relay can still work via su
+		// SFTP not available, check SCP as fallback
+		scpTr := filetransfer.NewSCPTransport(info.client)
+		scpOk, _, scpErr := scpTr.Check(context.Background())
+		if scpErr == nil && scpOk {
+			return mustJSON(ftResponse{OK: true, Message: "scp(root-relay)"})
+		}
+		// Even SFTP and SCP not available, but relay can still work via su
 		return mustJSON(ftResponse{OK: true, Message: "su-relay(root-relay)"})
 	}
 
@@ -1488,13 +1494,19 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 			if a.ctx == nil {
 				return
 			}
-			runtime.EventsEmit(a.ctx, "file-transfer-progress", map[string]any{
-				"taskId":     taskID,
-				"sessionId":  sessionID,
-				"bytesDone":  p.BytesDone,
-				"bytesTotal": p.BytesTotal,
-				"speedBps":   p.SpeedBps,
-			})
+			payload := map[string]any{
+				"taskId":    taskID,
+				"sessionId": sessionID,
+			}
+			if p.Step != "" {
+				// Step-only notification: don't overwrite byte progress
+				payload["step"] = p.Step
+			} else {
+				payload["bytesDone"] = p.BytesDone
+				payload["bytesTotal"] = p.BytesTotal
+				payload["speedBps"] = p.SpeedBps
+			}
+			runtime.EventsEmit(a.ctx, "file-transfer-progress", payload)
 		}
 
 		var (

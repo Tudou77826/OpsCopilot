@@ -42,15 +42,17 @@ type rootShellSession struct {
 type RootRelayTransport struct {
 	sshClient    *ssh.Client
 	rootPassword string
+	loginUser    string // login username, used to chown relay directory for SCP access
 
 	mu    sync.Mutex
 	shell *rootShellSession // cached su session, nil if not yet created
 }
 
-func NewRootRelayTransport(client *ssh.Client, rootPassword string) *RootRelayTransport {
+func NewRootRelayTransport(client *ssh.Client, rootPassword string, loginUser string) *RootRelayTransport {
 	return &RootRelayTransport{
 		sshClient:    client,
 		rootPassword: rootPassword,
+		loginUser:    loginUser,
 	}
 }
 
@@ -205,6 +207,13 @@ func (t *RootRelayTransport) prepareRelayDir(ctx context.Context) (relayDir stri
 		return "", nil, &TransferError{Code: ErrorCodeRelayFailed, Message: fmt.Sprintf("创建中转目录失败: %s", err)}
 	}
 
+	// Chown relay directory to login user so SCP (running as login user) can write to it
+	if t.loginUser != "" {
+		if _, err := t.runAsRoot(ctx, "chown "+shellSingleQuote(t.loginUser)+" "+shellSingleQuote(relayDir)); err != nil {
+			return "", nil, &TransferError{Code: ErrorCodeRelayFailed, Message: fmt.Sprintf("chown 中转目录失败: %s", err)}
+		}
+	}
+
 	cleanup = func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -234,8 +243,17 @@ func (t *RootRelayTransport) checkTmpSpace(ctx context.Context, requiredBytes in
 	return nil
 }
 
+// emitStep sends a step notification through the progress callback.
+func emitStep(progress func(Progress), step string) {
+	if progress != nil {
+		progress(Progress{BytesTotal: -1, Step: step})
+	}
+}
+
 // Upload uploads a local file to a remote path via root relay.
 func (t *RootRelayTransport) Upload(ctx context.Context, localPath, remotePath string, progress func(Progress)) (TransferResult, error) {
+	emitStep(progress, "正在检查本地文件...")
+
 	// Get local file size for space check
 	lp := filepath.Clean(localPath)
 	st, err := os.Stat(lp)
@@ -245,28 +263,38 @@ func (t *RootRelayTransport) Upload(ctx context.Context, localPath, remotePath s
 	fileSize := st.Size()
 
 	// Check space
+	emitStep(progress, "正在检查中转空间...")
 	if err := t.checkTmpSpace(ctx, fileSize); err != nil {
 		return TransferResult{}, err
 	}
 
 	// Prepare relay directory
+	emitStep(progress, "正在创建中转目录...")
 	relayDir, cleanup, err := t.prepareRelayDir(ctx)
 	if err != nil {
 		return TransferResult{}, err
 	}
 	defer cleanup()
 
-	// Upload to relay directory via SFTP (as normal user)
+	// Upload to relay directory via SFTP (as normal user), fallback to SCP
 	fileName := path.Base(normalizeRemotePath(remotePath))
 	relayPath := relayDir + fileName
 
+	emitStep(progress, "正在上传到中转目录...")
 	sftpTr := NewSFTPTransport(t.sshClient)
 	res, err := sftpTr.Upload(ctx, localPath, relayPath, progress)
 	if err != nil {
-		return TransferResult{}, err
+		// SFTP failed, fallback to SCP
+		emitStep(progress, "SFTP 不可用，切换 SCP 上传...")
+		scpTr := NewSCPTransport(t.sshClient)
+		res, err = scpTr.Upload(ctx, localPath, relayPath, progress)
+		if err != nil {
+			return TransferResult{}, err
+		}
 	}
 
 	// Copy from relay to target as root.
+	emitStep(progress, "正在提权复制到目标路径...")
 	// chown is best-effort (||true) but cp must succeed.
 	parentDir := path.Dir(normalizeRemotePath(remotePath))
 	cmd := fmt.Sprintf(
@@ -285,6 +313,8 @@ func (t *RootRelayTransport) Upload(ctx context.Context, localPath, remotePath s
 
 // Download downloads a remote file to a local path via root relay.
 func (t *RootRelayTransport) Download(ctx context.Context, remotePath, localPath string, progress func(Progress)) (TransferResult, error) {
+	emitStep(progress, "正在获取远程文件信息...")
+
 	rp := normalizeRemotePath(remotePath)
 
 	// Get remote file size
@@ -296,12 +326,14 @@ func (t *RootRelayTransport) Download(ctx context.Context, remotePath, localPath
 
 	// Check space
 	if fileSize > 0 {
+		emitStep(progress, "正在检查中转空间...")
 		if err := t.checkTmpSpace(ctx, fileSize); err != nil {
 			return TransferResult{}, err
 		}
 	}
 
 	// Prepare relay directory
+	emitStep(progress, "正在创建中转目录...")
 	relayDir, cleanup, err := t.prepareRelayDir(ctx)
 	if err != nil {
 		return TransferResult{}, err
@@ -312,6 +344,7 @@ func (t *RootRelayTransport) Download(ctx context.Context, remotePath, localPath
 	fileName := path.Base(rp)
 	relayPath := relayDir + fileName
 
+	emitStep(progress, "正在提权复制到中转目录...")
 	cmd := fmt.Sprintf("cp %s %s && chmod 644 %s",
 		shellSingleQuote(rp),
 		shellSingleQuote(relayPath),
@@ -321,9 +354,17 @@ func (t *RootRelayTransport) Download(ctx context.Context, remotePath, localPath
 		return TransferResult{}, err
 	}
 
-	// Download from relay via SFTP (as normal user)
+	// Download from relay via SFTP (as normal user), fallback to SCP
+	emitStep(progress, "正在下载到本地...")
 	sftpTr := NewSFTPTransport(t.sshClient)
-	return sftpTr.Download(ctx, relayPath, localPath, progress)
+	res, err := sftpTr.Download(ctx, relayPath, localPath, progress)
+	if err != nil {
+		// SFTP failed, fallback to SCP
+		emitStep(progress, "SFTP 不可用，切换 SCP 下载...")
+		scpTr := NewSCPTransport(t.sshClient)
+		return scpTr.Download(ctx, relayPath, localPath, progress)
+	}
+	return res, nil
 }
 
 // List lists directory contents via su.

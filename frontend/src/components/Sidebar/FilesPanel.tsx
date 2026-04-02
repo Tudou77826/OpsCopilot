@@ -80,6 +80,7 @@ type TaskState = {
     speedBps: number;
     status: 'running' | 'done' | 'error' | 'cancelled';
     message?: string;
+    step?: string;
 };
 
 type FilePaneProps = {
@@ -273,6 +274,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
             'sftp(key)': 'SFTP（密钥登录）',
             'sftp(root)': 'SFTP（Root 直连）',
             'sftp(root-relay)': 'SFTP（Root 中转模式）',
+            'scp(root-relay)': 'SCP 中转（Root 中转模式）',
             'su-relay(root-relay)': 'SU 中转（Root 中转模式）',
             'scp(login)': 'SCP（兼容模式）',
             'scp(fallback)': 'SCP（兼容模式）',
@@ -467,7 +469,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                             bytesDone: Number(data?.bytesDone ?? cur.bytesDone),
                             bytesTotal: Number(data?.bytesTotal ?? cur.bytesTotal),
                             speedBps: Number(data?.speedBps ?? cur.speedBps),
-                            status: 'running'
+                            status: 'running',
+                            step: (data?.step as string) || cur.step
                         }
                     };
                 });
@@ -493,7 +496,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                         [tid]: {
                             ...cur,
                             status,
-                            message: data?.message || (ok ? '完成' : '失败')
+                            message: data?.message || (ok ? '完成' : '失败'),
+                            step: undefined
                         }
                     };
                 });
@@ -1160,7 +1164,11 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                             taskList.map(t => (
                                 <div key={t.taskId} style={styles.taskRow}>
                                     <div style={styles.taskId}>{t.taskId.slice(0, 8)}</div>
-                                    <div style={styles.taskStatus}>{t.status}</div>
+                                    {t.status === 'running' && t.step ? (
+                                        <div style={styles.taskStep}>{t.step}</div>
+                                    ) : (
+                                        <div style={styles.taskStatus}>{t.status}</div>
+                                    )}
                                     <div style={styles.taskProgress}>
                                         {t.bytesTotal > 0 ? `${t.bytesDone}/${t.bytesTotal}` : `${t.bytesDone}`}
                                     </div>
@@ -1429,6 +1437,15 @@ const styles: Record<string, React.CSSProperties> = {
         color: '#aaa',
         fontSize: '12px',
         minWidth: '70px'
+    },
+    taskStep: {
+        color: '#58a6ff',
+        fontSize: '11px',
+        flex: '1 1 80px',
+        maxWidth: '200px',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
     },
     taskProgress: {
         color: '#aaa',

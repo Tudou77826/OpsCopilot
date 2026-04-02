@@ -41,9 +41,10 @@ type Entry struct {
 }
 
 type Progress struct {
-	BytesDone  int64 `json:"bytesDone"`
-	BytesTotal int64 `json:"bytesTotal"`
-	SpeedBps   int64 `json:"speedBps"`
+	BytesDone  int64  `json:"bytesDone"`
+	BytesTotal int64  `json:"bytesTotal"`
+	SpeedBps   int64  `json:"speedBps"`
+	Step       string `json:"step,omitempty"` // current sub-step description for UI display
 }
 
 type TransferResult struct {

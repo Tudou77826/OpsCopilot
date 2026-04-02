@@ -31,6 +31,7 @@ type FTPApp struct {
 	clients       map[string]*ssh.Client
 	closeFns      map[string]func()
 	rootPasswords map[string]string
+	loginUsers    map[string]string
 
 	ftMu      sync.Mutex
 	ftCancels map[string]context.CancelFunc
@@ -44,6 +45,7 @@ func NewFTPApp(ipcTokenFile, sessionID string) *FTPApp {
 		clients:       make(map[string]*ssh.Client),
 		closeFns:      make(map[string]func()),
 		rootPasswords: make(map[string]string),
+		loginUsers:    make(map[string]string),
 		ftCancels:     make(map[string]context.CancelFunc),
 	}
 }
@@ -114,6 +116,7 @@ func (a *FTPApp) autoConnect(sessionID string) {
 	a.clients[sessionID] = client.SSHClient()
 	a.closeFns[sessionID] = func() { _ = client.Close() }
 	a.rootPasswords[sessionID] = cfg.RootPassword
+	a.loginUsers[sessionID] = cfg.User
 	a.mu.Unlock()
 
 	log.Printf("[FTP] 已自动连接会话: %s", sessionID)
@@ -218,6 +221,7 @@ func (a *FTPApp) Connect(sessionID string) string {
 	a.clients[sessionID] = client.SSHClient()
 	a.closeFns[sessionID] = func() { _ = client.Close() }
 	a.rootPasswords[sessionID] = cfg.RootPassword
+	a.loginUsers[sessionID] = cfg.User
 	a.mu.Unlock()
 
 	return mustJSON(map[string]any{"ok": true, "message": "已连接"})
@@ -233,6 +237,7 @@ func (a *FTPApp) Disconnect(sessionID string) string {
 	delete(a.clients, sessionID)
 	delete(a.closeFns, sessionID)
 	delete(a.rootPasswords, sessionID)
+	delete(a.loginUsers, sessionID)
 	a.mu.Unlock()
 
 	if client != nil {
@@ -251,6 +256,7 @@ func (a *FTPApp) FTList(sessionID, remotePath string) string {
 	a.mu.RLock()
 	client := a.clients[sessionID]
 	rootPwd := a.rootPasswords[sessionID]
+	loginUser := a.loginUsers[sessionID]
 	a.mu.RUnlock()
 
 	if client == nil {
@@ -260,7 +266,7 @@ func (a *FTPApp) FTList(sessionID, remotePath string) string {
 	var entries []filetransfer.Entry
 	var err error
 	if rootPwd != "" {
-		relay := filetransfer.NewRootRelayTransport(client, rootPwd)
+		relay := filetransfer.NewRootRelayTransport(client, rootPwd, loginUser)
 		entries, err = relay.List(context.Background(), remotePath)
 	} else {
 		tr := filetransfer.NewSFTPTransport(client)
@@ -279,6 +285,7 @@ func (a *FTPApp) FTStat(sessionID, remotePath string) string {
 	a.mu.RLock()
 	client := a.clients[sessionID]
 	rootPwd := a.rootPasswords[sessionID]
+	loginUser := a.loginUsers[sessionID]
 	a.mu.RUnlock()
 
 	if client == nil {
@@ -288,7 +295,7 @@ func (a *FTPApp) FTStat(sessionID, remotePath string) string {
 	var entry filetransfer.Entry
 	var err error
 	if rootPwd != "" {
-		relay := filetransfer.NewRootRelayTransport(client, rootPwd)
+		relay := filetransfer.NewRootRelayTransport(client, rootPwd, loginUser)
 		entry, err = relay.Stat(context.Background(), remotePath)
 	} else {
 		tr := filetransfer.NewSFTPTransport(client)
@@ -335,13 +342,14 @@ func (a *FTPApp) FTRemoteMkdir(sessionID, remotePath string) string {
 	a.mu.RLock()
 	client := a.clients[sessionID]
 	rootPwd := a.rootPasswords[sessionID]
+	loginUser := a.loginUsers[sessionID]
 	a.mu.RUnlock()
 
 	if client == nil {
 		return mustJSON(ftResponse{OK: false, Error: "未连接"})
 	}
 	if rootPwd != "" {
-		relay := filetransfer.NewRootRelayTransport(client, rootPwd)
+		relay := filetransfer.NewRootRelayTransport(client, rootPwd, loginUser)
 		if err := relay.Mkdir(context.Background(), remotePath); err != nil {
 			return mustJSON(ftResponse{OK: false, Error: err.Error()})
 		}
@@ -361,13 +369,14 @@ func (a *FTPApp) FTRemoteRemove(sessionID, remotePath string) string {
 	a.mu.RLock()
 	client := a.clients[sessionID]
 	rootPwd := a.rootPasswords[sessionID]
+	loginUser := a.loginUsers[sessionID]
 	a.mu.RUnlock()
 
 	if client == nil {
 		return mustJSON(ftResponse{OK: false, Error: "未连接"})
 	}
 	if rootPwd != "" {
-		relay := filetransfer.NewRootRelayTransport(client, rootPwd)
+		relay := filetransfer.NewRootRelayTransport(client, rootPwd, loginUser)
 		if err := relay.Remove(context.Background(), remotePath, true); err != nil {
 			return mustJSON(ftResponse{OK: false, Error: err.Error()})
 		}
@@ -387,13 +396,14 @@ func (a *FTPApp) FTRemoteRename(sessionID, oldPath, newPath string) string {
 	a.mu.RLock()
 	client := a.clients[sessionID]
 	rootPwd := a.rootPasswords[sessionID]
+	loginUser := a.loginUsers[sessionID]
 	a.mu.RUnlock()
 
 	if client == nil {
 		return mustJSON(ftResponse{OK: false, Error: "未连接"})
 	}
 	if rootPwd != "" {
-		relay := filetransfer.NewRootRelayTransport(client, rootPwd)
+		relay := filetransfer.NewRootRelayTransport(client, rootPwd, loginUser)
 		if err := relay.Rename(context.Background(), oldPath, newPath); err != nil {
 			return mustJSON(ftResponse{OK: false, Error: err.Error()})
 		}
@@ -421,6 +431,7 @@ func (a *FTPApp) startTransfer(sessionID, op, localPath, remotePath string) stri
 	a.mu.RLock()
 	client := a.clients[sessionID]
 	rootPwd := a.rootPasswords[sessionID]
+	loginUser := a.loginUsers[sessionID]
 	a.mu.RUnlock()
 
 	if client == nil {
@@ -445,13 +456,19 @@ func (a *FTPApp) startTransfer(sessionID, op, localPath, remotePath string) stri
 			if a.ctx == nil {
 				return
 			}
-			runtime.EventsEmit(a.ctx, "file-transfer-progress", map[string]any{
-				"taskId":     taskID,
-				"sessionId":  sessionID,
-				"bytesDone":  p.BytesDone,
-				"bytesTotal": p.BytesTotal,
-				"speedBps":   p.SpeedBps,
-			})
+			payload := map[string]any{
+				"taskId":    taskID,
+				"sessionId": sessionID,
+			}
+			if p.Step != "" {
+				// Step-only notification: don't overwrite byte progress
+				payload["step"] = p.Step
+			} else {
+				payload["bytesDone"] = p.BytesDone
+				payload["bytesTotal"] = p.BytesTotal
+				payload["speedBps"] = p.SpeedBps
+			}
+			runtime.EventsEmit(a.ctx, "file-transfer-progress", payload)
 		}
 
 		var (
@@ -459,7 +476,7 @@ func (a *FTPApp) startTransfer(sessionID, op, localPath, remotePath string) stri
 			opErr error
 		)
 		if rootPwd != "" {
-			relay := filetransfer.NewRootRelayTransport(client, rootPwd)
+			relay := filetransfer.NewRootRelayTransport(client, rootPwd, loginUser)
 			if op == "upload" {
 				res, opErr = relay.Upload(ctx, localPath, remotePath, progressFn)
 			} else {
@@ -539,12 +556,13 @@ func (a *FTPApp) FTRemoteReadFile(sessionID, remotePath string, maxBytes int64) 
 	a.mu.RLock()
 	client := a.clients[sessionID]
 	rootPwd := a.rootPasswords[sessionID]
+	loginUser := a.loginUsers[sessionID]
 	a.mu.RUnlock()
 	if client == nil {
 		return mustJSON(ftResponse{OK: false, Error: "未连接"})
 	}
 	if rootPwd != "" {
-		relay := filetransfer.NewRootRelayTransport(client, rootPwd)
+		relay := filetransfer.NewRootRelayTransport(client, rootPwd, loginUser)
 		content, err := relay.ReadFile(context.Background(), remotePath, maxBytes)
 		if err != nil {
 			return mustJSON(map[string]any{"ok": false, "error": err.Error()})
@@ -566,12 +584,13 @@ func (a *FTPApp) FTRemoteWriteFile(sessionID, remotePath, content string) string
 	a.mu.RLock()
 	client := a.clients[sessionID]
 	rootPwd := a.rootPasswords[sessionID]
+	loginUser := a.loginUsers[sessionID]
 	a.mu.RUnlock()
 	if client == nil {
 		return mustJSON(ftResponse{OK: false, Error: "未连接"})
 	}
 	if rootPwd != "" {
-		relay := filetransfer.NewRootRelayTransport(client, rootPwd)
+		relay := filetransfer.NewRootRelayTransport(client, rootPwd, loginUser)
 		if err := relay.WriteFile(context.Background(), remotePath, []byte(content)); err != nil {
 			return mustJSON(map[string]any{"ok": false, "error": err.Error()})
 		}
