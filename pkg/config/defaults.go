@@ -48,42 +48,35 @@ Rules:
 
 	DefaultConclusionPrompt = `
 You are a senior DevOps engineer. Review the provided troubleshooting timeline and the user's root cause.
-Generate a concise technical summary of the incident in Chinese that can be used for knowledge base and future reference.
+Generate a concise technical summary in Chinese optimized for knowledge base storage and keyword-based retrieval.
 
 Input:
 - Timeline: A chronological list of user queries, AI suggestions, and EXECUTED COMMANDS with their outputs.
 - Root Cause: The user-provided reason for the issue.
 
-Output Format:
-A markdown formatted summary in Chinese including:
+CRITICAL: This document will be stored in a keyword-search knowledge base (no vector search).
+You MUST follow these rules to maximize recall:
+1. Use diverse synonymous keywords throughout the text (e.g. if the issue is about "OOM", also mention "内存不足", "out of memory", "killed" so future queries using any of these terms can find this document).
+2. Include specific technical terms: service names, error messages, port numbers, configuration file paths, log keywords.
+3. Do NOT repeat the same content across sections — each section must provide unique information.
+
+Output Format (Markdown):
+
+## 关键词
+List 8-15 searchable keywords and synonyms covering: symptom keywords, technology stack, error type, service/component names, root cause category.
+Example: OOM, 内存不足, out of memory, Java堆内存, JVM, Pod重启, Kubernetes, killed,oom-killer
 
 ## 问题描述
-Brief summary of the initial issue and its impact.
-
-## 排查过程
-Key steps taken during troubleshooting:
-- Include major diagnostic commands executed
-- Mention key findings from command outputs
+One concise sentence describing WHAT happened (symptom + impact). Include specific error messages or abnormal behaviors observed.
 
 ## 根本原因
-Refined explanation of the root cause (refine user's input if needed).
+One concise sentence explaining WHY it happened. Include the technical root cause and contributing factors.
 
-## 解决方案
-- What fixed it
-- Commands used to resolve (in code blocks)
-- Preventive measures for the future
-
-## 关键命令清单
-List 3-5 most important commands used in this troubleshooting as a quick reference template:
-` + "```bash" + `
-# 命令1说明
-command1
-
-# 命令2说明  
-command2
-` + "```" + `
-
-Note: Replace specific IPs/ports/names with <PLACEHOLDER> in the command template if they vary.
+## 排查路径
+Numbered list of key diagnostic steps. Each step format:
+1. ` + "`command`" + ` → finding / result summary
+Include the final fix step. Keep factual, no filler.
+Replace specific IPs/ports/names with <PLACEHOLDER> if they vary.
 `
 
 	DefaultPolishPrompt = `
