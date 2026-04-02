@@ -73,14 +73,35 @@ type Manager struct {
 	Config             *AppConfig
 	lastImportMessage  string
 	importing          atomic.Bool
+	readOnly           bool // 只读模式：Load 时不自动创建文件
 }
 
 func NewManager() *Manager {
+	return newManagerWithDir("")
+}
+
+// NewManagerWithDir 创建基于指定目录的配置管理器
+// 所有配置文件路径都相对于 dir 解析
+func NewManagerWithDir(dir string) *Manager {
+	return newManagerWithDir(dir)
+}
+
+// SetReadOnly 设置只读模式，Load 时不会自动创建文件
+func (m *Manager) SetReadOnly(ro bool) {
+	m.readOnly = ro
+}
+
+func newManagerWithDir(dir string) *Manager {
 	// 默认配置
 	defaultLLM := LoadLLMConfig()
 
-	cwd, _ := os.Getwd()
-	defaultLogDir := filepath.Join(cwd, "logs")
+	var defaultLogDir string
+	if dir != "" {
+		defaultLogDir = filepath.Join(dir, "logs")
+	} else {
+		cwd, _ := os.Getwd()
+		defaultLogDir = filepath.Join(cwd, "logs")
+	}
 
 	cfg := &AppConfig{
 		LLM: *defaultLLM,
@@ -110,12 +131,20 @@ func NewManager() *Manager {
 		HighlightRules: []HighlightRule{},
 	}
 
+	// 如果指定了目录，所有路径基于该目录；否则基于当前目录
+	resolvePath := func(name string) string {
+		if dir != "" {
+			return filepath.Join(dir, name)
+		}
+		return name
+	}
+
 	return &Manager{
-		configPath:         "config.json",         // 默认在当前目录
-		promptsPath:        "prompts.json",        // prompts 配置文件
-		quickCommandsPath:  "quick_commands.json", // quick_commands 配置文件
-		highlightRulesPath: "highlight_rules.json",
-		sessionsPath:       "sessions.json",
+		configPath:         resolvePath("config.json"),
+		promptsPath:        resolvePath("prompts.json"),
+		quickCommandsPath:  resolvePath("quick_commands.json"),
+		highlightRulesPath: resolvePath("highlight_rules.json"),
+		sessionsPath:       resolvePath("sessions.json"),
 		Config:             cfg,
 	}
 }
@@ -125,6 +154,10 @@ func (m *Manager) Load() error {
 	// 加载主配置文件
 	data, err := os.ReadFile(m.configPath)
 	if os.IsNotExist(err) {
+		if m.readOnly {
+			// 只读模式下不创建文件，使用内存中的默认值
+			return nil
+		}
 		// 文件不存在，保存默认配置
 		return m.Save()
 	}
@@ -189,6 +222,12 @@ func (m *Manager) Load() error {
 	// 加载 highlight_rules 配置
 	if err := m.loadHighlightRules(); err != nil {
 		return err
+	}
+
+	// 只读模式下不加载辅助配置文件（prompts/quick_commands/highlight_rules）
+	// 也不自动保存迁移变更
+	if m.readOnly {
+		return nil
 	}
 
 	if changed {

@@ -6,36 +6,45 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"opscopilot/pkg/mcpserver"
 )
 
 func main() {
+	// 获取可执行文件所在目录作为配置文件基础路径
+	execPath, _ := os.Executable()
+	binDir := filepath.Dir(execPath)
+
 	// 获取 sessions.json 路径
-	// 优先使用环境变量，否则使用当前目录的 sessions.json
+	// 优先使用环境变量，否则使用可执行文件所在目录
 	sessionsFile := os.Getenv("OPSCOPILOT_SESSIONS_FILE")
 	if sessionsFile == "" {
-		sessionsFile = "sessions.json"
+		sessionsFile = filepath.Join(binDir, "sessions.json")
 	}
 
 	// 获取录制目录
 	recordingsDir := os.Getenv("OPSCOPILOT_RECORDINGS_DIR")
 	if recordingsDir == "" {
-		recordingsDir = "recordings"
+		recordingsDir = filepath.Join(binDir, "recordings")
 	}
 
 	// 获取知识库目录（用于归档排查经验）
 	knowledgeDir := os.Getenv("OPSCOPILOT_KNOWLEDGE_DIR")
 	if knowledgeDir == "" {
-		knowledgeDir = "docs"
+		knowledgeDir = filepath.Join(binDir, "docs")
 	}
 
 	// 获取白名单配置文件路径
 	whitelistPath := os.Getenv("OPSCOPILOT_WHITELIST_PATH")
+	if whitelistPath == "" {
+		whitelistPath = filepath.Join(binDir, "command_whitelist.json")
+	}
 
 	// 创建服务器配置
 	serverConfig := &mcpserver.Config{
+		ConfigDir:      binDir,
 		SessionsFile:   sessionsFile,
 		RecordingsDir:  recordingsDir,
 		KnowledgeDir:   knowledgeDir,

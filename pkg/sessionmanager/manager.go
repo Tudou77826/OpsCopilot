@@ -38,6 +38,14 @@ func NewManager() *Manager {
 	}
 }
 
+// NewManagerWithPath 创建指定文件路径的 session 管理器
+func NewManagerWithPath(filePath string) *Manager {
+	return &Manager{
+		filePath: filePath,
+		Sessions: []*Session{},
+	}
+}
+
 func (m *Manager) Load() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

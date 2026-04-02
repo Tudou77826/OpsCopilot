@@ -20,6 +20,7 @@ import (
 
 // Config MCP Server 配置
 type Config struct {
+	ConfigDir      string // 配置文件基础目录（可执行文件所在目录）
 	SessionsFile   string // sessions.json 路径
 	RecordingsDir  string // 录制文件存储目录
 	KnowledgeDir   string // 知识库目录（用于归档排查经验）
@@ -87,24 +88,13 @@ func NewServer(config *Config) (*Server, error) {
 	go s.startIdleConnectionCleaner()
 
 	// 使用现有的 sessionmanager 加载 sessions.json
-	s.sessionMgr = sessionmanager.NewManager()
-	if config.SessionsFile != "" {
-		// 如果指定了路径，需要修改 manager 的 filePath
-		// sessionmanager 没有提供设置路径的方法，这里直接加载
-		data, err := os.ReadFile(config.SessionsFile)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				fmt.Fprintf(os.Stderr, "[MCP] Warning: Failed to read sessions file: %v\n", err)
-			}
-		} else {
-			if err := json.Unmarshal(data, &s.sessionMgr.Sessions); err != nil {
-				fmt.Fprintf(os.Stderr, "[MCP] Warning: Failed to parse sessions file: %v\n", err)
-			}
-		}
-	} else {
-		if err := s.sessionMgr.Load(); err != nil {
-			fmt.Fprintf(os.Stderr, "[MCP] Warning: Failed to load sessions: %v\n", err)
-		}
+	sessionsPath := config.SessionsFile
+	if sessionsPath == "" {
+		sessionsPath = "sessions.json"
+	}
+	s.sessionMgr = sessionmanager.NewManagerWithPath(sessionsPath)
+	if err := s.sessionMgr.Load(); err != nil {
+		fmt.Fprintf(os.Stderr, "[MCP] Warning: Failed to load sessions: %v\n", err)
 	}
 
 	// 使用现有的 secretstore
@@ -135,8 +125,13 @@ func NewServer(config *Config) (*Server, error) {
 
 // initAIService 初始化 AI 服务
 func (s *Server) initAIService() error {
-	// 1. 加载 config.json
-	configMgr := config.NewManager()
+	// 1. 加载 config.json（基于 ConfigDir，只读模式不创建文件）
+	configDir := s.config.ConfigDir
+	if configDir == "" {
+		configDir = "."
+	}
+	configMgr := config.NewManagerWithDir(configDir)
+	configMgr.SetReadOnly(true)
 	if err := configMgr.Load(); err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
