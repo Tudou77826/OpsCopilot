@@ -74,3 +74,4 @@ thread_dump*.txt
 .claude/
 CLAUDE.md
 recordings/
+mcp-server.exe~
