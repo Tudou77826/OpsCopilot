@@ -710,7 +710,6 @@ func (a *FTPApp) callIPCAction(action string, req ftipc.IPCRequest) (string, boo
 		var payload map[string]any
 		if err := json.Unmarshal([]byte(raw), &payload); err == nil {
 			if okFlag, ok := payload["ok"].(bool); ok && okFlag {
-				delete(payload, "taskId")
 				if _, exists := payload["message"]; !exists {
 					payload["message"] = "任务已提交到主程序执行"
 				}

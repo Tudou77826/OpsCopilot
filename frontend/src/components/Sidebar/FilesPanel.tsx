@@ -459,7 +459,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                         bytesDone: 0,
                         bytesTotal: -1,
                         speedBps: 0,
-                        status: 'running' as const
+                        status: 'running' as const,
+                        step: undefined as string | undefined
                     };
                     return {
                         ...prev,
@@ -487,7 +488,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                         bytesDone: 0,
                         bytesTotal: -1,
                         speedBps: 0,
-                        status: 'running' as const
+                        status: 'running' as const,
+                        step: undefined as string | undefined
                     };
                     const ok = !!data?.ok;
                     const status = ok ? 'done' : (data?.message?.includes('取消') ? 'cancelled' : 'error');
@@ -608,6 +610,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                 return;
             }
             if (resp.taskId) {
+                // Detect IPC delegated task: done events won't reach this frontend
+                const isDelegated = !!(resp as any).message?.includes?.('主程序');
                 setTasks(prev => ({
                     ...prev,
                     [resp.taskId as string]: {
@@ -616,7 +620,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                         bytesDone: 0,
                         bytesTotal: -1,
                         speedBps: 0,
-                        status: 'running'
+                        status: isDelegated ? 'done' : 'running',
+                        message: isDelegated ? ((resp as any).message || '任务已提交到主程序执行') : undefined
                     }
                 }));
                 setDrawerOpen(true);
@@ -686,6 +691,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                 return;
             }
             if (resp.taskId) {
+                const isDelegated = !!(resp as any).message?.includes?.('主程序');
                 setTasks(prev => ({
                     ...prev,
                     [resp.taskId as string]: {
@@ -694,7 +700,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                         bytesDone: 0,
                         bytesTotal: -1,
                         speedBps: 0,
-                        status: 'running'
+                        status: isDelegated ? 'done' : 'running',
+                        message: isDelegated ? ((resp as any).message || '任务已提交到主程序执行') : undefined
                     }
                 }));
                 setDrawerOpen(true);
@@ -735,6 +742,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                 return;
             }
             if (resp.taskId) {
+                const isDelegated = !!(resp as any).message?.includes?.('主程序');
                 setTasks(prev => ({
                     ...prev,
                     [resp.taskId as string]: {
@@ -743,7 +751,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                         bytesDone: 0,
                         bytesTotal: -1,
                         speedBps: 0,
-                        status: 'running'
+                        status: isDelegated ? 'done' : 'running',
+                        message: isDelegated ? ((resp as any).message || '任务已提交到主程序执行') : undefined
                     }
                 }));
                 setDrawerOpen(true);
