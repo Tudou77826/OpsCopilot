@@ -10,6 +10,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@fontsource/jetbrains-mono": "^5.2.8",
     "highlight.js": "^11.11.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

@@ -763,6 +763,10 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             allowProposedApi: true,
             cursorBlink: true,
             scrollback: terminalConfig?.scrollback || 5000,
+            fontFamily: '"JetBrains Mono", monospace',
+            fontSize: 14,
+            fontWeight: '400',
+            fontWeightBold: '700',
             theme: {
                 background: '#1e1e1e',
             }
