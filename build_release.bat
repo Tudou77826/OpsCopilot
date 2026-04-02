@@ -5,13 +5,16 @@ setlocal
 :: OpsCopilot 构建脚本 (Release)
 :: ==============================
 
+:: CI 环境下跳过 pause
+if "%CI%"=="true" set NOPAUSE=true
+
 echo [INFO] Building OpsCopilot for Production...
 
 :: 检查 wails 是否安装
 where wails >nul 2>nul
 if %errorlevel% neq 0 (
     echo [ERROR] Wails CLI not found. Please install it first.
-    pause
+    if not "%NOPAUSE%"=="true" pause
     exit /b 1
 )
 
@@ -21,7 +24,7 @@ wails build
 
 if %errorlevel% neq 0 (
     echo [ERROR] Build failed.
-    pause
+    if not "%NOPAUSE%"=="true" pause
     exit /b 1
 )
 
@@ -57,7 +60,7 @@ echo [INFO] Building MCP Server...
 go build -o "build\bin\mcp-server.exe" ./cmd/mcp-server/
 if %errorlevel% neq 0 (
     echo [ERROR] MCP Server build failed.
-    pause
+    if not "%NOPAUSE%"=="true" pause
     exit /b 1
 )
 echo [INFO]   - mcp-server.exe
@@ -68,13 +71,13 @@ echo [INFO] Building FTP frontend assets...
 call npm --prefix frontend-ftp install
 if %errorlevel% neq 0 (
     echo [ERROR] FTP frontend dependencies install failed.
-    pause
+    if not "%NOPAUSE%"=="true" pause
     exit /b 1
 )
 call npm --prefix frontend-ftp run build
 if %errorlevel% neq 0 (
     echo [ERROR] FTP frontend build failed.
-    pause
+    if not "%NOPAUSE%"=="true" pause
     exit /b 1
 )
 if exist "cmd\ftpmanager\static" rmdir /S /Q "cmd\ftpmanager\static"
@@ -82,13 +85,13 @@ mkdir "cmd\ftpmanager\static"
 xcopy /E /I /Y "frontend-ftp\dist\*" "cmd\ftpmanager\static\" >nul
 if %errorlevel% neq 0 (
     echo [ERROR] Copy FTP frontend assets failed.
-    pause
+    if not "%NOPAUSE%"=="true" pause
     exit /b 1
 )
 go build -tags production -ldflags "-s -w" -o "build\bin\OpsFTP.exe" ./cmd/ftpmanager/
 if %errorlevel% neq 0 (
     echo [ERROR] FTP File Manager build failed.
-    pause
+    if not "%NOPAUSE%"=="true" pause
     exit /b 1
 )
 echo [INFO]   - OpsFTP.exe
