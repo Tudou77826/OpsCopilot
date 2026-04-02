@@ -1172,17 +1172,23 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                         ) : (
                             taskList.map(t => (
                                 <div key={t.taskId} style={styles.taskRow}>
-                                    <div style={styles.taskId}>{t.taskId.slice(0, 8)}</div>
-                                    {t.status === 'running' && t.step ? (
-                                        <div style={styles.taskStep}>{t.step}</div>
+                                    <div style={styles.taskId} title={t.taskId}>{t.taskId.slice(0, 8)}</div>
+                                    {t.status === 'done' ? (
+                                        <span style={{ color: '#4ade80', fontSize: '11px' }}>✓ 完成</span>
+                                    ) : t.status === 'error' || t.status === 'cancelled' ? (
+                                        <span style={{ color: '#f87171', fontSize: '11px' }}>✗ {t.status}</span>
                                     ) : (
-                                        <div style={styles.taskStatus}>{t.status}</div>
+                                        <span style={styles.taskStatus}>{t.status}</span>
                                     )}
-                                    <div style={styles.taskProgress}>
-                                        {t.bytesTotal > 0 ? `${t.bytesDone}/${t.bytesTotal}` : `${t.bytesDone}`}
-                                    </div>
-                                    <div style={styles.taskSpeed}>{t.speedBps > 0 ? `${t.speedBps} B/s` : ''}</div>
-                                    <div style={styles.taskMsg}>{t.message || ''}</div>
+                                    {t.status === 'done' && t.message ? (
+                                        <div style={styles.taskMsg}>{t.message}</div>
+                                    ) : null}
+                                    {t.status === 'running' && t.bytesTotal > 0 ? (
+                                        <div style={styles.taskProgress}>{t.bytesDone}/{t.bytesTotal}</div>
+                                    ) : null}
+                                    {t.status === 'running' && t.speedBps > 0 ? (
+                                        <div style={styles.taskSpeed}>{t.speedBps} B/s</div>
+                                    ) : null}
                                     {t.status === 'running' ? (
                                         <button style={styles.btnSecondary} onClick={() => cancelTask(t.taskId)} disabled={loading}>
                                             取消
