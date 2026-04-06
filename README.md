@@ -2,14 +2,14 @@
 
 <div align="center">
 
-**AI 驱动的智能运维助手**
+**AI 驱动的智能运维助手 / AI Agent 远程执行工具**
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![Wails](https://img.shields.io/badge/Wails-v2-DF0000?style=flat)](https://wails.io/)
 [![React](https://img.shields.io/badge/React-18.x-61DAFB?style=flat&logo=react)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat&logo=typescript)](https://www.typescriptlang.org/)
 
-*让运维经验沉淀为知识，让知识复用更高效*
+*让运维经验沉淀为知识，让 AI Agent 拥有远程执行能力*
 
 </div>
 
@@ -19,33 +19,34 @@ https://github.com/Tudou77826/OpsCopilot/releases
 
 ## 📖 项目简介
 
-OpsCopilot 是一款面向运维工程师的**智能化操作助手**，通过深度集成 LLM（大语言模型），将传统的"记忆驱动"运维模式升级为"AI 辅助决策"模式。
+OpsCopilot 是一款兼具**人机交互**与**AI Agent 工具**双重属性的智能运维平台：
 
-### 🎯 核心价值
-
-OpsCopilot 的核心目标是建立**运维知识的完整闭环**：
+| 角色 | 面向 | 核心能力 |
+|------|------|---------|
+| **运维助手** | 运维工程师 | AI 连接解析、知识库搜索、故障定位 Agent、会话录制 |
+| **知识引擎** | 团队 | 排查经验自动沉淀、SOP 文档管理、知识复用 |
+| **MCP Server** | AI Agent | SSH 远程执行、文件管理、知识库查询、安全白名单 |
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         运维知识价值闭环                                 │
-├─────────────────────────────────────────────────────────────────────────┤
+┌──────────────────────────────────────────────────────────────────────────┐
+│                         OpsCopilot 双模架构                               │
+├──────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
-│    问题发生 ──▶ AI 辅助定位 ──▶ 人工解决 ──▶ 自动沉淀 ──▶ 知识复用      │
-│        │             │             │            │            │           │
-│        ▼             ▼             ▼            ▼            ▼           │
-│    [故障现象]    [搜索知识库]   [执行命令]   [录制过程]   [下次快速定位] │
+│  👨‍💻 人机模式                        🤖 Agent 模式                        │
+│  ──────────────────────              ──────────────────────               │
+│  终端操作 ◀──▶ SSH 连接             Claude / Cursor / ...                │
+│  AI 对话  ◀──▶ 知识库搜索              │                                  │
+│  故障定位 ◀──▶ Agent 推理             MCP Protocol                       │
+│  过程录制 ◀──▶ 知识沉淀              │                                   │
+│                                       ▼                                  │
+│                                    OpsCopilot MCP Server                 │
+│                                     ├─ ssh_exec     (远程命令执行)       │
+│                                     ├─ server_connect/disconnect        │
+│                                     ├─ session_start/end (排查会话)      │
+│                                     └─ get_hints    (知识库指引)         │
 │                                                                          │
-│    ✨ 每次定位都让知识库更强大，知识库越强定位越准确 ✨                   │
-│                                                                          │
-└─────────────────────────────────────────────────────────────────────────┘
+└──────────────────────────────────────────────────────────────────────────┘
 ```
-
-| 价值点 | 描述 |
-|-------|------|
-| **降低认知负担** | 无需记忆复杂的命令参数和故障处理流程 |
-| **知识库驱动** | 基于团队内部 SOP 文档提供定制化建议 |
-| **经验自动沉淀** | 录制排查过程，自动生成可复用的知识文档 |
-| **多节点协同** | 一键连接、命令广播、统一管理 |
 
 ---
 
@@ -83,11 +84,6 @@ AI 策略：
   - tail -f /var/log/payment/slow.log
 ```
 
-**技术亮点**：
-- LLM 增强的关键词提取（支持中英文混合）
-- 关键词缓存，避免重复 LLM 调用
-- 中文优先策略，优化中文知识库搜索效果
-
 ### 3. 🧠 定位助手（Agent 模式）
 <img width="1768" height="1280" alt="image" src="https://github.com/user-attachments/assets/559fff6d-9fd8-41d8-901d-66ce169adca8" />
 
@@ -112,14 +108,70 @@ AI 策略：
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**可用工具**：
-| 工具 | 功能 |
-|-----|------|
-| `search_knowledge` | 搜索知识库内容 |
-| `list_knowledge_files` | 列出知识库文件 |
-| `read_knowledge_file` | 读取具体文档 |
+### 4. 🔌 MCP Server（面向 AI Agent）
 
-### 4. 📝 排查过程录制与知识沉淀
+OpsCopilot 可作为 **MCP Server** 运行，让 Claude、Cursor 等 AI Agent 直接获得 SSH 远程操作能力：
+
+```json
+// opencode 的 MCP 配置
+{
+  "mcpServers": {
+    "opscopilot": {
+      "type": "local",
+      "command": ["D:/dev/release/opscopilot/V-1.2.1/mcp-server.exe"],
+      "environment": {
+        "OPSCOPILOT_SESSIONS_FILE": "D:/dev/release/opscopilot/V-1.2.1/sessions.json",
+        "OPSCOPILOT_RECORDINGS_DIR": "D:/dev/release/opscopilot/V-1.2.1/recordings",
+        "OPSCOPILOT_KNOWLEDGE_DIR": "D:/dev/release/opscopilot/V-1.2.1/docs",
+        "OPSCOPILOT_WHITELIST_PATH": "D:/dev/release/opscopilot/V-1.2.1/command_whitelist.json"
+      },
+      "enabled": true
+    }
+  }
+}
+```
+
+**可用 MCP 工具**：
+
+| 工具 | 功能 |
+|------|------|
+| `server_list` | 列出所有可用服务器及连接状态 |
+| `server_connect` | 连接到指定服务器（支持跳板机） |
+| `server_disconnect` | 断开服务器连接 |
+| `ssh_exec` | 在远程服务器执行命令（白名单管控） |
+| `session_start` | 开始排查会话 |
+| `session_status` | 查看当前会话状态 |
+| `session_end` | 结束会话，生成排查报告并归档到知识库 |
+| `get_hints` | 基于知识库获取排查思路提示 |
+
+**实际使用效果** — 在 Claude Code 中直接操作远程服务器：
+
+```text
+👤 你: 帮我看看生产环境 web-01 的磁盘使用情况
+
+🤖 Claude: 我来连接服务器查看。
+  → 调用 server_connect("web-01")
+  → 调用 ssh_exec("web-01", "df -h")
+
+  Filesystem      Size  Used Avail Use% Mounted on
+  /dev/sda1       100G   78G   22G  78% /
+  /dev/sdb1       500G  490G   10G  98% /data   ⚠️
+
+  /data 分区使用率已达 98%，建议清理旧日志。
+  → 调用 ssh_exec("web-01", "du -sh /data/log/* | sort -rh | head -5")
+
+  4.2G   /data/log/app/access.log.2025-03-*
+  2.8G   /data/log/app/error.log.2025-03-*
+  ...
+```
+
+**安全机制**：
+- 命令白名单：按服务器 IP 粒度配置允许执行的命令
+- LLM 风险检测：对不在白名单中的命令进行 AI 风险评估
+- 空闲超时：自动断开长时间无操作的连接
+- 审计录制：所有 MCP 操作均记录到排查会话
+
+### 5. 📝 排查过程录制与知识沉淀
 
 自动记录排查过程，生成可归档的 Markdown 文档：
 
@@ -153,18 +205,12 @@ SHOW VARIABLES LIKE 'max_connections';
 # 分析慢查询
 mysqldumpslow -s t /var/log/mysql/slow.log | head -10
 ```
+```
 
-**技术亮点**：
-- 实时录制终端输入输出
-- AI 自动生成结构化总结
-- 提取关键命令并模板化
-- 自动追加到知识库
-
-### 5. ⌨️ 智能命令补全
+### 6. ⌨️ 智能命令补全
 
 <img width="1638" height="586" alt="image" src="https://github.com/user-attachments/assets/c22e9981-04fa-4443-b3d3-8a7f67a57066" />
 <img width="1574" height="1135" alt="image" src="https://github.com/user-attachments/assets/b27463bb-8906-4099-bff8-abda347403ae" />
-
 
 内置 Linux 命令知识库，支持命令名、选项、常用组合的智能补全：
 
@@ -182,15 +228,9 @@ mysqldumpslow -s t /var/log/mysql/slow.log | head -10
   -tvf    列出压缩包内容
 ```
 
-**技术亮点**：
-- **自定义延迟**：可配置补全弹出延迟（默认 150ms），避免输入时干扰
-- **常用组合**：预置高频选项组合，一键补全复杂参数
-- **中文描述**：所有命令和选项都有中文说明
-
-### 6. 🚀 LLM 指令快查（Ctrl+K）
+### 7. 🚀 LLM 指令快查（Ctrl+K）
 
 <img width="1644" height="513" alt="image" src="https://github.com/user-attachments/assets/e2e5d4e1-5e8e-4471-88b3-f4c6e967d12f" />
-
 
 忘记命令？用自然语言描述，AI 帮你生成：
 
@@ -211,17 +251,13 @@ mysqldumpslow -s t /var/log/mysql/slow.log | head -10
 └──────────────────────────────────────────────────────────────┘
 ```
 
-**技术亮点**：
-- **自然语言理解**：支持中英文混合描述
-- **上下文感知**：基于知识库生成更贴合团队规范的命令
-- **一键执行**：生成的命令可直接输入到当前终端
-
-### 7. 📡 多节点终端管理
+### 8. 📡 多节点终端管理
 
 - **并发连接**：一键启动多个 SSH 会话（支持跳板机穿透）
 - **命令广播**：同步执行命令到多个节点
 - **自动提权**：智能检测 `sudo` 密码提示并自动输入
 - **会话持久化**：保存连接配置，快速重连
+- **文件管理**：内置 SFTP/SCP 文件传输，支持拖拽上传下载
 
 ---
 
@@ -229,11 +265,20 @@ mysqldumpslow -s t /var/log/mysql/slow.log | head -10
 
 ```mermaid
 graph TB
+    subgraph "用户入口"
+        UI[👤 运维工程师]
+        Agent[🤖 AI Agent]
+    end
+
     subgraph "Frontend - React + TypeScript"
-        UI[用户界面]
         Terminal[xterm.js 终端]
         AI_Panel[AI 问答面板]
-        Agent_Panel[定位助手面板]
+        FileMgr[文件管理器]
+    end
+
+    subgraph "MCP Server"
+        MCPServer[MCP Protocol Server]
+        MCPTools[SSH / Session / Hints 工具]
     end
 
     subgraph "Bridge - Wails Runtime"
@@ -265,6 +310,7 @@ graph TB
             SessionMgr[Session Manager]
             SSHClient[SSH Client]
             Recorder[会话录制器]
+            FileTransfer[SFTP / SCP / Base64]
         end
 
         subgraph "数据层"
@@ -279,13 +325,18 @@ graph TB
         Target[目标服务器]
     end
 
-    UI --> Binding
+    UI --> Terminal
+    UI --> AI_Panel
+    UI --> FileMgr
+    Agent -->|MCP Protocol| MCPServer
+
     Terminal --> Events
     AI_Panel --> Binding
-    Agent_Panel --> Binding
+    MCPServer --> MCPTools
 
     Binding --> App
     Events --> App
+    MCPTools --> App
 
     App --> AgentService
     AgentService --> ToolRegistry
@@ -295,6 +346,7 @@ graph TB
 
     App --> LLM
     App --> SessionMgr
+    App --> FileTransfer
     App --> Config
 
     LLM --> LLM_API
@@ -303,18 +355,22 @@ graph TB
 
     SessionMgr --> SSHClient
     SSHClient --> Bastion
-    Bastion --> Target
+    SSHClient --> Target
+    FileTransfer --> Bastion
 ```
 
 ### 核心模块说明
 
 | 模块 | 路径 | 职责 |
-|-----|------|------|
+|------|------|------|
+| **MCP Server** | `pkg/mcpserver/` | MCP 协议服务端，暴露工具给外部 AI Agent |
 | **Agent Service** | `pkg/ai/agent.go` | ReAct 循环，协调 LLM 和工具 |
 | **Tool Registry** | `pkg/tools/registry.go` | 工具注册和管理 |
 | **Knowledge Tools** | `pkg/tools/knowledge/` | 知识库搜索、列表、读取 |
 | **Term Extractor** | `pkg/ai/agent.go` | LLM 增强的关键词提取 |
-| **Recorder** | `pkg/recorder/` | 终端会话录制 |
+| **SSH Client** | `pkg/sshclient/` | SSH 连接、跳板机穿透、自动提权 |
+| **File Transfer** | `pkg/filetransfer/` | SFTP / SCP / Base64 文件传输 |
+| **Recorder** | `pkg/recorder/` | 终端会话录制与知识沉淀 |
 
 ---
 
@@ -354,7 +410,7 @@ wails build
 
 ### 配置 AI 服务
 
-首次运行后，点击 **设置⚙️** 配置 LLM：
+首次运行后，点击 **设置** 配置 LLM：
 
 ```json
 {
@@ -374,6 +430,77 @@ wails build
 
 ---
 
+## 🔌 MCP Server 配置
+
+OpsCopilot 启动后自动监听 MCP 连接。在 AI Agent 的配置文件中添加：
+
+### Claude Desktop
+
+编辑 `claude_desktop_config.json`：
+
+```json
+{
+  "mcpServers": {
+    "opscopilot": {
+      "command": "C:\\path\\to\\OpsCopilot.exe",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+### Cursor / Claude Code
+
+在项目或全局的 `.mcp.json` 中添加：
+
+```json
+{
+  "mcpServers": {
+    "opscopilot": {
+      "command": "/path/to/OpsCopilot",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+### 服务器配置
+
+在 OpsCopilot 的 `sessions.json` 中预配置服务器：
+
+```json
+[
+  {
+    "name": "web-01",
+    "host": "10.1.1.1",
+    "user": "app_user",
+    "bastion": {
+      "host": "172.16.0.1",
+      "user": "jump_user"
+    }
+  }
+]
+```
+
+### 命令白名单
+
+在 `config.json` 中配置允许 AI Agent 执行的命令：
+
+```json
+{
+  "mcpWhitelist": {
+    "10.1.1.*": [
+      "ps", "top", "df", "du", "free", "uptime",
+      "cat", "head", "tail", "grep", "ls", "find",
+      "systemctl status *", "journalctl *", "docker ps",
+      "docker logs *", "netstat", "ss", "ping", "curl"
+    ]
+  }
+}
+```
+
+---
+
 ## 📚 知识库配置
 
 将团队内部 SOP 文档（Markdown 格式）放入 `docs/` 目录：
@@ -389,7 +516,7 @@ docs/
     └── java_oom_analysis.md
 ```
 
-应用启动时会自动加载文档，作为 AI 问答的上下文来源。
+应用启动时会自动加载文档，作为 AI 问答和 MCP `get_hints` 的上下文来源。
 
 ---
 
@@ -403,17 +530,15 @@ OpsCopilot/
 │   ├── ai/                    # AI 服务
 │   │   ├── agent.go           # Agent 循环 + 关键词提取
 │   │   └── intent.go          # 意图识别
+│   ├── mcpserver/             # MCP Server（面向 AI Agent）
+│   │   ├── server.go          # MCP 协议服务端
+│   │   └── tools.go           # MCP 工具实现
 │   ├── tools/                 # 工具系统
 │   │   ├── interface.go       # Tool 接口定义
 │   │   ├── registry.go        # 工具注册器
 │   │   └── knowledge/         # 知识库工具
-│   │       ├── search.go      # 搜索工具
-│   │       ├── list_files.go  # 列表工具
-│   │       └── read_file.go   # 读取工具
 │   ├── knowledge/             # 知识库核心
-│   │   ├── loader.go          # 文档加载
-│   │   ├── search.go          # 搜索算法
-│   │   └── tools.go           # 底层操作
+│   ├── filetransfer/          # 文件传输（SFTP/SCP/Base64）
 │   ├── recorder/              # 会话录制
 │   ├── script/                # 脚本管理
 │   ├── sshclient/             # SSH 客户端
@@ -431,7 +556,7 @@ OpsCopilot/
 
 ## 🗺️ 发展路线
 
-### 已完成 ✅
+### 已完成
 
 - [x] AI 智能连接解析
 - [x] 知识库搜索（关键词 + LLM 增强）
@@ -440,14 +565,17 @@ OpsCopilot/
 - [x] 多节点终端管理
 - [x] 智能命令补全（自定义延迟 + 常用组合）
 - [x] LLM 指令快查（Ctrl+K 自然语言生成命令）
+- [x] MCP Server（面向 AI Agent 的 SSH 远程执行）
+- [x] 文件传输（SFTP / SCP / Base64 拖拽上传下载）
+- [x] 跳板机穿透与自动提权
 
-### 进行中 🚧
+### 进行中
 
 - [ ] 向量检索增强（语义搜索）
 - [ ] 知识使用率统计
 - [ ] 知识生命周期管理
 
-### 计划中 📋
+### 计划中
 
 - [ ] 混合检索（向量 + 关键词）
 - [ ] 知识评分与去重
@@ -462,7 +590,9 @@ OpsCopilot/
 - **密码存储**：使用操作系统级密钥链（Windows Credential Manager / macOS Keychain）
 - **日志脱敏**：自动过滤日志中的密码字段
 - **传输加密**：SSH 协议原生加密，无明文传输
-- **权限最小化**：应用仅需网络访问权限
+- **命令白名单**：MCP 模式下按服务器粒度限制可执行命令
+- **LLM 风险检测**：对白名单外的命令进行 AI 安全评估
+- **空闲超时**：自动断开长时间无操作的连接
 
 ---
 
