@@ -178,7 +178,12 @@ func (t *RootRelayTransport) invalidateSession() {
 // runAsRoot executes a single command as root using a persistent su session.
 // If the session is dead, it is invalidated and a fresh one is created on the next call.
 func (t *RootRelayTransport) runAsRoot(ctx context.Context, cmd string) (string, error) {
-	log.Printf("[RootRelay] 执行 root 命令: %s", cmd)
+	// Trate long commands (e.g. base64 chunks) to avoid flooding logs
+	logCmd := cmd
+	if len(logCmd) > 200 {
+		logCmd = logCmd[:200] + fmt.Sprintf("... (truncated, total %d bytes)", len(cmd))
+	}
+	log.Printf("[RootRelay] 执行 root 命令: %s", logCmd)
 	shell, err := t.getSession(ctx)
 	if err != nil {
 		return "", err
@@ -552,8 +557,9 @@ func (t *RootRelayTransport) List(ctx context.Context, remotePath string) ([]Ent
 	log.Printf("[RootRelay] 列出目录: %s", p)
 
 	// Try find -printf first (more reliable), fall back to ls
+	// Note: %T@ is modification time as seconds.nanoseconds since epoch (NOT %Y which is link type)
 	cmd := fmt.Sprintf(
-		`find %s -maxdepth 1 -printf '%%F\t%%s\t%%Y\t%%f\n' 2>/dev/null`,
+		`find %s -maxdepth 1 -printf '%%F\t%%s\t%%T@\t%%f\n' 2>/dev/null`,
 		shellSingleQuote(p),
 	)
 	output, err := t.runAsRoot(ctx, cmd)
@@ -787,7 +793,13 @@ func parseFindOutput(output string) []Entry {
 		}
 
 		size, _ := strconv.ParseInt(parts[1], 10, 64)
-		modTimeSec, _ := strconv.ParseInt(parts[2], 10, 64)
+		// %T@ returns epoch seconds with fractional part (e.g. "1712345678.123456789")
+		// Take only the integer part before the dot
+		modTimeStr := parts[2]
+		if dotIdx := strings.Index(modTimeStr, "."); dotIdx >= 0 {
+			modTimeStr = modTimeStr[:dotIdx]
+		}
+		modTimeSec, _ := strconv.ParseInt(modTimeStr, 10, 64)
 
 		isDir := parts[0] == "directory"
 		var mode uint32
