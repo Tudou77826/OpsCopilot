@@ -59,6 +59,7 @@ type App struct {
 	ftCancels         map[string]context.CancelFunc
 	relayMu           sync.Mutex
 	relayTransports   map[string]*filetransfer.RootRelayTransport
+	shellTransports   map[string]*filetransfer.RootRelayTransport
 	sessionStates     map[string]*SessionState         // 会话状态追踪
 	sessionStateMu    sync.RWMutex
 	commandExtractors map[string]*terminal.CommandExtractor // 命令提取器（Tab 补全修正）
@@ -130,6 +131,7 @@ func NewApp() *App {
 		isForceQuitting:   false,
 		ftCancels:         make(map[string]context.CancelFunc),
 		relayTransports:   make(map[string]*filetransfer.RootRelayTransport),
+		shellTransports:   make(map[string]*filetransfer.RootRelayTransport),
 		sessionStates:     make(map[string]*SessionState),
 	}
 
@@ -179,14 +181,17 @@ func (a *App) getRelayTransport(sessionID string) *filetransfer.RootRelayTranspo
 
 	sess, ok := a.sessionMgr.Get(sessionID)
 	if !ok || sess.Client == nil || sess.Client.SSHClient() == nil {
+		log.Printf("[FT] getRelayTransport 会话 %s 不存在或 SSH 客户端为空", sessionID[:8])
 		return nil
 	}
 
 	cfg, cfgOk := a.getConfig(sessionID)
 	if !cfgOk || cfg.RootPassword == "" {
+		log.Printf("[FT] getRelayTransport 会话 %s 无 root 密码配置", sessionID[:8])
 		return nil
 	}
 
+	log.Printf("[FT] getRelayTransport 会话 %s 创建新 RootRelayTransport (loginUser=%s)", sessionID[:8], cfg.User)
 	t := filetransfer.NewRootRelayTransport(sess.Client.SSHClient(), cfg.RootPassword, cfg.User)
 	a.relayTransports[sessionID] = t
 	return t
@@ -200,6 +205,30 @@ func (a *App) closeRelayTransport(sessionID string) {
 		t.Close()
 		delete(a.relayTransports, sessionID)
 	}
+	if t, ok := a.shellTransports[sessionID]; ok {
+		t.Close()
+		delete(a.shellTransports, sessionID)
+	}
+}
+
+// getShellTransport returns a cached RootRelayTransport for root-identity sessions
+// where SFTP is not available. It uses the root SSH client directly (no su needed).
+func (a *App) getShellTransport(sessionID string, client *ssh.Client) *filetransfer.RootRelayTransport {
+	a.relayMu.Lock()
+	defer a.relayMu.Unlock()
+
+	if a.shellTransports == nil {
+		a.shellTransports = make(map[string]*filetransfer.RootRelayTransport)
+	}
+	if t, ok := a.shellTransports[sessionID]; ok {
+		return t
+	}
+
+	// loginUser="" means we are already root, RootRelayTransport will skip su
+	log.Printf("[FT] getShellTransport 会话 %s 创建新 ShellTransport (root 直连，跳过 su)", sessionID[:8])
+	t := filetransfer.NewRootRelayTransport(client, "", "")
+	a.shellTransports[sessionID] = t
+	return t
 }
 
 // startup is called when the app starts. The context is saved
@@ -1072,12 +1101,18 @@ func (a *App) FTRemoteMkdir(sessionID, remotePath string) string {
 		return mustJSON(remoteFSResponse{OK: true})
 	}
 
-	if strings.HasPrefix(a.getTransferMode(sessionID), "scp") {
-		return mustJSON(remoteFSResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotSupported, Message: "SCP 模式不支持远端目录操作"}})
-	}
-
 	tr := filetransfer.NewSFTPTransport(info.client)
 	if err := tr.Mkdir(context.Background(), remotePath); err != nil {
+		// SFTP failed, try shell for root
+		if info.identity == "root" {
+			shell := a.getShellTransport(sessionID, info.client)
+			if shell != nil {
+				if shellErr := shell.Mkdir(context.Background(), remotePath); shellErr != nil {
+					return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(shellErr)})
+				}
+				return mustJSON(remoteFSResponse{OK: true})
+			}
+		}
 		return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(err)})
 	}
 	return mustJSON(remoteFSResponse{OK: true})
@@ -1101,12 +1136,17 @@ func (a *App) FTRemoteRename(sessionID, oldPath, newPath string) string {
 		return mustJSON(remoteFSResponse{OK: true})
 	}
 
-	if strings.HasPrefix(a.getTransferMode(sessionID), "scp") {
-		return mustJSON(remoteFSResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotSupported, Message: "SCP 模式不支持远端重命名"}})
-	}
-
 	tr := filetransfer.NewSFTPTransport(info.client)
 	if err := tr.Rename(context.Background(), oldPath, newPath); err != nil {
+		if info.identity == "root" {
+			shell := a.getShellTransport(sessionID, info.client)
+			if shell != nil {
+				if shellErr := shell.Rename(context.Background(), oldPath, newPath); shellErr != nil {
+					return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(shellErr)})
+				}
+				return mustJSON(remoteFSResponse{OK: true})
+			}
+		}
 		return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(err)})
 	}
 	return mustJSON(remoteFSResponse{OK: true})
@@ -1130,12 +1170,17 @@ func (a *App) FTRemoteRemove(sessionID, remotePath string) string {
 		return mustJSON(remoteFSResponse{OK: true})
 	}
 
-	if strings.HasPrefix(a.getTransferMode(sessionID), "scp") {
-		return mustJSON(remoteFSResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotSupported, Message: "SCP 模式不支持远端删除"}})
-	}
-
 	tr := filetransfer.NewSFTPTransport(info.client)
 	if err := tr.Remove(context.Background(), remotePath, true); err != nil {
+		if info.identity == "root" {
+			shell := a.getShellTransport(sessionID, info.client)
+			if shell != nil {
+				if shellErr := shell.Remove(context.Background(), remotePath, true); shellErr != nil {
+					return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(shellErr)})
+				}
+				return mustJSON(remoteFSResponse{OK: true})
+			}
+		}
 		return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(err)})
 	}
 	return mustJSON(remoteFSResponse{OK: true})
@@ -1228,17 +1273,21 @@ func (a *App) getTransferClientWithRelay(sessionID string) (transferClientInfo, 
 
 	cfg, ok := a.getConfig(sessionID)
 	if !ok {
+		log.Printf("[FT] 会话 %s 无连接配置，使用 login 身份", sessionID[:8])
 		return transferClientInfo{client: base, closeFn: baseClose, identity: identity}, nil
 	}
 
 	if cfg.RootPassword == "" {
+		log.Printf("[FT] 会话 %s 无 root 密码，使用 login 身份 (user=%s)", sessionID[:8], cfg.User)
 		return transferClientInfo{client: base, closeFn: baseClose, identity: identity}, nil
 	}
 	if strings.EqualFold(cfg.User, "root") {
+		log.Printf("[FT] 会话 %s 已使用 root 登录", sessionID[:8])
 		return transferClientInfo{client: base, closeFn: baseClose, identity: "root"}, nil
 	}
 
 	// Try root SSH direct connection
+	log.Printf("[FT] 会话 %s 尝试 root 直连 (host=%s, via_bastion=%v)", sessionID[:8], cfg.Host, cfg.Bastion != nil)
 	rootCfg := &sshclient.ConnectConfig{
 		Host:     cfg.Host,
 		Port:     cfg.Port,
@@ -1256,6 +1305,7 @@ func (a *App) getTransferClientWithRelay(sessionID string) (transferClientInfo, 
 
 	rootClient, err := sshclient.NewClient(rootCfg)
 	if err == nil && rootClient != nil && rootClient.SSHClient() != nil {
+		log.Printf("[FT] 会话 %s root 直连成功", sessionID[:8])
 		return transferClientInfo{
 			client:   rootClient.SSHClient(),
 			closeFn:  func() { _ = rootClient.Close() },
@@ -1264,6 +1314,7 @@ func (a *App) getTransferClientWithRelay(sessionID string) (transferClientInfo, 
 	}
 
 	// Root SSH failed but we have root password → use relay mode
+	log.Printf("[FT] 会话 %s root 直连失败 (%v)，降级为 root-relay 中转模式", sessionID[:8], err)
 	return transferClientInfo{
 		client:   base,
 		closeFn:  baseClose,
@@ -1301,21 +1352,32 @@ func (a *App) FTList(sessionID, remotePath string) string {
 	}
 	defer info.closeFn()
 
+	log.Printf("[FTList] 会话 %s 列目录 %s (identity=%s)", sessionID[:8], remotePath, info.identity)
+
 	var entries []filetransfer.Entry
 	if info.identity == "root-relay" {
 		relay := a.getRelayTransport(sessionID)
 		if relay == nil {
+			log.Printf("[FTList] 会话 %s root-relay 传输未就绪", sessionID[:8])
 			return mustJSON(remoteFSResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotFound, Message: "root-relay 传输未就绪"}})
 		}
 		entries, err = relay.List(context.Background(), remotePath)
 	} else {
 		tr := filetransfer.NewSFTPTransport(info.client)
 		entries, err = tr.List(context.Background(), remotePath)
+		// SFTP failed but we have root access — fall back to shell commands
+		if err != nil && info.identity == "root" {
+			log.Printf("[FTList] 会话 %s SFTP 列目录失败 (%v)，降级到 shell 命令", sessionID[:8], err)
+			shell := a.getShellTransport(sessionID, info.client)
+			entries, err = shell.List(context.Background(), remotePath)
+		}
 	}
 	if err != nil {
+		log.Printf("[FTList] 会话 %s 列目录失败: %v", sessionID[:8], err)
 		te := toTransferErr(err)
 		return mustJSON(ftResponse{OK: false, Error: te})
 	}
+	log.Printf("[FTList] 会话 %s 列目录成功，共 %d 条目", sessionID[:8], len(entries))
 	return mustJSON(ftResponse{OK: true, Entries: entries})
 }
 
@@ -1336,6 +1398,11 @@ func (a *App) FTStat(sessionID, remotePath string) string {
 	} else {
 		tr := filetransfer.NewSFTPTransport(info.client)
 		entry, err = tr.Stat(context.Background(), remotePath)
+		// SFTP failed but we have root access — fall back to shell commands
+		if err != nil && info.identity == "root" {
+			shell := a.getShellTransport(sessionID, info.client)
+			entry, err = shell.Stat(context.Background(), remotePath)
+		}
 	}
 	if err != nil {
 		te := toTransferErr(err)
@@ -1402,24 +1469,31 @@ func (a *App) OpenFileManager(sessionID string) string {
 func (a *App) FTCheck(sessionID string) string {
 	info, err := a.getTransferClientWithRelay(sessionID)
 	if err != nil {
+		log.Printf("[FTCheck] 会话 %s 获取传输客户端失败: %v", sessionID[:8], err)
 		return mustJSON(ftResponse{OK: false, Error: toTransferErr(err)})
 	}
 	defer info.closeFn()
+
+	log.Printf("[FTCheck] 会话 %s 身份=%s", sessionID[:8], info.identity)
 
 	// Root relay mode: SFTP works for relay dir operations, so always available
 	if info.identity == "root-relay" {
 		sftpTr := filetransfer.NewSFTPTransport(info.client)
 		_, _, sftpErr := sftpTr.Check(context.Background())
 		if sftpErr == nil {
+			log.Printf("[FTCheck] 会话 %s → sftp(root-relay)", sessionID[:8])
 			return mustJSON(ftResponse{OK: true, Message: "sftp(root-relay)"})
 		}
 		// SFTP not available, check SCP as fallback
+		log.Printf("[FTCheck] 会话 %s SFTP 不可用 (%v)，尝试 SCP 兜底", sessionID[:8], sftpErr)
 		scpTr := filetransfer.NewSCPTransport(info.client)
 		scpOk, _, scpErr := scpTr.Check(context.Background())
 		if scpErr == nil && scpOk {
+			log.Printf("[FTCheck] 会话 %s → scp(root-relay)", sessionID[:8])
 			return mustJSON(ftResponse{OK: true, Message: "scp(root-relay)"})
 		}
 		// Even SFTP and SCP not available, but relay can still work via su
+		log.Printf("[FTCheck] 会话 %s SFTP/SCP 均不可用，使用 su-relay 模式", sessionID[:8])
 		return mustJSON(ftResponse{OK: true, Message: "su-relay(root-relay)"})
 	}
 
@@ -1428,13 +1502,21 @@ func (a *App) FTCheck(sessionID string) string {
 	_, _, sftpErr := sftpTr.Check(context.Background())
 	if sftpErr == nil {
 		if info.identity == "root" {
+			log.Printf("[FTCheck] 会话 %s → sftp(root)", sessionID[:8])
 			return mustJSON(ftResponse{OK: true, Message: "sftp(root)"})
 		}
+		log.Printf("[FTCheck] 会话 %s → sftp(login)", sessionID[:8])
 		return mustJSON(ftResponse{OK: true, Message: "sftp(login)"})
 	}
 
 	te := toTransferErr(sftpErr)
+	log.Printf("[FTCheck] 会话 %s SFTP 检查失败: code=%s err=%v", sessionID[:8], te.Code, sftpErr)
 	if te != nil && (te.Code == filetransfer.ErrorCodeSFTPNotSupported || te.Code == filetransfer.ErrorCodeUnknown || te.Code == filetransfer.ErrorCodeNetwork) {
+		// Root identity can manage files via shell commands even without SFTP
+		if info.identity == "root" {
+			log.Printf("[FTCheck] 会话 %s root 身份，SFTP 不可用但可通过 shell 命令管理文件", sessionID[:8])
+			return mustJSON(ftResponse{OK: true, Message: "sftp(root)"})
+		}
 		scpTr := filetransfer.NewSCPTransport(c)
 		ok, _, err := scpTr.Check(context.Background())
 		if err != nil {
@@ -1454,8 +1536,10 @@ func (a *App) FTCheck(sessionID string) string {
 }
 
 func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string) string {
+	log.Printf("[FT] 开始文件传输任务: op=%s session=%s local=%s remote=%s", op, sessionID[:8], localPath, remotePath)
 	info, err := a.getTransferClientWithRelay(sessionID)
 	if err != nil {
+		log.Printf("[FT] 获取传输客户端失败: %v", err)
 		return mustJSON(ftResponse{OK: false, Error: toTransferErr(err)})
 	}
 
@@ -1476,6 +1560,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 		// Re-resolve client inside goroutine (session may have changed)
 		taskInfo, err := a.getTransferClientWithRelay(sessionID)
 		if err != nil {
+			log.Printf("[FT] 任务 %s 重新获取传输客户端失败: %v", taskID[:8], err)
 			if a.ctx != nil {
 				te := toTransferErr(err)
 				runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
@@ -1516,8 +1601,10 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 
 		// Root relay mode: use RootRelayTransport for actual transfer
 		if taskInfo.identity == "root-relay" {
+			log.Printf("[FT] 任务 %s 使用 root-relay 模式传输 (op=%s)", taskID[:8], op)
 			relay := a.getRelayTransport(sessionID)
 			if relay == nil {
+				log.Printf("[FT] 任务 %s root-relay 传输未就绪", taskID[:8])
 				if a.ctx != nil {
 					runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
 						"taskId":    taskID,
@@ -1540,6 +1627,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 				return
 			}
 			if opErr != nil {
+				log.Printf("[FT] 任务 %s root-relay 传输失败: %v", taskID[:8], opErr)
 				te := toTransferErr(opErr)
 				runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
 					"taskId":    taskID,
@@ -1564,6 +1652,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 		c := taskInfo.client
 		identity := taskInfo.identity
 
+		log.Printf("[FT] 任务 %s 使用常规模式 (identity=%s, op=%s)", taskID[:8], identity, op)
 		sftpTr := filetransfer.NewSFTPTransport(c)
 		if op == "upload" {
 			res, opErr = sftpTr.Upload(ctx, localPath, remotePath, progressFn)
@@ -1580,6 +1669,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 
 		if opErr != nil {
 			te := toTransferErr(opErr)
+			log.Printf("[FT] 任务 %s SFTP 失败 (code=%s)，尝试 SCP 降级", taskID[:8], te.Code)
 			if te != nil && (te.Code == filetransfer.ErrorCodeSFTPNotSupported || te.Code == filetransfer.ErrorCodeUnknown || te.Code == filetransfer.ErrorCodeNetwork) {
 				scpTr := filetransfer.NewSCPTransport(c)
 				ok, _, checkErr := scpTr.Check(ctx)
@@ -1606,6 +1696,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 			return
 		}
 		if opErr != nil {
+			log.Printf("[FT] 任务 %s 传输失败 (transport=%s): %v", taskID[:8], usedTransport, opErr)
 			te := toTransferErr(opErr)
 			runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
 				"taskId":    taskID,
@@ -1623,6 +1714,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 			"bytes":     res.Bytes,
 			"message":   "完成 (" + usedTransport + ")",
 		})
+		log.Printf("[FT] 任务 %s 传输成功 (transport=%s, bytes=%d)", taskID[:8], usedTransport, res.Bytes)
 	}()
 
 	// Suppress unused warning

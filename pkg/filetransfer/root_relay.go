@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -76,6 +77,8 @@ func (t *RootRelayTransport) getSession(ctx context.Context) (*rootShellSession,
 		return t.shell, nil
 	}
 
+	log.Printf("[RootRelay] 创建新 su 会话 (loginUser=%s)", t.loginUser)
+
 	session, err := t.sshClient.NewSession()
 	if err != nil {
 		return nil, &TransferError{Code: ErrorCodeNetwork, Message: fmt.Sprintf("创建 SSH 会话失败: %s", err)}
@@ -111,28 +114,36 @@ func (t *RootRelayTransport) getSession(ctx context.Context) (*rootShellSession,
 	buf := make([]byte, 4096)
 	_, _ = stdout.Read(buf)
 
-	// Send "su -"
-	if _, err := io.WriteString(stdin, "su -\n"); err != nil {
-		session.Close()
-		return nil, &TransferError{Code: ErrorCodeAuthFailed, Message: fmt.Sprintf("发送 su 命令失败: %s", err)}
-	}
+	// If loginUser is empty, we are already the target user (e.g., connected as root).
+	// Skip su entirely and use the shell directly.
+	if t.loginUser == "" {
+		log.Printf("[RootRelay] loginUser 为空，跳过 su 提权，直接使用当前 shell")
+	} else {
+		// Send "su -"
+		if _, err := io.WriteString(stdin, "su -\n"); err != nil {
+			session.Close()
+			return nil, &TransferError{Code: ErrorCodeAuthFailed, Message: fmt.Sprintf("发送 su 命令失败: %s", err)}
+		}
 
-	// Wait for password prompt
-	if err := waitForOutput(stdout, []string{"Password:", "密码："}, 10*time.Second); err != nil {
-		session.Close()
-		return nil, &TransferError{Code: ErrorCodeAuthFailed, Message: fmt.Sprintf("等待密码提示超时: %s", err)}
-	}
+		// Wait for password prompt
+		if err := waitForOutput(stdout, []string{"Password:", "密码："}, 10*time.Second); err != nil {
+			session.Close()
+			return nil, &TransferError{Code: ErrorCodeAuthFailed, Message: fmt.Sprintf("等待密码提示超时: %s", err)}
+		}
 
-	// Send root password
-	if _, err := io.WriteString(stdin, t.rootPassword+"\n"); err != nil {
-		session.Close()
-		return nil, &TransferError{Code: ErrorCodeAuthFailed, Message: fmt.Sprintf("发送密码失败: %s", err)}
-	}
+		// Send root password
+		if _, err := io.WriteString(stdin, t.rootPassword+"\n"); err != nil {
+			session.Close()
+			return nil, &TransferError{Code: ErrorCodeAuthFailed, Message: fmt.Sprintf("发送密码失败: %s", err)}
+		}
 
-	// Wait for root shell prompt (# or $)
-	if err := waitForOutput(stdout, []string{"# ", "$ "}, 10*time.Second); err != nil {
-		session.Close()
-		return nil, &TransferError{Code: ErrorCodeAuthFailed, Message: "su 认证失败或超时"}
+		// Wait for root shell prompt (# or $)
+		if err := waitForOutput(stdout, []string{"# ", "$ "}, 10*time.Second); err != nil {
+			log.Printf("[RootRelay] su 认证失败: %v", err)
+			session.Close()
+			return nil, &TransferError{Code: ErrorCodeAuthFailed, Message: "su 认证失败或超时"}
+		}
+		log.Printf("[RootRelay] su 认证成功")
 	}
 
 	shell := &rootShellSession{
@@ -141,6 +152,7 @@ func (t *RootRelayTransport) getSession(ctx context.Context) (*rootShellSession,
 		stdout:  stdout,
 	}
 	t.shell = shell
+	log.Printf("[RootRelay] 会话创建成功")
 	return shell, nil
 }
 
@@ -149,6 +161,7 @@ func (t *RootRelayTransport) invalidateSession() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.shell != nil {
+		log.Printf("[RootRelay] 会话失效，关闭并重建")
 		t.shell.session.Close()
 		t.shell = nil
 	}
@@ -157,6 +170,7 @@ func (t *RootRelayTransport) invalidateSession() {
 // runAsRoot executes a single command as root using a persistent su session.
 // If the session is dead, it is invalidated and a fresh one is created on the next call.
 func (t *RootRelayTransport) runAsRoot(ctx context.Context, cmd string) (string, error) {
+	log.Printf("[RootRelay] 执行 root 命令: %s", cmd)
 	shell, err := t.getSession(ctx)
 	if err != nil {
 		return "", err
@@ -180,9 +194,11 @@ func (t *RootRelayTransport) runAsRoot(ctx context.Context, cmd string) (string,
 	}
 
 	if output.failed {
+		log.Printf("[RootRelay] 命令执行失败: %s", output.raw)
 		return "", &TransferError{Code: ErrorCodePermissionDenied, Message: fmt.Sprintf("root 命令执行失败: %s", output.raw)}
 	}
 
+	log.Printf("[RootRelay] 命令执行成功，输出长度=%d", len(output.raw))
 	return output.raw, nil
 }
 
@@ -196,6 +212,7 @@ type relayOutput struct {
 func (t *RootRelayTransport) prepareRelayDir(ctx context.Context) (relayDir string, cleanup func(), err error) {
 	id := uuid.New().String()[:8]
 	relayDir = defaultRelayBaseDir + "/" + id + "/"
+	log.Printf("[RootRelay] 创建中转目录: %s", relayDir)
 
 	// Ensure base directory exists
 	if _, err := t.runAsRoot(ctx, "mkdir -p "+defaultRelayBaseDir); err != nil {
@@ -252,6 +269,7 @@ func emitStep(progress func(Progress), step string) {
 
 // Upload uploads a local file to a remote path via root relay.
 func (t *RootRelayTransport) Upload(ctx context.Context, localPath, remotePath string, progress func(Progress)) (TransferResult, error) {
+	log.Printf("[RootRelay] 上传开始: %s -> %s", localPath, remotePath)
 	emitStep(progress, "正在检查本地文件...")
 
 	// Get local file size for space check
@@ -268,6 +286,8 @@ func (t *RootRelayTransport) Upload(ctx context.Context, localPath, remotePath s
 		return TransferResult{}, err
 	}
 
+	log.Printf("[RootRelay] 文件大小=%d 字节", fileSize)
+
 	// Prepare relay directory
 	emitStep(progress, "正在创建中转目录...")
 	relayDir, cleanup, err := t.prepareRelayDir(ctx)
@@ -276,20 +296,33 @@ func (t *RootRelayTransport) Upload(ctx context.Context, localPath, remotePath s
 	}
 	defer cleanup()
 
+	log.Printf("[RootRelay] 使用中转目录: %s", relayDir)
+
 	// Upload to relay directory via SFTP (as normal user), fallback to SCP
 	fileName := path.Base(normalizeRemotePath(remotePath))
 	relayPath := relayDir + fileName
 
+	// Try SFTP → SCP → base64 direct upload
+	// Use a short timeout for SFTP/SCP attempts so we can fallback to base64
+	// if they hang (SCP through bastion can hang indefinitely on ack).
+	relayCtx, relayCancel := context.WithTimeout(ctx, 15*time.Second)
+	defer relayCancel()
+
 	emitStep(progress, "正在上传到中转目录...")
 	sftpTr := NewSFTPTransport(t.sshClient)
-	res, err := sftpTr.Upload(ctx, localPath, relayPath, progress)
+	res, err := sftpTr.Upload(relayCtx, localPath, relayPath, progress)
 	if err != nil {
+		log.Printf("[RootRelay] SFTP 上传到中转目录失败: %v", err)
 		// SFTP failed, fallback to SCP
 		emitStep(progress, "SFTP 不可用，切换 SCP 上传...")
 		scpTr := NewSCPTransport(t.sshClient)
-		res, err = scpTr.Upload(ctx, localPath, relayPath, progress)
+		res, err = scpTr.Upload(relayCtx, localPath, relayPath, progress)
 		if err != nil {
-			return TransferResult{}, err
+			// Both SFTP and SCP failed, fallback to base64 direct upload via su
+			emitStep(progress, "SFTP/SCP 均不可用，使用 base64 直传...")
+			log.Printf("[RootRelay] SFTP/SCP 均失败，降级为 base64 直传模式")
+			cleanup() // clean relay dir, we don't need it
+			return t.uploadViaBase64(ctx, lp, normalizeRemotePath(remotePath), fileSize, progress)
 		}
 	}
 
@@ -308,11 +341,122 @@ func (t *RootRelayTransport) Upload(ctx context.Context, localPath, remotePath s
 		return TransferResult{}, err
 	}
 
+	log.Printf("[RootRelay] 上传完成: %s -> %s", localPath, remotePath)
 	return res, nil
+}
+
+// uploadViaBase64 uploads a file by base64-encoding its content and writing
+// it directly through the su session. This is the last-resort fallback when
+// neither SFTP nor SCP is available.
+func (t *RootRelayTransport) uploadViaBase64(ctx context.Context, lp string, remotePath string, fileSize int64, progress func(Progress)) (TransferResult, error) {
+	const chunkSize = 4000 // base64 chunk size per command (safe for shell command length)
+
+	data, err := os.ReadFile(lp)
+	if err != nil {
+		return TransferResult{}, toTransferError(err)
+	}
+
+	total := int64(len(data))
+	emitStep(progress, fmt.Sprintf("正在通过 base64 直传 (%d 字节)...", total))
+
+	// For small files, send in one shot
+	if total <= chunkSize {
+		encoded := base64.StdEncoding.EncodeToString(data)
+		cmd := fmt.Sprintf("echo '%s' | base64 -d > %s", encoded, shellSingleQuote(remotePath))
+		if _, err := t.runAsRoot(ctx, cmd); err != nil {
+			return TransferResult{}, err
+		}
+		if progress != nil {
+			progress(Progress{BytesDone: total, BytesTotal: total})
+		}
+		log.Printf("[RootRelay] base64 直传完成: %s -> %s (%d 字节)", lp, remotePath, total)
+		return TransferResult{Bytes: total}, nil
+	}
+
+	// For larger files, write in chunks using >> append
+	// First chunk: truncate (>)
+	// Subsequent chunks: append (>>)
+	first := true
+	offset := 0
+	for offset < len(data) {
+		select {
+		case <-ctx.Done():
+			return TransferResult{}, &TransferError{Code: ErrorCodeNetwork, Message: "操作已取消"}
+		default:
+		}
+
+		end := offset + chunkSize
+		if end > len(data) {
+			end = len(data)
+		}
+		chunk := data[offset:end]
+		encoded := base64.StdEncoding.EncodeToString(chunk)
+
+		var cmd string
+		if first {
+			cmd = fmt.Sprintf("echo '%s' | base64 -d > %s", encoded, shellSingleQuote(remotePath))
+			first = false
+		} else {
+			cmd = fmt.Sprintf("echo '%s' | base64 -d >> %s", encoded, shellSingleQuote(remotePath))
+		}
+
+		if _, err := t.runAsRoot(ctx, cmd); err != nil {
+			return TransferResult{}, err
+		}
+
+		offset = end
+		if progress != nil {
+			progress(Progress{BytesDone: int64(offset), BytesTotal: total})
+		}
+	}
+
+	log.Printf("[RootRelay] base64 分块直传完成: %s -> %s (%d 字节)", lp, remotePath, total)
+	return TransferResult{Bytes: total}, nil
+}
+
+// downloadViaBase64 downloads a remote file by reading its base64-encoded content
+// through the su session. This is the last-resort fallback when neither SFTP nor SCP is available.
+func (t *RootRelayTransport) downloadViaBase64(ctx context.Context, remotePath string, localPath string, fileSize int64, progress func(Progress)) (TransferResult, error) {
+	emitStep(progress, "正在通过 base64 直传下载...")
+	rp := normalizeRemotePath(remotePath)
+
+	// Use base64 encoding to transfer file content
+	// For files we know the size of, limit base64 output accordingly
+	maxBase64Len := ""
+	if fileSize > 0 {
+		maxBase64Len = fmt.Sprintf(" | head -c %d", fileSize*2+100) // base64 is ~1.37x larger
+	}
+	cmd := fmt.Sprintf("base64 %s%s", shellSingleQuote(rp), maxBase64Len)
+	output, err := t.runAsRoot(ctx, cmd)
+	if err != nil {
+		return TransferResult{}, err
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(output))
+	if err != nil {
+		return TransferResult{}, &TransferError{Code: ErrorCodeUnknown, Message: fmt.Sprintf("base64 解码失败: %s", err)}
+	}
+
+	// Write to local file
+	lp := filepath.Clean(localPath)
+	if err := os.MkdirAll(filepath.Dir(lp), 0755); err != nil {
+		return TransferResult{}, toTransferError(err)
+	}
+	if err := os.WriteFile(lp, decoded, 0644); err != nil {
+		return TransferResult{}, toTransferError(err)
+	}
+
+	if progress != nil {
+		progress(Progress{BytesDone: int64(len(decoded)), BytesTotal: int64(len(decoded))})
+	}
+
+	log.Printf("[RootRelay] base64 直传下载完成: %s -> %s (%d 字节)", remotePath, localPath, len(decoded))
+	return TransferResult{Bytes: int64(len(decoded))}, nil
 }
 
 // Download downloads a remote file to a local path via root relay.
 func (t *RootRelayTransport) Download(ctx context.Context, remotePath, localPath string, progress func(Progress)) (TransferResult, error) {
+	log.Printf("[RootRelay] 下载开始: %s -> %s", remotePath, localPath)
 	emitStep(progress, "正在获取远程文件信息...")
 
 	rp := normalizeRemotePath(remotePath)
@@ -354,22 +498,36 @@ func (t *RootRelayTransport) Download(ctx context.Context, remotePath, localPath
 		return TransferResult{}, err
 	}
 
-	// Download from relay via SFTP (as normal user), fallback to SCP
+	// Download from relay via SFTP (as normal user), fallback to SCP, then base64
+	// Use a short timeout for SFTP/SCP attempts so we can fallback to base64
+	// if they hang (SCP through bastion can hang indefinitely on ack).
+	relayCtx, relayCancel := context.WithTimeout(ctx, 15*time.Second)
+	defer relayCancel()
+
 	emitStep(progress, "正在下载到本地...")
 	sftpTr := NewSFTPTransport(t.sshClient)
-	res, err := sftpTr.Download(ctx, relayPath, localPath, progress)
+	res, err := sftpTr.Download(relayCtx, relayPath, localPath, progress)
 	if err != nil {
 		// SFTP failed, fallback to SCP
 		emitStep(progress, "SFTP 不可用，切换 SCP 下载...")
 		scpTr := NewSCPTransport(t.sshClient)
-		return scpTr.Download(ctx, relayPath, localPath, progress)
+		res, err = scpTr.Download(relayCtx, relayPath, localPath, progress)
+		if err != nil {
+			// Both SFTP and SCP failed, fallback to base64 direct download
+			emitStep(progress, "SFTP/SCP 均不可用，使用 base64 直传下载...")
+			log.Printf("[RootRelay] SFTP/SCP 下载均失败，降级为 base64 直传模式")
+			cleanup() // clean relay dir
+			return t.downloadViaBase64(ctx, normalizeRemotePath(remotePath), localPath, fileSize, progress)
+		}
 	}
+	log.Printf("[RootRelay] 下载完成: %s -> %s", remotePath, localPath)
 	return res, nil
 }
 
 // List lists directory contents via su.
 func (t *RootRelayTransport) List(ctx context.Context, remotePath string) ([]Entry, error) {
 	p := normalizeRemotePath(remotePath)
+	log.Printf("[RootRelay] 列出目录: %s", p)
 
 	// Try find -printf first (more reliable), fall back to ls
 	cmd := fmt.Sprintf(
@@ -452,6 +610,7 @@ func (t *RootRelayTransport) ReadFile(ctx context.Context, remotePath string, ma
 		maxBytes = 256 * 1024
 	}
 	p := normalizeRemotePath(remotePath)
+	log.Printf("[RootRelay] 读取文件: %s (maxBytes=%d)", p, maxBytes)
 
 	// Use base64 encoding to safely transfer content
 	cmd := fmt.Sprintf("base64 %s | head -c %d", shellSingleQuote(p), maxBytes*2)
@@ -475,6 +634,7 @@ func (t *RootRelayTransport) ReadFile(ctx context.Context, remotePath string, ma
 // WriteFile writes content to a remote file via base64 decoding through su.
 func (t *RootRelayTransport) WriteFile(ctx context.Context, remotePath string, content []byte) error {
 	p := normalizeRemotePath(remotePath)
+	log.Printf("[RootRelay] 写入文件: %s (大小=%d 字节)", p, len(content))
 	encoded := base64.StdEncoding.EncodeToString(content)
 
 	// Write base64 content and decode on remote

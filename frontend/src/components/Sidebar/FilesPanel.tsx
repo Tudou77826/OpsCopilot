@@ -253,7 +253,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
     };
 
     const isSFTPSupported = () => {
-        return protocol.startsWith('sftp');
+        // root-relay has full file management capabilities via su + shell commands
+        return protocol.startsWith('sftp') || protocol.includes('root-relay');
     };
 
     const isTransferSupported = () => {
@@ -261,7 +262,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
     };
 
     const isSCPMode = () => {
-        return protocol.startsWith('scp');
+        return protocol.startsWith('scp') && !protocol.includes('root-relay');
     };
 
     const isRootRelay = () => {
@@ -369,7 +370,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
     const refreshRemote = async (path: string) => {
         const targetSessionId = sessionIdRef.current;
         if (!targetSessionId) return;
-        if (!protocolRef.current.startsWith('sftp')) {
+        if (!protocolRef.current.startsWith('sftp') && !protocolRef.current.includes('root-relay')) {
             setRemoteEntries([]);
             return;
         }
@@ -410,7 +411,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
     };
 
     const refreshRemoteAuto = async () => {
-        if (!protocolRef.current.startsWith('sftp')) return;
+        if (!protocolRef.current.startsWith('sftp') && !protocolRef.current.includes('root-relay')) return;
         const before = remoteEntriesRef.current.length;
         await refreshRemote(remotePathRef.current);
         const after = remoteEntriesRef.current.length;
@@ -581,7 +582,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
         const baseDir = isSCPMode() ? (remotePathInput.trim() || remotePath) : remotePath;
         const dst = remoteJoin(baseDir, entry.name);
 
-        if (protocolRef.current.startsWith('sftp')) {
+        if (protocolRef.current.startsWith('sftp') || protocolRef.current.includes('root-relay')) {
             try {
                 const raw = await api.FTStat(sessionIdRef.current, dst);
                 const resp = parseResp(raw);
@@ -1060,7 +1061,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                 </div>
             ) : null}
 
-            {!isSFTPSupported() && protocol.startsWith('scp') ? (
+            {!isSFTPSupported() && protocol.startsWith('scp') && !isRootRelay() ? (
                 <div style={{ color: '#aaa', fontSize: '12px' }}>
                     当前为 SCP 降级模式，仅支持上传/下载，不支持远端浏览与管理。
                 </div>
