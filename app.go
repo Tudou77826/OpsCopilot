@@ -1290,8 +1290,20 @@ func (a *App) getTransferClientWithRelay(sessionID string) (transferClientInfo, 
 		return transferClientInfo{client: base, closeFn: baseClose, identity: "root"}, nil
 	}
 
+	// Through bastion: root direct SSH is typically blocked (bastion restricts root login).
+	// Skip the failed attempt and go directly to root-relay mode.
+	if cfg.Bastion != nil {
+		log.Printf("[FT] 会话 %s 通过跳板机，跳过 root 直连，直接使用 root-relay 中转模式", sessionID[:8])
+		return transferClientInfo{
+			client:     base,
+			closeFn:    baseClose,
+			identity:   "root-relay",
+			viaBastion: true,
+		}, nil
+	}
+
 	// Try root SSH direct connection
-	log.Printf("[FT] 会话 %s 尝试 root 直连 (host=%s, via_bastion=%v)", sessionID[:8], cfg.Host, cfg.Bastion != nil)
+	log.Printf("[FT] 会话 %s 尝试 root 直连 (host=%s)", sessionID[:8], cfg.Host)
 	rootCfg := &sshclient.ConnectConfig{
 		Host:     cfg.Host,
 		Port:     cfg.Port,
