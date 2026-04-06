@@ -112,20 +112,14 @@ AI 策略：
 
 OpsCopilot 可作为 **MCP Server** 运行，让 Claude、Cursor 等 AI Agent 直接获得 SSH 远程操作能力：
 
+将 `mcp-server.exe` 与 `sessions.json`、`command_whitelist.json`、`docs/` 放在同一目录，然后配置：
+
 ```json
-// opencode 的 MCP 配置
 {
   "mcpServers": {
     "opscopilot": {
       "type": "local",
-      "command": ["D:/dev/release/opscopilot/V-1.2.1/mcp-server.exe"],
-      "environment": {
-        "OPSCOPILOT_SESSIONS_FILE": "D:/dev/release/opscopilot/V-1.2.1/sessions.json",
-        "OPSCOPILOT_RECORDINGS_DIR": "D:/dev/release/opscopilot/V-1.2.1/recordings",
-        "OPSCOPILOT_KNOWLEDGE_DIR": "D:/dev/release/opscopilot/V-1.2.1/docs",
-        "OPSCOPILOT_WHITELIST_PATH": "D:/dev/release/opscopilot/V-1.2.1/command_whitelist.json"
-      },
-      "enabled": true
+      "command": ["path/to/mcp-server.exe"]
     }
   }
 }
