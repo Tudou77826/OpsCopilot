@@ -14,6 +14,8 @@ const (
 	ErrorCodeNetwork          ErrorCode = "NETWORK"
 	ErrorCodeRelayFailed      ErrorCode = "RELAY_FAILED"
 	ErrorCodeRelayNoSpace     ErrorCode = "RELAY_NO_SPACE"
+	ErrorCodeFileSizeExceeded ErrorCode = "FILE_SIZE_EXCEEDED"
+	ErrorCodeChecksumMismatch ErrorCode = "CHECKSUM_MISMATCH"
 )
 
 type TransferError struct {

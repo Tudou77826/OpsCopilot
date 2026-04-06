@@ -248,7 +248,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
     };
 
     const formatError = (resp: FTResponse): string => {
-        if (resp.error) return `${resp.error.message} (${resp.error.code})`;
+        if (resp.error) {
+            const code = resp.error.code;
+            if (code === 'FILE_SIZE_EXCEEDED') return '文件过大，Base64 直传模式最大支持 300 KB';
+            if (code === 'CHECKSUM_MISMATCH') return '文件校验失败，传输数据可能不完整。请重试';
+            return `${resp.error.message} (${code})`;
+        }
         return resp.message || '失败';
     };
 
@@ -1058,7 +1063,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
 
             {isRootRelay() ? (
                 <div style={styles.relayBanner}>
-                    当前无法 Root 直连，已切换为 Root 中转模式。通过 su 会话直接传输文件，传输可能比直连模式稍慢。
+                    当前无法 Root 直连，已切换为 Root 中转模式。通过 Base64 直传传输文件，单文件上限 300 KB，传输后自动校验文件完整性。
                 </div>
             ) : null}
 

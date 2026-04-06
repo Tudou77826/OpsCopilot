@@ -2,7 +2,9 @@ package filetransfer
 
 import (
 	"context"
+	"crypto/md5"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -19,6 +21,8 @@ import (
 )
 
 const defaultRelayBaseDir = "/tmp/opscopilot"
+
+const maxBase64DirectBytes = 300 * 1024 // 300 KB — max file size for base64 direct transfer
 
 const (
 	rootRelayOK   = "__RELAY_OK__"
@@ -280,6 +284,33 @@ func emitStep(progress func(Progress), step string) {
 	}
 }
 
+// computeLocalMD5 computes the MD5 hash of a local file and returns the hex digest.
+func computeLocalMD5(filePath string) (string, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return "", fmt.Errorf("打开文件失败: %w", err)
+	}
+	defer f.Close()
+	h := md5.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", fmt.Errorf("读取文件失败: %w", err)
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// computeRemoteMD5 computes the MD5 hash of a remote file via runAsRoot.
+func (t *RootRelayTransport) computeRemoteMD5(ctx context.Context, remotePath string) (string, error) {
+	output, err := t.runAsRoot(ctx, fmt.Sprintf("md5sum %s", shellSingleQuote(remotePath)))
+	if err != nil {
+		return "", fmt.Errorf("远程 md5sum 执行失败: %w", err)
+	}
+	fields := strings.Fields(strings.TrimSpace(output))
+	if len(fields) < 1 {
+		return "", fmt.Errorf("md5sum 输出格式异常: %q", output)
+	}
+	return fields[0], nil
+}
+
 // Upload uploads a local file to a remote path via root relay.
 func (t *RootRelayTransport) Upload(ctx context.Context, localPath, remotePath string, progress func(Progress)) (TransferResult, error) {
 	log.Printf("[RootRelay] 上传开始: %s -> %s", localPath, remotePath)
@@ -377,6 +408,22 @@ func (t *RootRelayTransport) uploadViaBase64(ctx context.Context, lp string, rem
 	}
 
 	total := int64(len(data))
+
+	// Size limit check
+	if total > maxBase64DirectBytes {
+		return TransferResult{}, &TransferError{
+			Code:    ErrorCodeFileSizeExceeded,
+			Message: fmt.Sprintf("文件过大，Base64 直传最大支持 %d KB（当前 %d KB）", maxBase64DirectBytes/1024, total/1024),
+		}
+	}
+
+	// Compute local MD5 before transfer (non-fatal)
+	emitStep(progress, "正在计算文件校验和...")
+	localMD5, md5Err := computeLocalMD5(lp)
+	if md5Err != nil {
+		log.Printf("[RootRelay] 计算本地 MD5 失败（继续传输）: %v", md5Err)
+	}
+
 	emitStep(progress, fmt.Sprintf("正在通过 base64 直传 (%d 字节)...", total))
 
 	// For small files, send in one shot
@@ -390,58 +437,90 @@ func (t *RootRelayTransport) uploadViaBase64(ctx context.Context, lp string, rem
 			progress(Progress{BytesDone: total, BytesTotal: total})
 		}
 		log.Printf("[RootRelay] base64 直传完成: %s -> %s (%d 字节)", lp, remotePath, total)
-		return TransferResult{Bytes: total}, nil
+	} else {
+		// For larger files, write in chunks using >> append
+		// First chunk: truncate (>)
+		// Subsequent chunks: append (>>)
+		first := true
+		offset := 0
+		for offset < len(data) {
+			select {
+			case <-ctx.Done():
+				return TransferResult{}, &TransferError{Code: ErrorCodeNetwork, Message: "操作已取消"}
+			default:
+			}
+
+			end := offset + chunkSize
+			if end > len(data) {
+				end = len(data)
+			}
+			chunk := data[offset:end]
+			encoded := base64.StdEncoding.EncodeToString(chunk)
+
+			var cmd string
+			if first {
+				cmd = fmt.Sprintf("echo '%s' | base64 -d > %s", encoded, shellSingleQuote(remotePath))
+				first = false
+			} else {
+				cmd = fmt.Sprintf("echo '%s' | base64 -d >> %s", encoded, shellSingleQuote(remotePath))
+			}
+
+			if _, err := t.runAsRoot(ctx, cmd); err != nil {
+				return TransferResult{}, err
+			}
+
+			offset = end
+			if progress != nil {
+				progress(Progress{BytesDone: int64(offset), BytesTotal: total})
+			}
+		}
+
+		log.Printf("[RootRelay] base64 分块直传完成: %s -> %s (%d 字节)", lp, remotePath, total)
 	}
 
-	// For larger files, write in chunks using >> append
-	// First chunk: truncate (>)
-	// Subsequent chunks: append (>>)
-	first := true
-	offset := 0
-	for offset < len(data) {
-		select {
-		case <-ctx.Done():
-			return TransferResult{}, &TransferError{Code: ErrorCodeNetwork, Message: "操作已取消"}
-		default:
+	// Post-transfer MD5 verification
+	if localMD5 != "" {
+		emitStep(progress, "正在验证文件完整性...")
+		remoteMD5, md5Err := t.computeRemoteMD5(ctx, remotePath)
+		if md5Err != nil {
+			log.Printf("[RootRelay] 远程 MD5 计算失败（跳过验证）: %v", md5Err)
+		} else if !strings.EqualFold(localMD5, remoteMD5) {
+			log.Printf("[RootRelay] MD5 校验失败: local=%s remote=%s", localMD5, remoteMD5)
+			_, _ = t.runAsRoot(ctx, "rm -f "+shellSingleQuote(remotePath))
+			return TransferResult{}, &TransferError{
+				Code:    ErrorCodeChecksumMismatch,
+				Message: fmt.Sprintf("文件校验失败：本地 %s，远端 %s。已删除远端文件，请重新上传", localMD5, remoteMD5),
+			}
 		}
-
-		end := offset + chunkSize
-		if end > len(data) {
-			end = len(data)
-		}
-		chunk := data[offset:end]
-		encoded := base64.StdEncoding.EncodeToString(chunk)
-
-		var cmd string
-		if first {
-			cmd = fmt.Sprintf("echo '%s' | base64 -d > %s", encoded, shellSingleQuote(remotePath))
-			first = false
-		} else {
-			cmd = fmt.Sprintf("echo '%s' | base64 -d >> %s", encoded, shellSingleQuote(remotePath))
-		}
-
-		if _, err := t.runAsRoot(ctx, cmd); err != nil {
-			return TransferResult{}, err
-		}
-
-		offset = end
-		if progress != nil {
-			progress(Progress{BytesDone: int64(offset), BytesTotal: total})
-		}
+		log.Printf("[RootRelay] MD5 校验通过: %s", localMD5)
 	}
 
-	log.Printf("[RootRelay] base64 分块直传完成: %s -> %s (%d 字节)", lp, remotePath, total)
 	return TransferResult{Bytes: total}, nil
 }
 
 // downloadViaBase64 downloads a remote file by reading its base64-encoded content
 // through the su session. This is the last-resort fallback when neither SFTP nor SCP is available.
 func (t *RootRelayTransport) downloadViaBase64(ctx context.Context, remotePath string, localPath string, fileSize int64, progress func(Progress)) (TransferResult, error) {
-	emitStep(progress, "正在通过 base64 直传下载...")
+	// Size limit check
+	if fileSize > maxBase64DirectBytes {
+		return TransferResult{}, &TransferError{
+			Code:    ErrorCodeFileSizeExceeded,
+			Message: fmt.Sprintf("文件过大，Base64 直传最大支持 %d KB（当前 %d KB）", maxBase64DirectBytes/1024, fileSize/1024),
+		}
+	}
+
 	rp := normalizeRemotePath(remotePath)
+
+	// Compute remote MD5 before transfer (non-fatal)
+	emitStep(progress, "正在计算远端文件校验和...")
+	remoteMD5, md5Err := t.computeRemoteMD5(ctx, rp)
+	if md5Err != nil {
+		log.Printf("[RootRelay] 远程 MD5 计算失败（继续传输）: %v", md5Err)
+	}
 
 	// Use base64 encoding to transfer file content
 	// For files we know the size of, limit base64 output accordingly
+	emitStep(progress, "正在通过 base64 直传下载...")
 	maxBase64Len := ""
 	if fileSize > 0 {
 		maxBase64Len = fmt.Sprintf(" | head -c %d", fileSize*2+100) // base64 is ~1.37x larger
@@ -464,6 +543,23 @@ func (t *RootRelayTransport) downloadViaBase64(ctx context.Context, remotePath s
 	}
 	if err := os.WriteFile(lp, decoded, 0644); err != nil {
 		return TransferResult{}, toTransferError(err)
+	}
+
+	// Post-transfer MD5 verification
+	if remoteMD5 != "" {
+		emitStep(progress, "正在验证文件完整性...")
+		localMD5, md5Err := computeLocalMD5(lp)
+		if md5Err != nil {
+			log.Printf("[RootRelay] 本地 MD5 计算失败（跳过验证）: %v", md5Err)
+		} else if !strings.EqualFold(localMD5, remoteMD5) {
+			log.Printf("[RootRelay] MD5 校验失败: remote=%s local=%s", remoteMD5, localMD5)
+			_ = os.Remove(lp)
+			return TransferResult{}, &TransferError{
+				Code:    ErrorCodeChecksumMismatch,
+				Message: fmt.Sprintf("文件校验失败：远端 %s，本地 %s。已删除本地文件，请重新下载", remoteMD5, localMD5),
+			}
+		}
+		log.Printf("[RootRelay] MD5 校验通过: %s", remoteMD5)
 	}
 
 	if progress != nil {

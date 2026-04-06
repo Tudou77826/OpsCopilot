@@ -1,6 +1,7 @@
 package filetransfer
 
 import (
+	"os"
 	"testing"
 	"time"
 )
@@ -309,5 +310,65 @@ func TestPrepareRelayDirPath(t *testing.T) {
 	expected := "/tmp/opscopilot/abcd1234/"
 	if relayDir != expected {
 		t.Errorf("relayDir = %q, want %q", relayDir, expected)
+	}
+}
+
+func TestComputeLocalMD5(t *testing.T) {
+	// Create a temp file with known content
+	tmpFile, err := os.CreateTemp("", "md5test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+	content := []byte("hello world")
+	if _, err := tmpFile.Write(content); err != nil {
+		t.Fatal(err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	hash, err := computeLocalMD5(tmpFile.Name())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Known MD5 of "hello world"
+	expected := "5eb63bbbe01eeed093cb22bb8f5acdc3"
+	if hash != expected {
+		t.Errorf("got %q, want %q", hash, expected)
+	}
+}
+
+func TestComputeLocalMD5_EmptyFile(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "md5test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+	if err := tmpFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	hash, err := computeLocalMD5(tmpFile.Name())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// MD5 of empty string
+	expected := "d41d8cd98f00b204e9800998ecf8427e"
+	if hash != expected {
+		t.Errorf("got %q, want %q", hash, expected)
+	}
+}
+
+func TestComputeLocalMD5_Nonexistent(t *testing.T) {
+	_, err := computeLocalMD5("/nonexistent/path/file.txt")
+	if err == nil {
+		t.Error("expected error for nonexistent file")
+	}
+}
+
+func TestMaxBase64DirectBytes(t *testing.T) {
+	if maxBase64DirectBytes != 300*1024 {
+		t.Errorf("maxBase64DirectBytes = %d, want %d", maxBase64DirectBytes, 300*1024)
 	}
 }
