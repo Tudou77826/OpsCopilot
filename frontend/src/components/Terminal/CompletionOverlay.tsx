@@ -175,7 +175,7 @@ const styles = {
     itemText: {
         color: '#fff',
         fontSize: '13px',
-        fontFamily: 'monospace',
+        fontFamily: 'var(--font-mono)',
         fontWeight: 500,
         flex: 1,
     },

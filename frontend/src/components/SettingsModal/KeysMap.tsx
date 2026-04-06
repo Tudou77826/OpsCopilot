@@ -162,7 +162,7 @@ const styles: Record<string, React.CSSProperties> = {
     },
     keyPill: {
         display: 'inline-block',
-        fontFamily: 'monospace',
+        fontFamily: 'var(--font-mono)',
         fontSize: '12px',
         padding: '2px 8px',
         borderRadius: '999px',

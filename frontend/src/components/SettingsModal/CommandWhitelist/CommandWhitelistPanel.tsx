@@ -560,7 +560,7 @@ const PolicyEditor: React.FC<{
                   value={newCommand.pattern || ''}
                   onChange={(e) => setNewCommand({ ...newCommand, pattern: e.target.value })}
                   placeholder="正则表达式，如: ^ls(\\s|$)"
-                  style={{ ...editorStyles.input, fontFamily: 'monospace' }}
+                  style={{ ...editorStyles.input, fontFamily: 'var(--font-mono)' }}
                 />
                 <select
                   value={newCommand.category || 'read_only'}
@@ -860,7 +860,7 @@ const styles: Record<string, React.CSSProperties> = {
   commandPattern: {
     color: '#9cdcfe',
     fontSize: '12px',
-    fontFamily: 'monospace',
+    fontFamily: 'var(--font-mono)',
   },
   categoryBadge: {
     padding: '2px 6px',
@@ -1019,7 +1019,7 @@ const editorStyles: Record<string, React.CSSProperties> = {
     padding: '8px',
     backgroundColor: '#252526',
     borderRadius: '4px',
-    fontFamily: 'monospace',
+    fontFamily: 'var(--font-mono)',
     fontSize: '11px',
   },
   input: {
@@ -1110,7 +1110,7 @@ const editorStyles: Record<string, React.CSSProperties> = {
   commandPattern: {
     color: '#9cdcfe',
     fontSize: '11px',
-    fontFamily: 'monospace',
+    fontFamily: 'var(--font-mono)',
   },
   categoryBadge: {
     padding: '2px 6px',

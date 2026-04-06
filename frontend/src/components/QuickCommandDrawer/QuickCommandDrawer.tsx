@@ -490,7 +490,7 @@ const styles = {
         borderRadius: '4px',
         resize: 'none' as const,
         boxSizing: 'border-box' as const,
-        fontFamily: 'monospace',
+        fontFamily: 'var(--font-mono)',
     },
     modalActions: {
         display: 'flex',

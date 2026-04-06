@@ -73,7 +73,7 @@ const styles = {
         padding: '6px 10px',
         borderRadius: '4px',
         border: '1px solid #444',
-        fontFamily: 'Consolas, monospace',
+        fontFamily: 'var(--font-mono)',
         fontSize: '12px',
         color: '#ce9178',
         whiteSpace: 'pre-wrap' as const,

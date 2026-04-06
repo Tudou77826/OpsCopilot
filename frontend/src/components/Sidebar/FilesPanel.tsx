@@ -1536,7 +1536,7 @@ const styles: Record<string, React.CSSProperties> = {
         backgroundColor: '#1e1e1e',
         color: '#fff',
         outline: 'none',
-        fontFamily: 'monospace',
+        fontFamily: 'var(--font-mono)',
         fontSize: '12px',
         resize: 'none' as const
     },

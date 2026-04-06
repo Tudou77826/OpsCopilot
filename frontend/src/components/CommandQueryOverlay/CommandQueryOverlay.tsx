@@ -198,7 +198,7 @@ const styles: Record<string, React.CSSProperties> = {
         padding: '8px 10px',
     },
     commandLine: {
-        fontFamily: 'monospace',
+        fontFamily: 'var(--font-mono)',
         fontSize: '12px',
         color: '#fff',
         whiteSpace: 'pre-wrap',

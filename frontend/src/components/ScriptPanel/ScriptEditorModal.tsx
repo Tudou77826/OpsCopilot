@@ -543,7 +543,7 @@ const styles: Record<string, React.CSSProperties> = {
         borderRadius: '6px',
         color: '#ffffff',
         fontSize: '14px',
-        fontFamily: 'Consolas, "JetBrains Mono", Monaco, monospace',
+        fontFamily: 'var(--font-mono)',
         boxSizing: 'border-box' as const,
         transition: 'all 0.15s ease',
     },

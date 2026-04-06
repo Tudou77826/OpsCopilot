@@ -87,7 +87,7 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: '12px',
         whiteSpace: 'pre-wrap',
         wordBreak: 'break-word',
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+        fontFamily: 'var(--font-mono)',
         backgroundColor: '#101010'
     }
 };

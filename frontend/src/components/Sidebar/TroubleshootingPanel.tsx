@@ -1335,7 +1335,7 @@ const styles = {
         color: '#4ec9b0',
         padding: '2px 6px',
         borderRadius: '3px',
-        fontFamily: 'Consolas, "Courier New", monospace',
+        fontFamily: 'var(--font-mono)',
         fontSize: '11px',
     },
     serverStatusList: {

@@ -167,7 +167,7 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({ content, role }) => {
                     background: rgba(255, 255, 255, 0.1);
                     padding: 2px 6px;
                     border-radius: 3px;
-                    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+                    font-family: var(--font-mono);
                     font-size: 0.9em;
                     color: #f8f8f2;
                 }
@@ -191,7 +191,7 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({ content, role }) => {
                 .message-markdown-content .code-language {
                     font-size: 11px;
                     color: #abb2bf;
-                    font-family: 'Consolas', 'Monaco', monospace;
+                    font-family: var(--font-mono);
                     text-transform: uppercase;
                     font-weight: 500;
                 }
@@ -201,7 +201,7 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({ content, role }) => {
                     padding: 12px;
                     overflow-x: auto;
                     background: #282c34;
-                    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+                    font-family: var(--font-mono);
                     font-size: 12px;
                     line-height: 1.5;
                 }

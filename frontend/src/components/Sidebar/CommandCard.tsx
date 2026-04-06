@@ -72,7 +72,7 @@ const styles = {
         minHeight: '36px',
     },
     commandText: {
-        fontFamily: 'Consolas, monospace',
+        fontFamily: 'var(--font-mono)',
         fontSize: '13px',
         color: '#ce9178',
         flex: 1,

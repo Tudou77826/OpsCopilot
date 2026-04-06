@@ -242,7 +242,7 @@ const styles: Record<string, React.CSSProperties> = {
     commandItem: {
         fontSize: '12px',
         color: '#e0e0e0',
-        fontFamily: 'Consolas, Monaco, monospace',
+        fontFamily: 'var(--font-mono)',
         padding: '2px 0',
     },
     moreIndicator: {

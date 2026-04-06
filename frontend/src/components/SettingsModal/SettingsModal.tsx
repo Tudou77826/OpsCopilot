@@ -565,7 +565,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 color: '#d4d4d4',
                                 marginTop: '8px',
                                 overflow: 'auto',
-                                fontFamily: 'Consolas, "Courier New", monospace'
+                                fontFamily: 'var(--font-mono)'
                             }}>{`{
   "mcpServers": {
     "服务器名": {
@@ -906,7 +906,7 @@ const styles = {
         backgroundColor: '#1e1e1e',
         color: '#fff',
         outline: 'none',
-        fontFamily: 'monospace',
+        fontFamily: 'var(--font-mono)',
         fontSize: '12px',
         resize: 'vertical' as const,
         ':focus': {

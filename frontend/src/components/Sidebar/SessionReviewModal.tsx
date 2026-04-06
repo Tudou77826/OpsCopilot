@@ -258,7 +258,7 @@ const styles = {
         color: '#ccc',
         fontSize: '13px',
         whiteSpace: 'pre-wrap' as const,
-        fontFamily: 'monospace',
+        fontFamily: 'var(--font-mono)',
     },
     empty: {
         textAlign: 'center' as const,
