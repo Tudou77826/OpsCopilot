@@ -199,7 +199,6 @@ SHOW VARIABLES LIKE 'max_connections';
 # 分析慢查询
 mysqldumpslow -s t /var/log/mysql/slow.log | head -10
 ```
-```
 
 ### 6. ⌨️ 智能命令补全
 
