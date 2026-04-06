@@ -44,6 +44,7 @@ type RootRelayTransport struct {
 	sshClient    *ssh.Client
 	rootPassword string
 	loginUser    string // login username, used to chown relay directory for SCP access
+	skipRelay    bool   // when true, skip SFTP/SCP/relay-dir and go directly to base64
 
 	mu    sync.Mutex
 	shell *rootShellSession // cached su session, nil if not yet created
@@ -66,6 +67,13 @@ func (t *RootRelayTransport) Close() {
 		t.shell.session.Close()
 		t.shell = nil
 	}
+}
+
+// SetSkipRelay controls whether the transport skips SFTP/SCP relay directory
+// and goes directly to base64 transfer. Set to true when connecting through
+// a bastion host where SFTP/SCP are unreliable.
+func (t *RootRelayTransport) SetSkipRelay(skip bool) {
+	t.skipRelay = skip
 }
 
 // getSession returns the cached root shell session, creating one if needed.
@@ -288,6 +296,13 @@ func (t *RootRelayTransport) Upload(ctx context.Context, localPath, remotePath s
 
 	log.Printf("[RootRelay] 文件大小=%d 字节", fileSize)
 
+	// Through bastion: skip SFTP/SCP relay entirely, go directly to base64
+	if t.skipRelay {
+		log.Printf("[RootRelay] 跳过 SFTP/SCP 中转，直接使用 base64 直传模式")
+		emitStep(progress, "正在通过 base64 直传...")
+		return t.uploadViaBase64(ctx, lp, normalizeRemotePath(remotePath), fileSize, progress)
+	}
+
 	// Prepare relay directory
 	emitStep(progress, "正在创建中转目录...")
 	relayDir, cleanup, err := t.prepareRelayDir(ctx)
@@ -467,6 +482,13 @@ func (t *RootRelayTransport) Download(ctx context.Context, remotePath, localPath
 		return TransferResult{}, err
 	}
 	fileSize, _ := strconv.ParseInt(strings.TrimSpace(statOutput), 10, 64)
+
+	// Through bastion: skip SFTP/SCP relay entirely, go directly to base64
+	if t.skipRelay {
+		log.Printf("[RootRelay] 跳过 SFTP/SCP 中转，直接使用 base64 直传下载模式")
+		emitStep(progress, "正在通过 base64 直传下载...")
+		return t.downloadViaBase64(ctx, normalizeRemotePath(remotePath), localPath, fileSize, progress)
+	}
 
 	// Check space
 	if fileSize > 0 {

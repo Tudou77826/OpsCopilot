@@ -258,7 +258,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
     };
 
     const isTransferSupported = () => {
-        return protocol.startsWith('sftp') || protocol.startsWith('scp');
+        return protocol.startsWith('sftp') || protocol.startsWith('scp') || protocol.includes('root-relay');
     };
 
     const isSCPMode = () => {
@@ -276,7 +276,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
             'sftp(root)': 'SFTP（Root 直连）',
             'sftp(root-relay)': 'SFTP（Root 中转模式）',
             'scp(root-relay)': 'SCP 中转（Root 中转模式）',
-            'su-relay(root-relay)': 'SU 中转（Root 中转模式）',
+            'su-relay(root-relay)': 'Base64 直传（Root 中转模式）',
             'scp(login)': 'SCP（兼容模式）',
             'scp(fallback)': 'SCP（兼容模式）',
             'scp(root)': 'SCP（Root 兼容模式）',
@@ -285,6 +285,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
     };
 
     const getWorkModeLabel = (p: string): string => {
+        if (p === 'su-relay(root-relay)') return 'Base64 直传';
         if (p.includes('root-relay')) return 'Root 中转';
         if (p.startsWith('sftp') || p.startsWith('scp')) return '常规直连';
         return '—';
@@ -1057,7 +1058,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
 
             {isRootRelay() ? (
                 <div style={styles.relayBanner}>
-                    当前无法 Root 直连，已切换为中转模式。通过普通登录会话与服务器临时目录 /tmp/opscopilot 完成文件中转，传输可能比直连模式稍慢。
+                    当前无法 Root 直连，已切换为 Root 中转模式。通过 su 会话直接传输文件，传输可能比直连模式稍慢。
                 </div>
             ) : null}
 

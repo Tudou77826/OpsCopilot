@@ -193,6 +193,9 @@ func (a *App) getRelayTransport(sessionID string) *filetransfer.RootRelayTranspo
 
 	log.Printf("[FT] getRelayTransport 会话 %s 创建新 RootRelayTransport (loginUser=%s)", sessionID[:8], cfg.User)
 	t := filetransfer.NewRootRelayTransport(sess.Client.SSHClient(), cfg.RootPassword, cfg.User)
+	if cfg.Bastion != nil {
+		t.SetSkipRelay(true)
+	}
 	a.relayTransports[sessionID] = t
 	return t
 }
@@ -1256,9 +1259,10 @@ func (a *App) getPreferredTransferSSHClient(sessionID string) (*ssh.Client, func
 
 // transferClientInfo holds the SSH client and metadata for file transfer operations.
 type transferClientInfo struct {
-	client   *ssh.Client
-	closeFn  func()
-	identity string // "login" | "root" | "root-relay"
+	client     *ssh.Client
+	closeFn    func()
+	identity   string // "login" | "root" | "root-relay"
+	viaBastion bool   // true when connection goes through a bastion host
 }
 
 func (a *App) getTransferClientWithRelay(sessionID string) (transferClientInfo, error) {
@@ -1316,9 +1320,10 @@ func (a *App) getTransferClientWithRelay(sessionID string) (transferClientInfo, 
 	// Root SSH failed but we have root password → use relay mode
 	log.Printf("[FT] 会话 %s root 直连失败 (%v)，降级为 root-relay 中转模式", sessionID[:8], err)
 	return transferClientInfo{
-		client:   base,
-		closeFn:  baseClose,
-		identity: "root-relay",
+		client:     base,
+		closeFn:    baseClose,
+		identity:   "root-relay",
+		viaBastion: cfg.Bastion != nil,
 	}, nil
 }
 
@@ -1478,6 +1483,12 @@ func (a *App) FTCheck(sessionID string) string {
 
 	// Root relay mode: SFTP works for relay dir operations, so always available
 	if info.identity == "root-relay" {
+		// Through bastion: SFTP (not enabled on target) and SCP (hangs via bastion) are both unusable.
+		// Skip them and go directly to base64 transfer via su session.
+		if info.viaBastion {
+			log.Printf("[FTCheck] 会话 %s 检测到跳板机，跳过 SFTP/SCP，直接使用 base64 直传模式", sessionID[:8])
+			return mustJSON(ftResponse{OK: true, Message: "su-relay(root-relay)"})
+		}
 		sftpTr := filetransfer.NewSFTPTransport(info.client)
 		_, _, sftpErr := sftpTr.Check(context.Background())
 		if sftpErr == nil {
