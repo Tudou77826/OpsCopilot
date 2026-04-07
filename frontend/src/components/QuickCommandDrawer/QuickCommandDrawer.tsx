@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 
 export interface QuickCommand {
     id: string;
@@ -16,13 +16,22 @@ interface QuickCommandDrawerProps {
 const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute, isOpen, onToggle }) => {
     const [commands, setCommands] = useState<QuickCommand[]>([]);
     const [selectedGroup, setSelectedGroup] = useState<string>('default');
-    const [availableGroups, setAvailableGroups] = useState<string[]>(['default']);
     const [showGroupList, setShowGroupList] = useState(false);
     const groupListRef = useRef<HTMLDivElement>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, cmdId: string } | null>(null);
     const [editingCmd, setEditingCmd] = useState<QuickCommand | null>(null);
     const [isNewCommand, setIsNewCommand] = useState(false);
     const [loaded, setLoaded] = useState(false);
+
+    // 直接从 commands 计算可用分组，保证实时准确
+    const availableGroups = useMemo(() => {
+        const groupSet = new Set<string>();
+        commands.forEach(cmd => {
+            groupSet.add(cmd.group || 'default');
+        });
+        if (groupSet.size === 0) groupSet.add('default');
+        return Array.from(groupSet).sort();
+    }, [commands]);
 
     // Close group list when clicking outside
     useEffect(() => {
@@ -62,24 +71,12 @@ const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute, isOp
         }
     }, []);
 
-    // Load groups when commands change
+    // 当分组列表变化时，确保当前选中分组有效
     useEffect(() => {
-        // @ts-ignore
-        if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetQuickCommandGroups) {
-            // @ts-ignore
-            window.go.main.App.GetQuickCommandGroups().then((groups: string[]) => {
-                if (groups && groups.length > 0) {
-                    setAvailableGroups(groups);
-                    // If current selected group doesn't exist, select the first available group
-                    if (!groups.includes(selectedGroup)) {
-                        setSelectedGroup(groups[0]);
-                    }
-                }
-            }).catch((err: any) => {
-                console.error("Failed to load groups", err);
-            });
+        if (availableGroups.length > 0 && !availableGroups.includes(selectedGroup)) {
+            setSelectedGroup(availableGroups[0]);
         }
-    }, [commands]);
+    }, [availableGroups, selectedGroup]);
 
     // Save to backend on change
     useEffect(() => {
@@ -252,16 +249,31 @@ const QuickCommandDrawer: React.FC<QuickCommandDrawerProps> = ({ onExecute, isOp
                         </div>
                         <div style={styles.formGroup}>
                             <label style={styles.label}>分组</label>
-                            <input
-                                style={styles.input}
-                                value={editingCmd.group || 'default'}
-                                onChange={e => setEditingCmd({ ...editingCmd, group: e.target.value })}
-                                placeholder="default"
-                                list="availableGroups"
-                            />
-                            <datalist id="availableGroups">
-                                {availableGroups.map(g => <option key={g} value={g} />)}
-                            </datalist>
+                            {editingCmd.group === '__new__' ? (
+                                <input
+                                    style={styles.input}
+                                    value=''
+                                    onChange={e => setEditingCmd({ ...editingCmd, group: e.target.value })}
+                                    placeholder="输入新分组名"
+                                    autoFocus
+                                    onBlur={e => {
+                                        if (!e.target.value.trim()) {
+                                            setEditingCmd({ ...editingCmd, group: availableGroups[0] || 'default' });
+                                        }
+                                    }}
+                                />
+                            ) : (
+                                <select
+                                    style={styles.input}
+                                    value={editingCmd.group || 'default'}
+                                    onChange={e => setEditingCmd({ ...editingCmd, group: e.target.value })}
+                                >
+                                    {availableGroups.map(g => (
+                                        <option key={g} value={g}>{g}</option>
+                                    ))}
+                                    <option value="__new__" style={{ color: '#007acc' }}>+ 新建分组...</option>
+                                </select>
+                            )}
                         </div>
                         <div style={styles.formGroup}>
                             <label style={styles.label}>命令内容</label>
