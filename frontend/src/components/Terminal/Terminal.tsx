@@ -535,7 +535,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                 }
             }).filter(Boolean) as Array<{ rule: HighlightRule; re: RegExp }>;
 
-            const budgetMs = 10;
+            const budgetMs = 50;
             const t0 = performance.now();
 
             for (let lineIdx = start; lineIdx <= end; lineIdx++) {
@@ -579,7 +579,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
 
                 const decos: any[] = [];
                 for (const rg of ranges) {
-                    if (totalDecos >= 1000) break;
+                    if (totalDecos >= 5000) break;
                     const offset = lineIdx - cursorAbs;
                     const marker = term.registerMarker(offset);
                     if (!marker) continue;
@@ -601,7 +601,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                     }
                 }
                 if (decos.length > 0) decorationsRef.current.set(lineIdx, decos);
-                if (totalDecos >= 1000) break;
+                if (totalDecos >= 5000) break;
             }
         }, Math.max(0, delayMs));
     }, [clearDecorations]);
