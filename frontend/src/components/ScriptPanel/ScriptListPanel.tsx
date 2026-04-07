@@ -1,4 +1,13 @@
 import React, { useEffect, useState, useMemo, forwardRef, useImperativeHandle } from 'react';
+import VariableInputDialog from './VariableInputDialog';
+
+interface ScriptVariable {
+    name: string;
+    display_name: string;
+    default_value: string;
+    required: boolean;
+    description: string;
+}
 
 interface Script {
     id: string;
@@ -8,6 +17,7 @@ interface Script {
     command_count: number;
     host: string;
     user: string;
+    variables?: ScriptVariable[];
 }
 
 interface ScriptListPanelProps {
@@ -26,6 +36,7 @@ const ScriptListPanel = forwardRef<{
     const [scripts, setScripts] = useState<Script[]>([]);
     const [loading, setLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [varDialog, setVarDialog] = useState<{ scriptId: string; variables: ScriptVariable[] } | null>(null);
 
     useEffect(() => {
         loadScripts();
@@ -119,6 +130,31 @@ const ScriptListPanel = forwardRef<{
         );
     }, [scripts, searchQuery]);
 
+    const handleReplay = async (scriptId: string) => {
+        if (!activeSessionId) return;
+
+        const s = scripts.find((s) => s.id === scriptId);
+        if (s?.variables && s.variables.length > 0) {
+            setVarDialog({ scriptId, variables: s.variables });
+            return;
+        }
+
+        onReplayScript(scriptId);
+    };
+
+    const handleVarSubmit = async (values: Record<string, string>) => {
+        if (!varDialog || !activeSessionId) return;
+        const scriptId = varDialog.scriptId;
+        setVarDialog(null);
+
+        try {
+            // @ts-ignore
+            await window.go.main.App.ReplayScriptWithVars(scriptId, activeSessionId, values);
+        } catch (err: any) {
+            alert('回放失败: ' + (err?.message || err));
+        }
+    };
+
     return (
         <div style={styles.container}>
             <div style={styles.header}>
@@ -161,11 +197,16 @@ const ScriptListPanel = forwardRef<{
                                 </div>
                                 <div style={styles.scriptMeta}>
                                     <span style={styles.metaText} title={`录制于 ${new Date(script.start_time).toLocaleString('zh-CN')}`}>
-                                        📅 {formatDate(script.start_time)}
+                                        {formatDate(script.start_time)}
                                     </span>
                                     <span style={styles.metaText}>
-                                        📋 {script.command_count}
+                                        {script.command_count} 条命令
                                     </span>
+                                    {script.variables && script.variables.length > 0 && (
+                                        <span style={styles.varBadge}>
+                                            {script.variables.length} 个变量
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                             <div style={styles.scriptActions}>
@@ -182,7 +223,7 @@ const ScriptListPanel = forwardRef<{
                                         opacity: activeSessionId ? 1 : 0.5,
                                         cursor: activeSessionId ? 'pointer' : 'not-allowed'
                                     }}
-                                    onClick={() => activeSessionId && onReplayScript(script.id)}
+                                    onClick={() => activeSessionId && handleReplay(script.id)}
                                     title="回放"
                                     disabled={!activeSessionId}
                                 >
@@ -207,6 +248,13 @@ const ScriptListPanel = forwardRef<{
                     ))}
                 </div>
             )}
+
+            <VariableInputDialog
+                isOpen={varDialog !== null}
+                variables={varDialog?.variables || []}
+                onSubmit={handleVarSubmit}
+                onCancel={() => setVarDialog(null)}
+            />
         </div>
     );
 });
@@ -319,6 +367,13 @@ const styles: Record<string, React.CSSProperties> = {
     metaText: {
         fontSize: '10px',
         color: '#757575',
+    },
+    varBadge: {
+        fontSize: '10px',
+        color: '#b39ddb',
+        backgroundColor: '#2d1b4e',
+        padding: '1px 5px',
+        borderRadius: '8px',
     },
     scriptActions: {
         display: 'flex',

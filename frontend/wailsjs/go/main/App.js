@@ -206,6 +206,10 @@ export function ReplayScript(arg1, arg2) {
   return window['go']['main']['App']['ReplayScript'](arg1, arg2);
 }
 
+export function ReplayScriptWithVars(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ReplayScriptWithVars'](arg1, arg2, arg3);
+}
+
 export function ResizeTerminal(arg1, arg2, arg3) {
   return window['go']['main']['App']['ResizeTerminal'](arg1, arg2, arg3);
 }

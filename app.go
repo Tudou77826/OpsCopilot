@@ -2149,6 +2149,11 @@ func (a *App) ReplayScript(scriptID, sessionID string) error {
 	return a.scriptMgr.ReplayScript(scriptID, sessionID)
 }
 
+// ReplayScriptWithVars 带变量值的回放脚本
+func (a *App) ReplayScriptWithVars(scriptID, sessionID string, varValues map[string]string) error {
+	return a.scriptMgr.ReplayScriptWithVars(scriptID, sessionID, varValues)
+}
+
 // ExportScript 导出脚本为Shell脚本
 func (a *App) ExportScript(scriptID string) (string, error) {
 	return a.scriptMgr.ExportScript(scriptID)

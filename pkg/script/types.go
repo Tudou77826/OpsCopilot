@@ -25,6 +25,10 @@ type Script struct {
 	Name        string                 `json:"name"`
 	Description string                 `json:"description"`
 	Commands    []ScriptCommand        `json:"commands"`
+
+	// 新增：变量和步骤树
+	Variables []ScriptVariable `json:"variables,omitempty"`
+	Steps     []ScriptStep     `json:"steps,omitempty"`
 }
 
 // ScriptCommand 可编辑的脚本命令
@@ -76,6 +80,26 @@ func (s *Script) SyncFromRecordingSession(base *recorder.RecordingSession) {
 	s.Suggestions = base.Suggestions
 }
 
+// ScriptVariable 脚本变量定义
+type ScriptVariable struct {
+	Name         string `json:"name"`          // 变量名，如 port, service_name
+	DisplayName  string `json:"display_name"`  // UI 显示名，如 "端口号"
+	DefaultValue string `json:"default_value"` // 默认值
+	Required     bool   `json:"required"`      // 是否必填
+	Description  string `json:"description"`   // 说明文字
+}
+
+// ScriptStep 脚本步骤
+type ScriptStep struct {
+	Command string `json:"command,omitempty"`
+	Comment string `json:"comment,omitempty"`
+	Delay   int    `json:"delay,omitempty"`
+	Enabled bool   `json:"enabled"`
+
+	// 兼容：映射回原始录制序号
+	OriginalIndex int `json:"original_index,omitempty"`
+}
+
 // ScriptStatus 脚本录制状态
 type ScriptStatus struct {
 	IsRecording  bool   `json:"is_recording"`
@@ -83,4 +107,45 @@ type ScriptStatus struct {
 	Name         string `json:"name,omitempty"`
 	CommandCount int    `json:"command_count"`
 	Duration     int64  `json:"duration"` // 已录制时长（秒）
+}
+
+// MigrateCommandsToSteps 将旧的 Commands 迁移为 Steps（向后兼容）
+func (s *Script) MigrateCommandsToSteps() {
+	if len(s.Steps) > 0 {
+		return
+	}
+	if len(s.Commands) == 0 {
+		return
+	}
+
+	s.Steps = make([]ScriptStep, len(s.Commands))
+	for i, cmd := range s.Commands {
+		s.Steps[i] = ScriptStep{
+			Command:       cmd.Content,
+			Comment:       cmd.Comment,
+			Delay:         cmd.Delay,
+			Enabled:       cmd.Enabled,
+			OriginalIndex: cmd.Index,
+		}
+	}
+}
+
+// SyncStepsToCommands 将 Steps 同步回 Commands（保存时保持旧客户端兼容）
+func (s *Script) SyncStepsToCommands() {
+	if len(s.Steps) == 0 {
+		return
+	}
+	commands := make([]ScriptCommand, len(s.Steps))
+	for i, step := range s.Steps {
+		commands[i] = ScriptCommand{
+			RecordedCommand: recorder.RecordedCommand{
+				Index:   i,
+				Content: step.Command,
+			},
+			Comment: step.Comment,
+			Delay:   step.Delay,
+			Enabled: step.Enabled,
+		}
+	}
+	s.Commands = commands
 }

@@ -515,6 +515,46 @@ export namespace recorder {
 
 export namespace script {
 	
+	export class ScriptStep {
+	    command?: string;
+	    comment?: string;
+	    delay?: number;
+	    enabled: boolean;
+	    original_index?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ScriptStep(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.command = source["command"];
+	        this.comment = source["comment"];
+	        this.delay = source["delay"];
+	        this.enabled = source["enabled"];
+	        this.original_index = source["original_index"];
+	    }
+	}
+	export class ScriptVariable {
+	    name: string;
+	    display_name: string;
+	    default_value: string;
+	    required: boolean;
+	    description: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ScriptVariable(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.display_name = source["display_name"];
+	        this.default_value = source["default_value"];
+	        this.required = source["required"];
+	        this.description = source["description"];
+	    }
+	}
 	export class ScriptCommand {
 	    index: number;
 	    content: string;
@@ -565,6 +605,8 @@ export namespace script {
 	    name: string;
 	    description: string;
 	    commands: ScriptCommand[];
+	    variables?: ScriptVariable[];
+	    steps?: ScriptStep[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Script(source);
@@ -590,6 +632,8 @@ export namespace script {
 	        this.name = source["name"];
 	        this.description = source["description"];
 	        this.commands = this.convertValues(source["commands"], ScriptCommand);
+	        this.variables = this.convertValues(source["variables"], ScriptVariable);
+	        this.steps = this.convertValues(source["steps"], ScriptStep);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -631,6 +675,7 @@ export namespace script {
 	        this.duration = source["duration"];
 	    }
 	}
+	
 
 }
 

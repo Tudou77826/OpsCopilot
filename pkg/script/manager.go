@@ -20,10 +20,10 @@ type CommandSender interface {
 
 // Manager 脚本管理器
 type Manager struct {
-	recorder    *recorder.Recorder
-	storagePath string
-	current     *Script
-	mu          sync.RWMutex
+	recorder      *recorder.Recorder
+	storagePath   string
+	current       *Script
+	mu            sync.RWMutex
 	commandSender CommandSender // 用于回放时发送命令
 }
 
@@ -134,6 +134,10 @@ func (m *Manager) UpdateScript(script *Script) error {
 	defer m.mu.Unlock()
 
 	script.UpdatedAt = time.Now()
+
+	// 同步 Steps → Commands（保持向后兼容）
+	script.SyncStepsToCommands()
+
 	return m.saveScript(script)
 }
 
@@ -162,6 +166,9 @@ func (m *Manager) LoadScript(scriptID string) (*Script, error) {
 
 	// 同步基础会话数据
 	script.SyncFromRecordingSession(session)
+
+	// 向后兼容：自动将 Commands 迁移为 Steps
+	script.MigrateCommandsToSteps()
 
 	return script, nil
 }
@@ -209,6 +216,11 @@ func (m *Manager) DeleteScript(scriptID string) error {
 
 // ReplayScript 回放脚本
 func (m *Manager) ReplayScript(scriptID string, sessionID string) error {
+	return m.ReplayScriptWithVars(scriptID, sessionID, nil)
+}
+
+// ReplayScriptWithVars 带变量值的回放脚本
+func (m *Manager) ReplayScriptWithVars(scriptID string, sessionID string, varValues map[string]string) error {
 	log.Printf("[ScriptReplay] Starting replay: scriptID=%s, sessionID=%s", scriptID, sessionID)
 
 	// 加载脚本
@@ -218,28 +230,58 @@ func (m *Manager) ReplayScript(scriptID string, sessionID string) error {
 		return err
 	}
 
-	log.Printf("[ScriptReplay] Loaded script '%s' with %d commands", scriptData.Name, len(scriptData.Commands))
+	// 合并变量：默认值 + 用户提供的值
+	mergedVars := make(map[string]string)
+	for _, v := range scriptData.Variables {
+		mergedVars[v.Name] = v.DefaultValue
+	}
+	for k, v := range varValues {
+		mergedVars[k] = v
+	}
 
-	// 逐条执行命令
-	for i, cmd := range scriptData.Commands {
+	ctx := NewPlaybackContext(mergedVars)
+
+	// 优先使用步骤树
+	if len(scriptData.Steps) > 0 {
+		return m.replaySteps(scriptData.Steps, ctx, sessionID)
+	}
+
+	// 降级到旧的命令列表模式
+	log.Printf("[ScriptReplay] Loaded script '%s' with %d commands (legacy mode)", scriptData.Name, len(scriptData.Commands))
+	return m.replayCommands(scriptData.Commands, ctx, sessionID)
+}
+
+// replaySteps 使用步骤树回放
+func (m *Manager) replaySteps(steps []ScriptStep, ctx *PlaybackContext, sessionID string) error {
+	if m.commandSender == nil {
+		return fmt.Errorf("command sender not set")
+	}
+	return ExecuteSteps(steps, ctx, m.commandSender, sessionID)
+}
+
+// replayCommands 使用旧命令列表回放
+func (m *Manager) replayCommands(commands []ScriptCommand, ctx *PlaybackContext, sessionID string) error {
+	if m.commandSender == nil {
+		return fmt.Errorf("command sender not set")
+	}
+
+	for i, cmd := range commands {
 		if !cmd.Enabled {
 			log.Printf("[ScriptReplay] Skipping disabled command %d: %s", i, cmd.Content)
 			continue
 		}
 
-		// 延迟
 		if cmd.Delay > 0 {
 			time.Sleep(time.Duration(cmd.Delay) * time.Millisecond)
 		}
 
-		// 发送命令
-		log.Printf("[ScriptReplay] Executing command %d: %s", i, cmd.Content)
-		if err := m.commandSender.SendCommand(sessionID, cmd.Content+"\n"); err != nil {
+		command := SubstituteVariables(cmd.Content, ctx.Variables)
+		log.Printf("[ScriptReplay] Executing command %d: %s", i, command)
+		if err := m.commandSender.SendCommand(sessionID, command+"\n"); err != nil {
 			log.Printf("[ScriptReplay] Failed to execute command '%s': %v", cmd.Content, err)
 			return fmt.Errorf("failed to execute command '%s': %w", cmd.Content, err)
 		}
 
-		// 等待命令执行完成（简单等待，可以根据提示符优化）
 		time.Sleep(500 * time.Millisecond)
 	}
 
@@ -258,26 +300,50 @@ func (m *Manager) ExportScript(scriptID string) (string, error) {
 
 	sb.WriteString("#!/bin/bash\n")
 	sb.WriteString(fmt.Sprintf("# %s\n", script.Name))
-	sb.WriteString(fmt.Sprintf("# %s\n\n", script.Description))
+	if script.Description != "" {
+		sb.WriteString(fmt.Sprintf("# %s\n", script.Description))
+	}
 	sb.WriteString(fmt.Sprintf("# Recorded: %s\n", script.StartTime.Format("2006-01-02 15:04:05")))
 	if script.Host != "" {
-		sb.WriteString(fmt.Sprintf("# Host: %s@%s\n\n", script.User, script.Host))
+		sb.WriteString(fmt.Sprintf("# Host: %s@%s\n", script.User, script.Host))
+	}
+	sb.WriteString("\nset -e\n\n")
+
+	// 导出变量定义
+	if len(script.Variables) > 0 {
+		sb.WriteString("# === 变量定义 ===\n")
+		for _, v := range script.Variables {
+			if v.DisplayName != "" {
+				sb.WriteString(fmt.Sprintf("# %s\n", v.DisplayName))
+			}
+			if v.Description != "" {
+				sb.WriteString(fmt.Sprintf("# %s\n", v.Description))
+			}
+			sb.WriteString(fmt.Sprintf("%s=\"${%s:-%s}\"\n", v.Name, v.Name, v.DefaultValue))
+		}
+		sb.WriteString("\n")
 	}
 
-	for _, cmd := range script.Commands {
-		if !cmd.Enabled {
-			sb.WriteString(fmt.Sprintf("# %s (disabled)\n", cmd.Content))
-			continue
-		}
+	// 导出步骤
+	if len(script.Steps) > 0 {
+		ExportStepsToBash(script.Steps, &sb)
+	} else {
+		// 降级到旧的命令列表
+		for _, cmd := range script.Commands {
+			if !cmd.Enabled {
+				sb.WriteString(fmt.Sprintf("# %s (disabled)\n", cmd.Content))
+				continue
+			}
 
-		if cmd.Comment != "" {
-			sb.WriteString(fmt.Sprintf("# %s\n", cmd.Comment))
-		}
+			if cmd.Comment != "" {
+				sb.WriteString(fmt.Sprintf("# %s\n", cmd.Comment))
+			}
 
-		sb.WriteString(fmt.Sprintf("%s\n", cmd.Content))
+			sb.WriteString(fmt.Sprintf("%s\n", cmd.Content))
 
-		if cmd.Delay > 0 {
-			sb.WriteString(fmt.Sprintf("sleep %f\n", float64(cmd.Delay)/1000))
+			if cmd.Delay > 0 {
+				sb.WriteString(fmt.Sprintf("sleep %g\n", float64(cmd.Delay)/1000))
+			}
 		}
 	}
 
