@@ -782,6 +782,12 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         }
 
         term.open(terminalRef.current);
+
+        // 给终端画布加内边距，避免字符紧贴边缘
+        const xtermEl = terminalRef.current.querySelector('.xterm');
+        if (xtermEl instanceof HTMLElement) {
+            xtermEl.style.padding = '4px 8px';
+        }
         fitAddon.fit();
 
         fitAddonRef.current = fitAddon;
