@@ -148,6 +148,16 @@ func NewApp() *App {
 	// Set the CommandSender to app itself
 	scriptMgr.SetCommandSender(app)
 
+	// 构建知识库目录
+	knowledgeDir := app.resolveKnowledgeBase()
+	if knowledgeDir != "" {
+		if err := aiService.UpdateCatalog(knowledgeDir); err != nil {
+			fmt.Printf("Warning: Failed to build knowledge catalog: %v\n", err)
+		} else if aiService.GetCatalog() != nil {
+			fmt.Printf("[App] Knowledge catalog built: %d scenarios\n", aiService.GetCatalog().TotalScenarios())
+		}
+	}
+
 	return app
 }
 

@@ -1,6 +1,8 @@
 package mcpserver
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"opscopilot/pkg/llm"
 	"opscopilot/pkg/recorder"
 )
 
@@ -40,10 +43,12 @@ type MCPSessionInfo struct {
 // MCPRecorderAdapter MCP 录制器适配器
 // 复用主程序 recorder，添加 MCP 特有功能（服务器追踪、exitCode、findings）
 type MCPRecorderAdapter struct {
-	recorder     *recorder.Recorder
-	current      *MCPSessionInfo
-	knowledgeDir string // 知识库目录
-	mu           sync.RWMutex
+	recorder        *recorder.Recorder
+	current         *MCPSessionInfo
+	knowledgeDir    string       // 知识库目录
+	llmProvider     llm.Provider // LLM 提供者（用于智能提取归档元数据）
+	mu              sync.RWMutex
+	onCatalogUpdate func() // 归档后目录更新回调
 }
 
 // NewMCPRecorderAdapter 创建适配器
@@ -193,6 +198,12 @@ func (a *MCPRecorderAdapter) archiveToKnowledge() error {
 	}
 
 	fmt.Printf("[MCP] Archived to knowledge: %s\n", filePath)
+
+	// 归档后通知更新目录
+	if a.onCatalogUpdate != nil {
+		a.onCatalogUpdate()
+	}
+
 	return nil
 }
 
@@ -200,11 +211,51 @@ func (a *MCPRecorderAdapter) archiveToKnowledge() error {
 func (a *MCPRecorderAdapter) generateKnowledgeMarkdown() string {
 	var sb strings.Builder
 
+	// YAML Front Matter
+	sb.WriteString("---\n")
+	sb.WriteString("service: auto\n")
+	sb.WriteString("module: auto\n")
+	sb.WriteString("type: archive\n")
+	sb.WriteString("---\n\n")
+
 	// 标题
 	sb.WriteString(fmt.Sprintf("# %s\n\n", a.current.Problem))
 
+	// 问题现象
+	sb.WriteString("## 问题现象\n\n")
+	sb.WriteString(a.current.Problem + "\n")
+
+	// 关键词（优先 LLM 智能提取，失败则从命令中提取）
+	keywords, components := a.extractMetadataWithLLM()
+	if len(keywords) == 0 {
+		keywords = extractKeywordsFromCommands(a.current.Commands)
+	}
+	if len(keywords) > 0 {
+		sb.WriteString("\n## 关键词\n\n")
+		sb.WriteString(strings.Join(keywords, ", ") + "\n")
+	}
+
+	// 涉及组件（LLM 提取优先，服务器列表补充）
+	if len(components) == 0 && len(a.current.Servers) > 0 {
+		for server := range a.current.Servers {
+			components = append(components, server)
+		}
+	}
+	if len(components) > 0 {
+		sb.WriteString("\n## 涉及组件\n\n")
+		sb.WriteString(strings.Join(components, ", ") + "\n")
+	}
+
+	// 涉及组件
+	if len(a.current.Servers) > 0 {
+		sb.WriteString("\n## 涉及组件\n\n")
+		for server := range a.current.Servers {
+			sb.WriteString(fmt.Sprintf("- %s\n", server))
+		}
+	}
+
 	// 元信息
-	sb.WriteString("## 概述\n\n")
+	sb.WriteString("\n## 概述\n\n")
 	sb.WriteString(fmt.Sprintf("- **开始时间**: %s\n", a.current.StartTime.Format("2006-01-02 15:04:05")))
 	if a.current.EndTime != nil {
 		sb.WriteString(fmt.Sprintf("- **结束时间**: %s\n", a.current.EndTime.Format("2006-01-02 15:04:05")))
@@ -291,6 +342,126 @@ func slugify(s string) string {
 	}
 
 	return s
+}
+
+// SetOnCatalogUpdate 设置归档后的目录更新回调
+func (a *MCPRecorderAdapter) SetOnCatalogUpdate(fn func()) {
+	a.onCatalogUpdate = fn
+}
+
+// SetLLMProvider 设置 LLM 提供者（用于智能提取归档元数据）
+func (a *MCPRecorderAdapter) SetLLMProvider(provider llm.Provider) {
+	a.llmProvider = provider
+}
+
+// extractKeywordsFromCommands 从命令中提取简单关键词（回退方案）
+func extractKeywordsFromCommands(commands []MCPRecordedCommand) []string {
+	seen := make(map[string]bool)
+	var keywords []string
+	for _, cmd := range commands {
+		parts := strings.Fields(cmd.Command)
+		if len(parts) > 0 {
+			name := parts[0]
+			if !seen[name] && len(name) > 1 {
+				seen[name] = true
+				keywords = append(keywords, name)
+			}
+		}
+	}
+	if len(keywords) > 10 {
+		keywords = keywords[:10]
+	}
+	return keywords
+}
+
+// extractMetadataWithLLM 使用 LLM 从会话内容中提取关键词和涉及组件
+func (a *MCPRecorderAdapter) extractMetadataWithLLM() (keywords []string, components []string) {
+	if a.llmProvider == nil || a.current == nil {
+		return nil, nil
+	}
+
+	// 构建会话摘要（限制长度避免 token 浪费）
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("问题: %s\n", a.current.Problem))
+	if a.current.RootCause != "" {
+		sb.WriteString(fmt.Sprintf("根因: %s\n", a.current.RootCause))
+	}
+	if a.current.Conclusion != "" {
+		sb.WriteString(fmt.Sprintf("方案: %s\n", a.current.Conclusion))
+	}
+	for i, cmd := range a.current.Commands {
+		if i >= 15 {
+			sb.WriteString("...\n")
+			break
+		}
+		sb.WriteString(fmt.Sprintf("命令: %s\n", cmd.Command))
+		// 只取输出的前 200 字符
+		output := cmd.Output
+		if len(output) > 200 {
+			output = output[:200] + "..."
+		}
+		if output != "" {
+			sb.WriteString(fmt.Sprintf("输出: %s\n", output))
+		}
+	}
+	for _, f := range a.current.Findings {
+		sb.WriteString(fmt.Sprintf("发现: %s\n", f))
+	}
+
+	summary := sb.String()
+	if len(summary) > 3000 {
+		summary = summary[:3000]
+	}
+
+	const prompt = `从以下运维排查会话摘要中提取关键词和涉及的技术组件。
+
+输出格式（纯JSON，不要markdown标记）：
+{"keywords": ["关键词1", "关键词2"], "components": ["组件1", "组件2"]}
+
+规则：
+- keywords: 5-10个搜索关键词，包含错误码、技术术语、故障现象词、中间件名
+- components: 涉及的技术组件（如 Nginx、MySQL、Redis、Docker），不含服务器主机名
+- 保持中文关键词为中文，英文为英文
+- 不要编造会话中没有的信息`
+
+	messages := []llm.ChatMessage{
+		{Role: "system", Content: prompt},
+		{Role: "user", Content: summary},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	result, err := a.llmProvider.ChatCompletion(ctx, messages)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[MCPRecorder] LLM metadata extraction failed: %v, using fallback\n", err)
+		return nil, nil
+	}
+
+	// 清理 JSON 响应
+	cleaned := strings.TrimSpace(result)
+	cleaned = strings.TrimPrefix(cleaned, "```json")
+	cleaned = strings.TrimPrefix(cleaned, "```")
+	cleaned = strings.TrimSuffix(cleaned, "```")
+	cleaned = strings.TrimSpace(cleaned)
+
+	var parsed struct {
+		Keywords   []string `json:"keywords"`
+		Components []string `json:"components"`
+	}
+	if err := json.Unmarshal([]byte(cleaned), &parsed); err != nil {
+		fmt.Fprintf(os.Stderr, "[MCPRecorder] LLM metadata parse failed: %v, using fallback\n", err)
+		return nil, nil
+	}
+
+	if len(parsed.Keywords) > 10 {
+		parsed.Keywords = parsed.Keywords[:10]
+	}
+	if len(parsed.Components) > 10 {
+		parsed.Components = parsed.Components[:10]
+	}
+
+	return parsed.Keywords, parsed.Components
 }
 
 // GetCurrentSession 获取当前会话

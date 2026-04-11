@@ -36,13 +36,8 @@ func (p *ScriptedProvider) ChatWithTools(ctx context.Context, messages []llm.Cha
 }
 
 func TestAgentLoop(t *testing.T) {
-	// Disable Wails Emit for tests
-	SetEventEmitter(func(ctx context.Context, optionalData string, optionalData2 ...interface{}) {
-		// Do nothing
-	})
-	defer SetEventEmitter(nil) // Reset or set back to original if accessible, but here just nil is risky if tests run parallel.
-	// Better: Set a mock that logs?
-	// Or just do nothing.
+	SetEventEmitter(func(ctx context.Context, optionalData string, optionalData2 ...interface{}) {})
+	defer SetEventEmitter(nil)
 
 	// 1. Setup Test Knowledge Base
 	tmpDir, err := os.MkdirTemp("", "agent_test_docs")
@@ -51,197 +46,171 @@ func TestAgentLoop(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	err = os.WriteFile(filepath.Join(tmpDir, "network.md"), []byte("# Network Troubleshooting\nCheck ping."), 0644)
+	err = os.WriteFile(filepath.Join(tmpDir, "network.md"), []byte(`---
+service: Network Service
+module: 基础网络
+---
+
+# Network Troubleshooting
+
+## 场景：网络延迟高
+
+- **现象**: 网络响应慢，ping 延迟高
+- **关键词**: network, slow, ping, 延迟, 慢
+- **涉及组件**: 路由器, 交换机
+
+Check ping and traceroute.
+`), 0644)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = os.WriteFile(filepath.Join(tmpDir, "payment.md"), []byte("# 支付系统排查\n支付超时常见原因：网关异常、DNS、路由。"), 0644)
+	// 构建 catalog
+	cat, err := knowledge.BuildCatalog(tmpDir)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("BuildCatalog error: %v", err)
 	}
 
 	// 2. Define Test Script
-	// Scenario: User asks "network slow".
-	// Step 1: Agent calls SearchKnowledge
-	// Step 2: Agent (internal) calls LLM to extract weighted terms
-	// Step 3: Agent calls ReadFile("network.md")
-	// Step 4: Agent answers
+	// 新流程（2轮LLM调用）:
+	//   Round 1: LLM 看到目录上下文 → 调用 read_knowledge_file
+	//   Round 2: LLM 看到文件内容 → 生成最终回答
 
 	mockProvider := &ScriptedProvider{
 		T: t,
 		Responses: []func(messages []llm.ChatMessage, tools []llm.Tool) (*llm.ChatResponse, error){
-			// Round 1: Expect User Question, Return ToolCall SearchKnowledge
+			// Round 1: LLM 看到带目录的系统提示，决定读取文件
 			func(messages []llm.ChatMessage, tools []llm.Tool) (*llm.ChatResponse, error) {
-				lastMsg := messages[len(messages)-1]
-				if lastMsg.Role != "user" {
-					t.Errorf("Round 1: Expected user message, got %s", lastMsg.Role)
+				// 验证系统提示包含目录
+				systemMsg := messages[0]
+				if systemMsg.Role != "system" {
+					t.Errorf("Round 1: first message should be system, got %s", systemMsg.Role)
 				}
+				if !strings.Contains(systemMsg.Content, "知识库问题目录") {
+					t.Errorf("Round 1: system prompt should contain catalog, got: %s", systemMsg.Content[:min(200, len(systemMsg.Content))])
+				}
+				if !strings.Contains(systemMsg.Content, "Network Service") {
+					t.Errorf("Round 1: system prompt should contain 'Network Service'")
+				}
+
+				// 验证工具列表只有 read_knowledge_file
+				foundReadTool := false
+				for _, tool := range tools {
+					if tool.Function.Name == "read_knowledge_file" {
+						foundReadTool = true
+					}
+					if tool.Function.Name == "search_knowledge" || tool.Function.Name == "list_knowledge_files" {
+						t.Errorf("Round 1: should NOT have search/list tools, got %s", tool.Function.Name)
+					}
+				}
+				if !foundReadTool {
+					t.Error("Round 1: should have read_knowledge_file tool")
+				}
+
 				return &llm.ChatResponse{
-					Content: "Thinking...",
+					Content: "Reading...",
 					ToolCalls: []llm.ToolCall{
 						{
 							ID:   "call_1",
 							Type: "function",
 							Function: llm.FunctionCall{
-								Name:      knowledge.ToolSearch,
-								Arguments: `{"query":"network slow","top_k":5}`,
+								Name:      "read_knowledge_file",
+								Arguments: `{"path": "network.md", "section": "网络延迟高"}`,
 							},
 						},
 					},
 				}, nil
 			},
-			// Round 2: Keyword extraction ChatCompletion (no tools)
+			// Round 2: LLM 生成最终回答
 			func(messages []llm.ChatMessage, tools []llm.Tool) (*llm.ChatResponse, error) {
-				if tools != nil && len(tools) != 0 {
-					t.Errorf("Round 2: Expected no tools, got %d", len(tools))
-				}
+				// 验证收到了工具结果
 				lastMsg := messages[len(messages)-1]
-				if lastMsg.Role != "user" {
-					t.Errorf("Round 2: Expected user message, got %s", lastMsg.Role)
+				if lastMsg.Role != "tool" || lastMsg.Name != "read_knowledge_file" {
+					t.Errorf("Round 2: Expected tool output for read_knowledge_file, got %v", lastMsg)
 				}
-				return &llm.ChatResponse{
-					Content: `[{"term":"network","weight":5},{"term":"ping","weight":3}]`,
-				}, nil
-			},
-			// Round 3: Expect Tool Output (Search hits), Return ToolCall ReadFile
-			func(messages []llm.ChatMessage, tools []llm.Tool) (*llm.ChatResponse, error) {
-				lastMsg := messages[len(messages)-1]
-				if lastMsg.Role != "tool" || lastMsg.Name != knowledge.ToolSearch {
-					t.Errorf("Round 3: Expected tool output for SearchKnowledge, got %v", lastMsg)
-				}
-				if !strings.Contains(lastMsg.Content, "network.md") {
-					t.Errorf("Round 3: Expected search hits to contain network.md, got %s", lastMsg.Content)
+				if !strings.Contains(lastMsg.Content, "ping") && !strings.Contains(lastMsg.Content, "场景") {
+					t.Errorf("Round 2: Expected content to contain 'ping' or '场景', got %s", lastMsg.Content)
 				}
 
 				return &llm.ChatResponse{
-					Content: "Reading file...",
-					ToolCalls: []llm.ToolCall{
-						{
-							ID:   "call_2",
-							Type: "function",
-							Function: llm.FunctionCall{
-								Name:      knowledge.ToolReadFile,
-								Arguments: `{"path": "network.md"}`,
-							},
-						},
-					},
-				}, nil
-			},
-			// Round 4: Expect Tool Output (Content), Return Final Answer
-			func(messages []llm.ChatMessage, tools []llm.Tool) (*llm.ChatResponse, error) {
-				lastMsg := messages[len(messages)-1]
-				if lastMsg.Role != "tool" || lastMsg.Name != knowledge.ToolReadFile {
-					t.Errorf("Round 4: Expected tool output for ReadFile, got %v", lastMsg)
-				}
-				if !strings.Contains(lastMsg.Content, "Check ping") {
-					t.Errorf("Round 4: Expected content to contain 'Check ping', got %s", lastMsg.Content)
-				}
-
-				return &llm.ChatResponse{
-					Content:   "You should check ping.",
-					ToolCalls: nil, // Done
+					Content:   "You should check ping and traceroute.",
+					ToolCalls: nil,
 				}, nil
 			},
 		},
 	}
 
 	// 3. Initialize Service
-	cfgMgr := config.NewManager() // Defaults
+	cfgMgr := config.NewManager()
 	svc := NewAIService(mockProvider, mockProvider, cfgMgr)
 
 	// 4. Run Agent
-	answer, err := svc.AskWithContext(context.Background(), "network slow", tmpDir)
+	answer, err := svc.RunAgent(context.Background(), AgentRunOptions{
+		Question:     "network slow",
+		KnowledgeDir: tmpDir,
+		SystemPrompt: "",
+		RetryMax:     5,
+		Catalog:      cat,
+	})
 	if err != nil {
 		t.Fatalf("Agent run failed: %v", err)
 	}
 
 	// 5. Verify Result
-	if answer != "You should check ping." {
-		t.Errorf("Expected final answer 'You should check ping.', got '%s'", answer)
+	if answer != "You should check ping and traceroute." {
+		t.Errorf("Expected 'You should check ping and traceroute.', got '%s'", answer)
 	}
 
-	if mockProvider.CallCount != 4 {
-		t.Errorf("Expected 4 LLM calls, got %d", mockProvider.CallCount)
+	if mockProvider.CallCount != 2 {
+		t.Errorf("Expected 2 LLM calls (down from 4), got %d", mockProvider.CallCount)
 	}
 }
 
-func TestAgentSearchChineseInputWithEnglishTerms(t *testing.T) {
+func TestAgentCatalogInjection(t *testing.T) {
 	SetEventEmitter(func(ctx context.Context, optionalData string, optionalData2 ...interface{}) {})
 	defer SetEventEmitter(nil)
 
-	tmpDir, err := os.MkdirTemp("", "agent_test_docs_zh")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	err = os.WriteFile(filepath.Join(tmpDir, "payment.md"), []byte("# 支付系统排查\n支付超时常见原因：网关异常、DNS、路由。"), 0644)
-	if err != nil {
-		t.Fatal(err)
+	// 构建一个带条目的 catalog
+	cat := &knowledge.Catalog{
+		Services: []knowledge.ServiceEntry{
+			{
+				Name: "Payment Service",
+				Modules: []knowledge.ModuleEntry{
+					{
+						Name: "核心支付模块",
+						Scenarios: []knowledge.ScenarioEntry{
+							{
+								Title:     "支付超时",
+								File:      "payment.md",
+								LineStart: 1,
+								LineEnd:   5,
+								Phenomena: "支付接口504",
+								Keywords:  []string{"504", "timeout", "支付"},
+								Type:      "sop",
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	mockProvider := &ScriptedProvider{
 		T: t,
 		Responses: []func(messages []llm.ChatMessage, tools []llm.Tool) (*llm.ChatResponse, error){
 			func(messages []llm.ChatMessage, tools []llm.Tool) (*llm.ChatResponse, error) {
-				lastMsg := messages[len(messages)-1]
-				if lastMsg.Role != "user" {
-					t.Errorf("Round 1: Expected user message, got %s", lastMsg.Role)
+				systemMsg := messages[0]
+				// 验证目录被注入
+				if !strings.Contains(systemMsg.Content, "Payment Service") {
+					t.Errorf("system prompt should contain 'Payment Service', got: %s", systemMsg.Content)
 				}
-				return &llm.ChatResponse{
-					Content: "Thinking...",
-					ToolCalls: []llm.ToolCall{
-						{
-							ID:   "call_1",
-							Type: "function",
-							Function: llm.FunctionCall{
-								Name:      knowledge.ToolSearch,
-								Arguments: `{"query":"payment timeout troubleshooting","top_k":5}`,
-							},
-						},
-					},
-				}, nil
-			},
-			func(messages []llm.ChatMessage, tools []llm.Tool) (*llm.ChatResponse, error) {
-				return &llm.ChatResponse{
-					Content: `[{"term":"payment","weight":5},{"term":"timeout","weight":5}]`,
-				}, nil
-			},
-			func(messages []llm.ChatMessage, tools []llm.Tool) (*llm.ChatResponse, error) {
-				lastMsg := messages[len(messages)-1]
-				if lastMsg.Role != "tool" || lastMsg.Name != knowledge.ToolSearch {
-					t.Errorf("Round 3: Expected tool output for SearchKnowledge, got %v", lastMsg)
-				}
-				if !strings.Contains(lastMsg.Content, "payment.md") {
-					t.Errorf("Round 3: Expected search hits to contain payment.md, got %s", lastMsg.Content)
+				if !strings.Contains(systemMsg.Content, "支付超时") {
+					t.Errorf("system prompt should contain scenario title '支付超时'")
 				}
 
+				// 直接回答（不调用工具）
 				return &llm.ChatResponse{
-					Content: "Reading file...",
-					ToolCalls: []llm.ToolCall{
-						{
-							ID:   "call_2",
-							Type: "function",
-							Function: llm.FunctionCall{
-								Name:      knowledge.ToolReadFile,
-								Arguments: `{"path": "payment.md"}`,
-							},
-						},
-					},
-				}, nil
-			},
-			func(messages []llm.ChatMessage, tools []llm.Tool) (*llm.ChatResponse, error) {
-				lastMsg := messages[len(messages)-1]
-				if lastMsg.Role != "tool" || lastMsg.Name != knowledge.ToolReadFile {
-					t.Errorf("Round 4: Expected tool output for ReadFile, got %v", lastMsg)
-				}
-				if !strings.Contains(lastMsg.Content, "支付超时") {
-					t.Errorf("Round 4: Expected content to contain '支付超时', got %s", lastMsg.Content)
-				}
-
-				return &llm.ChatResponse{
-					Content:   "请检查网关与路由。",
+					Content:   "请检查支付网关配置。",
 					ToolCalls: nil,
 				}, nil
 			},
@@ -251,14 +220,89 @@ func TestAgentSearchChineseInputWithEnglishTerms(t *testing.T) {
 	cfgMgr := config.NewManager()
 	svc := NewAIService(mockProvider, mockProvider, cfgMgr)
 
-	answer, err := svc.AskWithContext(context.Background(), "支付超时怎么排查", tmpDir)
+	answer, err := svc.RunAgent(context.Background(), AgentRunOptions{
+		Question:     "支付超时怎么办",
+		KnowledgeDir: "",
+		RetryMax:     5,
+		Catalog:      cat,
+	})
 	if err != nil {
 		t.Fatalf("Agent run failed: %v", err)
 	}
-	if answer != "请检查网关与路由。" {
-		t.Errorf("Expected final answer, got '%s'", answer)
+
+	if answer != "请检查支付网关配置。" {
+		t.Errorf("Expected '请检查支付网关配置。', got '%s'", answer)
 	}
-	if mockProvider.CallCount != 4 {
-		t.Errorf("Expected 4 LLM calls, got %d", mockProvider.CallCount)
+
+	if mockProvider.CallCount != 1 {
+		t.Errorf("Expected 1 LLM call, got %d", mockProvider.CallCount)
 	}
+}
+
+func TestAgentWithoutCatalog(t *testing.T) {
+	SetEventEmitter(func(ctx context.Context, optionalData string, optionalData2 ...interface{}) {})
+	defer SetEventEmitter(nil)
+
+	tmpDir, err := os.MkdirTemp("", "agent_test_no_cat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	err = os.WriteFile(filepath.Join(tmpDir, "test.md"), []byte("# Test\nSome content."), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mockProvider := &ScriptedProvider{
+		T: t,
+		Responses: []func(messages []llm.ChatMessage, tools []llm.Tool) (*llm.ChatResponse, error){
+			func(messages []llm.ChatMessage, tools []llm.Tool) (*llm.ChatResponse, error) {
+				systemMsg := messages[0]
+				// 无 catalog 时不应包含 "知识库问题目录" 这个标题
+				if strings.Contains(systemMsg.Content, "## 知识库问题目录") {
+					t.Error("system prompt should NOT contain catalog header when Catalog is nil")
+				}
+				// 仍然应该有 read_knowledge_file 工具
+				foundReadTool := false
+				for _, tool := range tools {
+					if tool.Function.Name == "read_knowledge_file" {
+						foundReadTool = true
+					}
+				}
+				if !foundReadTool {
+					t.Error("should still have read_knowledge_file tool")
+				}
+
+				return &llm.ChatResponse{
+					Content:   "知识库暂无相关文档。",
+					ToolCalls: nil,
+				}, nil
+			},
+		},
+	}
+
+	cfgMgr := config.NewManager()
+	svc := NewAIService(mockProvider, mockProvider, cfgMgr)
+
+	answer, err := svc.RunAgent(context.Background(), AgentRunOptions{
+		Question:     "test question",
+		KnowledgeDir: tmpDir,
+		RetryMax:     5,
+		Catalog:      nil, // 无 catalog
+	})
+	if err != nil {
+		t.Fatalf("Agent run failed: %v", err)
+	}
+
+	if answer != "知识库暂无相关文档。" {
+		t.Errorf("Expected fallback answer, got '%s'", answer)
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

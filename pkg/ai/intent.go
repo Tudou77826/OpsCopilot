@@ -24,6 +24,8 @@ type AIService struct {
 	cfgMgr          *config.Manager
 	mcpClient       mcp.Client // MCP 客户端（可选）
 	mcpManager      MCPManagerProvider // MCP 管理器（可选）
+	catalog         *knowledge.Catalog // 知识库目录
+	knowledgeDir    string             // 知识库目录路径
 }
 
 // MCPManagerProvider MCP 管理器接口
@@ -53,6 +55,27 @@ func (s *AIService) SetMCPClient(client mcp.Client) {
 // SetMCPManager 设置 MCP 管理器
 func (s *AIService) SetMCPManager(manager MCPManagerProvider) {
 	s.mcpManager = manager
+}
+
+// UpdateCatalog 构建并更新知识库目录
+func (s *AIService) UpdateCatalog(knowledgeDir string) error {
+	catalog, err := knowledge.BuildCatalog(knowledgeDir)
+	if err != nil {
+		return err
+	}
+	s.catalog = catalog
+	s.knowledgeDir = knowledgeDir
+	return nil
+}
+
+// GetCatalog 获取当前目录（供外部检查）
+func (s *AIService) GetCatalog() *knowledge.Catalog {
+	return s.catalog
+}
+
+// GetFastProvider 返回 fast provider（供外部模块使用）
+func (s *AIService) GetFastProvider() llm.Provider {
+	return s.fastProvider
 }
 
 func (s *AIService) UpdateProviders(fastProvider llm.Provider, complexProvider llm.Provider) {
@@ -152,6 +175,35 @@ func CleanJSONResponse(resp string) string {
 	return strings.TrimSpace(resp)
 }
 
+// normalizeAgentResponse 清理 Agent 返回结果中的格式问题
+func normalizeAgentResponse(resp string) string {
+	s := strings.TrimSpace(resp)
+
+	// 1. 处理 JSON 包装的 Markdown
+	// 检测 {"summary": "..."} 或 {"content": "..."} 模式
+	if strings.HasPrefix(s, "{") {
+		var wrapper map[string]interface{}
+		if err := json.Unmarshal([]byte(s), &wrapper); err == nil {
+			for _, key := range []string{"summary", "content", "answer", "text"} {
+				if val, ok := wrapper[key].(string); ok && val != "" {
+					s = val
+					break
+				}
+			}
+		}
+	}
+
+	// 2. 处理孤立的代码块标记
+	// 统计 ``` 出现次数，奇数时移除最后一个
+	count := strings.Count(s, "```")
+	if count%2 == 1 {
+		lastIdx := strings.LastIndex(s, "```")
+		s = s[:lastIdx] + s[lastIdx+3:]
+	}
+
+	return strings.TrimSpace(s)
+}
+
 func (s *AIService) AskWithContext(ctx context.Context, question string, knowledgeDir string) (string, error) {
 	prompt := s.cfgMgr.Config.Prompts["qa_prompt"]
 	if prompt == "" {
@@ -238,11 +290,12 @@ func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowled
 			SystemPrompt: prompt,
 			RetryMax:     5,
 			EnableMCP:    false,
+			Catalog:      s.catalog,
 		})
 		if err != nil {
 			return "", err
 		}
-		return CleanJSONResponse(resp), nil
+		return normalizeAgentResponse(resp), nil
 	}
 
 	// 启用 MCP 时，并行运行知识库问答和 MCP 诊断
@@ -265,12 +318,13 @@ func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowled
 			SystemPrompt: prompt,
 			RetryMax:     5,
 			EnableMCP:    false, // 知识库问答不使用 MCP
+			Catalog:      s.catalog,
 		})
 		if err != nil {
 			opsCopilotErr = err
 			return
 		}
-		opsCopilotAnswer = CleanJSONResponse(resp)
+		opsCopilotAnswer = normalizeAgentResponse(resp)
 	}()
 
 	// MCP 诊断
@@ -344,7 +398,7 @@ func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowled
 			externalErr = err
 			return
 		}
-		externalAnswer = CleanJSONResponse(resp)
+		externalAnswer = normalizeAgentResponse(resp)
 	}()
 
 	// 等待知识库问答完成（这是主要结果，必须等待）

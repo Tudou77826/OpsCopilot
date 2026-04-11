@@ -41,12 +41,29 @@ interface TroubleshootingPanelProps {
     onStop?: () => void;
 }
 
+// Stage display configuration: maps backend stage names to user-friendly labels, icons, and colors
+const STAGE_CONFIG: Record<string, { label: string; icon: string; color: string }> = {
+    thinking:       { label: '分析中',   icon: '🧠', color: '#8b9cf7' },
+    catalog_match:  { label: '匹配知识库', icon: '🎯', color: '#7ac5d8' },
+    reading:        { label: '查阅文档', icon: '📖', color: '#7ac5d8' },
+    mcp_call:       { label: '调用工具', icon: '🔧', color: '#d4a843' },
+    answering:      { label: '生成回答', icon: '✍️', color: '#6ecf8a' },
+    retrying:       { label: '重试中',   icon: '🔄', color: '#e0a050' },
+    error:          { label: '出错',     icon: '⚠️', color: '#e06060' },
+};
+
+function getStageConfig(stage: string) {
+    return STAGE_CONFIG[stage] || { label: stage, icon: '⚙️', color: '#888' };
+}
+
 const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, onStop }) => {
     const [isInvestigating, setIsInvestigating] = useState(false);
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
     const [agentStatus, setAgentStatus] = useState<{ stage: string; message: string } | null>(null);
     const [agentStatusHistory, setAgentStatusHistory] = useState<AgentStatusEvent[]>([]);
+    const [catalogMatches, setCatalogMatches] = useState<string[]>([]);
+    const catalogMatchRef = useRef<string[]>([]);
     const [lastUsedDocs, setLastUsedDocs] = useState<string[]>([]);
     const usedDocsRef = useRef<Set<string>>(new Set());
     const [isStopping, setIsStopping] = useState(false);
@@ -135,8 +152,10 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         }
 
         try {
-            setAgentStatus({ stage: 'thinking', message: '正在分析问题...' });
+            setAgentStatus({ stage: 'thinking', message: '正在分析问题，扫描知识库目录...' });
             setAgentStatusHistory([]);
+            setCatalogMatches([]);
+            catalogMatchRef.current = [];
             setLastUsedDocs([]);
             usedDocsRef.current = new Set();
             let cancelStatus: (() => void) | undefined;
@@ -160,6 +179,10 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                         if (stage === 'reading') {
                             const doc = extractDocFromReadingMessage(message);
                             if (doc) usedDocsRef.current.add(doc);
+                        }
+                        if (stage === 'catalog_match') {
+                            catalogMatchRef.current = [...catalogMatchRef.current, message];
+                            setCatalogMatches([...catalogMatchRef.current]);
                         }
                     });
                 }
@@ -251,6 +274,8 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         setMessages([]);
         setAgentStatus(null);
         setAgentStatusHistory([]);
+        setCatalogMatches([]);
+        catalogMatchRef.current = [];
         setLastUsedDocs([]);
         usedDocsRef.current = new Set();
         setViewMode('opscopilot');
@@ -318,8 +343,10 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         setMessages(prev => [...prev, userMsg]);
         setInput('');
 
-        setAgentStatus({ stage: 'thinking', message: '正在分析...' });
+        setAgentStatus({ stage: 'thinking', message: '正在分析问题，扫描知识库目录...' });
         setAgentStatusHistory([]);
+        setCatalogMatches([]);
+        catalogMatchRef.current = [];
         setLastUsedDocs([]);
         usedDocsRef.current = new Set();
         let cancelStatus: (() => void) | undefined;
@@ -343,6 +370,10 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                     if (stage === 'reading') {
                         const doc = extractDocFromReadingMessage(message);
                         if (doc) usedDocsRef.current.add(doc);
+                    }
+                    if (stage === 'catalog_match') {
+                        catalogMatchRef.current = [...catalogMatchRef.current, message];
+                        setCatalogMatches([...catalogMatchRef.current]);
                     }
                 });
             }
@@ -425,7 +456,31 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         }
     };
 
+    const preprocessContent = (content: string): string => {
+        let text = content;
+
+        // 1. 尝试从 JSON 包装中提取文本
+        try {
+            const trimmed = text.trim();
+            if (trimmed.startsWith('{')) {
+                const data = JSON.parse(trimmed);
+                for (const key of ['summary', 'content', 'answer', 'text']) {
+                    if (data[key] && typeof data[key] === 'string') {
+                        text = data[key];
+                        break;
+                    }
+                }
+            }
+        } catch {}
+
+        // 2. 确保标题前有空行（修复 `文字\n## 标题` → `文字\n\n## 标题`）
+        text = text.replace(/([^\n])\n(#{1,6} )/g, '$1\n\n$2');
+
+        return text;
+    };
+
     const renderMessageContent = (content: string) => {
+        content = preprocessContent(content);
         try {
             // Check if content looks like JSON before parsing
             let jsonContent = content.trim();
@@ -704,21 +759,62 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                             ))
                         )}
                         <div ref={messagesEndRef} />
-                        {agentStatus && (
-                            <div style={styles.statusIndicator}>
-                                <span style={styles.spinner}>⚙️</span> {agentStatus.message}
-                            </div>
-                        )}
-                        {agentStatus && agentStatusHistory.length > 0 && (
+                        {agentStatus && (() => {
+                            const cfg = getStageConfig(agentStatus.stage);
+                            return (
+                                <div style={styles.statusIndicator}>
+                                    <span style={{...styles.stageIcon, color: cfg.color}}>{cfg.icon}</span>
+                                    <span style={{...styles.stageLabel, color: cfg.color}}>{cfg.label}</span>
+                                    {agentStatus.stage === 'catalog_match' ? (
+                                        <span style={styles.stageBreadcrumb}>{agentStatus.message}</span>
+                                    ) : (
+                                        <span style={styles.stageMessage}>{agentStatus.message.replace(cfg.label, '').replace(cfg.icon, '')}</span>
+                                    )}
+                                </div>
+                            );
+                        })()}
+                        {agentStatus && agentStatusHistory.length > 1 && (
                             <div style={styles.statusHistory}>
-                                {agentStatusHistory.slice(-5).map((s, idx) => (
-                                    <div key={idx} style={styles.statusHistoryLine}>
-                                        {s.stage}: {s.message}
-                                    </div>
-                                ))}
+                                {agentStatusHistory.slice(0, -1).map((s, idx) => {
+                                    const cfg = getStageConfig(s.stage);
+                                    // 对 catalog_match 显示匹配到的场景名（路径最后一段）
+                                    const detail = s.stage === 'catalog_match'
+                                        ? (() => { const parts = s.message.split(' › '); return parts[parts.length - 1] || ''; })()
+                                        : '';
+                                    return (
+                                        <div key={idx} style={styles.statusHistoryLine}>
+                                            <span style={{...styles.historyIcon, color: cfg.color}}>{cfg.icon}</span>
+                                            <span style={{...styles.historyLabel, color: cfg.color}}>{cfg.label}</span>
+                                            {detail && <span style={styles.historyDetail}>{detail}</span>}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
-                        {!troubleshootResult && !agentStatus && lastUsedDocs.length > 0 && (
+                        {!troubleshootResult && !agentStatus && catalogMatches.length > 0 && (
+                            <div style={styles.usedDocsBox}>
+                                <div style={styles.usedDocsTitle}>知识库匹配路径</div>
+                                <div style={styles.usedDocsList}>
+                                    {catalogMatches.map((path, idx) => {
+                                        const parts = path.split(' › ');
+                                        return (
+                                            <span key={idx} style={styles.catalogPathChip}>
+                                                {parts.map((part, pi) => (
+                                                    <span key={pi}>
+                                                        {pi > 0 && <span style={styles.catalogPathSep}> / </span>}
+                                                        <span style={{
+                                                            color: pi === parts.length - 1 ? '#ccc' : '#777',
+                                                            fontWeight: pi === parts.length - 1 ? 500 : 400,
+                                                        }}>{part}</span>
+                                                    </span>
+                                                ))}
+                                            </span>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                        {!troubleshootResult && !agentStatus && lastUsedDocs.length > 0 && catalogMatches.length === 0 && (
                             <div style={styles.usedDocsBox}>
                                 <div style={styles.usedDocsTitle}>本次参考文档</div>
                                 <div style={styles.usedDocsList}>
@@ -970,27 +1066,61 @@ const styles = {
         display: 'flex',
         alignItems: 'center',
         gap: '6px',
-        fontStyle: 'italic',
-        animation: 'fadeIn 0.3s ease',
+        backgroundColor: '#1e1e1e',
+        borderRadius: '6px',
+        margin: '0 4px',
+        border: '1px solid #2a2a2a',
     },
-    spinner: {
-        display: 'inline-block',
-        animation: 'spin 2s linear infinite',
-        fontStyle: 'normal',
+    stageIcon: {
+        fontSize: '14px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        animation: 'pulse 1.5s ease-in-out infinite',
+    },
+    stageLabel: {
+        fontSize: '12px',
+        fontWeight: '600' as const,
+        whiteSpace: 'nowrap' as const,
+    },
+    stageMessage: {
+        fontSize: '12px',
+        color: '#999',
+        whiteSpace: 'nowrap' as const,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+    },
+    stageBreadcrumb: {
+        fontSize: '12px',
+        color: '#999',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
     },
     statusHistory: {
-        padding: '6px 12px 10px 12px',
-        borderLeft: '2px solid #333',
-        marginLeft: '8px',
-        color: '#777',
-        fontSize: '12px',
+        padding: '4px 12px',
+        borderLeft: '2px solid #2a2a2a',
+        marginLeft: '14px',
         display: 'flex',
         flexDirection: 'column' as const,
-        gap: '4px',
+        gap: '3px',
     },
     statusHistoryLine: {
-        whiteSpace: 'pre-wrap' as const,
-        wordBreak: 'break-word' as const,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '5px',
+        opacity: 0.5,
+    },
+    historyIcon: {
+        fontSize: '11px',
+        display: 'inline-flex',
+    },
+    historyLabel: {
+        fontSize: '11px',
+        fontWeight: '500' as const,
+    },
+    historyDetail: {
+        fontSize: '11px',
+        color: '#666',
+        marginLeft: '2px',
     },
     usedDocsBox: {
         padding: '10px 12px',
@@ -999,6 +1129,18 @@ const styles = {
         borderRadius: '8px',
         color: '#aaa',
         maxWidth: '95%',
+    },
+    catalogPathChip: {
+        padding: '2px 8px',
+        borderRadius: '999px',
+        backgroundColor: '#2a2a2a',
+        border: '1px solid #3a3a3a',
+        color: '#bbb',
+        fontSize: '11px',
+    },
+    catalogPathSep: {
+        color: '#555',
+        margin: '0 1px',
     },
     usedDocsTitle: {
         fontSize: '12px',
@@ -1476,6 +1618,7 @@ if (!existing) {
     styleSheet.id = 'opscopilot-animations';
     styleSheet.textContent = `
         @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
         /* Troubleshooting switch toggle styles */
         .troubleshoot-switch-slider {

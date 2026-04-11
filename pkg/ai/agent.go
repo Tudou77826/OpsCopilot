@@ -28,44 +28,35 @@ type AgentRunOptions struct {
 	KnowledgeDir string
 	SystemPrompt string
 	RetryMax     int
-	EnableMCP    bool // 是否启用 MCP 工具增强
+	EnableMCP    bool               // 是否启用 MCP 工具增强
+	Catalog      *knowledge.Catalog // 知识库目录（注入 Agent 系统提示）
 }
 
-const agentToolPrompt = "You are OpsCopilot running in Agent mode. You have access to a local knowledge base and the following tools:\n" +
-	"1) search_knowledge: search within documentation content and return top matches with snippets\n" +
-	"2) list_knowledge_files: list available markdown docs\n" +
-	"3) read_knowledge_file: read a specific markdown doc by relative path\n" +
-	"4) MCP tools: Additional diagnostic tools available through MCP (if configured and enabled)\n\n" +
-	"Rules:\n" +
-	"- You MUST call search_knowledge at least once before answering.\n" +
-	"- When calling search_knowledge, keep the query short (keywords/phrases), not the full problem statement.\n" +
-	"- Use the search results to choose which file(s) to read (usually 1-3) before answering.\n" +
-	"- Call list_knowledge_files only if search results are empty or you need to explore the available docs.\n" +
-	"- Only read files that are relevant to the user's question.\n" +
-	"- If MCP tools are available, you may use them for advanced diagnostic capabilities.\n" +
-	"- When calling MCP diagnostic tools, provide a clear and structured problem description, not just raw user input.\n" +
-	"- Structure the problem description for MCP tools: include symptoms, context, and what you've already checked.\n" +
-	"- If the knowledge base does not contain the answer, say so and then answer from general knowledge.\n" +
-	"- Always follow additional system instructions about output format.\n" +
-	"- Always answer in the same language as the user."
+const agentBasePrompt = "你是 OpsCopilot 运维诊断助手。你可以查阅本地知识库来辅助诊断。\n\n" +
+	"## 可用工具\n" +
+	"1. read_knowledge_file: 读取知识库文档（指定 path 和可选的 section）\n\n" +
+	"## 检索策略\n" +
+	"参考上方「知识库问题目录」，综合以下维度找出所有可能相关的场景：\n" +
+	"- 现象匹配：用户描述的故障现象是否与目录中某场景类似\n" +
+	"- 组件关联：用户涉及的组件（如 MySQL、Nginx、Redis）是否出现在目录场景的「涉及组件」中\n" +
+	"- 关键词交叉：用户问题中的关键词与目录场景的关键词是否有重叠\n" +
+	"一次可以读取多个相关场景（多次调用 read_knowledge_file），然后综合分析给出推断。\n" +
+	"不必要求「完全相同的问题」才检索，症状相似、组件相关、根因相近的场景都值得参考。\n\n" +
+	"## 规则\n" +
+	"- 如果目录中没有与用户问题相关的场景，如实告知用户知识库中暂无相关排障文档，不要凭空编造排查建议\n" +
+	"- 输出 Markdown 格式，用 ## 分节，命令用 ```bash 代码块\n" +
+	"- 用中文回答\n" +
+	"- 当调用 MCP 工具时，提供清晰结构化的问题描述\n" +
+	"- Always follow additional system instructions about output format."
 
 // RunAgent executes the ReAct loop
 func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string, error) {
 	runID := uuid.NewString()
 	startAt := time.Now()
-	termCache := &simpleTermCache{data: make(map[string][]knowledge.WeightedTerm)}
 
 	// 创建工具注册器并注册知识库工具
 	registry := tools.NewRegistry()
-	registry.Register(knowledgetools.NewSearchTool(
-		opts.KnowledgeDir,
-		s,
-		knowledgetools.WithOriginalQuery(opts.Question),
-		knowledgetools.WithTermCache(termCache),
-		knowledgetools.WithRetryMax(opts.RetryMax),
-	))
-	registry.Register(knowledgetools.NewListFilesTool(opts.KnowledgeDir))
-	registry.Register(knowledgetools.NewReadFileTool(opts.KnowledgeDir))
+	registry.Register(knowledgetools.NewReadFileTool(opts.KnowledgeDir, opts.Catalog))
 
 	// 构建LLM工具列表
 	llmTools := registry.ToLLMTools()
@@ -102,10 +93,31 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 	}
 
 	// 合并 system messages 为一个，避免某些模型报错 "System message must be at the beginning"
-	systemPrompt := agentToolPrompt
-	if opts.SystemPrompt != "" {
-		systemPrompt = agentToolPrompt + "\n\n" + opts.SystemPrompt
+	var systemPromptBuilder strings.Builder
+	systemPromptBuilder.WriteString(agentBasePrompt)
+
+	// 注入目录上下文
+	if opts.Catalog != nil {
+		catalogText := opts.Catalog.RenderForLLM()
+		if catalogText != "" {
+			systemPromptBuilder.WriteString("\n\n## 知识库问题目录\n\n")
+			systemPromptBuilder.WriteString(catalogText)
+			log.Printf("[Agent][%s] Catalog injected: %d scenarios, %d bytes",
+				runID, opts.Catalog.TotalScenarios(), len(catalogText))
+			log.Printf("[Agent][%s] Catalog content:\n%s", runID, catalogText)
+		} else {
+			log.Printf("[Agent][%s] Catalog present but empty (0 scenarios)", runID)
+		}
+	} else {
+		log.Printf("[Agent][%s] No catalog available", runID)
 	}
+
+	if opts.SystemPrompt != "" {
+		systemPromptBuilder.WriteString("\n\n")
+		systemPromptBuilder.WriteString(opts.SystemPrompt)
+	}
+
+	systemPrompt := systemPromptBuilder.String()
 	messages := []llm.ChatMessage{{Role: "system", Content: systemPrompt}}
 	messages = append(messages, llm.ChatMessage{Role: "user", Content: opts.Question})
 
@@ -122,7 +134,11 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 	log.Printf("[Agent][%s] Start questionLen=%d knowledgeDir=%q knowledgeExists=%t tools=%d", runID, len(opts.Question), opts.KnowledgeDir, knowledgeExists, len(llmTools))
 
 	for i := 0; i < maxSteps; i++ {
-		emitStatus(ctx, runID, "thinking", "正在思考下一步...")
+		if i == 0 {
+			emitStatus(ctx, runID, "thinking", "正在分析问题，扫描知识库目录...")
+		} else {
+			emitStatus(ctx, runID, "thinking", "正在思考下一步...")
+		}
 		stepAt := time.Now()
 		resp, err := retryChatWithTools(ctx, runID, opts.RetryMax, func() (*llm.ChatResponse, error) {
 			return provider.ChatWithTools(ctx, messages, llmTools)
@@ -134,8 +150,11 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 		}
 
 		log.Printf("[Agent][%s] Step=%d LLMOk cost=%s contentLen=%d toolCalls=%d", runID, i+1, llmCost, len(resp.Content), len(resp.ToolCalls))
+		if resp.Content != "" {
+			log.Printf("[Agent][%s] Step=%d LLM thinking: %s", runID, i+1, resp.Content)
+		}
 		for idx, tc := range resp.ToolCalls {
-			log.Printf("[Agent][%s] Step=%d ToolCall#%d id=%s name=%s argsLen=%d", runID, i+1, idx+1, tc.ID, tc.Function.Name, len(tc.Function.Arguments))
+			log.Printf("[Agent][%s] Step=%d ToolCall#%d name=%s args=%s", runID, i+1, idx+1, tc.Function.Name, tc.Function.Arguments)
 		}
 
 		messages = append(messages, llm.ChatMessage{

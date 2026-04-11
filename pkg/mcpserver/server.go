@@ -106,6 +106,31 @@ func NewServer(config *Config) (*Server, error) {
 		// 不阻止启动，只是 get_hints 功能降级
 	}
 
+	// 注入 LLM provider 给归档器，用于智能提取归档元数据
+	if s.aiService != nil {
+		s.mcpRecorder.SetLLMProvider(s.aiService.GetFastProvider())
+	}
+
+	// 构建知识库目录并注册归档后自动更新回调
+	if s.aiService != nil && config.KnowledgeDir != "" {
+		if err := s.aiService.UpdateCatalog(config.KnowledgeDir); err != nil {
+			fmt.Fprintf(os.Stderr, "[MCP] Warning: Failed to build knowledge catalog: %v\n", err)
+		} else if s.aiService.GetCatalog() != nil {
+			fmt.Fprintf(os.Stderr, "[MCP] Knowledge catalog built: %d scenarios\n", s.aiService.GetCatalog().TotalScenarios())
+		}
+
+		// 注册归档后自动重建目录的回调
+		knowledgeDir := config.KnowledgeDir
+		s.mcpRecorder.SetOnCatalogUpdate(func() {
+			fmt.Fprintf(os.Stderr, "[MCP] Archive complete, rebuilding knowledge catalog...\n")
+			if err := s.aiService.UpdateCatalog(knowledgeDir); err != nil {
+				fmt.Fprintf(os.Stderr, "[MCP] Warning: Failed to rebuild catalog after archive: %v\n", err)
+			} else if s.aiService.GetCatalog() != nil {
+				fmt.Fprintf(os.Stderr, "[MCP] Knowledge catalog rebuilt: %d scenarios\n", s.aiService.GetCatalog().TotalScenarios())
+			}
+		})
+	}
+
 	// 初始化白名单管理器
 	whitelistPath := "command_whitelist.json"
 	if config.WhitelistPath != "" {
