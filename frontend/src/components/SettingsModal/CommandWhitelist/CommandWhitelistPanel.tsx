@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { WhitelistConfig, Policy, Command, RiskAssessment } from './types';
+import { WhitelistConfig, Policy, Command } from './types';
 
 interface CommandWhitelistPanelProps {
   onSave?: () => void;
@@ -11,10 +11,6 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [expandedPolicy, setExpandedPolicy] = useState<string | null>(null);
   const [editingPolicy, setEditingPolicy] = useState<Policy | null>(null);
-  const [testingCommand, setTestingCommand] = useState('');
-  const [testResult, setTestResult] = useState<RiskAssessment | null>(null);
-  const [testing, setTesting] = useState(false);
-
   // 用于防抖保存
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // 追踪初始加载是否完成
@@ -86,11 +82,6 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
     }
   };
 
-  const handleToggleLLMCheck = () => {
-    if (!config) return;
-    setConfig({ ...config, llm_check_enabled: !config.llm_check_enabled });
-  };
-
   const handleAddPolicy = () => {
     if (!config) return;
     const newPolicy: Policy = {
@@ -124,26 +115,6 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
     setEditingPolicy(null);
   };
 
-  const handleTestCommand = async () => {
-    if (!testingCommand.trim()) return;
-    setTesting(true);
-    setTestResult(null);
-    try {
-      // @ts-ignore
-      const result = await window.go.main.App.AssessCommandRisk(testingCommand);
-      setTestResult(result);
-    } catch (err) {
-      setTestResult({
-        is_risky: true,
-        risk_level: 'high',
-        reason: `评估失败: ${err}`,
-        suggestions: '',
-      });
-    } finally {
-      setTesting(false);
-    }
-  };
-
   const toggleCommand = (policyId: string, cmdIndex: number) => {
     if (!config) return;
     setConfig({
@@ -157,24 +128,6 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
         return p;
       }),
     });
-  };
-
-  const getRiskColor = (level: string) => {
-    switch (level) {
-      case 'low': return '#4caf50';
-      case 'medium': return '#ff9800';
-      case 'high': return '#f44336';
-      default: return '#9e9e9e';
-    }
-  };
-
-  const getRiskBgColor = (level: string) => {
-    switch (level) {
-      case 'low': return '#1a2a24';
-      case 'medium': return '#2a2518';
-      case 'high': return '#2a1818';
-      default: return '#252526';
-    }
   };
 
   const getCategoryColor = (category: string) => {
@@ -191,74 +144,6 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
 
   return (
     <div style={styles.container}>
-      {/* 全局设置 */}
-      <div style={styles.section}>
-        <div style={styles.sectionHeader}>
-          <span style={styles.sectionTitle}>LLM 风险检查</span>
-          <label style={styles.switch}>
-            <input
-              type="checkbox"
-              checked={config.llm_check_enabled}
-              onChange={handleToggleLLMCheck}
-            />
-            <span style={styles.slider}></span>
-          </label>
-        </div>
-        <div style={styles.sectionDesc}>
-          启用后，对于不在白名单中的命令，将使用 LLM 进行风险评估
-        </div>
-      </div>
-
-      {/* 命令测试区域 */}
-      <div style={styles.section}>
-        <div style={styles.sectionTitle}>命令风险测试</div>
-        <div style={styles.sectionDesc}>
-          输入命令测试 LLM 风险评估功能
-        </div>
-        <div style={styles.testInputRow}>
-          <input
-            type="text"
-            value={testingCommand}
-            onChange={(e) => setTestingCommand(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleTestCommand()}
-            placeholder="输入命令进行风险评估..."
-            style={styles.input}
-          />
-          <button
-            onClick={handleTestCommand}
-            disabled={testing || !testingCommand.trim()}
-            style={{
-              ...styles.primaryBtn,
-              ...(testing || !testingCommand.trim() ? styles.primaryBtnDisabled : {}),
-            }}
-          >
-            {testing ? '评估中...' : '评估'}
-          </button>
-        </div>
-        {testResult && (
-          <div style={{
-            ...styles.testResult,
-            borderColor: getRiskColor(testResult.risk_level),
-            backgroundColor: getRiskBgColor(testResult.risk_level),
-          }}>
-            <div style={styles.testResultHeader}>
-              <span style={{
-                ...styles.riskBadge,
-                backgroundColor: getRiskColor(testResult.risk_level),
-              }}>
-                {testResult.risk_level.toUpperCase()}
-              </span>
-              <span style={styles.testResultReason}>{testResult.reason}</span>
-            </div>
-            {testResult.suggestions && (
-              <div style={styles.testResultSuggestion}>
-                {testResult.suggestions}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
       {/* 策略列表 */}
       <div style={styles.section}>
         <div style={styles.toolbar}>
@@ -695,53 +580,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#fff',
     outline: 'none',
     fontSize: '13px',
-  },
-  testInputRow: {
-    display: 'flex',
-    gap: '8px',
-    marginTop: '12px',
-  },
-  testResult: {
-    marginTop: '12px',
-    padding: '12px',
-    borderRadius: '4px',
-    border: '1px solid',
-  },
-  testResultHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-  },
-  riskBadge: {
-    padding: '2px 8px',
-    borderRadius: '4px',
-    color: '#fff',
-    fontSize: '11px',
-    fontWeight: 600,
-  },
-  testResultReason: {
-    color: '#ccc',
-    fontSize: '13px',
-  },
-  testResultSuggestion: {
-    marginTop: '8px',
-    color: '#888',
-    fontSize: '12px',
-  },
-  // 按钮样式
-  primaryBtn: {
-    padding: '8px 16px',
-    borderRadius: '4px',
-    border: 'none',
-    backgroundColor: '#007acc',
-    color: '#fff',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: 500,
-  },
-  primaryBtnDisabled: {
-    backgroundColor: '#444',
-    cursor: 'not-allowed',
   },
   editBtn: {
     padding: '4px 10px',

@@ -83,8 +83,7 @@ func TestIntegration_CommandWhitelistFlow(t *testing.T) {
 
 	// 6. 测试配置持久化
 	newConfig := &WhitelistConfig{
-		Version:         "1.0",
-		LLMCheckEnabled: true,
+		Version: "1.0",
 		Policies: []Policy{
 			{
 				ID:          "test-policy",
@@ -114,9 +113,6 @@ func TestIntegration_CommandWhitelistFlow(t *testing.T) {
 	}
 
 	loadedConfig := mgr2.GetConfig()
-	if loadedConfig.LLMCheckEnabled != true {
-		t.Error("LLMCheckEnabled not persisted")
-	}
 
 	if len(loadedConfig.Policies) != 1 || loadedConfig.Policies[0].ID != "test-policy" {
 		t.Error("Policy not persisted correctly")

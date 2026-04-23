@@ -392,27 +392,8 @@ export namespace mcpserver {
 		    return a;
 		}
 	}
-	export class RiskAssessment {
-	    is_risky: boolean;
-	    risk_level: string;
-	    reason: string;
-	    suggestions: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new RiskAssessment(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.is_risky = source["is_risky"];
-	        this.risk_level = source["risk_level"];
-	        this.reason = source["reason"];
-	        this.suggestions = source["suggestions"];
-	    }
-	}
 	export class WhitelistConfig {
 	    version: string;
-	    llm_check_enabled: boolean;
 	    policies: Policy[];
 	
 	    static createFrom(source: any = {}) {
@@ -422,7 +403,6 @@ export namespace mcpserver {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.version = source["version"];
-	        this.llm_check_enabled = source["llm_check_enabled"];
 	        this.policies = this.convertValues(source["policies"], Policy);
 	    }
 	

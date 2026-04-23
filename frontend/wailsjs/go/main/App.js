@@ -10,10 +10,6 @@ export function AskTroubleshoot(arg1, arg2) {
   return window['go']['main']['App']['AskTroubleshoot'](arg1, arg2);
 }
 
-export function AssessCommandRisk(arg1) {
-  return window['go']['main']['App']['AssessCommandRisk'](arg1);
-}
-
 export function Broadcast(arg1, arg2) {
   return window['go']['main']['App']['Broadcast'](arg1, arg2);
 }

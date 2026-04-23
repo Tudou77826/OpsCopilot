@@ -10,9 +10,8 @@ const (
 
 // WhitelistConfig 白名单配置
 type WhitelistConfig struct {
-	Version         string   `json:"version"`           // 配置版本
-	LLMCheckEnabled bool     `json:"llm_check_enabled"` // 是否启用 LLM 风险检查
-	Policies        []Policy `json:"policies"`          // 策略列表
+	Version  string   `json:"version"`   // 配置版本
+	Policies []Policy `json:"policies"`  // 策略列表
 }
 
 // Policy 策略（按 IP 段区分）
@@ -40,28 +39,10 @@ type CheckResult struct {
 	PolicyName string          `json:"policy_name"` // 匹配的策略名称
 }
 
-// RiskLevel 风险等级
-type RiskLevel string
-
-const (
-	RiskLow    RiskLevel = "low"    // 低风险
-	RiskMedium RiskLevel = "medium" // 中风险
-	RiskHigh   RiskLevel = "high"   // 高风险
-)
-
-// RiskAssessment LLM 风险评估结果
-type RiskAssessment struct {
-	IsRisky     bool      `json:"is_risky"`     // 是否有风险
-	RiskLevel   RiskLevel `json:"risk_level"`   // 风险等级
-	Reason      string    `json:"reason"`       // 原因说明（中文）
-	Suggestions string    `json:"suggestions"`  // 安全建议（中文）
-}
-
 // DefaultWhitelistConfig 返回默认白名单配置
 func DefaultWhitelistConfig() *WhitelistConfig {
 	return &WhitelistConfig{
-		Version:         "1.0",
-		LLMCheckEnabled: true,
+		Version: "1.0",
 		Policies: []Policy{
 			{
 				ID:          "default",

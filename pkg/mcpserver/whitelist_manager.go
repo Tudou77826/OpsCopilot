@@ -275,26 +275,3 @@ func (m *WhitelistManager) DeletePolicy(policyID string) error {
 
 	return fmt.Errorf("策略 '%s' 不存在", policyID)
 }
-
-// IsLLMCheckEnabled 返回是否启用 LLM 检查
-func (m *WhitelistManager) IsLLMCheckEnabled() bool {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.config.LLMCheckEnabled
-}
-
-// SetLLMCheckEnabled 设置是否启用 LLM 检查
-func (m *WhitelistManager) SetLLMCheckEnabled(enabled bool) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.config.LLMCheckEnabled = enabled
-
-	// 保存配置
-	data, err := json.MarshalIndent(m.config, "", "  ")
-	if err != nil {
-		return fmt.Errorf("序列化配置失败: %w", err)
-	}
-
-	return os.WriteFile(m.configPath, data, 0644)
-}

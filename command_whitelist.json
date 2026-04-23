@@ -1,6 +1,5 @@
 {
   "version": "1.0",
-  "llm_check_enabled": true,
   "policies": [
     {
       "id": "default",

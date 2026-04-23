@@ -51,7 +51,6 @@ type App struct {
 	mcpManager        *mcp.Manager                     // MCP 服务器管理器
 	whitelistMgr      *mcpserver.WhitelistManager      // 命令白名单管理器
 	fileAccessMgr     *mcpserver.FileAccessChecker      // 文件访问控制管理器
-	llmChecker        *mcpserver.LLMChecker            // LLM 风险检查器
 	activeConfigs     map[string]ConnectConfig
 	activeConfigsMu   sync.RWMutex                     // protects activeConfigs
 	ipcServer         *ftipc.Server
@@ -142,8 +141,6 @@ func NewApp() *App {
 		fmt.Printf("Warning: Failed to initialize whitelist manager: %v\n", err)
 	} else {
 		app.whitelistMgr = whitelistMgr
-		// 初始化 LLM 检查器（复用 fast provider）
-		app.llmChecker = mcpserver.NewLLMChecker(fastProvider)
 	}
 
 	// 初始化文件访问控制管理器
@@ -947,14 +944,6 @@ func (a *App) SaveCommandWhitelist(config mcpserver.WhitelistConfig) error {
 		return fmt.Errorf("白名单管理器未初始化")
 	}
 	return a.whitelistMgr.UpdateConfig(&config)
-}
-
-// AssessCommandRisk 使用 LLM 评估命令风险
-func (a *App) AssessCommandRisk(command string) (*mcpserver.RiskAssessment, error) {
-	if a.llmChecker == nil {
-		return nil, fmt.Errorf("LLM 检查器未初始化")
-	}
-	return a.llmChecker.AssessCommand(context.Background(), command)
 }
 
 // GetFileAccessConfig 获取文件访问控制配置

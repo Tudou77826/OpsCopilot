@@ -42,7 +42,6 @@ type Server struct {
 	checker          *CommandChecker          // 简单检查器（向后兼容）
 	whitelistManager *WhitelistManager        // 白名单管理器（新）
 	fileChecker      *FileAccessChecker       // 文件访问检查器（新）
-	llmChecker       *LLMChecker              // LLM 风险检查器（新）
 	localStagingDir  string                   // 本地暂存目录
 	recorder         *recorder.Recorder       // 复用主程序录制器
 	mcpRecorder      *MCPRecorderAdapter      // MCP 适配器
@@ -200,9 +199,6 @@ func (s *Server) initAIService() error {
 
 	// 4. 创建 AIService
 	s.aiService = ai.NewAIService(fastProvider, complexProvider, configMgr)
-
-	// 5. 初始化 LLM 检查器（使用 fast provider）
-	s.llmChecker = NewLLMChecker(fastProvider)
 
 	// 6. 设置空的事件发射器（MCP Server 不需要 UI 事件，避免 Wails runtime 调用）
 	ai.SetEventEmitter(func(ctx context.Context, optionalData string, optionalData2 ...interface{}) {

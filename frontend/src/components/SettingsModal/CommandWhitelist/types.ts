@@ -3,9 +3,6 @@
 // CommandCategory 命令分类
 export type CommandCategory = 'read_only' | 'write';
 
-// RiskLevel 风险等级
-export type RiskLevel = 'low' | 'medium' | 'high';
-
 // Command 命令规则
 export interface Command {
   pattern: string;
@@ -26,22 +23,12 @@ export interface Policy {
 // WhitelistConfig 白名单配置
 export interface WhitelistConfig {
   version: string;
-  llm_check_enabled: boolean;
   policies: Policy[];
-}
-
-// RiskAssessment LLM 风险评估结果
-export interface RiskAssessment {
-  is_risky: boolean;
-  risk_level: RiskLevel;
-  reason: string;
-  suggestions: string;
 }
 
 // 默认配置
 export const DEFAULT_WHITELIST_CONFIG: WhitelistConfig = {
   version: '1.0',
-  llm_check_enabled: true,
   policies: [
     {
       id: 'default',

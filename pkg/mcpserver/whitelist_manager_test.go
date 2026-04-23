@@ -166,8 +166,6 @@ func TestWhitelistManager_SaveAndLoad(t *testing.T) {
 
 	// 修改配置
 	config := mgr1.GetConfig()
-	config.LLMCheckEnabled = true
-
 	newPolicy := Policy{
 		ID:          "persist-test",
 		Name:        "持久化测试",
@@ -190,11 +188,6 @@ func TestWhitelistManager_SaveAndLoad(t *testing.T) {
 	}
 
 	loadedConfig := mgr2.GetConfig()
-
-	// 验证 LLM 检查设置
-	if !loadedConfig.LLMCheckEnabled {
-		t.Error("LLMCheckEnabled not persisted")
-	}
 
 	// 验证策略
 	found := false
