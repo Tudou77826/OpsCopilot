@@ -138,6 +138,23 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
         loadSessions();
     };
 
+    const collectSessions = (node: SessionNode): SessionNode[] => {
+        if (node.type === 'session' && node.config) return [node];
+        if (node.type === 'folder' && node.children) {
+            return node.children.flatMap(collectSessions);
+        }
+        return [];
+    };
+
+    const handleConnectAll = (folder: SessionNode) => {
+        const all = collectSessions(folder);
+        const max = 5;
+        if (all.length === 0) return;
+        const toConnect = all.slice(0, max);
+        if (all.length > max && !confirm(`该文件夹共有 ${all.length} 个会话，最多同时连接 ${max} 个，是否继续？`)) return;
+        toConnect.forEach(s => { if (s.config) onConnect(s.config); });
+    };
+
     // Recursive render
     const renderTree = (nodes: SessionNode[], level: number = 0) => {
         if (!nodes) return null;
@@ -299,6 +316,21 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                                 setContextMenu(null);
                             }}
                         >移出分组</div>
+                    )}
+                    {contextMenu.node.type === 'folder' && contextMenu.node.children && contextMenu.node.children.length > 0 && (
+                        <div
+                            style={{
+                                ...styles.menuItem,
+                                backgroundColor: hoveredMenuItem === 'connectall' ? '#094771' : 'transparent',
+                                color: hoveredMenuItem === 'connectall' ? '#fff' : '#ccc'
+                            }}
+                            onMouseEnter={() => setHoveredMenuItem('connectall')}
+                            onMouseLeave={() => setHoveredMenuItem(null)}
+                            onClick={() => {
+                                handleConnectAll(contextMenu.node);
+                                setContextMenu(null);
+                            }}
+                        >全部连接</div>
                     )}
                     <div 
                         style={{
