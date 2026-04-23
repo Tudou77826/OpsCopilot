@@ -293,6 +293,67 @@ export namespace mcpserver {
 	        this.enabled = source["enabled"];
 	    }
 	}
+	export class FileAccessPolicy {
+	    id: string;
+	    name: string;
+	    ip_ranges: string[];
+	    read_paths: string[];
+	    write_paths: string[];
+	    denied_paths: string[];
+	    allowed_local_dirs: string[];
+	    max_read_bytes: number;
+	    max_write_bytes: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new FileAccessPolicy(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.ip_ranges = source["ip_ranges"];
+	        this.read_paths = source["read_paths"];
+	        this.write_paths = source["write_paths"];
+	        this.denied_paths = source["denied_paths"];
+	        this.allowed_local_dirs = source["allowed_local_dirs"];
+	        this.max_read_bytes = source["max_read_bytes"];
+	        this.max_write_bytes = source["max_write_bytes"];
+	    }
+	}
+	export class FileAccessConfig {
+	    version: string;
+	    policies: FileAccessPolicy[];
+	
+	    static createFrom(source: any = {}) {
+	        return new FileAccessConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.policies = this.convertValues(source["policies"], FileAccessPolicy);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class Policy {
 	    id: string;
 	    name: string;

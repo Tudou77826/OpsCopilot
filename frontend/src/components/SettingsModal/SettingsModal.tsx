@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import KeysMap from './KeysMap';
 import HighlightRulesModal from './HighlightRulesModal';
 import CommandWhitelistPanel from './CommandWhitelist/CommandWhitelistPanel';
+import FileAccessPanel from './FileAccess/FileAccessPanel';
 import { HighlightRule, TerminalConfig } from '../Terminal/highlightTypes';
 
 interface AppConfig {
@@ -42,7 +43,7 @@ interface SettingsModalProps {
     onHighlightRulesChange?: (rules: HighlightRule[]) => void;
 }
 
-type TabId = 'llm' | 'prompts' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'filetransfer' | 'whitelist' | 'experimental';
+type TabId = 'llm' | 'prompts' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'filetransfer' | 'whitelist' | 'fileaccess' | 'experimental';
 
 interface NavItem {
     id: TabId;
@@ -83,6 +84,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         { id: 'broadcast', label: '多窗口', icon: '🪟', category: '交互' },
         { id: 'filetransfer', label: '文件传输', icon: '📁', category: '工具' },
         { id: 'whitelist', label: '命令白名单', icon: '🛡️', category: '安全' },
+        { id: 'fileaccess', label: '文件访问控制', icon: '🔒', category: '安全' },
         { id: 'experimental', label: '高级选项', icon: '🔧', category: '系统' },
     ];
 
@@ -482,6 +484,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
             case 'whitelist':
                 return <CommandWhitelistPanel />;
+
+            case 'fileaccess':
+                return <FileAccessPanel />;
 
             case 'experimental':
                 return (

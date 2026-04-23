@@ -215,6 +215,91 @@ func (s *Server) handleToolsList(req *JSONRPCRequest) {
 				"required": []string{"problem"},
 			},
 		},
+		{
+			Name: "file_download",
+			Description: `从远程服务器通过 SFTP 下载文件到本地。
+
+适用于排障场景中拉取配置文件、日志、数据文件到本地分析。
+文件访问受路径级访问控制策略限制。
+
+使用场景：
+- 下载远程日志文件到本地分析
+- 拉取配置文件查看或备份
+- 获取运行数据用于诊断
+
+注意：
+- 文件大小有上限限制（默认 10MB）
+- 远程路径和本地路径均受访问策略控制
+- 需要服务器支持 SFTP 协议`,
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"server": map[string]interface{}{
+						"type":        "string",
+						"description": "服务器名称（必须是已连接的服务器）",
+					},
+					"remote_path": map[string]interface{}{
+						"type":        "string",
+						"description": "远程文件路径",
+					},
+					"local_path": map[string]interface{}{
+						"type":        "string",
+						"description": "本地保存路径（必须在允许的本地目录内）",
+					},
+					"max_bytes": map[string]interface{}{
+						"type":        "integer",
+						"description": "最大下载字节数（默认 10MB）",
+						"default":     10485760,
+					},
+				},
+				"required": []string{"server", "remote_path", "local_path"},
+			},
+		},
+		{
+			Name: "file_upload",
+			Description: `从本地上传文件到远程服务器（通过 SFTP）。
+
+适用于推送修改后的配置文件、补丁脚本等到远程服务器。
+上传操作默认自动备份远程已有文件，防止误覆盖。
+
+使用场景：
+- 推送修改后的配置文件
+- 上传补丁脚本到远程执行
+- 部署小型文件
+
+注意：
+- 写入路径需要管理员显式配置（默认为空）
+- 上传上限默认 5MB
+- 默认自动备份被覆盖的远程文件`,
+			InputSchema: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"server": map[string]interface{}{
+						"type":        "string",
+						"description": "服务器名称（必须是已连接的服务器）",
+					},
+					"local_path": map[string]interface{}{
+						"type":        "string",
+						"description": "本地文件路径（必须在允许的本地目录内）",
+					},
+					"remote_path": map[string]interface{}{
+						"type":        "string",
+						"description": "远程目标路径",
+					},
+					"backup": map[string]interface{}{
+						"type":        "boolean",
+						"description": "覆盖前自动备份远程文件（默认 true）",
+						"default":     true,
+					},
+					"mkdir": map[string]interface{}{
+						"type":        "boolean",
+						"description": "自动创建远程目标目录（默认 false）",
+						"default":     false,
+					},
+				},
+				"required": []string{"server", "local_path", "remote_path"},
+			},
+		},
 	}
 
 	s.SendResponse(req.ID, map[string]interface{}{
@@ -258,6 +343,10 @@ func (s *Server) handleToolsCall(req *JSONRPCRequest) {
 		result, err = s.toolSessionEnd(arguments)
 	case "get_hints":
 		result, err = s.toolGetHints(arguments)
+	case "file_download":
+		result, err = s.toolFileDownload(arguments)
+	case "file_upload":
+		result, err = s.toolFileUpload(arguments)
 	default:
 		s.SendError(req.ID, -32601, fmt.Sprintf("Tool not found: %s", toolName))
 		return

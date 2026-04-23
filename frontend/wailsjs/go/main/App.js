@@ -114,6 +114,10 @@ export function GetCompletions(arg1, arg2) {
   return window['go']['main']['App']['GetCompletions'](arg1, arg2);
 }
 
+export function GetFileAccessConfig() {
+  return window['go']['main']['App']['GetFileAccessConfig']();
+}
+
 export function GetHighlightRules() {
   return window['go']['main']['App']['GetHighlightRules']();
 }
@@ -216,6 +220,10 @@ export function ResizeTerminal(arg1, arg2, arg3) {
 
 export function SaveCommandWhitelist(arg1) {
   return window['go']['main']['App']['SaveCommandWhitelist'](arg1);
+}
+
+export function SaveFileAccessConfig(arg1) {
+  return window['go']['main']['App']['SaveFileAccessConfig'](arg1);
 }
 
 export function SaveHighlightRules(arg1) {

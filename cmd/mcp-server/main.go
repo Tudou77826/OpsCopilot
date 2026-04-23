@@ -42,6 +42,12 @@ func main() {
 		whitelistPath = filepath.Join(binDir, "command_whitelist.json")
 	}
 
+	// 获取文件访问控制配置文件路径
+	fileAccessPath := os.Getenv("OPSCOPILOT_FILE_ACCESS_PATH")
+	if fileAccessPath == "" {
+		fileAccessPath = filepath.Join(binDir, "file_access.json")
+	}
+
 	// 创建服务器配置
 	serverConfig := &mcpserver.Config{
 		ConfigDir:      binDir,
@@ -49,6 +55,7 @@ func main() {
 		RecordingsDir:  recordingsDir,
 		KnowledgeDir:   knowledgeDir,
 		WhitelistPath:  whitelistPath,
+		FilePath:       fileAccessPath,
 		MaxTotalBytes:  10240,
 		MaxLineLength:  500,
 		HeadLines:      5,

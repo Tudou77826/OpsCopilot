@@ -64,6 +64,8 @@ export function GetCommandWhitelist():Promise<mcpserver.WhitelistConfig>;
 
 export function GetCompletions(arg1:string,arg2:number):Promise<string>;
 
+export function GetFileAccessConfig():Promise<mcpserver.FileAccessConfig>;
+
 export function GetHighlightRules():Promise<Array<config.HighlightRule>>;
 
 export function GetMCPStatus():Promise<string>;
@@ -115,6 +117,8 @@ export function ReplayScriptWithVars(arg1:string,arg2:string,arg3:Record<string,
 export function ResizeTerminal(arg1:string,arg2:number,arg3:number):Promise<void>;
 
 export function SaveCommandWhitelist(arg1:mcpserver.WhitelistConfig):Promise<void>;
+
+export function SaveFileAccessConfig(arg1:mcpserver.FileAccessConfig):Promise<void>;
 
 export function SaveHighlightRules(arg1:Array<config.HighlightRule>):Promise<string>;
 
