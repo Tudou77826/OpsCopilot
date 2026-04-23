@@ -477,6 +477,13 @@ function App() {
         ));
     };
 
+    const handleReorderTerminals = (reorderedIds: string[]) => {
+        setTerminals(prev => {
+            const map = new Map(prev.map(t => [t.id, t]));
+            return reorderedIds.map(id => map.get(id)).filter(Boolean) as TerminalSession[];
+        });
+    };
+
     const handleDuplicateTerminal = (id: string) => {
         const term = terminals.find(t => t.id === id);
         if (!term) return;
@@ -645,6 +652,7 @@ function App() {
                         completionDelay={completionDelay}
                         terminalConfig={terminalConfig}
                         highlightRules={highlightRules}
+                        onReorderTerminals={handleReorderTerminals}
                     />
                 </div>
 

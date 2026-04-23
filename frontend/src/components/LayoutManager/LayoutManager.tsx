@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import TerminalComponent, { TerminalRef } from '../Terminal/Terminal';
 import { HighlightRule, TerminalConfig } from '../Terminal/highlightTypes';
 import { SessionStatus } from '../../types';
@@ -29,15 +29,25 @@ interface LayoutManagerProps {
     completionDelay?: number;
     terminalConfig?: TerminalConfig;
     highlightRules?: HighlightRule[];
+    onReorderTerminals?: (reorderedIds: string[]) => void;
 }
 
-const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTerminalData, terminalRefs, onCloseTerminal, onRenameTerminal, onDuplicateTerminal, onReconnect, onActiveTerminalChange, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast, completionDelay, terminalConfig, highlightRules }) => {
+const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTerminalData, terminalRefs, onCloseTerminal, onRenameTerminal, onDuplicateTerminal, onReconnect, onActiveTerminalChange, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast, completionDelay, terminalConfig, highlightRules, onReorderTerminals }) => {
     const [activeTab, setActiveTab] = useState<string>(terminals[0]?.id || '');
     const [editingTab, setEditingTab] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, id: string } | null>(null);
     const didMountRef = useRef(false);
     const prevTerminalIdsRef = useRef<string[]>([]);
+
+    // Drag state
+    const dragStateRef = useRef<{ draggedId: string } | null>(null);
+    const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
+    const [dragOverPosition, setDragOverPosition] = useState<'before' | 'after'>('after');
+    const [gridDragOverId, setGridDragOverId] = useState<string | null>(null);
+
+    // Collapse state (grid mode)
+    const [collapsedPaneIds, setCollapsedPaneIds] = useState<Set<string>>(new Set());
 
     // Ensure active tab is valid
     React.useEffect(() => {
@@ -113,12 +123,35 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
         return () => clearTimeout(timer);
     }, [terminals.length, mode, terminalRefs]);
 
+    // Clear collapsed state when switching to tab mode
+    React.useEffect(() => {
+        if (mode === 'tab') {
+            setCollapsedPaneIds(new Set());
+        }
+    }, [mode]);
+
+    // Clean up collapsed state when a terminal is removed
+    React.useEffect(() => {
+        setCollapsedPaneIds(prev => {
+            const currentIds = new Set(terminals.map(t => t.id));
+            const next = new Set<string>();
+            prev.forEach(id => {
+                if (currentIds.has(id)) next.add(id);
+            });
+            if (next.size === prev.size) return prev;
+            return next;
+        });
+    }, [terminals]);
+
     if (terminals.length === 0) {
-        return <div style={styles.emptyState}>暂无活动连接。请点击右上角 “+ 新建连接” 开始使用。</div>;
+        return <div style={styles.emptyState}>暂无活动连接。请点击右上角 "+ 新建连接" 开始使用。</div>;
     }
 
+    const visibleTerminals = terminals.filter(t => !collapsedPaneIds.has(t.id));
+    const collapsedTerminals = terminals.filter(t => collapsedPaneIds.has(t.id));
+
     const getGridStyle = () => {
-        const count = terminals.length;
+        const count = visibleTerminals.length;
         let cols = 1;
         let rows = 1;
 
@@ -129,11 +162,10 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
             cols = 3;
             rows = Math.ceil(count / 3);
         }
-        
+
         if (count === 2) {
-             // 2 windows side-by-side (1 row, 2 columns)
-             cols = 2;
-             rows = 1;
+            cols = 2;
+            rows = 1;
         }
 
         return {
@@ -168,200 +200,426 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
         setContextMenu({ x: e.clientX, y: e.clientY, id });
     };
 
+    // --- Tab Drag Handlers ---
+    const handleTabDragStart = (e: React.DragEvent, id: string) => {
+        dragStateRef.current = { draggedId: id };
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', id);
+        const el = e.currentTarget as HTMLElement;
+        el.style.opacity = '0.4';
+    };
+
+    const handleTabDragEnd = (e: React.DragEvent) => {
+        const el = e.currentTarget as HTMLElement;
+        el.style.opacity = '1';
+        dragStateRef.current = null;
+        setDragOverTabId(null);
+        setDragOverPosition('after');
+    };
+
+    const handleTabDragOver = (e: React.DragEvent, id: string) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (!dragStateRef.current || dragStateRef.current.draggedId === id) {
+            setDragOverTabId(null);
+            return;
+        }
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const midX = rect.left + rect.width / 2;
+        const pos = e.clientX < midX ? 'before' : 'after';
+        setDragOverTabId(id);
+        setDragOverPosition(pos);
+    };
+
+    const handleTabDrop = (e: React.DragEvent, targetId: string) => {
+        e.preventDefault();
+        const draggedId = dragStateRef.current?.draggedId;
+        if (!draggedId || draggedId === targetId || !onReorderTerminals) {
+            setDragOverTabId(null);
+            return;
+        }
+        const ids = terminals.map(t => t.id);
+        const draggedIdx = ids.indexOf(draggedId);
+        if (draggedIdx === -1) return;
+        ids.splice(draggedIdx, 1);
+        const targetIdx = ids.indexOf(targetId);
+        const insertIdx = dragOverPosition === 'before' ? targetIdx : targetIdx + 1;
+        ids.splice(insertIdx, 0, draggedId);
+        onReorderTerminals(ids);
+        setDragOverTabId(null);
+        setDragOverPosition('after');
+    };
+
+    // --- Grid Drag Handlers (swap model) ---
+    const handleGridDragStart = (e: React.DragEvent, id: string) => {
+        dragStateRef.current = { draggedId: id };
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', id);
+        const el = e.currentTarget as HTMLElement;
+        el.style.opacity = '0.4';
+    };
+
+    const handleGridDragEnd = (e: React.DragEvent) => {
+        const el = e.currentTarget as HTMLElement;
+        el.style.opacity = '1';
+        dragStateRef.current = null;
+        setGridDragOverId(null);
+    };
+
+    const handleGridDragOver = (e: React.DragEvent, id: string) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (!dragStateRef.current || dragStateRef.current.draggedId === id) {
+            setGridDragOverId(null);
+            return;
+        }
+        setGridDragOverId(id);
+    };
+
+    const handleGridDrop = (e: React.DragEvent, targetId: string) => {
+        e.preventDefault();
+        const draggedId = dragStateRef.current?.draggedId;
+        if (!draggedId || draggedId === targetId || !onReorderTerminals) {
+            setGridDragOverId(null);
+            return;
+        }
+        const ids = terminals.map(t => t.id);
+        const draggedIdx = ids.indexOf(draggedId);
+        const targetIdx = ids.indexOf(targetId);
+        if (draggedIdx === -1 || targetIdx === -1) return;
+        // Swap
+        [ids[draggedIdx], ids[targetIdx]] = [ids[targetIdx], ids[draggedIdx]];
+        onReorderTerminals(ids);
+        setGridDragOverId(null);
+    };
+
+    const handleGridDragLeave = () => {
+        setGridDragOverId(null);
+    };
+
+    // --- Collapse Handlers ---
+    const handleCollapsePane = (id: string) => {
+        setCollapsedPaneIds(prev => {
+            const next = new Set(prev);
+            next.add(id);
+            return next;
+        });
+        // Trigger fit after layout recalculation
+        setTimeout(() => {
+            terminalRefs.current.forEach(term => term.fit());
+        }, 150);
+    };
+
+    const handleExpandPane = (id: string) => {
+        setCollapsedPaneIds(prev => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+        });
+        // Trigger fit after layout recalculation
+        setTimeout(() => {
+            terminalRefs.current.forEach(term => term.fit());
+        }, 150);
+    };
+
     return (
         <div style={styles.container} onClick={() => setContextMenu(null)}>
             {mode === 'tab' && (
                 <div style={styles.tabHeader} role="tablist">
-                    {terminals.map(term => (
-                        <div
-                            key={term.id}
-                            role="tab"
-                            aria-selected={activeTab === term.id}
-                            style={{
-                                ...styles.tab,
-                                ...(activeTab === term.id ? styles.activeTab : {}),
-                                ...(term.status === SessionStatus.DISCONNECTED ? styles.disconnectedTab : {})
-                            }}
-                            onClick={() => handleTabClick(term.id)}
-                            onDoubleClick={() => handleTabDoubleClick(term.id, term.title)}
-                            onContextMenu={(e) => handleContextMenu(e, term.id)}
-                        >
-                            {editingTab === term.id ? (
-                                <input
-                                    autoFocus
-                                    value={editValue}
-                                    onChange={(e) => setEditValue(e.target.value)}
-                                    onBlur={() => handleRenameSubmit(term.id)}
-                                    onKeyDown={(e) => handleKeyDown(e, term.id)}
-                                    style={styles.renameInput}
-                                    onClick={(e) => e.stopPropagation()}
-                                />
-                            ) : (
-                                <div style={styles.tabContentInner}>
-                                    <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
-                                        {/* 状态指示器 */}
-                                        <span style={{
-                                            ...styles.statusIndicator,
-                                            ...(term.status === SessionStatus.CONNECTED
-                                                ? styles.statusConnected
-                                                : styles.statusDisconnected)
-                                        }} />
+                    {terminals.map(term => {
+                        const isDragOver = dragOverTabId === term.id;
+                        const isDraggedSelf = dragStateRef.current?.draggedId === term.id;
+                        return (
+                            <div
+                                key={term.id}
+                                role="tab"
+                                aria-selected={activeTab === term.id}
+                                draggable
+                                onDragStart={(e) => handleTabDragStart(e, term.id)}
+                                onDragEnd={handleTabDragEnd}
+                                onDragOver={(e) => handleTabDragOver(e, term.id)}
+                                onDrop={(e) => handleTabDrop(e, term.id)}
+                                style={{
+                                    ...styles.tab,
+                                    ...(activeTab === term.id ? styles.activeTab : {}),
+                                    ...(term.status === SessionStatus.DISCONNECTED ? styles.disconnectedTab : {}),
+                                    position: 'relative',
+                                    boxShadow: isDragOver
+                                        ? dragOverPosition === 'before'
+                                            ? '-2px 0 0 0 #007acc'
+                                            : '2px 0 0 0 #007acc'
+                                        : 'none',
+                                    opacity: isDraggedSelf ? 0.4 : undefined,
+                                    transition: 'box-shadow 0.15s',
+                                }}
+                                onClick={() => handleTabClick(term.id)}
+                                onDoubleClick={() => handleTabDoubleClick(term.id, term.title)}
+                                onContextMenu={(e) => handleContextMenu(e, term.id)}
+                            >
+                                {editingTab === term.id ? (
+                                    <input
+                                        autoFocus
+                                        value={editValue}
+                                        onChange={(e) => setEditValue(e.target.value)}
+                                        onBlur={() => handleRenameSubmit(term.id)}
+                                        onKeyDown={(e) => handleKeyDown(e, term.id)}
+                                        style={styles.renameInput}
+                                        onClick={(e) => e.stopPropagation()}
+                                    />
+                                ) : (
+                                    <div style={styles.tabContentInner}>
+                                        <div style={{ display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+                                            {/* 状态指示器 */}
+                                            <span style={{
+                                                ...styles.statusIndicator,
+                                                ...(term.status === SessionStatus.CONNECTED
+                                                    ? styles.statusConnected
+                                                    : styles.statusDisconnected)
+                                            }} />
 
-                                        {isBroadcastMode && (
-                                            <span
-                                                style={{
-                                                    ...styles.broadcastIcon,
-                                                    color: broadcastIds?.includes(term.id) ? '#4caf50' : '#666',
-                                                    marginRight: '6px'
-                                                }}
-                                                title={broadcastIds?.includes(term.id) ? "广播已开启 (点击关闭)" : "广播已关闭 (点击开启)"}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onToggleTerminalBroadcast && onToggleTerminalBroadcast(term.id);
-                                                }}
-                                            >
-                                                📡
-                                            </span>
-                                        )}
-                                        <span style={styles.tabTitle}>{term.title}</span>
+                                            {isBroadcastMode && (
+                                                <span
+                                                    style={{
+                                                        ...styles.broadcastIcon,
+                                                        color: broadcastIds?.includes(term.id) ? '#4caf50' : '#666',
+                                                        marginRight: '6px'
+                                                    }}
+                                                    title={broadcastIds?.includes(term.id) ? "广播已开启 (点击关闭)" : "广播已关闭 (点击开启)"}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onToggleTerminalBroadcast && onToggleTerminalBroadcast(term.id);
+                                                    }}
+                                                >
+                                                    📡
+                                                </span>
+                                            )}
+                                            <span style={styles.tabTitle}>{term.title}</span>
 
-                                        {/* 断开时显示重连按钮 */}
-                                        {term.status === SessionStatus.DISCONNECTED && (
-                                            <button
-                                                style={styles.reconnectBtn}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onReconnect && onReconnect(term.id);
-                                                }}
-                                                title="重新连接"
-                                            >
-                                                重连
-                                            </button>
-                                        )}
-                                    </div>
-                                    <span
-                                        style={styles.closeBtn}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onCloseTerminal(term.id);
-                                        }}
-                                    >
-                                        ×
-                                    </span>
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            <div style={mode === 'grid' ? getGridStyle() : styles.tabContent}>
-                {terminals.map(term => {
-                    // In tab mode, hide inactive terminals instead of unmounting to preserve state
-                    const isVisible = mode === 'grid' || activeTab === term.id;
-                    
-                    return (
-                        <div 
-                            key={term.id} 
-                            style={{
-                                ...styles.terminalWrapper,
-                                display: isVisible ? 'flex' : 'none',
-                                flexDirection: 'column',
-                                border: (mode === 'grid' && activeTab === term.id) ? '1px solid #007acc' : '1px solid transparent'
-                            }}
-                            onClick={() => handleTabClick(term.id)}
-                        >
-                            {mode === 'grid' && (
-                                <div style={styles.gridTitle}>
-                                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                                        {isBroadcastMode && (
-                                            <span 
-                                                style={{
-                                                    ...styles.broadcastIcon,
-                                                    color: broadcastIds?.includes(term.id) ? '#4caf50' : '#666',
-                                                    marginRight: '6px',
-                                                    fontSize: '0.8rem'
-                                                }}
-                                                title={broadcastIds?.includes(term.id) ? "广播已开启 (点击关闭)" : "广播已关闭 (点击开启)"}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onToggleTerminalBroadcast && onToggleTerminalBroadcast(term.id);
-                                                }}
-                                            >
-                                                📡
-                                            </span>
-                                        )}
-                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                            {term.title}
+                                            {/* 断开时显示重连按钮 */}
+                                            {term.status === SessionStatus.DISCONNECTED && (
+                                                <button
+                                                    style={styles.reconnectBtn}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onReconnect && onReconnect(term.id);
+                                                    }}
+                                                    title="重新连接"
+                                                >
+                                                    重连
+                                                </button>
+                                            )}
+                                        </div>
+                                        <span
+                                            style={styles.closeBtn}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onCloseTerminal(term.id);
+                                            }}
+                                        >
+                                            ×
                                         </span>
-                                    </div>
-                                </div>
-                            )}
-                            <div style={{flex: 1, position: 'relative', overflow: 'hidden'}}>
-                                <TerminalComponent
-                                    id={term.id}
-                                    sessionID={term.id}
-                                    onData={(data) => onTerminalData(term.id, data)}
-                                    completionDelay={completionDelay}
-                                    terminalConfig={terminalConfig}
-                                    highlightRules={highlightRules}
-                                    ref={(el) => {
-                                        if (el) {
-                                            terminalRefs.current.set(term.id, el);
-                                        } else {
-                                            terminalRefs.current.delete(term.id);
-                                        }
-                                    }}
-                                />
-                                {/* Internal Broadcast Control Overlay */}
-                                {isBroadcastMode && (
-                                    <div 
-                                        style={{
-                                            position: 'absolute',
-                                            top: '10px',
-                                            right: '20px',
-                                            zIndex: 10,
-                                            backgroundColor: broadcastIds?.includes(term.id) ? 'rgba(76, 175, 80, 0.9)' : 'rgba(60, 60, 60, 0.8)',
-                                            color: '#fff',
-                                            padding: '4px 8px',
-                                            borderRadius: '4px',
-                                            fontSize: '12px',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                            boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                                            transition: 'all 0.2s',
-                                            userSelect: 'none',
-                                            border: broadcastIds?.includes(term.id) ? '1px solid #45a049' : '1px solid #555'
-                                        }}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onToggleTerminalBroadcast && onToggleTerminalBroadcast(term.id);
-                                        }}
-                                        title={broadcastIds?.includes(term.id) ? "点击退出广播组" : "点击加入广播组"}
-                                    >
-                                        <span>{broadcastIds?.includes(term.id) ? '📡 广播中' : '🔇 已静音'}</span>
                                     </div>
                                 )}
                             </div>
-                        </div>
-                    );
-                })}
+                        );
+                    })}
+                </div>
+            )}
+
+            <div style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: 0,
+                overflow: 'hidden',
+            }}>
+                <div style={mode === 'grid' ? getGridStyle() : styles.tabContent}>
+                    {terminals.map(term => {
+                        const isCollapsed = collapsedPaneIds.has(term.id);
+                        // In tab mode, hide inactive terminals; in grid mode, hide collapsed ones
+                        const isVisible = mode === 'grid'
+                            ? !isCollapsed
+                            : activeTab === term.id;
+                        const isGridDragTarget = gridDragOverId === term.id;
+
+                        return (
+                            <div
+                                key={term.id}
+                                style={{
+                                    ...styles.terminalWrapper,
+                                    display: isVisible ? 'flex' : 'none',
+                                    flexDirection: 'column',
+                                    border: mode === 'grid'
+                                        ? isGridDragTarget
+                                            ? '2px solid #007acc'
+                                            : (activeTab === term.id ? '1px solid #007acc' : '1px solid transparent')
+                                        : undefined,
+                                }}
+                                onClick={() => handleTabClick(term.id)}
+                                onDragOver={mode === 'grid' && !isCollapsed ? (e) => handleGridDragOver(e, term.id) : undefined}
+                                onDrop={mode === 'grid' && !isCollapsed ? (e) => handleGridDrop(e, term.id) : undefined}
+                                onDragLeave={mode === 'grid' ? handleGridDragLeave : undefined}
+                            >
+                                {mode === 'grid' && (
+                                    <div
+                                        style={styles.gridTitle}
+                                        draggable={!isCollapsed}
+                                        onDragStart={(e) => handleGridDragStart(e, term.id)}
+                                        onDragEnd={handleGridDragEnd}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', flex: 1, overflow: 'hidden' }}>
+                                            {isBroadcastMode && (
+                                                <span
+                                                    style={{
+                                                        ...styles.broadcastIcon,
+                                                        color: broadcastIds?.includes(term.id) ? '#4caf50' : '#666',
+                                                        marginRight: '6px',
+                                                        fontSize: '0.8rem'
+                                                    }}
+                                                    title={broadcastIds?.includes(term.id) ? "广播已开启 (点击关闭)" : "广播已关闭 (点击开启)"}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onToggleTerminalBroadcast && onToggleTerminalBroadcast(term.id);
+                                                    }}
+                                                >
+                                                    📡
+                                                </span>
+                                            )}
+                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                {term.title}
+                                            </span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0, marginLeft: '8px' }}>
+                                            {!isCollapsed && (
+                                                <button
+                                                    style={styles.collapseBtn}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleCollapsePane(term.id);
+                                                    }}
+                                                    title="收起窗格"
+                                                >
+                                                    −
+                                                </button>
+                                            )}
+                                            <button
+                                                style={styles.closeBtn}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onCloseTerminal(term.id);
+                                                }}
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                                <div style={{flex: 1, position: 'relative', overflow: 'hidden'}}>
+                                    <TerminalComponent
+                                        id={term.id}
+                                        sessionID={term.id}
+                                        onData={(data) => onTerminalData(term.id, data)}
+                                        completionDelay={completionDelay}
+                                        terminalConfig={terminalConfig}
+                                        highlightRules={highlightRules}
+                                        ref={(el) => {
+                                            if (el) {
+                                                terminalRefs.current.set(term.id, el);
+                                            } else {
+                                                terminalRefs.current.delete(term.id);
+                                            }
+                                        }}
+                                    />
+                                    {/* Internal Broadcast Control Overlay */}
+                                    {isBroadcastMode && !isCollapsed && (
+                                        <div
+                                            style={{
+                                                position: 'absolute',
+                                                top: '10px',
+                                                right: '20px',
+                                                zIndex: 10,
+                                                backgroundColor: broadcastIds?.includes(term.id) ? 'rgba(76, 175, 80, 0.9)' : 'rgba(60, 60, 60, 0.8)',
+                                                color: '#fff',
+                                                padding: '4px 8px',
+                                                borderRadius: '4px',
+                                                fontSize: '12px',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                                                transition: 'all 0.2s',
+                                                userSelect: 'none',
+                                                border: broadcastIds?.includes(term.id) ? '1px solid #45a049' : '1px solid #555'
+                                            }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onToggleTerminalBroadcast && onToggleTerminalBroadcast(term.id);
+                                            }}
+                                            title={broadcastIds?.includes(term.id) ? "点击退出广播组" : "点击加入广播组"}
+                                        >
+                                            <span>{broadcastIds?.includes(term.id) ? '📡 广播中' : '🔇 已静音'}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Collapsed Pane Strip (bottom) */}
+                {mode === 'grid' && collapsedTerminals.length > 0 && (
+                    <div style={styles.collapsedStrip}>
+                        <span style={styles.collapsedStripLabel}>已收起:</span>
+                        {collapsedTerminals.map(term => (
+                            <div key={term.id} style={styles.collapsedItem}>
+                                {isBroadcastMode && (
+                                    <span
+                                        style={{
+                                            cursor: 'pointer',
+                                            fontSize: '0.75rem',
+                                            color: broadcastIds?.includes(term.id) ? '#4caf50' : '#666',
+                                            marginRight: '2px',
+                                        }}
+                                        title={broadcastIds?.includes(term.id) ? "广播已开启 (点击关闭)" : "广播已关闭 (点击开启)"}
+                                        onClick={() => onToggleTerminalBroadcast && onToggleTerminalBroadcast(term.id)}
+                                    >
+                                        {broadcastIds?.includes(term.id) ? '📡' : '🔇'}
+                                    </span>
+                                )}
+                                <span style={styles.collapsedItemTitle}>{term.title}</span>
+                                <button
+                                    style={styles.expandBtn}
+                                    onClick={() => handleExpandPane(term.id)}
+                                    title="展开窗格"
+                                >
+                                    ▲
+                                </button>
+                                <button
+                                    style={styles.collapsedCloseBtn}
+                                    onClick={() => onCloseTerminal(term.id)}
+                                    title="关闭"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Context Menu */}
             {contextMenu && (
-                <div 
+                <div
                     style={{
-                        ...styles.contextMenu, 
-                        top: contextMenu.y, 
+                        ...styles.contextMenu,
+                        top: contextMenu.y,
                         left: contextMenu.x
                     }}
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div 
-                        style={styles.menuItem} 
+                    <div
+                        style={styles.menuItem}
                         onClick={() => {
                             const term = terminals.find(t => t.id === contextMenu.id);
                             if (term) {
@@ -373,8 +631,8 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
                     >
                         重命名
                     </div>
-                    <div 
-                        style={styles.menuItem} 
+                    <div
+                        style={styles.menuItem}
                         onClick={() => {
                             if (onDuplicateTerminal) onDuplicateTerminal(contextMenu.id);
                             setContextMenu(null);
@@ -447,16 +705,39 @@ const styles = {
         }
     },
     closeBtn: {
+        background: 'none',
+        border: 'none',
         borderRadius: '50%',
         width: '16px',
         height: '16px',
-        display: 'flex',
+        display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: '12px',
+        fontSize: '14px',
+        lineHeight: 1,
         color: '#ccc',
         cursor: 'pointer',
         flexShrink: 0,
+        padding: 0,
+        ':hover': {
+            backgroundColor: 'rgba(255, 255, 255, 0.2)',
+            color: '#fff',
+        }
+    },
+    collapseBtn: {
+        background: 'none',
+        border: 'none',
+        color: '#ccc',
+        cursor: 'pointer',
+        fontSize: '14px',
+        width: '16px',
+        height: '16px',
+        padding: 0,
+        lineHeight: 1,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: '50%',
         ':hover': {
             backgroundColor: 'rgba(255, 255, 255, 0.2)',
             color: '#fff',
@@ -520,7 +801,6 @@ const styles = {
         gap: '4px',
         padding: '4px',
         backgroundColor: '#000',
-        height: '100%',
         minHeight: 0, // Important for nested flex containers
         overflow: 'hidden',
     },
@@ -540,6 +820,65 @@ const styles = {
         whiteSpace: 'nowrap' as const,
         overflow: 'hidden',
         textOverflow: 'ellipsis',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        cursor: 'grab',
+    },
+    collapsedStrip: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '6px 10px',
+        backgroundColor: '#252526',
+        borderTop: '1px solid #3c3c3c',
+        flexShrink: 0,
+        flexWrap: 'wrap' as const,
+    },
+    collapsedStripLabel: {
+        color: '#888',
+        fontSize: '0.75rem',
+        flexShrink: 0,
+    },
+    collapsedItem: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
+        padding: '3px 8px',
+        backgroundColor: '#2d2d2d',
+        borderRadius: '4px',
+        border: '1px solid #3c3c3c',
+    },
+    collapsedItemTitle: {
+        color: '#ccc',
+        fontSize: '0.75rem',
+        maxWidth: '120px',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap' as const,
+    },
+    expandBtn: {
+        background: 'none',
+        border: 'none',
+        color: '#007acc',
+        cursor: 'pointer',
+        fontSize: '11px',
+        padding: '0',
+        display: 'flex',
+        alignItems: 'center',
+    },
+    collapsedCloseBtn: {
+        background: 'none',
+        border: 'none',
+        color: '#999',
+        cursor: 'pointer',
+        fontSize: '14px',
+        padding: '0',
+        display: 'flex',
+        alignItems: 'center',
+        ':hover': {
+            color: '#ff6b6b',
+        }
     },
     contextMenu: {
         position: 'fixed' as const,
