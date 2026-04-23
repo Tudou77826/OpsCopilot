@@ -225,6 +225,25 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         }
     };
 
+    const handleHighlightRulesSave = async (rules: HighlightRule[]) => {
+        if (!config) return;
+        const newConfig = { ...config, highlight_rules: rules };
+        setConfig(newConfig);
+        try {
+            // @ts-ignore
+            const err = await window.go.main.App.SaveSettings(newConfig);
+            if (err) {
+                setMsg('错误: ' + err);
+            } else {
+                if (onHighlightRulesChange) {
+                    onHighlightRulesChange(rules);
+                }
+            }
+        } catch (e: any) {
+            setMsg('错误: ' + e.toString());
+        }
+    };
+
     const handleClose = () => {
         onClose();
     };
@@ -704,6 +723,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             highlight_rules: rules
                         });
                     }}
+                    onSave={handleHighlightRulesSave}
                     onClose={() => setRulesModalOpen(false)}
                 />
 

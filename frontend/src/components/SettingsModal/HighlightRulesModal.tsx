@@ -5,6 +5,7 @@ interface HighlightRulesModalProps {
     isOpen: boolean;
     rules: HighlightRule[];
     onChange: (rules: HighlightRule[]) => void;
+    onSave?: (rules: HighlightRule[]) => Promise<void>;
     onClose: () => void;
 }
 
@@ -115,7 +116,7 @@ function UnsavedChangesModal({ isOpen, changedCount, onSave, onDiscard, onCancel
     );
 }
 
-export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }: HighlightRulesModalProps) {
+export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, onClose }: HighlightRulesModalProps) {
     const [draft, setDraft] = useState<HighlightRule[]>(rules);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [hoveredBgOption, setHoveredBgOption] = useState<string | null>(null);
@@ -146,13 +147,29 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onClose }
         setDraft(next);
     };
 
-    const applyChanges = () => {
-        onChange(sorted);
+    const applyChanges = async () => {
+        if (onSave) {
+            try {
+                await onSave(sorted);
+            } catch {
+                return;
+            }
+        } else {
+            onChange(sorted);
+        }
         setIsDirty(false);
     };
 
-    const applyAndClose = () => {
-        onChange(sorted);
+    const applyAndClose = async () => {
+        if (onSave) {
+            try {
+                await onSave(sorted);
+            } catch {
+                return;
+            }
+        } else {
+            onChange(sorted);
+        }
         onClose();
     };
 
