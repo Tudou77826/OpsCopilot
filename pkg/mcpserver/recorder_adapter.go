@@ -246,14 +246,6 @@ func (a *MCPRecorderAdapter) generateKnowledgeMarkdown() string {
 		sb.WriteString(strings.Join(components, ", ") + "\n")
 	}
 
-	// 涉及组件
-	if len(a.current.Servers) > 0 {
-		sb.WriteString("\n## 涉及组件\n\n")
-		for server := range a.current.Servers {
-			sb.WriteString(fmt.Sprintf("- %s\n", server))
-		}
-	}
-
 	// 元信息
 	sb.WriteString("\n## 概述\n\n")
 	sb.WriteString(fmt.Sprintf("- **开始时间**: %s\n", a.current.StartTime.Format("2006-01-02 15:04:05")))
@@ -275,12 +267,6 @@ func (a *MCPRecorderAdapter) generateKnowledgeMarkdown() string {
 	if a.current.RootCause != "" {
 		sb.WriteString("\n## 根本原因\n\n")
 		sb.WriteString(a.current.RootCause + "\n")
-	}
-
-	// 解决方案
-	if a.current.Conclusion != "" {
-		sb.WriteString("\n## 解决方案\n\n")
-		sb.WriteString(a.current.Conclusion + "\n")
 	}
 
 	// 关键发现

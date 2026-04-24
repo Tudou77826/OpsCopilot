@@ -71,6 +71,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const [importDir, setImportDir] = useState('');
     const [importLoading, setImportLoading] = useState(false);
     const [importMsg, setImportMsg] = useState('');
+    const [reorganizeLoading, setReorganizeLoading] = useState(false);
+    const [reorganizeMsg, setReorganizeMsg] = useState('');
+    const [reorganizeProgress, setReorganizeProgress] = useState<{
+        stage: string;
+        current: number;
+        total: number;
+        file: string;
+        message: string;
+    } | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -107,6 +116,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             setMsg('');
             setImportDir('');
             setImportMsg('');
+            setReorganizeMsg('');
+            setReorganizeProgress(null);
+            setReorganizeLoading(false);
             setSearchQuery('');
             setActiveTab('llm');
         }
@@ -300,6 +312,55 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             setImportMsg('导入失败: ' + e.toString());
         } finally {
             setImportLoading(false);
+        }
+    };
+
+    const handleReorganizeKnowledgeBase = async () => {
+        setReorganizeLoading(true);
+        setReorganizeMsg('');
+        setReorganizeProgress(null);
+
+        // 监听进度事件
+        let offEvent: (() => void) | undefined;
+        // @ts-ignore
+        if (window.runtime && window.runtime.EventsOn) {
+            // @ts-ignore
+            offEvent = window.runtime.EventsOn('kb-reorganize', (data: any) => {
+                const stage = data?.stage || '';
+                const message = data?.message || '';
+
+                if (stage === 'done' || stage === 'error') {
+                    setReorganizeMsg(message);
+                    setReorganizeLoading(false);
+                    setReorganizeProgress(null);
+                    if (offEvent) offEvent();
+                } else {
+                    setReorganizeProgress({
+                        stage: stage,
+                        current: data?.current || 0,
+                        total: data?.total || 0,
+                        file: data?.file || '',
+                        message: message,
+                    });
+                }
+            });
+        }
+
+        try {
+            // @ts-ignore
+            const result = await window.go.main.App.ReorganizeKnowledgeBase();
+            if (result === 'started') {
+                setReorganizeProgress({ stage: 'scanning', current: 0, total: 0, file: '', message: '正在启动整理任务...' });
+            } else {
+                // 同步返回的错误（如未配置 LLM）
+                setReorganizeMsg(result || '整理完成');
+                setReorganizeLoading(false);
+                if (offEvent) offEvent();
+            }
+        } catch (e: any) {
+            setReorganizeMsg('整理失败: ' + e.toString());
+            setReorganizeLoading(false);
+            if (offEvent) offEvent();
         }
     };
 
@@ -598,6 +659,83 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             ) : (
                                 <div style={styles.settingDescription}>
                                     支持导入 config.json / prompts.json / quick_commands.json / highlight_rules.json；导入前会自动备份当前配置到 .bak 文件
+                                </div>
+                            )}
+                        </div>
+                        <div style={styles.groupTitle}>知识库文档整理</div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>整理知识库文档</label>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                <button
+                                    onClick={handleReorganizeKnowledgeBase}
+                                    style={styles.secondaryButton}
+                                    disabled={reorganizeLoading}
+                                >
+                                    {reorganizeLoading ? '整理中...' : '开始整理'}
+                                </button>
+                                {reorganizeLoading && (
+                                    <span style={{ color: '#888', fontSize: '13px' }}>
+                                        后台运行中，可关闭此窗口
+                                    </span>
+                                )}
+                            </div>
+                            {/* 进度信息 */}
+                            {reorganizeProgress && (
+                                <div style={{
+                                    marginTop: '8px',
+                                    padding: '8px 12px',
+                                    background: '#1a1a2e',
+                                    borderRadius: '6px',
+                                    fontSize: '13px',
+                                    color: '#ccc',
+                                    lineHeight: '1.6',
+                                    fontFamily: 'monospace',
+                                }}>
+                                    {reorganizeProgress.stage === 'scanning' && (
+                                        <div>正在扫描知识库文件...</div>
+                                    )}
+                                    {reorganizeProgress.stage === 'processing' && (
+                                        <>
+                                            <div style={{ color: '#4fc3f7' }}>
+                                                {reorganizeProgress.message}
+                                            </div>
+                                            {reorganizeProgress.total > 0 && (
+                                                <div style={{
+                                                    marginTop: '6px',
+                                                    height: '4px',
+                                                    background: '#333',
+                                                    borderRadius: '2px',
+                                                    overflow: 'hidden',
+                                                }}>
+                                                    <div style={{
+                                                        height: '100%',
+                                                        width: `${Math.round((reorganizeProgress.current / reorganizeProgress.total) * 100)}%`,
+                                                        background: '#4fc3f7',
+                                                        borderRadius: '2px',
+                                                        transition: 'width 0.3s ease',
+                                                    }} />
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                    {reorganizeProgress.stage === 'catalog' && (
+                                        <div>{reorganizeProgress.message}</div>
+                                    )}
+                                </div>
+                            )}
+                            {/* 最终结果 */}
+                            {reorganizeMsg ? (
+                                <div style={{
+                                    ...styles.settingDescription,
+                                    ...(reorganizeMsg.includes('失败') ? { color: '#ef5350' } :
+                                        reorganizeMsg.includes('无需处理') ? { color: '#999' } :
+                                        { color: '#66bb6a' })
+                                }}>
+                                    {reorganizeMsg}
+                                </div>
+                            ) : !reorganizeLoading && (
+                                <div style={styles.settingDescription}>
+                                    升级旧版归档格式、导入外部文档，自动提取关键词和组件信息加入知识库
                                 </div>
                             )}
                         </div>

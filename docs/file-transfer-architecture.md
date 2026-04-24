@@ -1,4 +1,14 @@
+---
+service: OpsCopilot
+module: 文件传输
+type: sop
+---
+
 # OpsCopilot 文件传输架构详解
+
+## 关键词
+
+FTP 管理器, UI 模式, RootRelayTransport, SFTP, 跳板机, IPC, 身份判定, 协议检测, 精简模式, FTCheck, SCP, Root-Relay
 
 ## 一、整体架构
 

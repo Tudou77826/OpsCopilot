@@ -1,3 +1,9 @@
+---
+service: Payment Service
+module: 核心支付模块
+type: archive
+---
+
 # 知识管理技术方案
 
 > 版本: v1.0 | 日期: 2026-04-11 | 状态: 设计中

@@ -1,3 +1,9 @@
+---
+service: OpsCopilot
+module: 知识检索技术方案
+type: sop
+---
+
 # 知识检索技术方案
 
 > 版本: v1.0 | 日期: 2026-04-11 | 状态: 设计中
@@ -5,6 +11,10 @@
 > 配套文档: [知识管理技术方案](knowledge-management-design.md)
 
 ---
+
+## 关键词
+
+LLM, 剪枝, catalog.json, ReAct, Mermaid, 前端, 上下文大小, read_knowledge_file, Agent, Markdown, 精准读取, Go, 多级目录
 
 ## 1. 设计思路
 

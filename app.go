@@ -23,6 +23,7 @@ import (
 	"opscopilot/pkg/config"
 	"opscopilot/pkg/filetransfer"
 	"opscopilot/pkg/ftipc"
+	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/llm"
 	"opscopilot/pkg/mcp"
 	"opscopilot/pkg/mcpserver"
@@ -993,6 +994,100 @@ func (a *App) ImportConfigFromDirectory(dirPath string) string {
 	}
 
 	return a.configMgr.LastImportMessage()
+}
+
+// ReorganizeKnowledgeBase 整理知识库文档（异步，通过事件推送进度）
+// 对缺少 Front Matter 的文档自动提取元数据并补齐
+// 返回 "started" 表示已开始后台执行，前端应监听 "kb-reorganize" 事件获取进度
+func (a *App) ReorganizeKnowledgeBase() string {
+	knowledgeDir := a.resolveKnowledgeBase()
+
+	provider := a.aiService.GetFastProvider()
+	if provider == nil {
+		return "错误：未配置 LLM 服务，请先在模型服务中配置 API"
+	}
+
+	emit := func(payload map[string]interface{}) {
+		runtime.EventsEmit(a.ctx, "kb-reorganize", payload)
+	}
+
+	// 后台执行整理
+	go func() {
+		extractor := knowledge.NewLLMMetadataExtractor(provider)
+
+		onProgress := func(stage string, current, total int, file, message string) {
+			emit(map[string]interface{}{
+				"stage":   stage,
+				"current": current,
+				"total":   total,
+				"file":    file,
+				"message": message,
+			})
+		}
+
+		results, err := knowledge.UpgradeDocuments(a.ctx, knowledgeDir, extractor, onProgress)
+		if err != nil {
+			emit(map[string]interface{}{
+				"stage":   "error",
+				"message": fmt.Sprintf("整理失败: %v", err),
+			})
+			return
+		}
+
+		// 统计结果
+		upgraded := 0
+		skipped := 0
+		failed := 0
+		var errs []string
+		for _, r := range results {
+			switch r.Status {
+			case "upgraded":
+				upgraded++
+			case "skipped":
+				skipped++
+			case "error":
+				failed++
+				errs = append(errs, fmt.Sprintf("  - %s: %s", r.File, r.Error))
+			}
+		}
+
+		// 有文件变更时重建目录
+		if upgraded > 0 {
+			emit(map[string]interface{}{
+				"stage":   "catalog",
+				"message": fmt.Sprintf("正在重建知识库目录..."),
+			})
+			if err := a.aiService.UpdateCatalog(knowledgeDir); err != nil {
+				emit(map[string]interface{}{
+					"stage":   "error",
+					"message": fmt.Sprintf("整理完成（%d 升级，%d 跳过，%d 失败），但重建目录失败: %v",
+						upgraded, skipped, failed, err),
+				})
+				return
+			}
+		}
+
+		// 构建最终消息
+		msg := ""
+		if upgraded == 0 && skipped > 0 && failed == 0 {
+			msg = fmt.Sprintf("所有 %d 个文档均已整理过，无需处理", skipped)
+		} else {
+			msg = fmt.Sprintf("整理完成：成功升级 %d 个，跳过 %d 个", upgraded, skipped)
+			if failed > 0 {
+				msg += fmt.Sprintf("，失败 %d 个：\n%s", failed, strings.Join(errs, "\n"))
+			}
+		}
+
+		emit(map[string]interface{}{
+			"stage":     "done",
+			"message":   msg,
+			"upgraded":  upgraded,
+			"skipped":   skipped,
+			"failed":    failed,
+		})
+	}()
+
+	return "started"
 }
 
 type ftResponse struct {

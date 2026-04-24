@@ -1,8 +1,18 @@
+---
+service: OpsCopilot
+module: filetransfer
+type: sop
+---
+
 # FTP/SFTP 文件传输 & 跳板机 Root 提权获取文件 — Code Review
 
 > 审查范围：`pkg/filetransfer/`、`pkg/sshclient/`、`pkg/mcpserver/tools.go`、`pkg/secretstore/`、`app.go` 中文件传输相关逻辑
 
 ---
+
+## 关键词
+
+Root 提权, Keyring, 密码存储, 安全风险, 密码明文, FTP, su -, ssh, bastion, 静默降级, SFTP, SCP, 跳板机
 
 ## 一、整体架构
 

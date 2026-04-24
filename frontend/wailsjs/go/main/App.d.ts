@@ -108,6 +108,8 @@ export function ReconnectSession(arg1:string):Promise<main.ConnectResult>;
 
 export function RenameSavedSession(arg1:string,arg2:string):Promise<string>;
 
+export function ReorganizeKnowledgeBase():Promise<string>;
+
 export function ReplayScript(arg1:string,arg2:string):Promise<void>;
 
 export function ReplayScriptWithVars(arg1:string,arg2:string,arg3:Record<string, string>):Promise<void>;
