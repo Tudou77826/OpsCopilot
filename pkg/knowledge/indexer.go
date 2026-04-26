@@ -97,8 +97,9 @@ func walkMarkdownFiles(dir string) (map[string]string, error) {
 		if err != nil {
 			return err
 		}
-		// 跳过目录和非 md 文件
-		if d.IsDir() || !strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
+		// 跳过目录、非 md 文件、以及 .bak 备份文件
+		if d.IsDir() || strings.HasSuffix(strings.ToLower(d.Name()), ".bak") ||
+			!strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
 			return nil
 		}
 		// 跳过 catalog 文件自身

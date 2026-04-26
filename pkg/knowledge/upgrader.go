@@ -21,6 +21,7 @@ type UpgradeState struct {
 type FileUpgradeState struct {
 	Hash       string    `json:"hash"`
 	UpgradedAt time.Time `json:"upgradedAt"`
+	BackupFile string    `json:"backupFile,omitempty"` // "old_doc.md.bak"
 }
 
 // UpgradeResult 单个文件的整理结果
@@ -28,6 +29,8 @@ type UpgradeResult struct {
 	File   string `json:"file"`
 	Status string `json:"status"` // "upgraded" | "skipped" | "error"
 	Error  string `json:"error,omitempty"`
+
+	backupFile string // 内部使用：备份文件名
 }
 
 // ProgressFunc 进度回调函数
@@ -40,7 +43,7 @@ type ProgressFunc func(stage string, current, total int, file, message string)
 
 // UpgradeDocuments 扫描知识库目录，对新增或修改过的 .md 文件进行整理
 // 使用 hash 增量跟踪，已整理且内容未变的文件自动跳过
-func UpgradeDocuments(ctx context.Context, knowledgeDir string, extractor MetadataExtractor, onProgress ProgressFunc) ([]UpgradeResult, error) {
+func UpgradeDocuments(ctx context.Context, knowledgeDir string, reorganizer ContentReorganizer, onProgress ProgressFunc) ([]UpgradeResult, error) {
 	// 扫描所有 .md 文件
 	if onProgress != nil {
 		onProgress("scanning", 0, 0, "", "正在扫描知识库文件...")
@@ -75,7 +78,6 @@ func UpgradeDocuments(ctx context.Context, knowledgeDir string, extractor Metada
 	}
 
 	var results []UpgradeResult
-	hasChanges := false
 
 	for i, entry := range orderedFiles {
 		relPath := entry.relPath
@@ -97,22 +99,21 @@ func UpgradeDocuments(ctx context.Context, knowledgeDir string, extractor Metada
 				fmt.Sprintf("正在处理 (%d/%d): %s", i+1, totalFiles, relPath))
 		}
 
-		result := upgradeFile(ctx, knowledgeDir, relPath, content, extractor)
+		result := upgradeFile(ctx, knowledgeDir, relPath, content, reorganizer)
 		results = append(results, result)
 
 		if result.Status == "upgraded" {
-			hasChanges = true
 			// 重新读取文件内容以获取更新后的 hash
 			fullPath := filepath.Join(knowledgeDir, filepath.FromSlash(relPath))
 			if newContent, err := os.ReadFile(fullPath); err == nil {
 				state.Files[relPath] = FileUpgradeState{
 					Hash:       md5Hash(string(newContent)),
 					UpgradedAt: time.Now(),
+					BackupFile: result.backupFile,
 				}
 			}
-		} else if result.Status == "error" {
-			// 失败的文件不更新状态，下次重试
 		}
+		// 失败的文件不更新状态，下次重试
 	}
 
 	// 清理已删除文件的状态
@@ -131,46 +132,42 @@ func UpgradeDocuments(ctx context.Context, knowledgeDir string, extractor Metada
 		return results, fmt.Errorf("save upgrade state: %w", err)
 	}
 
-	_ = hasChanges // 调用方根据 results 判断是否有变更
-
 	return results, nil
 }
 
-// upgradeFile 整理单个文件：提取元数据 → 补齐 Front Matter → 原地覆写
-func upgradeFile(ctx context.Context, knowledgeDir, relPath, content string, extractor MetadataExtractor) UpgradeResult {
-	// 检查是否已有完整的 Front Matter
-	fm, _ := extractFrontMatter(content)
-	if fm != nil && fm["service"] != "" {
-		// 已有 Front Matter 且有 service → 不需要整理
-		return UpgradeResult{
-			File:   relPath,
-			Status: "skipped",
-		}
-	}
-
-	// 使用 LLM 提取元数据
-	metadata, err := extractor.ExtractMetadata(ctx, content)
+// upgradeFile 整理单个文件：LLM 重组 → 备份原文件 → 写入新文件
+func upgradeFile(ctx context.Context, knowledgeDir, relPath, content string, reorganizer ContentReorganizer) UpgradeResult {
+	// 使用 LLM 重组文档
+	doc, err := reorganizer.Reorganize(ctx, content)
 	if err != nil {
 		return UpgradeResult{
 			File:   relPath,
 			Status: "error",
-			Error:  fmt.Sprintf("metadata extraction failed: %v", err),
+			Error:  fmt.Sprintf("reorganize failed: %v", err),
 		}
 	}
 
-	// 如果 LLM 也没提取出 service，跳过
-	if metadata.Service == "" {
+	if doc.Content == "" {
 		return UpgradeResult{
 			File:   relPath,
-			Status: "skipped",
+			Status: "error",
+			Error:  "reorganize produced empty content",
 		}
 	}
 
-	// 补齐 Front Matter
-	upgraded := prependFrontMatter(content, metadata)
-
-	// 确保目录存在并写入文件
 	fullPath := filepath.Join(knowledgeDir, filepath.FromSlash(relPath))
+
+	// 备份原文件
+	backupFile, err := backupOriginal(fullPath)
+	if err != nil {
+		return UpgradeResult{
+			File:   relPath,
+			Status: "error",
+			Error:  fmt.Sprintf("backup failed: %v", err),
+		}
+	}
+
+	// 写入重组后的内容
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
 		return UpgradeResult{
 			File:   relPath,
@@ -178,7 +175,7 @@ func upgradeFile(ctx context.Context, knowledgeDir, relPath, content string, ext
 			Error:  fmt.Sprintf("create directory: %v", err),
 		}
 	}
-	if err := os.WriteFile(fullPath, []byte(upgraded), 0644); err != nil {
+	if err := os.WriteFile(fullPath, []byte(doc.Content), 0644); err != nil {
 		return UpgradeResult{
 			File:   relPath,
 			Status: "error",
@@ -189,7 +186,39 @@ func upgradeFile(ctx context.Context, knowledgeDir, relPath, content string, ext
 	return UpgradeResult{
 		File:   relPath,
 		Status: "upgraded",
+		backupFile: backupFile,
 	}
+}
+
+// backupOriginal 将原文件重命名为 .md.bak
+// 如果 .md.bak 已存在，追加数字后缀 .md.bak.1、.md.bak.2 等
+func backupOriginal(filePath string) (string, error) {
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		// 文件不存在，无需备份
+		return "", nil
+	}
+
+	backupPath := filePath + ".bak"
+	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+		// .md.bak 不存在，直接重命名
+		if err := os.Rename(filePath, backupPath); err != nil {
+			return "", fmt.Errorf("rename to .bak: %w", err)
+		}
+		return filepath.Base(backupPath), nil
+	}
+
+	// .md.bak 已存在，找下一个可用的数字后缀
+	for i := 1; i <= 100; i++ {
+		numberedBackup := fmt.Sprintf("%s.bak.%d", filePath, i)
+		if _, err := os.Stat(numberedBackup); os.IsNotExist(err) {
+			if err := os.Rename(filePath, numberedBackup); err != nil {
+				return "", fmt.Errorf("rename to .bak.%d: %w", i, err)
+			}
+			return filepath.Base(numberedBackup), nil
+		}
+	}
+
+	return "", fmt.Errorf("too many backup files for %s", filePath)
 }
 
 // prependFrontMatter 为文档添加 Front Matter

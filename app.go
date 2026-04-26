@@ -1013,7 +1013,7 @@ func (a *App) ReorganizeKnowledgeBase() string {
 
 	// 后台执行整理
 	go func() {
-		extractor := knowledge.NewLLMMetadataExtractor(provider)
+		reorganizer := knowledge.NewLLMContentReorganizer(provider)
 
 		onProgress := func(stage string, current, total int, file, message string) {
 			emit(map[string]interface{}{
@@ -1025,7 +1025,7 @@ func (a *App) ReorganizeKnowledgeBase() string {
 			})
 		}
 
-		results, err := knowledge.UpgradeDocuments(a.ctx, knowledgeDir, extractor, onProgress)
+		results, err := knowledge.UpgradeDocuments(a.ctx, knowledgeDir, reorganizer, onProgress)
 		if err != nil {
 			emit(map[string]interface{}{
 				"stage":   "error",
