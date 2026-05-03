@@ -65,6 +65,7 @@ type App struct {
 	sessionStateMu    sync.RWMutex
 	commandExtractors map[string]*terminal.CommandExtractor // 命令提取器（Tab 补全修正）
 	extractorMu       sync.RWMutex                     // 命令提取器锁
+	reorganizeMu      sync.Mutex                       // 知识库整理互斥锁，防止重复触发
 }
 
 // NewApp creates a new App application struct
@@ -999,11 +1000,18 @@ func (a *App) ImportConfigFromDirectory(dirPath string) string {
 // ReorganizeKnowledgeBase 整理知识库文档（异步，通过事件推送进度）
 // 对缺少 Front Matter 的文档自动提取元数据并补齐
 // 返回 "started" 表示已开始后台执行，前端应监听 "kb-reorganize" 事件获取进度
+// 使用互斥锁防止重复触发
 func (a *App) ReorganizeKnowledgeBase() string {
+	// 尝试获取锁，失败说明已有整理任务在运行
+	if !a.reorganizeMu.TryLock() {
+		return "错误：知识库整理正在进行中，请等待完成后再试"
+	}
+
 	knowledgeDir := a.resolveKnowledgeBase()
 
 	provider := a.aiService.GetFastProvider()
 	if provider == nil {
+		a.reorganizeMu.Unlock()
 		return "错误：未配置 LLM 服务，请先在模型服务中配置 API"
 	}
 
@@ -1013,7 +1021,9 @@ func (a *App) ReorganizeKnowledgeBase() string {
 
 	// 后台执行整理
 	go func() {
-		reorganizer := knowledge.NewLLMContentReorganizer(provider)
+		defer a.reorganizeMu.Unlock()
+
+		reorganizer := knowledge.NewLLMContentReorganizer(provider, knowledge.LoadModuleConfig(knowledgeDir).Modules)
 
 		onProgress := func(stage string, current, total int, file, message string) {
 			emit(map[string]interface{}{

@@ -48,6 +48,19 @@ func (s *Server) ensureSFTP(conn *Connection) (*sftp.Client, error) {
 	return client, nil
 }
 
+// toolFileTransfer 文件传输入口（根据 action 分发）
+func (s *Server) toolFileTransfer(args map[string]interface{}) (interface{}, error) {
+	action, _ := args["action"].(string)
+	switch action {
+	case "download":
+		return s.toolFileDownload(args)
+	case "upload":
+		return s.toolFileUpload(args)
+	default:
+		return nil, fmt.Errorf("未知 action: %s，可选: download, upload", action)
+	}
+}
+
 // toolFileDownload 从远程服务器下载文件到本地
 func (s *Server) toolFileDownload(args map[string]interface{}) (interface{}, error) {
 	serverName, _ := args["server"].(string)

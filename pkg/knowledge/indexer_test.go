@@ -57,6 +57,51 @@ service: Test
 			wantFields: nil,
 			wantBody: "---\nservice: Test\n\n没有闭合的正文",
 		},
+		{
+			name: "代码块中的 --- 不应被误识别为 Front Matter 结束",
+			input: `---
+service: Test
+type: sop
+---
+
+# 正文
+
+代码示例：
+
+` + "```yaml" + `
+---
+apiVersion: v1
+kind: ConfigMap
+---
+` + "```" + `
+
+更多内容`,
+			wantFields: map[string]string{
+				"service": "Test",
+				"type":    "sop",
+			},
+			wantBody: "# 正文\n\n代码示例：\n\n```yaml\n---\napiVersion: v1\nkind: ConfigMap\n---\n```\n\n更多内容",
+		},
+		{
+			name: "Front Matter 中含 --- 行的代码块",
+			input: `---
+service: Test
+---
+
+正文包含代码
+
+` + "```" + `
+一些内容
+---
+不应该截断
+` + "```" + `
+
+尾部内容`,
+			wantFields: map[string]string{
+				"service": "Test",
+			},
+			wantBody: "正文包含代码\n\n```\n一些内容\n---\n不应该截断\n```\n\n尾部内容",
+		},
 	}
 
 	for _, tt := range tests {

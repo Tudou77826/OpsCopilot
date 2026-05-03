@@ -22,13 +22,15 @@ type FileUpgradeState struct {
 	Hash       string    `json:"hash"`
 	UpgradedAt time.Time `json:"upgradedAt"`
 	BackupFile string    `json:"backupFile,omitempty"` // "old_doc.md.bak"
+	Outputs    []string  `json:"outputs,omitempty"`    // 拆分输出文件路径
 }
 
 // UpgradeResult 单个文件的整理结果
 type UpgradeResult struct {
-	File   string `json:"file"`
-	Status string `json:"status"` // "upgraded" | "skipped" | "error"
-	Error  string `json:"error,omitempty"`
+	File    string   `json:"file"`
+	Status  string   `json:"status"` // "upgraded" | "skipped" | "error"
+	Error   string   `json:"error,omitempty"`
+	Outputs []string `json:"outputs,omitempty"`
 
 	backupFile string // 内部使用：备份文件名
 }
@@ -110,6 +112,7 @@ func UpgradeDocuments(ctx context.Context, knowledgeDir string, reorganizer Cont
 					Hash:       md5Hash(string(newContent)),
 					UpgradedAt: time.Now(),
 					BackupFile: result.backupFile,
+					Outputs:    result.Outputs,
 				}
 			}
 		}
@@ -121,8 +124,13 @@ func UpgradeDocuments(ctx context.Context, knowledgeDir string, reorganizer Cont
 	for p := range currentFiles {
 		existingPaths[p] = true
 	}
-	for p := range state.Files {
+	for p, fileState := range state.Files {
 		if !existingPaths[p] {
+			// 清理拆分输出的磁盘文件
+			for _, output := range fileState.Outputs {
+				outputPath := filepath.Join(knowledgeDir, filepath.FromSlash(output))
+				os.Remove(outputPath)
+			}
 			delete(state.Files, p)
 		}
 	}
@@ -136,9 +144,10 @@ func UpgradeDocuments(ctx context.Context, knowledgeDir string, reorganizer Cont
 }
 
 // upgradeFile 整理单个文件：LLM 重组 → 备份原文件 → 写入新文件
+// 支持 1:N 拆分输出
 func upgradeFile(ctx context.Context, knowledgeDir, relPath, content string, reorganizer ContentReorganizer) UpgradeResult {
-	// 使用 LLM 重组文档
-	doc, err := reorganizer.Reorganize(ctx, content)
+	// 使用 LLM 重组文档（可能返回多个文档）
+	docs, err := reorganizer.Reorganize(ctx, content)
 	if err != nil {
 		return UpgradeResult{
 			File:   relPath,
@@ -147,11 +156,22 @@ func upgradeFile(ctx context.Context, knowledgeDir, relPath, content string, reo
 		}
 	}
 
-	if doc.Content == "" {
+	if len(docs) == 0 {
 		return UpgradeResult{
 			File:   relPath,
 			Status: "error",
-			Error:  "reorganize produced empty content",
+			Error:  "reorganize produced no documents",
+		}
+	}
+
+	// 检查所有文档内容非空
+	for i, doc := range docs {
+		if doc.Content == "" {
+			return UpgradeResult{
+				File:   relPath,
+				Status: "error",
+				Error:  fmt.Sprintf("reorganize produced empty content for document %d", i),
+			}
 		}
 	}
 
@@ -167,26 +187,83 @@ func upgradeFile(ctx context.Context, knowledgeDir, relPath, content string, reo
 		}
 	}
 
-	// 写入重组后的内容
-	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
-		return UpgradeResult{
-			File:   relPath,
-			Status: "error",
-			Error:  fmt.Sprintf("create directory: %v", err),
+	// 记录已写入的路径，用于回滚
+	var writtenPaths []string
+
+	// 写入所有重组后的文档
+	for _, doc := range docs {
+		var targetPath string
+		if doc.SubPath != "" {
+			// 拆分模式：写入 knowledgeDir/SubPath
+			// 消毒 SubPath，防止 LLM 生成的路径包含 ../ 导致目录遍历
+			cleanSub := filepath.Clean(filepath.FromSlash(doc.SubPath))
+			if strings.Contains(cleanSub, "..") {
+				rollbackBackup(fullPath, backupFile)
+				rollbackSplit(knowledgeDir, writtenPaths)
+				return UpgradeResult{
+					File:   relPath,
+					Status: "error",
+					Error:  fmt.Sprintf("invalid SubPath %q: path traversal detected", doc.SubPath),
+				}
+			}
+			targetPath = filepath.Join(knowledgeDir, cleanSub, filepath.Base(relPath))
+		} else {
+			// 1:1 模式：写入原路径
+			targetPath = fullPath
 		}
+
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+			rollbackBackup(fullPath, backupFile)
+			rollbackSplit(knowledgeDir, writtenPaths)
+			return UpgradeResult{
+				File:   relPath,
+				Status: "error",
+				Error:  fmt.Sprintf("create directory: %v", err),
+			}
+		}
+		if err := os.WriteFile(targetPath, []byte(doc.Content), 0644); err != nil {
+			rollbackBackup(fullPath, backupFile)
+			rollbackSplit(knowledgeDir, writtenPaths)
+			return UpgradeResult{
+				File:   relPath,
+				Status: "error",
+				Error:  fmt.Sprintf("write file: %v", err),
+			}
+		}
+		writtenPaths = append(writtenPaths, targetPath)
 	}
-	if err := os.WriteFile(fullPath, []byte(doc.Content), 0644); err != nil {
-		return UpgradeResult{
-			File:   relPath,
-			Status: "error",
-			Error:  fmt.Sprintf("write file: %v", err),
+
+	// 计算 outputs 路径（相对路径）
+	var outputs []string
+	for _, doc := range docs {
+		if doc.SubPath != "" {
+			outputs = append(outputs, filepath.ToSlash(filepath.Join(doc.SubPath, filepath.Base(relPath))))
 		}
 	}
 
 	return UpgradeResult{
-		File:   relPath,
-		Status: "upgraded",
+		File:       relPath,
+		Status:     "upgraded",
+		Outputs:    outputs,
 		backupFile: backupFile,
+	}
+}
+
+// rollbackBackup 将备份文件恢复为原文件
+func rollbackBackup(originalPath, backupFileName string) {
+	if backupFileName == "" {
+		return
+	}
+	backupPath := filepath.Join(filepath.Dir(originalPath), backupFileName)
+	if _, err := os.Stat(backupPath); err == nil {
+		os.Rename(backupPath, originalPath)
+	}
+}
+
+// rollbackSplit 清理拆分写入的文件
+func rollbackSplit(knowledgeDir string, writtenPaths []string) {
+	for _, p := range writtenPaths {
+		os.Remove(p)
 	}
 }
 
@@ -219,64 +296,6 @@ func backupOriginal(filePath string) (string, error) {
 	}
 
 	return "", fmt.Errorf("too many backup files for %s", filePath)
-}
-
-// prependFrontMatter 为文档添加 Front Matter
-// 如果已有 Front Matter 但缺少字段，则补齐；否则新增
-func prependFrontMatter(content string, meta *ExtractedMetadata) string {
-	fm, body := extractFrontMatter(content)
-
-	// 确保 body 部分不以 Front Matter 标记开头
-	body = strings.TrimPrefix(body, "---")
-	body = strings.TrimLeft(body, "\n\r")
-
-	// 构建新的 Front Matter
-	if fm == nil {
-		fm = make(map[string]string)
-	}
-	if fm["service"] == "" {
-		fm["service"] = meta.Service
-	}
-	if fm["module"] == "" {
-		if meta.Module != "" {
-			fm["module"] = meta.Module
-		} else {
-			fm["module"] = "默认模块"
-		}
-	}
-	if fm["type"] == "" {
-		// 尝试推断类型
-		if strings.Contains(body, "## 问题现象") || strings.Contains(body, "## 根本原因") {
-			fm["type"] = "archive"
-		} else {
-			fm["type"] = "sop"
-		}
-	}
-
-	var sb strings.Builder
-	sb.WriteString("---\n")
-	sb.WriteString(fmt.Sprintf("service: %s\n", fm["service"]))
-	sb.WriteString(fmt.Sprintf("module: %s\n", fm["module"]))
-	sb.WriteString(fmt.Sprintf("type: %s\n", fm["type"]))
-	sb.WriteString("---\n\n")
-
-	// 如果原文档没有关键词段，且 LLM 提取到了，则补充
-	if !strings.Contains(body, "## 关键词") && len(meta.Keywords) > 0 {
-		// 在第一个 ## 之前插入关键词段
-		idx := strings.Index(body, "## ")
-		if idx > 0 {
-			sb.WriteString(body[:idx])
-			sb.WriteString(fmt.Sprintf("## 关键词\n\n%s\n\n", strings.Join(meta.Keywords, ", ")))
-			sb.WriteString(body[idx:])
-		} else {
-			sb.WriteString(body)
-			sb.WriteString(fmt.Sprintf("\n## 关键词\n\n%s\n", strings.Join(meta.Keywords, ", ")))
-		}
-	} else {
-		sb.WriteString(body)
-	}
-
-	return sb.String()
 }
 
 // loadUpgradeState 加载已整理状态

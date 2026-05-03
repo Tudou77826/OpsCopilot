@@ -56,39 +56,22 @@ type Tool struct {
 func (s *Server) handleToolsList(req *JSONRPCRequest) {
 	tools := []Tool{
 		{
-			Name: "server_list",
-			Description: "列出所有可用服务器及其连接状态。\n\n返回两类服务器：\n- connected: 已建立连接，可直接使用\n- available: 已保存凭证，可以尝试连接（可能失败）",
-			InputSchema: map[string]interface{}{
-				"type":       "object",
-				"properties": map[string]interface{}{},
-			},
-		},
-		{
-			Name: "server_connect",
-			Description: "连接到指定服务器。\n\n使用已保存的凭证进行连接。如果通过跳板机，会自动处理。",
+			Name:        "server",
+			Description: "服务器连接管理。通过 action 参数执行不同操作：list（列出服务器）、connect（连接）、disconnect（断开）。",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
+					"action": map[string]interface{}{
+						"type":        "string",
+						"description": "操作类型：list、connect、disconnect",
+						"enum":        []string{"list", "connect", "disconnect"},
+					},
 					"server": map[string]interface{}{
 						"type":        "string",
-						"description": "服务器名称",
+						"description": "服务器名称（connect/disconnect 时必填）",
 					},
 				},
-				"required": []string{"server"},
-			},
-		},
-		{
-			Name: "server_disconnect",
-			Description: "断开指定服务器的连接。",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"server": map[string]interface{}{
-						"type":        "string",
-						"description": "服务器名称",
-					},
-				},
-				"required": []string{"server"},
+				"required": []string{"action"},
 			},
 		},
 		{
@@ -140,100 +123,16 @@ func (s *Server) handleToolsList(req *JSONRPCRequest) {
 			},
 		},
 		{
-			Name:        "session_start",
-			Description: "开始一个新的排查会话。\n\n所有后续操作都会关联到这个会话，用于审计录制和知识归档。",
+			Name:        "file_transfer",
+			Description: "远程文件传输（SFTP）。通过 action 参数执行不同操作：download（下载）、upload（上传）。",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"problem": map[string]interface{}{
+					"action": map[string]interface{}{
 						"type":        "string",
-						"description": "问题描述（用于标识和归档）",
+						"description": "操作类型：download、upload",
+						"enum":        []string{"download", "upload"},
 					},
-					"servers": map[string]interface{}{
-						"type":        "array",
-						"items":       map[string]interface{}{"type": "string"},
-						"description": "可能涉及的服务器列表（可选）",
-					},
-				},
-				"required": []string{"problem"},
-			},
-		},
-		{
-			Name:        "session_status",
-			Description: "查看当前排查会话的状态。",
-			InputSchema: map[string]interface{}{
-				"type":       "object",
-				"properties": map[string]interface{}{},
-			},
-		},
-		{
-			Name:        "session_end",
-			Description: "结束当前排查会话。\n\n会断开所有连接，生成排查报告，并将经验归档到知识库。",
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"summary": map[string]interface{}{
-						"type":        "string",
-						"description": "排查总结（问题原因、解决方案）",
-					},
-					"findings": map[string]interface{}{
-						"type":        "array",
-						"items":       map[string]interface{}{"type": "string"},
-						"description": "关键发现列表",
-					},
-					"root_cause": map[string]interface{}{
-						"type":        "string",
-						"description": "根本原因（如果已确定）",
-					},
-				},
-				"required": []string{"summary"},
-			},
-		},
-		{
-			Name: "get_hints",
-			Description: `基于知识库获取排查思路提示。
-
-输入问题描述，返回 Markdown 格式的定位指导文档。
-
-适用场景：
-- 开始排查前获取思路
-- 遇到问题时寻求指导
-
-注意：需要 OpsCopilot 配置了 LLM API（config.json 中的 llm.APIKey）`,
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"problem": map[string]interface{}{
-						"type":        "string",
-						"description": "问题描述或症状",
-					},
-					"context": map[string]interface{}{
-						"type":        "string",
-						"description": "额外上下文（如服务器类型、应用名称、错误信息）",
-					},
-				},
-				"required": []string{"problem"},
-			},
-		},
-		{
-			Name: "file_download",
-			Description: `从远程服务器通过 SFTP 下载文件到本地。
-
-适用于排障场景中拉取配置文件、日志、数据文件到本地分析。
-文件访问受路径级访问控制策略限制。
-
-使用场景：
-- 下载远程日志文件到本地分析
-- 拉取配置文件查看或备份
-- 获取运行数据用于诊断
-
-注意：
-- 文件大小有上限限制（默认 10MB）
-- 远程路径和本地路径均受访问策略控制
-- 需要服务器支持 SFTP 协议`,
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
 					"server": map[string]interface{}{
 						"type":        "string",
 						"description": "服务器名称（必须是已连接的服务器）",
@@ -244,60 +143,25 @@ func (s *Server) handleToolsList(req *JSONRPCRequest) {
 					},
 					"local_path": map[string]interface{}{
 						"type":        "string",
-						"description": "本地保存路径（必须在允许的本地目录内）",
+						"description": "本地文件路径",
 					},
 					"max_bytes": map[string]interface{}{
 						"type":        "integer",
-						"description": "最大下载字节数（默认 10MB）",
+						"description": "最大下载字节数，默认 10MB（download 时有效）",
 						"default":     10485760,
-					},
-				},
-				"required": []string{"server", "remote_path", "local_path"},
-			},
-		},
-		{
-			Name: "file_upload",
-			Description: `从本地上传文件到远程服务器（通过 SFTP）。
-
-适用于推送修改后的配置文件、补丁脚本等到远程服务器。
-上传操作默认自动备份远程已有文件，防止误覆盖。
-
-使用场景：
-- 推送修改后的配置文件
-- 上传补丁脚本到远程执行
-- 部署小型文件
-
-注意：
-- 写入路径需要管理员显式配置（默认为空）
-- 上传上限默认 5MB
-- 默认自动备份被覆盖的远程文件`,
-			InputSchema: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"server": map[string]interface{}{
-						"type":        "string",
-						"description": "服务器名称（必须是已连接的服务器）",
-					},
-					"local_path": map[string]interface{}{
-						"type":        "string",
-						"description": "本地文件路径（必须在允许的本地目录内）",
-					},
-					"remote_path": map[string]interface{}{
-						"type":        "string",
-						"description": "远程目标路径",
 					},
 					"backup": map[string]interface{}{
 						"type":        "boolean",
-						"description": "覆盖前自动备份远程文件（默认 true）",
+						"description": "覆盖前自动备份远程文件，默认 true（upload 时有效）",
 						"default":     true,
 					},
 					"mkdir": map[string]interface{}{
 						"type":        "boolean",
-						"description": "自动创建远程目标目录（默认 false）",
+						"description": "自动创建远程目标目录，默认 false（upload 时有效）",
 						"default":     false,
 					},
 				},
-				"required": []string{"server", "local_path", "remote_path"},
+				"required": []string{"action", "server", "remote_path", "local_path"},
 			},
 		},
 	}
@@ -327,26 +191,12 @@ func (s *Server) handleToolsCall(req *JSONRPCRequest) {
 	var err error
 
 	switch toolName {
-	case "server_list":
-		result, err = s.toolServerList()
-	case "server_connect":
-		result, err = s.toolServerConnect(arguments)
-	case "server_disconnect":
-		result, err = s.toolServerDisconnect(arguments)
+	case "server":
+		result, err = s.toolServer(arguments)
 	case "ssh_exec":
 		result, err = s.toolSSHExec(arguments)
-	case "session_start":
-		result, err = s.toolSessionStart(arguments)
-	case "session_status":
-		result, err = s.toolSessionStatus()
-	case "session_end":
-		result, err = s.toolSessionEnd(arguments)
-	case "get_hints":
-		result, err = s.toolGetHints(arguments)
-	case "file_download":
-		result, err = s.toolFileDownload(arguments)
-	case "file_upload":
-		result, err = s.toolFileUpload(arguments)
+	case "file_transfer":
+		result, err = s.toolFileTransfer(arguments)
 	default:
 		s.SendError(req.ID, -32601, fmt.Sprintf("Tool not found: %s", toolName))
 		return

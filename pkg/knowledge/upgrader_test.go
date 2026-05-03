@@ -13,12 +13,12 @@ import (
 
 // mockReorganizer 实现 ContentReorganizer 接口，用于测试
 type mockReorganizer struct {
-	response *ReorganizedDocument
-	err      error
+	response  []*ReorganizedDocument
+	err       error
 	callCount int
 }
 
-func (m *mockReorganizer) Reorganize(ctx context.Context, content string) (*ReorganizedDocument, error) {
+func (m *mockReorganizer) Reorganize(ctx context.Context, content string) ([]*ReorganizedDocument, error) {
 	m.callCount++
 	return m.response, m.err
 }
@@ -53,12 +53,12 @@ func TestUpgradeDocuments_BasicFlow(t *testing.T) {
 	}
 
 	reorganizer := &mockReorganizer{
-		response: &ReorganizedDocument{
+		response: []*ReorganizedDocument{{
 			Content: testSOPContent,
 			Service: "Test Service",
 			Module:  "测试模块",
 			DocType: "sop",
-		},
+		}},
 	}
 
 	results, err := UpgradeDocuments(context.Background(), tmpDir, reorganizer, nil)
@@ -104,11 +104,11 @@ func TestUpgradeDocuments_IncrementalSkip(t *testing.T) {
 	}
 
 	reorganizer := &mockReorganizer{
-		response: &ReorganizedDocument{
+		response: []*ReorganizedDocument{{
 			Content: testSOPContent,
 			Service: "Test Service",
 			DocType: "sop",
-		},
+		}},
 	}
 
 	// 第一次运行
@@ -150,11 +150,11 @@ func TestUpgradeDocuments_BackupConflict(t *testing.T) {
 	}
 
 	reorganizer := &mockReorganizer{
-		response: &ReorganizedDocument{
+		response: []*ReorganizedDocument{{
 			Content: testSOPContent,
 			Service: "Test Service",
 			DocType: "sop",
-		},
+		}},
 	}
 
 	results, err := UpgradeDocuments(context.Background(), tmpDir, reorganizer, nil)
@@ -193,11 +193,11 @@ func TestUpgradeDocuments_MultipleFiles(t *testing.T) {
 	}
 
 	reorganizer := &mockReorganizer{
-		response: &ReorganizedDocument{
+		response: []*ReorganizedDocument{{
 			Content: testSOPContent,
 			Service: "Test Service",
 			DocType: "sop",
-		},
+		}},
 	}
 
 	results, err := UpgradeDocuments(context.Background(), tmpDir, reorganizer, nil)
@@ -258,11 +258,11 @@ func TestUpgradeDocuments_StatePersistence(t *testing.T) {
 	}
 
 	reorganizer := &mockReorganizer{
-		response: &ReorganizedDocument{
+		response: []*ReorganizedDocument{{
 			Content: testSOPContent,
 			Service: "Test Service",
 			DocType: "sop",
-		},
+		}},
 	}
 
 	_, err = UpgradeDocuments(context.Background(), tmpDir, reorganizer, nil)
@@ -311,11 +311,11 @@ func TestUpgradeDocuments_ProgressCallback(t *testing.T) {
 	}
 
 	reorganizer := &mockReorganizer{
-		response: &ReorganizedDocument{
+		response: []*ReorganizedDocument{{
 			Content: testSOPContent,
 			Service: "Test Service",
 			DocType: "sop",
-		},
+		}},
 	}
 
 	var stages []string
@@ -361,12 +361,9 @@ func TestUpgradeDocuments_LLMFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	callCount := 0
 	reorganizer := &mockReorganizer{
 		err: fmt.Errorf("LLM unavailable"),
 	}
-	// Override to alternate success/failure
-	_ = callCount // We use the mockReorganizer which always returns err
 
 	results, err := UpgradeDocuments(context.Background(), tmpDir, reorganizer, nil)
 	if err != nil {
@@ -538,12 +535,12 @@ type: sop
 `
 
 	reorganizer := &mockReorganizer{
-		response: &ReorganizedDocument{
+		response: []*ReorganizedDocument{{
 			Content: reorganizedContent,
 			Service: "MyService",
 			Module:  "MyModule",
 			DocType: "sop",
-		},
+		}},
 	}
 
 	results, err := UpgradeDocuments(context.Background(), tmpDir, reorganizer, nil)
@@ -609,7 +606,7 @@ mock方案
 <!-- META: {"resend_from_line": null} -->`,
 	}
 
-	reorganizer := NewLLMContentReorganizer(mockProvider)
+	reorganizer := NewLLMContentReorganizer(mockProvider, nil)
 	results, err := UpgradeDocuments(context.Background(), tmpDir, reorganizer, nil)
 	if err != nil {
 		t.Fatalf("UpgradeDocuments error: %v", err)
@@ -631,5 +628,188 @@ mock方案
 	}
 	if !strings.Contains(string(content), "## 问题现象") {
 		t.Error("new file should contain archive format")
+	}
+}
+
+func TestRollbackBackup(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "rollback_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	t.Run("rollback restores original file", func(t *testing.T) {
+		original := filepath.Join(tmpDir, "test.md")
+		backup := filepath.Join(tmpDir, "test.md.bak")
+		originalContent := "原始内容"
+
+		os.WriteFile(original, []byte(originalContent), 0644)
+		os.Rename(original, backup)
+
+		// 原文件已不存在
+		if _, err := os.Stat(original); !os.IsNotExist(err) {
+			t.Fatal("original should not exist after rename")
+		}
+
+		// 执行回滚
+		rollbackBackup(original, "test.md.bak")
+
+		// 原文件应该恢复
+		data, err := os.ReadFile(original)
+		if err != nil {
+			t.Fatalf("original file should be restored: %v", err)
+		}
+		if string(data) != originalContent {
+			t.Errorf("restored content = %q, want %q", string(data), originalContent)
+		}
+		// 备份文件应该不存在了
+		if _, err := os.Stat(backup); !os.IsNotExist(err) {
+			t.Error("backup file should be removed after rollback")
+		}
+	})
+
+	t.Run("rollback with empty backup name is no-op", func(t *testing.T) {
+		original := filepath.Join(tmpDir, "noop.md")
+		os.WriteFile(original, []byte("content"), 0644)
+
+		rollbackBackup(original, "")
+
+		data, err := os.ReadFile(original)
+		if err != nil || string(data) != "content" {
+			t.Error("file should be unchanged with empty backup name")
+		}
+	})
+}
+
+func TestUpgradeDocuments_SplitFile(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "upgrade_split_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// 创建一个模拟多模块文档
+	multiContent := "## 故障记录 [2024-03-15] 支付超时\n支付接口504\n\n## 故障记录 [2024-03-20] 订单超时\n订单创建失败"
+	if err := os.WriteFile(filepath.Join(tmpDir, "troubleshooting_history.md"), []byte(multiContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Mock 返回两个拆分的文档
+	reorganizer := &mockReorganizer{
+		response: []*ReorganizedDocument{
+			{
+				Content: "---\nservice: Payment Service\nmodule: 核心支付模块\ntype: archive\n---\n\n# 支付超时\n",
+				Service: "Payment Service",
+				Module:  "核心支付模块",
+				DocType: "archive",
+				SubPath: "核心支付模块",
+			},
+			{
+				Content: "---\nservice: Order Service\nmodule: 订单模块\ntype: archive\n---\n\n# 订单超时\n",
+				Service: "Order Service",
+				Module:  "订单模块",
+				DocType: "archive",
+				SubPath: "订单模块",
+			},
+		},
+	}
+
+	results, err := UpgradeDocuments(context.Background(), tmpDir, reorganizer, nil)
+	if err != nil {
+		t.Fatalf("UpgradeDocuments error: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("len(results) = %d, want 1", len(results))
+	}
+	if results[0].Status != "upgraded" {
+		t.Errorf("status = %q, want 'upgraded'", results[0].Status)
+	}
+	if len(results[0].Outputs) != 2 {
+		t.Errorf("len(Outputs) = %d, want 2", len(results[0].Outputs))
+	}
+
+	// 验证备份文件
+	if _, err := os.Stat(filepath.Join(tmpDir, "troubleshooting_history.md.bak")); os.IsNotExist(err) {
+		t.Error("backup file should exist")
+	}
+
+	// 验证拆分输出文件
+	paymentPath := filepath.Join(tmpDir, "核心支付模块", "troubleshooting_history.md")
+	if _, err := os.Stat(paymentPath); os.IsNotExist(err) {
+		t.Error("核心支付模块/troubleshooting_history.md should exist")
+	}
+	orderPath := filepath.Join(tmpDir, "订单模块", "troubleshooting_history.md")
+	if _, err := os.Stat(orderPath); os.IsNotExist(err) {
+		t.Error("订单模块/troubleshooting_history.md should exist")
+	}
+}
+
+func TestUpgradeDocuments_SplitThenSkip(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "upgrade_split_skip_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	content := "原始内容"
+	if err := os.WriteFile(filepath.Join(tmpDir, "test.md"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	reorganizer := &mockReorganizer{
+		response: []*ReorganizedDocument{{
+			Content: testSOPContent,
+			Service: "Test Service",
+			Module:  "测试模块",
+			DocType: "sop",
+		}},
+	}
+
+	// 第一次运行
+	results1, err := UpgradeDocuments(context.Background(), tmpDir, reorganizer, nil)
+	if err != nil {
+		t.Fatalf("first run error: %v", err)
+	}
+	if len(results1) != 1 || results1[0].Status != "upgraded" {
+		t.Fatalf("first run: expected 1 upgraded, got %v", results1)
+	}
+
+	// 第二次运行（文件内容未变）
+	reorganizer.callCount = 0
+	results2, err := UpgradeDocuments(context.Background(), tmpDir, reorganizer, nil)
+	if err != nil {
+		t.Fatalf("second run error: %v", err)
+	}
+	if len(results2) != 1 || results2[0].Status != "skipped" {
+		t.Fatalf("second run: expected 1 skipped, got %v", results2)
+	}
+}
+
+func TestRollbackSplit(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "rollback_split_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// 创建一些模拟的拆分输出文件
+	dir1 := filepath.Join(tmpDir, "模块A")
+	os.MkdirAll(dir1, 0755)
+	file1 := filepath.Join(dir1, "test.md")
+	os.WriteFile(file1, []byte("content A"), 0644)
+
+	dir2 := filepath.Join(tmpDir, "模块B")
+	os.MkdirAll(dir2, 0755)
+	file2 := filepath.Join(dir2, "test.md")
+	os.WriteFile(file2, []byte("content B"), 0644)
+
+	rollbackSplit(tmpDir, []string{file1, file2})
+
+	if _, err := os.Stat(file1); !os.IsNotExist(err) {
+		t.Error("file1 should be removed after rollbackSplit")
+	}
+	if _, err := os.Stat(file2); !os.IsNotExist(err) {
+		t.Error("file2 should be removed after rollbackSplit")
 	}
 }

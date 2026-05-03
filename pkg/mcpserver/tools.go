@@ -1,7 +1,6 @@
 package mcpserver
 
 import (
-	"context"
 	"encoding/base64"
 	"fmt"
 	"strings"
@@ -14,6 +13,21 @@ import (
 // encodeBase64 编码字符串为 base64（用于安全传递密码）
 func encodeBase64(s string) string {
 	return base64.StdEncoding.EncodeToString([]byte(s))
+}
+
+// toolServer 服务器管理入口（根据 action 分发）
+func (s *Server) toolServer(args map[string]interface{}) (interface{}, error) {
+	action, _ := args["action"].(string)
+	switch action {
+	case "list", "":
+		return s.toolServerList()
+	case "connect":
+		return s.toolServerConnect(args)
+	case "disconnect":
+		return s.toolServerDisconnect(args)
+	default:
+		return nil, fmt.Errorf("未知 action: %s，可选: list, connect, disconnect", action)
+	}
 }
 
 // toolServerList 列出服务器
@@ -262,7 +276,6 @@ func (s *Server) toolSSHExec(args map[string]interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("缺少 command 参数")
 	}
 
-	note, _ := args["note"].(string)
 	maxLineLength := 500
 	if v, ok := args["max_line_length"].(float64); ok {
 		maxLineLength = int(v)
@@ -335,11 +348,6 @@ func (s *Server) toolSSHExec(args map[string]interface{}) (interface{}, error) {
 	controller := NewOutputController(s.config.MaxTotalBytes, maxLineLength, s.config.HeadLines)
 	result := controller.Process(output)
 
-	// 记录到录制会话（使用 MCP 适配器）
-	if s.mcpRecorder.GetCurrentSession() != nil {
-		s.mcpRecorder.RecordCommand(serverName, command, result.Output, exitCode, duration, note)
-	}
-
 	return map[string]interface{}{
 		"success": err == nil,
 		"output":  result.Output,
@@ -355,124 +363,5 @@ func (s *Server) toolSSHExec(args map[string]interface{}) (interface{}, error) {
 			"duration_ms":          duration.Milliseconds(),
 			"exit_code":            exitCode,
 		},
-	}, nil
-}
-
-// toolSessionStart 开始会话
-func (s *Server) toolSessionStart(args map[string]interface{}) (interface{}, error) {
-	problem, ok := args["problem"].(string)
-	if !ok || problem == "" {
-		return nil, fmt.Errorf("缺少 problem 参数")
-	}
-
-	// 使用 MCP 适配器开始会话
-	session, err := s.mcpRecorder.StartSession(problem)
-	if err != nil {
-		return nil, err
-	}
-
-	// 如果指定了服务器列表，预先连接
-	if servers, ok := args["servers"].([]interface{}); ok {
-		for _, sv := range servers {
-			if serverName, ok := sv.(string); ok {
-				s.toolServerConnect(map[string]interface{}{"server": serverName})
-			}
-		}
-	}
-
-	return map[string]interface{}{
-		"session_id": session.ID,
-		"status":     "active",
-		"message":    "会话已开始，所有操作将被记录",
-	}, nil
-}
-
-// toolSessionStatus 查看会话状态
-func (s *Server) toolSessionStatus() (interface{}, error) {
-	status := s.mcpRecorder.GetSessionStatus()
-	return status, nil
-}
-
-// toolSessionEnd 结束会话
-func (s *Server) toolSessionEnd(args map[string]interface{}) (interface{}, error) {
-	summary, ok := args["summary"].(string)
-	if !ok || summary == "" {
-		return nil, fmt.Errorf("缺少 summary 参数")
-	}
-
-	rootCause, _ := args["root_cause"].(string)
-
-	findings := make([]string, 0)
-	if f, ok := args["findings"].([]interface{}); ok {
-		for _, v := range f {
-			if s, ok := v.(string); ok {
-				findings = append(findings, s)
-			}
-		}
-	}
-
-	// 使用 MCP 适配器结束会话
-	session, err := s.mcpRecorder.EndSession(rootCause, summary, findings)
-	if err != nil {
-		return nil, err
-	}
-
-	// 断开所有连接
-	s.mu.Lock()
-	for name, conn := range s.connections {
-		if conn.Client != nil {
-			conn.Client.Close()
-		}
-		delete(s.connections, name)
-	}
-	s.mu.Unlock()
-
-	// 收集服务器列表
-	servers := make([]string, 0)
-	for server := range session.Servers {
-		servers = append(servers, server)
-	}
-
-	return map[string]interface{}{
-		"session_id":          session.ID,
-		"status":              "completed",
-		"duration_seconds":    int(session.EndTime.Sub(session.StartTime).Seconds()),
-		"servers_accessed":    len(servers),
-		"commands_executed":   len(session.Commands),
-		"root_cause":          session.RootCause,
-		"conclusion":          session.Conclusion,
-	}, nil
-}
-
-// toolGetHints 获取排查提示
-func (s *Server) toolGetHints(args map[string]interface{}) (interface{}, error) {
-	problem, ok := args["problem"].(string)
-	if !ok || problem == "" {
-		return nil, fmt.Errorf("缺少 problem 参数")
-	}
-
-	problemContext, _ := args["context"].(string)
-
-	// 检查 AIService 是否可用
-	if s.aiService == nil {
-		return nil, fmt.Errorf("AI 服务未初始化，请检查 config.json 中的 LLM 配置（需要配置 llm.APIKey）")
-	}
-
-	// 组合问题和上下文
-	fullProblem := problem
-	if problemContext != "" {
-		fullProblem = problem + "\n\n上下文：" + problemContext
-	}
-
-	// 调用 AskTroubleshoot（enableMCP=false，不使用 MCP 工具）
-	result, err := s.aiService.AskTroubleshoot(context.Background(), fullProblem, s.config.KnowledgeDir, false)
-	if err != nil {
-		return nil, fmt.Errorf("定位指导生成失败: %w", err)
-	}
-
-	// 返回 Markdown 格式的定位指导
-	return map[string]interface{}{
-		"content": result,  // Markdown 文本
-		"format":  "markdown",
 	}, nil
 }

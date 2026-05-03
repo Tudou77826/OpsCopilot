@@ -177,14 +177,34 @@ func extractFrontMatter(content string) (map[string]string, string) {
 		return nil, content
 	}
 
-	// 找到第二个 ---
-	endIdx := strings.Index(content[3:], "---")
-	if endIdx < 0 {
+	// 逐行扫描找第二个 ---，跳过代码块
+	lines := strings.Split(content, "\n")
+	inCodeBlock := false
+	endLine := -1
+	for i := 1; i < len(lines); i++ {
+		line := strings.TrimSpace(lines[i])
+
+		// 追踪代码块状态
+		if strings.HasPrefix(line, "```") {
+			inCodeBlock = !inCodeBlock
+			continue
+		}
+		if inCodeBlock {
+			continue
+		}
+
+		if line == "---" {
+			endLine = i
+			break
+		}
+	}
+
+	if endLine < 0 {
 		return nil, content
 	}
 
-	fmText := strings.TrimSpace(content[3 : endIdx+3])
-	body := strings.TrimSpace(content[endIdx+6:])
+	fmText := strings.TrimSpace(strings.Join(lines[1:endLine], "\n"))
+	body := strings.TrimSpace(strings.Join(lines[endLine+1:], "\n"))
 
 	fields := make(map[string]string)
 	for _, line := range strings.Split(fmText, "\n") {

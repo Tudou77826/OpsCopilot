@@ -1,7 +1,6 @@
 package mcpserver
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -10,10 +9,6 @@ import (
 	"time"
 
 	"github.com/pkg/sftp"
-	"opscopilot/pkg/ai"
-	"opscopilot/pkg/config"
-	"opscopilot/pkg/llm"
-	"opscopilot/pkg/recorder"
 	"opscopilot/pkg/secretstore"
 	"opscopilot/pkg/sessionmanager"
 	"opscopilot/pkg/sshclient"
@@ -43,9 +38,6 @@ type Server struct {
 	whitelistManager *WhitelistManager        // 白名单管理器（新）
 	fileChecker      *FileAccessChecker       // 文件访问检查器（新）
 	localStagingDir  string                   // 本地暂存目录
-	recorder         *recorder.Recorder       // 复用主程序录制器
-	mcpRecorder      *MCPRecorderAdapter      // MCP 适配器
-	aiService        *ai.AIService            // AI 服务（用于 get_hints）
 	mu               sync.RWMutex
 	stopChan         chan struct{}            // 停止清理 goroutine 的信号
 }
@@ -84,12 +76,8 @@ func NewServer(config *Config) (*Server, error) {
 		config:      config,
 		connections: make(map[string]*Connection),
 		checker:     NewCommandChecker(),
-		recorder:    recorder.NewRecorder(config.RecordingsDir),
 		stopChan:    make(chan struct{}),
 	}
-
-	// 创建 MCP 适配器（传入知识库目录用于归档）
-	s.mcpRecorder = NewMCPRecorderAdapter(s.recorder, config.KnowledgeDir)
 
 	// 启动连接空闲超时清理 goroutine
 	go s.startIdleConnectionCleaner()
@@ -106,37 +94,6 @@ func NewServer(config *Config) (*Server, error) {
 
 	// 使用现有的 secretstore
 	s.secretStore = secretstore.NewKeyringStore()
-
-	// 初始化 AI 服务（复用 OpsCopilot 的配置）
-	if err := s.initAIService(); err != nil {
-		fmt.Fprintf(os.Stderr, "[MCP] Warning: Failed to init AI service: %v\n", err)
-		// 不阻止启动，只是 get_hints 功能降级
-	}
-
-	// 注入 LLM provider 给归档器，用于智能提取归档元数据
-	if s.aiService != nil {
-		s.mcpRecorder.SetLLMProvider(s.aiService.GetFastProvider())
-	}
-
-	// 构建知识库目录并注册归档后自动更新回调
-	if s.aiService != nil && config.KnowledgeDir != "" {
-		if err := s.aiService.UpdateCatalog(config.KnowledgeDir); err != nil {
-			fmt.Fprintf(os.Stderr, "[MCP] Warning: Failed to build knowledge catalog: %v\n", err)
-		} else if s.aiService.GetCatalog() != nil {
-			fmt.Fprintf(os.Stderr, "[MCP] Knowledge catalog built: %d scenarios\n", s.aiService.GetCatalog().TotalScenarios())
-		}
-
-		// 注册归档后自动重建目录的回调
-		knowledgeDir := config.KnowledgeDir
-		s.mcpRecorder.SetOnCatalogUpdate(func() {
-			fmt.Fprintf(os.Stderr, "[MCP] Archive complete, rebuilding knowledge catalog...\n")
-			if err := s.aiService.UpdateCatalog(knowledgeDir); err != nil {
-				fmt.Fprintf(os.Stderr, "[MCP] Warning: Failed to rebuild catalog after archive: %v\n", err)
-			} else if s.aiService.GetCatalog() != nil {
-				fmt.Fprintf(os.Stderr, "[MCP] Knowledge catalog rebuilt: %d scenarios\n", s.aiService.GetCatalog().TotalScenarios())
-			}
-		})
-	}
 
 	// 初始化白名单管理器
 	whitelistPath := "command_whitelist.json"
@@ -172,40 +129,6 @@ func NewServer(config *Config) (*Server, error) {
 	}
 
 	return s, nil
-}
-
-// initAIService 初始化 AI 服务
-func (s *Server) initAIService() error {
-	// 1. 加载 config.json（基于 ConfigDir，只读模式不创建文件）
-	configDir := s.config.ConfigDir
-	if configDir == "" {
-		configDir = "."
-	}
-	configMgr := config.NewManagerWithDir(configDir)
-	configMgr.SetReadOnly(true)
-	if err := configMgr.Load(); err != nil {
-		return fmt.Errorf("load config: %w", err)
-	}
-
-	// 2. 检查 API Key 是否配置
-	llmCfg := configMgr.Config.LLM
-	if llmCfg.APIKey == "" {
-		return fmt.Errorf("LLM API Key not configured")
-	}
-
-	// 3. 创建 LLM Provider
-	fastProvider := llm.NewOpenAIProvider(llmCfg.APIKey, llmCfg.BaseURL, llmCfg.FastModel)
-	complexProvider := llm.NewOpenAIProvider(llmCfg.APIKey, llmCfg.BaseURL, llmCfg.ComplexModel)
-
-	// 4. 创建 AIService
-	s.aiService = ai.NewAIService(fastProvider, complexProvider, configMgr)
-
-	// 6. 设置空的事件发射器（MCP Server 不需要 UI 事件，避免 Wails runtime 调用）
-	ai.SetEventEmitter(func(ctx context.Context, optionalData string, optionalData2 ...interface{}) {
-		// No-op for MCP server
-	})
-
-	return nil
 }
 
 // GetAvailableServers 获取所有可用的服务器配置
