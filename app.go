@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -572,7 +573,7 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 
 	// Read loop
 	go func() {
-		buf := make([]byte, 4096)
+		buf := make([]byte, 32768)
 		for {
 			n, err := stdout.Read(buf)
 			if err != nil {
@@ -615,7 +616,7 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 				break
 			}
 			if n > 0 {
-				dataStr := string(buf[:n])
+				dataStr := readTerminalChunk(stdout, buf, n)
 				runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, dataStr)
 
 				// Record output
@@ -2342,4 +2343,28 @@ func (a *App) ReconnectSession(sessionID string) ConnectResult {
 	// 如果连接失败，保持disconnected状态
 	// 如果连接成功，ConnectWithID已经更新了状态
 	return result
+}
+
+// readTerminalChunk aggregates data from a terminal read loop.
+// If the initial read (n bytes) filled buf completely, it continues reading
+// until a short read, error, or the 256KB size limit. This reduces Wails event
+// count during high-throughput scenarios (e.g. cat large file) while keeping
+// interactive latency at zero for partial reads.
+func readTerminalChunk(r io.Reader, buf []byte, n int) string {
+	if n < len(buf) {
+		return string(buf[:n])
+	}
+	// Buffer filled: high-throughput scenario, aggregate reads
+	var agg bytes.Buffer
+	agg.Write(buf[:n])
+	for agg.Len() < 262144 {
+		n2, err2 := r.Read(buf)
+		if n2 > 0 {
+			agg.Write(buf[:n2])
+		}
+		if n2 < len(buf) || err2 != nil {
+			break
+		}
+	}
+	return agg.String()
 }

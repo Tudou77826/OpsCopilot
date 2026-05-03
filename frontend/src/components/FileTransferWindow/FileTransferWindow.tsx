@@ -20,6 +20,8 @@ const FileTransferWindow: React.FC<FileTransferWindowProps> = ({ isOpen, onClose
     const [beforeMaximizePos, setBeforeMaximizePos] = useState<{ x: number; y: number } | null>(null);
     const draggingRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
     const winRef = useRef<HTMLDivElement | null>(null);
+    const dragRafRef = useRef<number | null>(null);
+    const pendingPosRef = useRef<{ x: number; y: number } | null>(null);
 
     const initialPos = useMemo(() => {
         const pad = 24;
@@ -73,19 +75,41 @@ const FileTransferWindow: React.FC<FileTransferWindowProps> = ({ isOpen, onClose
             const pad = 10;
             const maxX = Math.max(pad, window.innerWidth - w - pad);
             const maxY = Math.max(pad, window.innerHeight - h - pad);
-            setPos({
+            pendingPosRef.current = {
                 x: Math.min(Math.max(pad, nextX), maxX),
                 y: Math.min(Math.max(pad, nextY), maxY)
-            });
+            };
+            if (!dragRafRef.current) {
+                dragRafRef.current = requestAnimationFrame(() => {
+                    dragRafRef.current = null;
+                    if (pendingPosRef.current) {
+                        setPos(pendingPosRef.current);
+                        pendingPosRef.current = null;
+                    }
+                });
+            }
         };
         const onUp = () => {
             draggingRef.current = null;
+            // Flush any pending position update immediately
+            if (dragRafRef.current) {
+                cancelAnimationFrame(dragRafRef.current);
+                dragRafRef.current = null;
+            }
+            if (pendingPosRef.current) {
+                setPos(pendingPosRef.current);
+                pendingPosRef.current = null;
+            }
         };
         window.addEventListener('mousemove', onMove);
         window.addEventListener('mouseup', onUp);
         return () => {
             window.removeEventListener('mousemove', onMove);
             window.removeEventListener('mouseup', onUp);
+            if (dragRafRef.current) {
+                cancelAnimationFrame(dragRafRef.current);
+                dragRafRef.current = null;
+            }
         };
     }, [initialPos.h, initialPos.w]);
 

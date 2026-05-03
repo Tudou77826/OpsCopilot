@@ -30,9 +30,10 @@ interface LayoutManagerProps {
     terminalConfig?: TerminalConfig;
     highlightRules?: HighlightRule[];
     onReorderTerminals?: (reorderedIds: string[]) => void;
+    scheduleFitAll?: (delay?: number) => void;
 }
 
-const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTerminalData, terminalRefs, onCloseTerminal, onRenameTerminal, onDuplicateTerminal, onReconnect, onActiveTerminalChange, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast, completionDelay, terminalConfig, highlightRules, onReorderTerminals }) => {
+const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTerminalData, terminalRefs, onCloseTerminal, onRenameTerminal, onDuplicateTerminal, onReconnect, onActiveTerminalChange, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast, completionDelay, terminalConfig, highlightRules, onReorderTerminals, scheduleFitAll }) => {
     const [activeTab, setActiveTab] = useState<string>(terminals[0]?.id || '');
     const [editingTab, setEditingTab] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
@@ -45,6 +46,27 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
     const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
     const [dragOverPosition, setDragOverPosition] = useState<'before' | 'after'>('after');
     const [gridDragOverId, setGridDragOverId] = useState<string | null>(null);
+
+    // Drag RAF throttling (Change 5)
+    const dragRafRef = useRef<number | null>(null);
+    const pendingDragRef = useRef<{ tabId: string | null; position: 'before' | 'after'; gridId: string | null }>({ tabId: null, position: 'after', gridId: null });
+    const lastDragStateRef = useRef<{ tabId: string | null; position: 'before' | 'after'; gridId: string | null }>({ tabId: null, position: 'after', gridId: null });
+
+    const flushDragState = useCallback(() => {
+        dragRafRef.current = null;
+        const pending = pendingDragRef.current;
+        const last = lastDragStateRef.current;
+        if (pending.tabId !== last.tabId || pending.position !== last.position) {
+            setDragOverTabId(pending.tabId);
+            setDragOverPosition(pending.position);
+            last.tabId = pending.tabId;
+            last.position = pending.position;
+        }
+        if (pending.gridId !== last.gridId) {
+            setGridDragOverId(pending.gridId);
+            last.gridId = pending.gridId;
+        }
+    }, []);
 
     // Collapse state (grid mode)
     const [collapsedPaneIds, setCollapsedPaneIds] = useState<Set<string>>(new Set());
@@ -116,12 +138,15 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
 
     // Trigger fit on layout change
     React.useEffect(() => {
-        // Wait for layout transition/render
-        const timer = setTimeout(() => {
-            terminalRefs.current.forEach(term => term.fit());
-        }, 100);
-        return () => clearTimeout(timer);
-    }, [terminals.length, mode, terminalRefs]);
+        if (scheduleFitAll) {
+            scheduleFitAll(100);
+        } else {
+            const timer = setTimeout(() => {
+                terminalRefs.current.forEach(term => term.fit());
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [terminals.length, mode, terminalRefs, scheduleFitAll]);
 
     // Clear collapsed state when switching to tab mode
     React.useEffect(() => {
@@ -213,22 +238,33 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
         const el = e.currentTarget as HTMLElement;
         el.style.opacity = '1';
         dragStateRef.current = null;
+        if (dragRafRef.current) {
+            cancelAnimationFrame(dragRafRef.current);
+            dragRafRef.current = null;
+        }
         setDragOverTabId(null);
         setDragOverPosition('after');
+        lastDragStateRef.current = { tabId: null, position: 'after', gridId: lastDragStateRef.current.gridId };
     };
 
     const handleTabDragOver = (e: React.DragEvent, id: string) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         if (!dragStateRef.current || dragStateRef.current.draggedId === id) {
-            setDragOverTabId(null);
+            pendingDragRef.current.tabId = null;
+            if (!dragRafRef.current) {
+                dragRafRef.current = requestAnimationFrame(flushDragState);
+            }
             return;
         }
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
         const midX = rect.left + rect.width / 2;
         const pos = e.clientX < midX ? 'before' : 'after';
-        setDragOverTabId(id);
-        setDragOverPosition(pos);
+        pendingDragRef.current.tabId = id;
+        pendingDragRef.current.position = pos;
+        if (!dragRafRef.current) {
+            dragRafRef.current = requestAnimationFrame(flushDragState);
+        }
     };
 
     const handleTabDrop = (e: React.DragEvent, targetId: string) => {
@@ -263,17 +299,28 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
         const el = e.currentTarget as HTMLElement;
         el.style.opacity = '1';
         dragStateRef.current = null;
+        if (dragRafRef.current) {
+            cancelAnimationFrame(dragRafRef.current);
+            dragRafRef.current = null;
+        }
         setGridDragOverId(null);
+        lastDragStateRef.current = { tabId: lastDragStateRef.current.tabId, position: lastDragStateRef.current.position, gridId: null };
     };
 
     const handleGridDragOver = (e: React.DragEvent, id: string) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         if (!dragStateRef.current || dragStateRef.current.draggedId === id) {
-            setGridDragOverId(null);
+            pendingDragRef.current.gridId = null;
+            if (!dragRafRef.current) {
+                dragRafRef.current = requestAnimationFrame(flushDragState);
+            }
             return;
         }
-        setGridDragOverId(id);
+        pendingDragRef.current.gridId = id;
+        if (!dragRafRef.current) {
+            dragRafRef.current = requestAnimationFrame(flushDragState);
+        }
     };
 
     const handleGridDrop = (e: React.DragEvent, targetId: string) => {
@@ -304,10 +351,13 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
             next.add(id);
             return next;
         });
-        // Trigger fit after layout recalculation
-        setTimeout(() => {
-            terminalRefs.current.forEach(term => term.fit());
-        }, 150);
+        if (scheduleFitAll) {
+            scheduleFitAll(150);
+        } else {
+            setTimeout(() => {
+                terminalRefs.current.forEach(term => term.fit());
+            }, 150);
+        }
     };
 
     const handleExpandPane = (id: string) => {
@@ -316,10 +366,13 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
             next.delete(id);
             return next;
         });
-        // Trigger fit after layout recalculation
-        setTimeout(() => {
-            terminalRefs.current.forEach(term => term.fit());
-        }, 150);
+        if (scheduleFitAll) {
+            scheduleFitAll(150);
+        } else {
+            setTimeout(() => {
+                terminalRefs.current.forEach(term => term.fit());
+            }, 150);
+        }
     };
 
     return (

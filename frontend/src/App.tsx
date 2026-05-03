@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import './App.css';
 import { TerminalRef } from './components/Terminal/Terminal';
 import LayoutManager from './components/LayoutManager/LayoutManager';
@@ -61,6 +61,17 @@ function App() {
         broadcastIdsRef.current = broadcastIds;
     }, [broadcastIds]);
     const terminalRefs = useRef(new Map<string, TerminalRef>());
+    // Unified fit scheduler — ensures at most one pending fit timer at any time
+    const fitTimerRef = useRef<number | null>(null);
+    const scheduleFitAll = useCallback((delay = 120) => {
+        if (fitTimerRef.current) {
+            window.clearTimeout(fitTimerRef.current);
+        }
+        fitTimerRef.current = window.setTimeout(() => {
+            fitTimerRef.current = null;
+            terminalRefs.current.forEach(t => t.fit());
+        }, delay);
+    }, []);
     // Store unlisten functions for events
     const unlisteners = useRef(new Map<string, () => void>());
     const activeConnectError = connectErrors.length > 0 ? connectErrors[0] : null;
@@ -553,19 +564,15 @@ function App() {
 
     // Force layout update when sidebar toggles
     useEffect(() => {
-        setTimeout(() => {
-            terminalRefs.current.forEach(t => t.fit());
-        }, 300); // Wait for transition
-    }, [isSidebarOpen]);
+        scheduleFitAll(300);
+    }, [isSidebarOpen, scheduleFitAll]);
 
     const [isQuickCommandDrawerOpen, setIsQuickCommandDrawerOpen] = useState(false);
 
     // Force terminal resize when QuickCommandDrawer toggles
     useEffect(() => {
-        setTimeout(() => {
-            terminalRefs.current.forEach(t => t.fit());
-        }, 350); // Wait for transition (300ms)
-    }, [isQuickCommandDrawerOpen]);
+        scheduleFitAll(350);
+    }, [isQuickCommandDrawerOpen, scheduleFitAll]);
 
     const toggleSidebar = (tab: 'sessions' | 'troubleshoot' | 'chat' | 'script') => {
         if (isSidebarOpen && sidebarTab === tab) {
@@ -653,6 +660,7 @@ function App() {
                         terminalConfig={terminalConfig}
                         highlightRules={highlightRules}
                         onReorderTerminals={handleReorderTerminals}
+                        scheduleFitAll={scheduleFitAll}
                     />
                 </div>
 

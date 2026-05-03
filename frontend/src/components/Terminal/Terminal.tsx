@@ -67,6 +67,14 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
     const decorationsRef = useRef<Map<number, any[]>>(new Map());
     const highlightTimerRef = useRef<number | null>(null);
 
+    // Write buffering refs (Change 1: frame-level flush)
+    const writeQueueRef = useRef<string[]>([]);
+    const flushScheduledRef = useRef<boolean>(false);
+
+    // Post-output highlight scan refs (Change 2: scan only after output stabilizes)
+    const lastOutputAtRef = useRef<number>(0);
+    const postScanTimerRef = useRef<number | null>(null);
+
     // Refs to avoid useEffect re-runs
     const completionVisibleRef = useRef(false);
     const completionDataRef = useRef<CompletionData>({ suggestions: [], replace_from: 0, replace_to: 0 });
@@ -365,7 +373,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             searchDecorationsRef.current.clear();
 
             const buffer = term.buffer.active;
-            const maxDecos = 2000;
+            const maxDecos = 800;
             const bg = '#f6e05e';
             const fg = '#000000';
 
@@ -471,6 +479,35 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         scheduleSearchHighlightAll(120, { visible: searchVisible, query: searchQuery, caseSensitive: searchCaseSensitive, regexMode: searchRegexMode });
     }, [scheduleSearchHighlightAll, searchVisible, searchQuery, searchCaseSensitive, searchRegexMode]);
 
+    // --- Change 1: Flush writes once per animation frame ---
+    const flushWrites = useCallback(() => {
+        flushScheduledRef.current = false;
+        const queue = writeQueueRef.current;
+        if (queue.length === 0) return;
+        const merged = queue.join('');
+        writeQueueRef.current = [];
+        xtermRef.current?.write(merged);
+        lastOutputAtRef.current = Date.now();
+    }, []);
+
+    // --- Change 2: Schedule highlight scan only after output stabilizes ---
+    const schedulePostOutputScan = useCallback(() => {
+        if (postScanTimerRef.current) {
+            window.clearTimeout(postScanTimerRef.current);
+            postScanTimerRef.current = null;
+        }
+        postScanTimerRef.current = window.setTimeout(() => {
+            postScanTimerRef.current = null;
+            // Only scan if output has been stable for >= 300ms
+            if (Date.now() - lastOutputAtRef.current >= 300) {
+                scheduleHighlightScan(0);
+            } else {
+                // Output is still happening, reschedule
+                schedulePostOutputScan();
+            }
+        }, 300);
+    }, []);
+
     const clearDecorations = useCallback(() => {
         const m = decorationsRef.current;
         for (const ds of m.values()) {
@@ -505,8 +542,8 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             const buffer = term.buffer.active;
             const viewportY = buffer.viewportY;
             const cursorAbs = buffer.baseY + buffer.cursorY;
-            const start = Math.max(0, viewportY - 100);
-            const end = Math.min(buffer.length - 1, viewportY + term.rows - 1 + 100);
+            const start = Math.max(0, viewportY - 40);
+            const end = Math.min(buffer.length - 1, viewportY + term.rows - 1 + 40);
 
             for (const [k, ds] of decorationsRef.current.entries()) {
                 if (k < start || k > end) {
@@ -535,7 +572,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                 }
             }).filter(Boolean) as Array<{ rule: HighlightRule; re: RegExp }>;
 
-            const budgetMs = 50;
+            const budgetMs = 12;
             const t0 = performance.now();
 
             for (let lineIdx = start; lineIdx <= end; lineIdx++) {
@@ -579,7 +616,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
 
                 const decos: any[] = [];
                 for (const rg of ranges) {
-                    if (totalDecos >= 5000) break;
+                    if (totalDecos >= 1500) break;
                     const offset = lineIdx - cursorAbs;
                     const marker = term.registerMarker(offset);
                     if (!marker) continue;
@@ -601,7 +638,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                     }
                 }
                 if (decos.length > 0) decorationsRef.current.set(lineIdx, decos);
-                if (totalDecos >= 5000) break;
+                if (totalDecos >= 1500) break;
             }
         }, Math.max(0, delayMs));
     }, [clearDecorations]);
@@ -715,8 +752,14 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
 
     useImperativeHandle(ref, () => ({
         write: (data: string) => {
-            xtermRef.current?.write(data);
-            scheduleHighlightScan(120);
+            // Change 1: Buffer writes, flush once per animation frame
+            writeQueueRef.current.push(data);
+            if (!flushScheduledRef.current) {
+                flushScheduledRef.current = true;
+                requestAnimationFrame(flushWrites);
+            }
+            // Change 2: Schedule post-output scan instead of immediate scan
+            schedulePostOutputScan();
             if (getSearchEnabled() && searchVisibleRef.current && searchQueryRef.current.trim()) {
                 scheduleSearchCount();
                 scheduleSearchHighlightAll(120, {
@@ -797,7 +840,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         scheduleHighlightScan(0);
 
         const onScrollDispose = term.onScroll(() => {
-            scheduleHighlightScan(120);
+            schedulePostOutputScan();
             if (getSearchEnabled() && searchVisibleRef.current && searchQueryRef.current.trim()) {
                 scheduleSearchHighlightAll(200, {
                     visible: searchVisibleRef.current,
@@ -956,7 +999,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                 completionVisibleRef.current = false;
                 triggerCompletion();
                 term.paste(text);
-                scheduleHighlightScan(120);
+                schedulePostOutputScan();
             }
         };
         terminalRef.current.addEventListener('paste', handlePaste);
@@ -972,7 +1015,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                         completionVisibleRef.current = false;
                         triggerCompletion();
                         term.paste(text);
-                        scheduleHighlightScan(120);
+                        schedulePostOutputScan();
                     }
                     term.focus();
                 });
@@ -996,7 +1039,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                         completionVisibleRef.current = false;
                         triggerCompletion();
                         term.paste(text);
-                        scheduleHighlightScan(120);
+                        schedulePostOutputScan();
                     }
                     term.focus();
                 });

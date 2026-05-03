@@ -1,68 +1,88 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
 import QuickCommandDrawer from './QuickCommandDrawer';
 
 describe('QuickCommandDrawer', () => {
     const defaultProps = {
         onExecute: vi.fn(),
-        isOpen: true, // Default to open so we can see content in tests
+        isOpen: true,
         onToggle: vi.fn(),
     };
+
+    beforeAll(() => {
+        // Mock Wails backend calls used by the component
+        (window as any).go = {
+            main: {
+                App: {
+                    LoadQuickCommands: vi.fn().mockResolvedValue([]),
+                    SaveQuickCommands: vi.fn(),
+                }
+            }
+        };
+    });
 
     it('renders correctly', () => {
         render(<QuickCommandDrawer {...defaultProps} />);
         expect(screen.getByText('▼ 快捷命令')).toBeInTheDocument();
     });
 
-    it('calls onToggle when handle is clicked', () => {
+    it('calls onToggle when toggle button is clicked', () => {
         const onToggleMock = vi.fn();
         render(<QuickCommandDrawer {...defaultProps} onToggle={onToggleMock} />);
-        const handle = screen.getByTitle('展开/收起');
-        fireEvent.click(handle);
+        // Toggle button shows "▼ 快捷命令" when open
+        const toggleBtn = screen.getByText('▼ 快捷命令');
+        fireEvent.click(toggleBtn);
         expect(onToggleMock).toHaveBeenCalled();
     });
 
-    it('executes command on click', () => {
+    it('executes command on click', async () => {
         const onExecuteMock = vi.fn();
+        (window as any).go.main.App.LoadQuickCommands = vi.fn().mockResolvedValue([
+            { id: '1', name: 'List Files', content: 'ls -la', group: 'default' }
+        ]);
         render(<QuickCommandDrawer {...defaultProps} onExecute={onExecuteMock} />);
 
-        // Find default command (assuming "ls -la" or similar exists in default state for test)
-        // If empty by default, we might need to add one first or mock localStorage
-
-        // Let's assume we mocked localStorage to have one command
-        // Since we can't easily mock localStorage in this setup without setupFiles, 
-        // we might test the "Add" flow first or rely on default props if we exposed initialCommands
+        // Wait for async load to complete and command to appear
+        const cmd = await screen.findByTitle('ls -la');
+        fireEvent.click(cmd);
+        expect(onExecuteMock).toHaveBeenCalledWith('ls -la');
     });
 
-    it('adds a new command', () => {
+    it('opens edit modal when + is clicked with default values', () => {
         render(<QuickCommandDrawer {...defaultProps} />);
         const addBtn = screen.getByText('+');
         fireEvent.click(addBtn);
 
-        // Should show edit dialog/inputs (mocked or real)
-        // Since we are building it, let's assume clicking + adds a default "New Command"
-        expect(screen.getByText('New Command')).toBeInTheDocument();
+        // Modal opens — "New Command" is in the input value
+        expect(screen.getByDisplayValue('New Command')).toBeInTheDocument();
+        expect(screen.getByText('编辑命令')).toBeInTheDocument();
     });
 
-    it('edits a command name', () => {
+    it('edits a command name via modal', async () => {
+        (window as any).go.main.App.LoadQuickCommands = vi.fn().mockResolvedValue([
+            { id: '1', name: 'List Files', content: 'ls -la', group: 'default' }
+        ]);
         render(<QuickCommandDrawer {...defaultProps} />);
-        // Add one
-        fireEvent.click(screen.getByText('+'));
 
-        const cmd = screen.getByText('New Command');
+        // Wait for async load
+        const cmd = await screen.findByTitle('ls -la');
+
+        // Right-click to open context menu
         fireEvent.contextMenu(cmd);
 
+        // Click "编辑" in context menu
         const editBtn = screen.getByText('编辑');
         fireEvent.click(editBtn);
 
-        // Expect input with value
-        const input = screen.getByDisplayValue('New Command');
-        fireEvent.change(input, { target: { value: 'List Files' } });
+        // Modal opens with current name in input
+        const nameInput = screen.getByDisplayValue('List Files') as HTMLInputElement;
+        fireEvent.change(nameInput, { target: { value: 'List All Files' } });
 
-        // Find the save button (primaryBtn)
+        // Save
         const saveBtn = screen.getByText('保存');
         fireEvent.click(saveBtn);
 
-        expect(screen.getByText('List Files')).toBeInTheDocument();
+        // After save, the card should show the new name
+        expect(screen.getByText('List All Files')).toBeInTheDocument();
     });
 });

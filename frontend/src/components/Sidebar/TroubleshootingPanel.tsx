@@ -457,6 +457,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
     };
 
     const preprocessContent = (content: string): string => {
+        if (!content) return '';
         let text = content;
 
         // 1. 尝试从 JSON 包装中提取文本
