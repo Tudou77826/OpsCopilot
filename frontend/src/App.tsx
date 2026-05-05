@@ -604,23 +604,37 @@ function App() {
     return (
         <div id="app" style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
             <div style={{
-                padding: '8px 16px',
-                background: '#333',
+                padding: '6px 12px',
+                background: '#2b2b2b',
+                borderBottom: '1px solid #1e1e1e',
                 color: '#fff',
                 display: 'flex',
-                gap: '16px',
+                gap: '12px',
                 alignItems: 'center',
                 justifyContent: 'space-between'
             }}>
                 <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.9rem', color: status === '已连接' ? '#4caf50' : '#aaa' }}>
-                        {status}
-                    </span>
+                    {status !== '就绪' && status !== '已连接' && status !== '已重连' && (
+                        <div style={{
+                            ...styles.loadingIndicator,
+                            color: (status.includes('失败') || status.includes('请先')) ? '#f44336' : '#888',
+                        }}>
+                            {!status.includes('失败') && !status.includes('请先') && (
+                                <svg className="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                                    <path d="M12 2a10 10 0 0 1 10 10" />
+                                </svg>
+                            )}
+                            <span>{status}</span>
+                        </div>
+                    )}
                     <button onClick={() => setIsSmartModalOpen(true)} style={styles.primaryBtn}>
                         + 新建连接
                     </button>
-                    <button onClick={() => setIsSettingsOpen(true)} style={styles.iconBtn} title="设置">
-                        ⚙️
+                    <button onClick={() => setIsSettingsOpen(true)} style={styles.iconBtnUnified} title="设置">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                        </svg>
                     </button>
                 </div>
 
@@ -628,14 +642,24 @@ function App() {
                     <button
                         style={layoutMode === 'tab' ? styles.activeToggle : styles.toggle}
                         onClick={() => setLayoutMode('tab')}
+                        title="标签模式"
                     >
-                        标签模式
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <rect x="1" y="2" width="14" height="2.5" rx="0.8" opacity="0.6"></rect>
+                            <rect x="1" y="6" width="14" height="8" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2"></rect>
+                        </svg>
                     </button>
                     <button
                         style={layoutMode === 'grid' ? styles.activeToggle : styles.toggle}
                         onClick={() => setLayoutMode('grid')}
+                        title="网格模式"
                     >
-                        网格模式
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2">
+                            <rect x="1" y="1" width="6" height="6" rx="1"></rect>
+                            <rect x="9" y="1" width="6" height="6" rx="1"></rect>
+                            <rect x="1" y="9" width="6" height="6" rx="1"></rect>
+                            <rect x="9" y="9" width="6" height="6" rx="1"></rect>
+                        </svg>
                     </button>
                 </div>
             </div>
@@ -788,45 +812,69 @@ function App() {
 
 const styles = {
     primaryBtn: {
-        padding: '6px 12px',
-        backgroundColor: '#007acc',
-        color: 'white',
-        border: 'none',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        fontWeight: 'bold' as const,
-    },
-    toggleGroup: {
-        display: 'flex',
-        backgroundColor: '#1e1e1e',
-        borderRadius: '4px',
-        overflow: 'hidden',
-        border: '1px solid #444',
-    },
-    toggle: {
-        padding: '6px 12px',
-        backgroundColor: 'transparent',
-        color: '#ccc',
-        border: 'none',
-        cursor: 'pointer',
-    },
-    activeToggle: {
-        padding: '6px 12px',
-        backgroundColor: '#007acc',
-        color: 'white',
-        border: 'none',
-        cursor: 'pointer',
-    },
-    iconBtn: {
-        background: 'none',
-        border: 'none',
-        fontSize: '1.2rem',
-        cursor: 'pointer',
-        padding: '4px',
+        height: '28px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        marginLeft: '8px',
+        gap: '4px',
+        padding: '0 12px',
+        backgroundColor: '#0e639c',
+        border: 'none',
+        borderRadius: '4px',
+        color: '#fff',
+        cursor: 'pointer',
+        fontSize: '0.82rem',
+        fontWeight: 500 as const,
+        transition: 'background-color 0.15s',
+    },
+    toggleGroup: {
+        display: 'flex',
+        borderRadius: '4px',
+        background: '#1e1e1e',
+        border: '1px solid #3c3c3c',
+        overflow: 'hidden',
+    },
+    toggle: {
+        width: '32px',
+        height: '26px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'transparent',
+        color: '#666',
+        border: 'none',
+        cursor: 'pointer',
+        transition: 'all 0.15s',
+    },
+    activeToggle: {
+        width: '32px',
+        height: '26px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#3c3c3c',
+        color: '#fff',
+        border: 'none',
+        cursor: 'pointer',
+        transition: 'all 0.15s',
+    },
+    iconBtnUnified: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'transparent',
+        border: 'none',
+        borderRadius: '4px',
+        color: '#aaa',
+        cursor: 'pointer',
+        padding: '4px',
+        transition: 'color 0.15s',
+    },
+    loadingIndicator: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        fontSize: '0.8rem',
     },
     rightNav: {
         width: '48px',
