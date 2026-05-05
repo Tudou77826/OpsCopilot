@@ -737,7 +737,7 @@ const styles = {
         alignItems: 'center',
         justifyContent: 'space-between',
         width: '100%',
-        padding: '8px 12px',
+        padding: '6px 10px',
         boxSizing: 'border-box' as const,
     },
     tabTitle: {
