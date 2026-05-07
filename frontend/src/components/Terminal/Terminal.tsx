@@ -812,7 +812,10 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             fontWeightBold: '700',
             theme: {
                 background: '#1e1e1e',
-            }
+            },
+            // 扩展分隔符：加入终端常见分隔符 /:=| 等
+            // 但不加 . 和 _，这样 sopuesr.iii_yuyu、my_var 等标识符保持为整体
+            wordSeparator: ' ()[]{}\'\"`,;:/\\|=<>!@#$%^&*~',
         });
         const fitAddon = new FitAddon();
         term.loadAddon(fitAddon);

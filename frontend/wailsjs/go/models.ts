@@ -152,7 +152,6 @@ export namespace config {
 	}
 	export class AppConfig {
 	    llm: LLMConfig;
-	    prompts: Record<string, string>;
 	    log: LogConfig;
 	    docs: DocsConfig;
 	    quick_commands: QuickCommand[];
@@ -170,7 +169,6 @@ export namespace config {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.llm = this.convertValues(source["llm"], LLMConfig);
-	        this.prompts = source["prompts"];
 	        this.log = this.convertValues(source["log"], LogConfig);
 	        this.docs = this.convertValues(source["docs"], DocsConfig);
 	        this.quick_commands = this.convertValues(source["quick_commands"], QuickCommand);

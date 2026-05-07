@@ -14,7 +14,6 @@ func TestTerminalConfigDefaultAndSave(t *testing.T) {
 
 	m := NewManager()
 	m.configPath = filepath.Join(dir, "config.json")
-	m.promptsPath = filepath.Join(dir, "prompts.json")
 	m.quickCommandsPath = filepath.Join(dir, "quick_commands.json")
 	m.highlightRulesPath = filepath.Join(dir, "highlight_rules.json")
 
@@ -34,7 +33,6 @@ func TestTerminalConfigDefaultAndSave(t *testing.T) {
 
 	m2 := NewManager()
 	m2.configPath = m.configPath
-	m2.promptsPath = m.promptsPath
 	m2.quickCommandsPath = m.quickCommandsPath
 	m2.highlightRulesPath = m.highlightRulesPath
 	if err := m2.Load(); err != nil {

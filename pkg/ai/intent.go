@@ -84,10 +84,7 @@ func (s *AIService) UpdateProviders(fastProvider llm.Provider, complexProvider l
 }
 
 func (s *AIService) GenerateLinuxCommand(request string) (*CommandQueryResult, error) {
-	prompt := s.cfgMgr.Config.Prompts["command_query_prompt"]
-	if prompt == "" {
-		prompt = config.DefaultCommandQueryPrompt
-	}
+	prompt := config.DefaultCommandQueryPrompt
 
 	messages := []llm.ChatMessage{
 		{Role: "system", Content: prompt},
@@ -115,10 +112,7 @@ func (s *AIService) GenerateLinuxCommand(request string) (*CommandQueryResult, e
 }
 
 func (s *AIService) ParseConnectIntent(input string) ([]sshclient.ConnectConfig, error) {
-	prompt := s.cfgMgr.Config.Prompts["smart_connect"]
-	if prompt == "" {
-		prompt = config.DefaultSmartConnectPrompt
-	}
+	prompt := config.DefaultSmartConnectPrompt
 
 	messages := []llm.ChatMessage{
 		{Role: "system", Content: prompt},
@@ -205,10 +199,7 @@ func normalizeAgentResponse(resp string) string {
 }
 
 func (s *AIService) AskWithContext(ctx context.Context, question string, knowledgeDir string) (string, error) {
-	prompt := s.cfgMgr.Config.Prompts["qa_prompt"]
-	if prompt == "" {
-		prompt = config.DefaultQAPrompt
-	}
+	prompt := config.DefaultQAPrompt
 
 	resp, err := s.RunAgent(ctx, AgentRunOptions{
 		Question:     question,
@@ -271,10 +262,7 @@ type TroubleshootResult struct {
 }
 
 func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowledgeDir string, enableMCP bool) (string, error) {
-	prompt := s.cfgMgr.Config.Prompts["troubleshoot_prompt"]
-	if prompt == "" {
-		prompt = config.DefaultTroubleshootPrompt
-	}
+	prompt := config.DefaultTroubleshootPrompt
 
 	result := TroubleshootResult{
 		OpsCopilotReady:  false,
@@ -538,10 +526,7 @@ func (s *AIService) GenerateConclusionStream(ctx context.Context, timeline strin
 }
 
 func (s *AIService) PolishContent(content string) (string, error) {
-	prompt := s.cfgMgr.Config.Prompts["polish_prompt"]
-	if prompt == "" {
-		prompt = config.DefaultPolishPrompt
-	}
+	prompt := config.DefaultPolishPrompt
 
 	messages := []llm.ChatMessage{
 		{Role: "system", Content: prompt},

@@ -13,9 +13,6 @@ interface AppConfig {
         ComplexModel: string;
         Model?: string;
     };
-    prompts: {
-        [key: string]: string;
-    };
     log: {
         dir: string;
     };
@@ -43,7 +40,7 @@ interface SettingsModalProps {
     onHighlightRulesChange?: (rules: HighlightRule[]) => void;
 }
 
-type TabId = 'llm' | 'prompts' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'filetransfer' | 'whitelist' | 'fileaccess' | 'experimental';
+type TabId = 'llm' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'filetransfer' | 'whitelist' | 'fileaccess' | 'experimental';
 
 interface NavItem {
     id: TabId;
@@ -77,7 +74,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     // Navigation items structure
     const navItems: NavItem[] = [
         { id: 'llm', label: '模型服务', icon: '🤖', category: 'AI' },
-        { id: 'prompts', label: 'AI提示词', icon: '💬', category: 'AI' },
         { id: 'terminal', label: '终端设置', icon: '🖥️', category: '终端' },
         { id: 'highlight', label: '突出显示', icon: '🎨', category: '终端' },
         { id: 'shortcuts', label: '快捷键', icon: '⌨️', category: '交互' },
@@ -270,17 +266,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         });
     };
 
-    const handlePromptChange = (key: string, value: string) => {
-        if (!config) return;
-        setConfig({
-            ...config,
-            prompts: {
-                ...config.prompts,
-                [key]: value
-            }
-        });
-    };
-
     const handleImportConfig = async () => {
         const dir = (importDir || '').trim();
         if (!dir) {
@@ -349,30 +334,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 placeholder="glm46"
                             />
                         </div>
-                    </div>
-                );
-
-            case 'prompts':
-                return (
-                    <div style={styles.settingsGroup}>
-                        <div style={styles.groupTitle}>系统提示词</div>
-                        {[
-                            { key: 'smart_connect', label: '智能连接系统提示词 (Smart Connect)' },
-                            { key: 'qa_prompt', label: 'AI 问答提示词 (AI Chat Agent)' },
-                            { key: 'troubleshoot_prompt', label: '问题排查提示词 (Troubleshooting Agent)' },
-                            { key: 'conclusion_prompt', label: '故障总结提示词 (Conclusion Agent)' },
-                            { key: 'polish_prompt', label: '内容润色提示词 (Polishing Agent)' },
-                        ].map(({ key, label }) => (
-                            <div key={key} style={styles.settingItem}>
-                                <label style={styles.settingLabel}>{label}</label>
-                                <textarea
-                                    style={styles.textarea}
-                                    value={config.prompts[key] || ''}
-                                    onChange={(e) => handlePromptChange(key, e.target.value)}
-                                    rows={8}
-                                />
-                            </div>
-                        ))}
                     </div>
                 );
 
@@ -597,7 +558,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 <div style={styles.settingDescription}>{importMsg}</div>
                             ) : (
                                 <div style={styles.settingDescription}>
-                                    支持导入 config.json / prompts.json / quick_commands.json / highlight_rules.json；导入前会自动备份当前配置到 .bak 文件
+                                    支持导入 config.json / quick_commands.json / highlight_rules.json；导入前会自动备份当前配置到 .bak 文件
                                 </div>
                             )}
                         </div>
@@ -895,20 +856,6 @@ const styles = {
         color: '#fff',
         outline: 'none',
         fontSize: '13px',
-        ':focus': {
-            borderColor: '#007ACC',
-        }
-    },
-    textarea: {
-        padding: '8px 12px',
-        borderRadius: '4px',
-        border: '1px solid #3c3c3c',
-        backgroundColor: '#1e1e1e',
-        color: '#fff',
-        outline: 'none',
-        fontFamily: 'var(--font-mono)',
-        fontSize: '12px',
-        resize: 'vertical' as const,
         ':focus': {
             borderColor: '#007ACC',
         }

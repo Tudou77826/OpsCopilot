@@ -19,31 +19,8 @@ func TestConfigLoad(t *testing.T) {
 		t.Error("config.json 文件不存在")
 	}
 
-	if _, err := os.Stat("prompts.json"); os.IsNotExist(err) {
-		t.Error("prompts.json 文件不存在")
-	}
-
 	if _, err := os.Stat("quick_commands.json"); os.IsNotExist(err) {
 		t.Error("quick_commands.json 文件不存在")
-	}
-
-	// 验证 Prompts 被正确加载
-	if mgr.Config.Prompts == nil {
-		t.Fatal("Prompts 未初始化")
-	}
-
-	expectedPrompts := []string{
-		"smart_connect",
-		"qa_prompt",
-		"conclusion_prompt",
-		"polish_prompt",
-		"troubleshoot_prompt",
-	}
-
-	for _, key := range expectedPrompts {
-		if _, ok := mgr.Config.Prompts[key]; !ok {
-			t.Errorf("缺少 prompt: %s", key)
-		}
 	}
 
 	// 验证 QuickCommands 被正确加载
@@ -52,7 +29,6 @@ func TestConfigLoad(t *testing.T) {
 	}
 
 	t.Logf("配置加载成功!")
-	t.Logf("- Prompts 数量: %d", len(mgr.Config.Prompts))
 	t.Logf("- QuickCommands 数量: %d", len(mgr.Config.QuickCommands))
 	t.Logf("- LLM FastModel: %s", mgr.Config.LLM.FastModel)
 	t.Logf("- LLM ComplexModel: %s", mgr.Config.LLM.ComplexModel)

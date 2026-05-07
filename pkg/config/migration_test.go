@@ -12,7 +12,6 @@ func TestConfigMigration_OldLLMModelToFastAndComplex(t *testing.T) {
 
 	mgr := NewManager()
 	mgr.configPath = filepath.Join(dir, "config.json")
-	mgr.promptsPath = filepath.Join(dir, "prompts.json")
 	mgr.quickCommandsPath = filepath.Join(dir, "quick_commands.json")
 
 	oldCfg := map[string]any{

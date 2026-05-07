@@ -15,7 +15,6 @@ func newTestManager(t *testing.T) (*Manager, string) {
 
 	mgr := NewManager()
 	mgr.configPath = filepath.Join(dir, "config.json")
-	mgr.promptsPath = filepath.Join(dir, "prompts.json")
 	mgr.quickCommandsPath = filepath.Join(dir, "quick_commands.json")
 	mgr.highlightRulesPath = filepath.Join(dir, "highlight_rules.json")
 	mgr.sessionsPath = filepath.Join(dir, "sessions.json")
@@ -46,9 +45,6 @@ func TestImportFromDirectory_BrokenMainConfig_SkipsAndImportsOthers(t *testing.T
 	if err := os.WriteFile(filepath.Join(oldDir, "config.json"), []byte("{broken"), 0644); err != nil {
 		t.Fatalf("write broken config.json: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(oldDir, "prompts.json"), []byte(`{"p":"v"}`), 0644); err != nil {
-		t.Fatalf("write prompts.json: %v", err)
-	}
 	if err := os.WriteFile(filepath.Join(oldDir, "quick_commands.json"), []byte(`[{"id":"1","name":"n","content":"c"}]`), 0644); err != nil {
 		t.Fatalf("write quick_commands.json: %v", err)
 	}
@@ -65,9 +61,6 @@ func TestImportFromDirectory_BrokenMainConfig_SkipsAndImportsOthers(t *testing.T
 	if mgr.Config.LLM != beforeLLM {
 		t.Fatalf("LLM should not change when config.json is broken")
 	}
-	if mgr.Config.Prompts["p"] != "v" {
-		t.Fatalf("prompts not imported")
-	}
 	if len(mgr.Config.QuickCommands) != 1 || mgr.Config.QuickCommands[0].ID != "1" {
 		t.Fatalf("quick commands not imported")
 	}
@@ -78,7 +71,7 @@ func TestImportFromDirectory_BrokenMainConfig_SkipsAndImportsOthers(t *testing.T
 		t.Fatalf("LastImportMessage = %q, want it to mention broken config.json", msg)
 	}
 
-	for _, p := range []string{"config.json.bak", "prompts.json.bak", "quick_commands.json.bak", "highlight_rules.json.bak"} {
+	for _, p := range []string{"config.json.bak", "quick_commands.json.bak", "highlight_rules.json.bak"} {
 		if _, err := os.Stat(filepath.Join(baseDir, p)); err != nil {
 			t.Fatalf("expected backup file %s: %v", p, err)
 		}
@@ -149,10 +142,6 @@ func TestImportFromDirectory_EmptyDirectory_NoChanges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read before config.json: %v", err)
 	}
-	beforePrompts, err := os.ReadFile(filepath.Join(baseDir, "prompts.json"))
-	if err != nil {
-		t.Fatalf("read before prompts.json: %v", err)
-	}
 
 	emptyOldDir := t.TempDir()
 	if err := mgr.ImportFromDirectory(emptyOldDir); err != nil {
@@ -163,20 +152,13 @@ func TestImportFromDirectory_EmptyDirectory_NoChanges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read after config.json: %v", err)
 	}
-	afterPrompts, err := os.ReadFile(filepath.Join(baseDir, "prompts.json"))
-	if err != nil {
-		t.Fatalf("read after prompts.json: %v", err)
-	}
 
 	if string(beforeConfig) != string(afterConfig) {
 		t.Fatalf("config.json changed after importing from empty directory")
 	}
-	if string(beforePrompts) != string(afterPrompts) {
-		t.Fatalf("prompts.json changed after importing from empty directory")
-	}
 }
 
-func TestImportFromDirectory_PartialFiles_ImportsLLMAndPromptsOnly(t *testing.T) {
+func TestImportFromDirectory_PartialFiles_ImportsLLMOnly(t *testing.T) {
 	mgr, _ := newTestManager(t)
 
 	oldDir := t.TempDir()
@@ -197,17 +179,6 @@ func TestImportFromDirectory_PartialFiles_ImportsLLMAndPromptsOnly(t *testing.T)
 		t.Fatalf("write old config.json: %v", err)
 	}
 
-	oldPrompts := map[string]string{
-		"custom_prompt": "hello",
-	}
-	pb, err := json.MarshalIndent(oldPrompts, "", "  ")
-	if err != nil {
-		t.Fatalf("marshal old prompts: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(oldDir, "prompts.json"), pb, 0644); err != nil {
-		t.Fatalf("write old prompts.json: %v", err)
-	}
-
 	if err := mgr.ImportFromDirectory(oldDir); err != nil {
 		t.Fatalf("ImportFromDirectory error: %v", err)
 	}
@@ -226,9 +197,6 @@ func TestImportFromDirectory_PartialFiles_ImportsLLMAndPromptsOnly(t *testing.T)
 	}
 	if mgr.Config.CompletionDelay != 150 {
 		t.Fatalf("CompletionDelay = %d, want %d (keep new default)", mgr.Config.CompletionDelay, 150)
-	}
-	if mgr.Config.Prompts["custom_prompt"] != "hello" {
-		t.Fatalf("custom prompt not imported")
 	}
 	if len(mgr.Config.QuickCommands) != 0 {
 		t.Fatalf("QuickCommands should remain default")
