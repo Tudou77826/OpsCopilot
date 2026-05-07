@@ -202,10 +202,6 @@ export function RenameSavedSession(arg1, arg2) {
   return window['go']['main']['App']['RenameSavedSession'](arg1, arg2);
 }
 
-export function ReorganizeKnowledgeBase() {
-  return window['go']['main']['App']['ReorganizeKnowledgeBase']();
-}
-
 export function ReplayScript(arg1, arg2) {
   return window['go']['main']['App']['ReplayScript'](arg1, arg2);
 }
