@@ -24,7 +24,6 @@ import (
 	"opscopilot/pkg/config"
 	"opscopilot/pkg/filetransfer"
 	"opscopilot/pkg/ftipc"
-	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/llm"
 	"opscopilot/pkg/mcp"
 	"opscopilot/pkg/mcpserver"
@@ -66,7 +65,6 @@ type App struct {
 	sessionStateMu    sync.RWMutex
 	commandExtractors map[string]*terminal.CommandExtractor // 命令提取器（Tab 补全修正）
 	extractorMu       sync.RWMutex                     // 命令提取器锁
-	reorganizeMu      sync.Mutex                       // 知识库整理互斥锁，防止重复触发
 }
 
 // NewApp creates a new App application struct
@@ -930,6 +928,14 @@ func (a *App) SaveSettings(cfg config.AppConfig) string {
 	complexProvider := llm.NewOpenAIProvider(llmConfig.APIKey, llmConfig.BaseURL, complexModel)
 	a.aiService.UpdateProviders(fastProvider, complexProvider)
 
+	// 如果知识库目录发生变化，重建 Catalog
+	newDir := a.resolveKnowledgeBase()
+	if err := a.aiService.UpdateCatalog(newDir); err != nil {
+		log.Printf("[App] Warning: Failed to rebuild knowledge catalog: %v", err)
+	} else if a.aiService.GetCatalog() != nil {
+		log.Printf("[App] Knowledge catalog rebuilt: %d scenarios", a.aiService.GetCatalog().TotalScenarios())
+	}
+
 	return ""
 }
 
@@ -998,108 +1004,6 @@ func (a *App) ImportConfigFromDirectory(dirPath string) string {
 	return a.configMgr.LastImportMessage()
 }
 
-// ReorganizeKnowledgeBase 整理知识库文档（异步，通过事件推送进度）
-// 对缺少 Front Matter 的文档自动提取元数据并补齐
-// 返回 "started" 表示已开始后台执行，前端应监听 "kb-reorganize" 事件获取进度
-// 使用互斥锁防止重复触发
-func (a *App) ReorganizeKnowledgeBase() string {
-	// 尝试获取锁，失败说明已有整理任务在运行
-	if !a.reorganizeMu.TryLock() {
-		return "错误：知识库整理正在进行中，请等待完成后再试"
-	}
-
-	knowledgeDir := a.resolveKnowledgeBase()
-
-	provider := a.aiService.GetFastProvider()
-	if provider == nil {
-		a.reorganizeMu.Unlock()
-		return "错误：未配置 LLM 服务，请先在模型服务中配置 API"
-	}
-
-	emit := func(payload map[string]interface{}) {
-		runtime.EventsEmit(a.ctx, "kb-reorganize", payload)
-	}
-
-	// 后台执行整理
-	go func() {
-		defer a.reorganizeMu.Unlock()
-
-		reorganizer := knowledge.NewLLMContentReorganizer(provider, knowledge.LoadModuleConfig(knowledgeDir).Modules)
-
-		onProgress := func(stage string, current, total int, file, message string) {
-			emit(map[string]interface{}{
-				"stage":   stage,
-				"current": current,
-				"total":   total,
-				"file":    file,
-				"message": message,
-			})
-		}
-
-		results, err := knowledge.UpgradeDocuments(a.ctx, knowledgeDir, reorganizer, onProgress)
-		if err != nil {
-			emit(map[string]interface{}{
-				"stage":   "error",
-				"message": fmt.Sprintf("整理失败: %v", err),
-			})
-			return
-		}
-
-		// 统计结果
-		upgraded := 0
-		skipped := 0
-		failed := 0
-		var errs []string
-		for _, r := range results {
-			switch r.Status {
-			case "upgraded":
-				upgraded++
-			case "skipped":
-				skipped++
-			case "error":
-				failed++
-				errs = append(errs, fmt.Sprintf("  - %s: %s", r.File, r.Error))
-			}
-		}
-
-		// 有文件变更时重建目录
-		if upgraded > 0 {
-			emit(map[string]interface{}{
-				"stage":   "catalog",
-				"message": fmt.Sprintf("正在重建知识库目录..."),
-			})
-			if err := a.aiService.UpdateCatalog(knowledgeDir); err != nil {
-				emit(map[string]interface{}{
-					"stage":   "error",
-					"message": fmt.Sprintf("整理完成（%d 升级，%d 跳过，%d 失败），但重建目录失败: %v",
-						upgraded, skipped, failed, err),
-				})
-				return
-			}
-		}
-
-		// 构建最终消息
-		msg := ""
-		if upgraded == 0 && skipped > 0 && failed == 0 {
-			msg = fmt.Sprintf("所有 %d 个文档均已整理过，无需处理", skipped)
-		} else {
-			msg = fmt.Sprintf("整理完成：成功升级 %d 个，跳过 %d 个", upgraded, skipped)
-			if failed > 0 {
-				msg += fmt.Sprintf("，失败 %d 个：\n%s", failed, strings.Join(errs, "\n"))
-			}
-		}
-
-		emit(map[string]interface{}{
-			"stage":     "done",
-			"message":   msg,
-			"upgraded":  upgraded,
-			"skipped":   skipped,
-			"failed":    failed,
-		})
-	}()
-
-	return "started"
-}
 
 type ftResponse struct {
 	OK      bool                         `json:"ok"`

@@ -12,10 +12,8 @@ import (
 	"opscopilot/pkg/tools"
 	knowledgetools "opscopilot/pkg/tools/knowledge"
 	"os"
-	"sort"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/google/uuid"
 	openai "github.com/sashabaranov/go-openai"
@@ -34,7 +32,13 @@ type AgentRunOptions struct {
 
 const agentBasePrompt = "你是 OpsCopilot 运维诊断助手。你可以查阅本地知识库来辅助诊断。\n\n" +
 	"## 可用工具\n" +
-	"1. read_knowledge_file: 读取知识库文档（指定 path 和可选的 section）\n\n" +
+	"1. read_knowledge_file: 读取知识库文档，返回带行号的内容。支持 start_line/end_line 按行号截断读取。\n" +
+	"2. grep_knowledge: 在知识库文档中搜索，支持正则表达式。用 | 表示 OR 匹配多个词，如 'timeout|504|超时'。\n\n" +
+	"## 工具使用策略\n" +
+	"- 先用 grep_knowledge 定位关键词所在文件和行号\n" +
+	"- 搜索时用 | 组合同义词、中英文、错误码，提高召回率（如 'OOM|out of memory|内存溢出'）\n" +
+	"- 再用 read_knowledge_file 配合 start_line/end_line 定向阅读相关段落\n" +
+	"- 无需 grep 时也可直接 read_knowledge_file 读全文（带行号）\n\n" +
 	"## 检索策略\n" +
 	"参考上方「知识库问题目录」，综合以下维度找出所有可能相关的场景：\n" +
 	"- 现象匹配：用户描述的故障现象是否与目录中某场景类似\n" +
@@ -57,6 +61,7 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 	// 创建工具注册器并注册知识库工具
 	registry := tools.NewRegistry()
 	registry.Register(knowledgetools.NewReadFileTool(opts.KnowledgeDir, opts.Catalog))
+	registry.Register(knowledgetools.NewGrepTool(opts.KnowledgeDir))
 
 	// 构建LLM工具列表
 	llmTools := registry.ToLLMTools()
@@ -409,250 +414,3 @@ func shortErr(err error) string {
 	return s
 }
 
-func shortText(s string, max int) string {
-	t := strings.TrimSpace(s)
-	t = strings.ReplaceAll(t, "\r", " ")
-	t = strings.ReplaceAll(t, "\n", " ")
-	if max <= 0 || len(t) <= max {
-		return t
-	}
-	return t[:max] + "..."
-}
-
-func chooseSearchKey(original string, model string) string {
-	o := strings.TrimSpace(original)
-	m := strings.TrimSpace(model)
-	if o == "" && m == "" {
-		return ""
-	}
-	if m == "" {
-		return o
-	}
-	if o == "" {
-		return m
-	}
-	if containsHan(o) && !containsHan(m) {
-		return o
-	}
-	if containsHan(m) && !containsHan(o) {
-		return m
-	}
-	if len([]rune(m)) > 0 && len([]rune(m)) < len([]rune(o)) {
-		return m
-	}
-	return o
-}
-
-func formatWeightedTerms(terms []knowledge.WeightedTerm, maxItems int, maxChars int) string {
-	if len(terms) == 0 {
-		return ""
-	}
-	cp := append([]knowledge.WeightedTerm(nil), terms...)
-	sort.Slice(cp, func(i, j int) bool {
-		if cp[i].Weight == cp[j].Weight {
-			return cp[i].Term < cp[j].Term
-		}
-		return cp[i].Weight > cp[j].Weight
-	})
-	if maxItems > 0 && len(cp) > maxItems {
-		cp = cp[:maxItems]
-	}
-	parts := make([]string, 0, len(cp))
-	for _, t := range cp {
-		term := strings.TrimSpace(t.Term)
-		if term == "" {
-			continue
-		}
-		parts = append(parts, fmt.Sprintf("%s(%.1f)", term, t.Weight))
-	}
-	out := strings.Join(parts, ", ")
-	return shortText(out, maxChars)
-}
-
-func (s *AIService) extractWeightedTerms(ctx context.Context, runID string, maxAttempts int, text string) ([]knowledge.WeightedTerm, error) {
-	if strings.TrimSpace(text) == "" {
-		return nil, fmt.Errorf("empty text")
-	}
-	if s.fastProvider == nil {
-		return nil, fmt.Errorf("fast provider not initialized")
-	}
-
-	const prompt = "You are a search query analyzer. Extract weighted keywords from the user's description for document retrieval.\n" +
-		"Output ONLY a valid JSON array of objects, no markdown and no extra text.\n" +
-		"Each object: {\"term\": string, \"weight\": number}.\n" +
-		"Rules:\n" +
-		"- 5-10 terms.\n" +
-		"- Prefer nouns/metrics/components/errors/commands.\n" +
-		"- Terms should be short (1-6 words) and searchable.\n" +
-		"- weight is 1-5 where 5 is most important.\n" +
-		"- IMPORTANT LANGUAGE RULE: Always keep key terms in the user's original language.\n" +
-		"- If you add translations/synonyms, include them as additional terms. Do NOT replace the original language terms.\n" +
-		"- Keep commands/error codes/service names as-is.\n"
-
-	messages := []llm.ChatMessage{
-		{Role: "system", Content: prompt},
-		{Role: "user", Content: text},
-	}
-
-	raw, err := retryChatCompletion(ctx, runID, maxAttempts, func() (string, error) {
-		return s.fastProvider.ChatCompletion(ctx, messages)
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	cleaned := CleanJSONResponse(raw)
-
-	var terms []knowledge.WeightedTerm
-	if err := json.Unmarshal([]byte(cleaned), &terms); err != nil {
-		var wrapper struct {
-			Terms []knowledge.WeightedTerm `json:"terms"`
-		}
-		if err2 := json.Unmarshal([]byte(cleaned), &wrapper); err2 != nil {
-			return nil, err
-		}
-		terms = wrapper.Terms
-	}
-
-	seen := map[string]float64{}
-	out := make([]knowledge.WeightedTerm, 0, len(terms))
-	for _, t := range terms {
-		term := strings.ToLower(strings.TrimSpace(t.Term))
-		if term == "" {
-			continue
-		}
-		w := t.Weight
-		if w <= 0 {
-			w = 1
-		}
-		if w > 5 {
-			w = 5
-		}
-		if cur, ok := seen[term]; ok && cur >= w {
-			continue
-		}
-		seen[term] = w
-		out = append(out, knowledge.WeightedTerm{Term: term, Weight: w})
-	}
-
-	if containsHan(text) && !anyContainsHanTerms(out) {
-		for _, seg := range extractHanSegments(text, 6) {
-			term := strings.ToLower(strings.TrimSpace(seg))
-			if term == "" {
-				continue
-			}
-			if _, ok := seen[term]; ok {
-				continue
-			}
-			seen[term] = 4
-			out = append(out, knowledge.WeightedTerm{Term: term, Weight: 4})
-		}
-	}
-
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Weight == out[j].Weight {
-			return out[i].Term < out[j].Term
-		}
-		return out[i].Weight > out[j].Weight
-	})
-	if len(out) > 10 {
-		out = out[:10]
-	}
-	return out, nil
-}
-
-func containsHan(s string) bool {
-	for _, r := range s {
-		if unicode.Is(unicode.Han, r) {
-			return true
-		}
-	}
-	return false
-}
-
-func anyContainsHanTerms(terms []knowledge.WeightedTerm) bool {
-	for _, t := range terms {
-		if containsHan(t.Term) {
-			return true
-		}
-	}
-	return false
-}
-
-func extractHanSegments(s string, maxItems int) []string {
-	var segs []string
-	var sb strings.Builder
-	flush := func() {
-		txt := strings.TrimSpace(sb.String())
-		sb.Reset()
-		if len([]rune(txt)) < 2 {
-			return
-		}
-		segs = append(segs, txt)
-	}
-	for _, r := range s {
-		if unicode.Is(unicode.Han, r) {
-			sb.WriteRune(r)
-			continue
-		}
-		flush()
-		if maxItems > 0 && len(segs) >= maxItems {
-			return segs
-		}
-	}
-	flush()
-	if maxItems > 0 && len(segs) > maxItems {
-		return segs[:maxItems]
-	}
-	return segs
-}
-
-func retryChatCompletion(ctx context.Context, runID string, maxAttempts int, fn func() (string, error)) (string, error) {
-	if maxAttempts <= 0 {
-		maxAttempts = 1
-	}
-	var lastErr error
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		resp, err := fn()
-		if err == nil {
-			return resp, nil
-		}
-		lastErr = err
-		if !isRetriableLLMError(err) || attempt == maxAttempts {
-			return "", err
-		}
-		wait := retryBackoff(attempt)
-		emitStatus(ctx, runID, "retrying", fmt.Sprintf("分词请求失败，正在重试（%d/%d），等待 %s... %s", attempt+1, maxAttempts, wait, shortErr(err)))
-		timer := time.NewTimer(wait)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return "", ctx.Err()
-		case <-timer.C:
-		}
-	}
-	return "", lastErr
-}
-
-// ExtractWeightedTerms 实现TermExtractor接口，提取加权关键词
-func (s *AIService) ExtractWeightedTerms(ctx context.Context, text string) ([]knowledge.WeightedTerm, error) {
-	return s.extractWeightedTerms(ctx, "", 3, text)
-}
-
-// ExtractWeightedTermsWithRetry 实现TermExtractorWithRetry接口
-func (s *AIService) ExtractWeightedTermsWithRetry(ctx context.Context, text string, maxAttempts int) ([]knowledge.WeightedTerm, error) {
-	return s.extractWeightedTerms(ctx, "", maxAttempts, text)
-}
-
-// simpleTermCache 简单的词项缓存实现
-type simpleTermCache struct {
-	data map[string][]knowledge.WeightedTerm
-}
-
-func (c *simpleTermCache) Get(key string) []knowledge.WeightedTerm {
-	return c.data[key]
-}
-
-func (c *simpleTermCache) Set(key string, terms []knowledge.WeightedTerm) {
-	c.data[key] = terms
-}

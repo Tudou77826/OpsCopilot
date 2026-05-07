@@ -37,7 +37,7 @@ func ToLLMTools(mcpTools []Tool) []llm.Tool {
 }
 
 // IsMCPTool 判断工具名称是否为 MCP 工具
-// 知识库工具前缀: search_, list_, read_
+// 知识库工具: grep_knowledge, list_knowledge_files, read_knowledge_file
 func IsMCPTool(toolName string) bool {
 	return !isKnowledgeTool(toolName)
 }
@@ -45,7 +45,7 @@ func IsMCPTool(toolName string) bool {
 // isKnowledgeTool 判断是否为知识库工具
 func isKnowledgeTool(toolName string) bool {
 	switch toolName {
-	case "search_knowledge", "list_knowledge_files", "read_knowledge_file":
+	case "grep_knowledge", "list_knowledge_files", "read_knowledge_file":
 		return true
 	default:
 		return false

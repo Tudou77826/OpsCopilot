@@ -93,11 +93,15 @@ Check ping and traceroute.
 					t.Errorf("Round 1: system prompt should contain 'Network Service'")
 				}
 
-				// 验证工具列表只有 read_knowledge_file
+				// 验证工具列表包含 read_knowledge_file 和 grep_knowledge
 				foundReadTool := false
+				foundGrepTool := false
 				for _, tool := range tools {
 					if tool.Function.Name == "read_knowledge_file" {
 						foundReadTool = true
+					}
+					if tool.Function.Name == "grep_knowledge" {
+						foundGrepTool = true
 					}
 					if tool.Function.Name == "search_knowledge" || tool.Function.Name == "list_knowledge_files" {
 						t.Errorf("Round 1: should NOT have search/list tools, got %s", tool.Function.Name)
@@ -105,6 +109,9 @@ Check ping and traceroute.
 				}
 				if !foundReadTool {
 					t.Error("Round 1: should have read_knowledge_file tool")
+				}
+				if !foundGrepTool {
+					t.Error("Round 1: should have grep_knowledge tool")
 				}
 
 				return &llm.ChatResponse{
