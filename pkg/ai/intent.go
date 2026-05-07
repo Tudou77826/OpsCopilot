@@ -486,10 +486,8 @@ func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowled
 }
 
 func (s *AIService) GenerateConclusion(timeline string, rootCause string) (string, error) {
-	prompt := s.cfgMgr.Config.Prompts["conclusion_prompt"]
-	if prompt == "" {
-		prompt = config.DefaultConclusionPrompt
-	}
+	// conclusion_prompt 的 section 格式是 archiver 的硬依赖，不读取用户配置
+	prompt := config.DefaultConclusionPrompt
 
 	content := fmt.Sprintf("Timeline:\n%s\n\nRoot Cause:\n%s", timeline, rootCause)
 

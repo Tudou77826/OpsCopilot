@@ -24,6 +24,7 @@ import (
 	"opscopilot/pkg/config"
 	"opscopilot/pkg/filetransfer"
 	"opscopilot/pkg/ftipc"
+	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/llm"
 	"opscopilot/pkg/mcp"
 	"opscopilot/pkg/mcpserver"
@@ -749,6 +750,113 @@ func (a *App) CancelSession() string {
 		return fmt.Sprintf("Error: %v", err)
 	}
 	return "cancelled"
+}
+
+// ServiceInfo 前端选择用的微服务信息
+type ServiceInfo struct {
+	Name    string       `json:"name"`
+	Modules []ModuleInfo `json:"modules"`
+}
+
+// ModuleInfo 前端选择用的模块信息
+type ModuleInfo struct {
+	Name     string `json:"name"`
+	FileName string `json:"fileName"`
+}
+
+// GetCatalogServices 返回 Catalog 中的 service/module 结构供前端选择
+func (a *App) GetCatalogServices() []ServiceInfo {
+	catalog := a.aiService.GetCatalog()
+	if catalog == nil {
+		return nil
+	}
+
+	result := make([]ServiceInfo, 0, len(catalog.Services))
+	for _, svc := range catalog.Services {
+		info := ServiceInfo{
+			Name:    svc.Name,
+			Modules: make([]ModuleInfo, 0, len(svc.Modules)),
+		}
+		for _, mod := range svc.Modules {
+			// 从模块的场景条目中获取关联的文件名
+			fileName := ""
+			if len(mod.Scenarios) > 0 {
+				fileName = mod.Scenarios[0].File
+			}
+			info.Modules = append(info.Modules, ModuleInfo{
+				Name:     mod.Name,
+				FileName: fileName,
+			})
+		}
+		result = append(result, info)
+	}
+	return result
+}
+
+// ArchiveSession 归档排查会话到指定文件
+func (a *App) ArchiveSession(rootCause string, conclusion string, service string, module string, targetFile string) string {
+	currentSession := a.coreRecorder.GetCurrentSession()
+	if currentSession == nil {
+		return toJSONError("No active session")
+	}
+
+	// 如果 conclusion 为空 → 调用 AI 生成
+	if conclusion == "" {
+		timelineBytes, err := json.Marshal(currentSession.Timeline)
+		if err != nil {
+			log.Printf("Failed to marshal timeline: %v", err)
+			return toJSONError("Failed to serialize timeline")
+		}
+		timelineStr := string(timelineBytes)
+		conclusion, err = a.aiService.GenerateConclusion(timelineStr, rootCause)
+		if err != nil {
+			log.Printf("Failed to generate conclusion: %v", err)
+			return toJSONError("Failed to generate conclusion")
+		}
+	}
+
+	// 追加归档记录到知识库文件
+	knowledgeDir := a.resolveKnowledgeBase()
+	input := &knowledge.ArchiveInput{
+		Session:    currentSession,
+		Conclusion: conclusion,
+		Service:    service,
+		Module:     module,
+		FilePath:   targetFile,
+	}
+
+	relPath, err := knowledge.AppendRecord(knowledgeDir, input)
+	if err != nil {
+		log.Printf("Failed to archive session: %v", err)
+		return toJSONError("Failed to archive session")
+	}
+
+	// 保留 recorder JSON 保存
+	if err := a.coreRecorder.StopSession(rootCause, conclusion); err != nil {
+		log.Printf("Failed to save session recording: %v", err)
+	}
+
+	// 重建 Catalog
+	if err := a.aiService.UpdateCatalog(knowledgeDir); err != nil {
+		log.Printf("Failed to update catalog after archive: %v", err)
+	}
+
+	log.Printf("[ArchiveSession] Archived to %s, catalog rebuilt", relPath)
+	result, _ := json.Marshal(map[string]interface{}{
+		"success":    true,
+		"conclusion": conclusion,
+		"filePath":   relPath,
+	})
+	return string(result)
+}
+
+// toJSONError 返回标准错误 JSON
+func toJSONError(msg string) string {
+	result, _ := json.Marshal(map[string]interface{}{
+		"success": false,
+		"error":   msg,
+	})
+	return string(result)
 }
 
 // appendConclusionToDocs appends the conclusion to the troubleshooting history markdown file

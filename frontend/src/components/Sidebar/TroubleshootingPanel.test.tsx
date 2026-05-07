@@ -10,14 +10,15 @@ vi.mock('./CommandCard', () => ({
     default: ({ command }: { command: string }) => <div data-testid="command">{command}</div>
 }));
 vi.mock('./SessionReviewModal', () => ({
-    default: ({ isOpen, onArchive }: { isOpen: boolean, onArchive: (c: string) => void }) => (
-        isOpen ? <div data-testid="review-modal"><button onClick={() => onArchive('Conclusion')}>Archive</button></div> : null
+    default: ({ isOpen, onArchive }: { isOpen: boolean, onArchive: (params: any) => void }) => (
+        isOpen ? <div data-testid="review-modal"><button onClick={() => onArchive({ conclusion: 'Conclusion', service: 'TestService', module: 'TestModule', targetFile: '' })}>Archive</button></div> : null
     )
 }));
 
 // Mock Wails runtime calls
 const mockStartSession = vi.fn();
 const mockStopSession = vi.fn();
+const mockArchiveSession = vi.fn();
 const mockAskAI = vi.fn();
 
 window.go = {
@@ -25,6 +26,7 @@ window.go = {
         App: {
             StartSession: mockStartSession,
             StopSession: mockStopSession,
+            ArchiveSession: mockArchiveSession,
             AskAI: mockAskAI,
             PolishRootCause: vi.fn(),
         }
@@ -99,7 +101,7 @@ describe('TroubleshootingPanel', () => {
         const archiveBtn = await screen.findByText('Archive'); // In mock modal
         fireEvent.click(archiveBtn);
 
-        expect(mockStopSession).toHaveBeenCalled();
+        expect(mockArchiveSession).toHaveBeenCalled();
         expect(onStopMock).toHaveBeenCalled();
     });
 });

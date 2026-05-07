@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import TroubleshootingStep from './TroubleshootingStep';
 import CommandCard from './CommandCard';
-import SessionReviewModal from './SessionReviewModal';
+import SessionReviewModal, { ArchiveParams } from './SessionReviewModal';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -285,22 +285,38 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         if (onStart) onStart();
     };
 
-    const handleArchive = async (conclusion: string) => {
+    const handleArchive = async (params: ArchiveParams) => {
         setIsReviewModalOpen(false);
         setIsStopping(false);
         setIsInvestigating(false);
         if (onStop) onStop();
 
         // @ts-ignore
-        if (window.go && window.go.main && window.go.main.App && window.go.main.App.StopSession) {
-            // @ts-ignore
-            await window.go.main.App.StopSession(rootCause, conclusion);
-            
-            setMessages(prev => [...prev, {
-                role: 'ai',
-                content: conclusion || '会话已结束并归档。',
-                timestamp: Date.now()
-            }]);
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.ArchiveSession) {
+            try {
+                // @ts-ignore
+                const result = await window.go.main.App.ArchiveSession(rootCause, params.conclusion, params.service, params.module, params.targetFile);
+                const parsed = JSON.parse(result);
+                if (parsed.success) {
+                    setMessages(prev => [...prev, {
+                        role: 'ai',
+                        content: parsed.conclusion || '会话已结束并归档。',
+                        timestamp: Date.now()
+                    }]);
+                } else {
+                    setMessages(prev => [...prev, {
+                        role: 'ai',
+                        content: `归档失败: ${parsed.error || '未知错误'}`,
+                        timestamp: Date.now()
+                    }]);
+                }
+            } catch (e) {
+                setMessages(prev => [...prev, {
+                    role: 'ai',
+                    content: `归档异常: ${e}`,
+                    timestamp: Date.now()
+                }]);
+            }
         } else {
             setMessages(prev => [...prev, {
                 role: 'ai',
@@ -308,7 +324,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                 timestamp: Date.now()
             }]);
         }
-        
+
         setRootCause('');
     };
 

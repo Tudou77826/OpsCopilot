@@ -8,6 +8,8 @@ import {script} from '../models';
 import {recorder} from '../models';
 import {sshclient} from '../models';
 
+export function ArchiveSession(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<string>;
+
 export function AskAI(arg1:string):Promise<string>;
 
 export function AskTroubleshoot(arg1:string,arg2:boolean):Promise<string>;
@@ -57,6 +59,8 @@ export function ForceQuit():Promise<void>;
 export function GenerateConclusionWithContext(arg1:string,arg2:string):Promise<string>;
 
 export function GenerateLinuxCommand(arg1:string):Promise<string>;
+
+export function GetCatalogServices():Promise<Array<main.ServiceInfo>>;
 
 export function GetCommandWhitelist():Promise<mcpserver.WhitelistConfig>;
 
