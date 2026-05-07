@@ -46,9 +46,13 @@ func AppendRecord(knowledgeDir string, input *ArchiveInput) (string, error) {
 			return "", fmt.Errorf("append to file: %w", err)
 		}
 	} else {
-		// 创建新文件
+		// 创建新文件 — 放入 archive/ 子目录，与已有文档区隔
 		fileName := sanitizeFileName(input.Service, input.Module) + ".md"
-		targetPath = filepath.Join(knowledgeDir, fileName)
+		targetPath = filepath.Join(knowledgeDir, "archive", fileName)
+		// 确保 new/ 目录存在
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+			return "", fmt.Errorf("create new directory: %w", err)
+		}
 		content := buildNewFile(input.Service, input.Module, record)
 		if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
 			return "", fmt.Errorf("create file: %w", err)
