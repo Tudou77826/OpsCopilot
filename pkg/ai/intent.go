@@ -506,6 +506,37 @@ func (s *AIService) GenerateConclusion(timeline string, rootCause string) (strin
 	return resp, nil
 }
 
+// GenerateConclusionStream 流式生成结论，通过 onToken 回调逐步推送 token。
+// 禁用思考模式以加速响应。
+func (s *AIService) GenerateConclusionStream(ctx context.Context, timeline string, rootCause string, onToken func(string)) (string, error) {
+	prompt := config.DefaultConclusionPrompt
+
+	content := fmt.Sprintf("Timeline:\n%s\n\nRoot Cause:\n%s", timeline, rootCause)
+
+	messages := []llm.ChatMessage{
+		{Role: "system", Content: prompt},
+		{Role: "user", Content: content},
+	}
+
+	log.Printf("[AIService] Generating conclusion (stream, no-thinking)")
+
+	// 优先使用 OpenAIProvider 的 no-thinking 专用方法
+	if p, ok := s.fastProvider.(*llm.OpenAIProvider); ok {
+		full, err := p.ChatCompletionStreamNoThinking(ctx, messages, onToken)
+		if err != nil {
+			return "", fmt.Errorf("AI provider stream error: %w", err)
+		}
+		return full, nil
+	}
+
+	// fallback：其他 Provider 实现走通用接口
+	full, err := s.fastProvider.ChatCompletionStream(ctx, messages, onToken)
+	if err != nil {
+		return "", fmt.Errorf("AI provider stream error: %w", err)
+	}
+	return full, nil
+}
+
 func (s *AIService) PolishContent(content string) (string, error) {
 	prompt := s.cfgMgr.Config.Prompts["polish_prompt"]
 	if prompt == "" {

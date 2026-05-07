@@ -35,6 +35,17 @@ func (p *ScriptedProvider) ChatWithTools(ctx context.Context, messages []llm.Cha
 	return handler(messages, tools)
 }
 
+func (p *ScriptedProvider) ChatCompletionStream(ctx context.Context, messages []llm.ChatMessage, onToken llm.StreamTokenCallback) (string, error) {
+	resp, err := p.ChatCompletion(ctx, messages)
+	if err != nil {
+		return "", err
+	}
+	if onToken != nil {
+		onToken(resp)
+	}
+	return resp, nil
+}
+
 func TestAgentLoop(t *testing.T) {
 	SetEventEmitter(func(ctx context.Context, optionalData string, optionalData2 ...interface{}) {})
 	defer SetEventEmitter(nil)

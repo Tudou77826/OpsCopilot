@@ -2137,6 +2137,33 @@ func (a *App) GenerateConclusionWithContext(contextStr string, rootCause string)
 	return conclusion
 }
 
+// StreamConclusion 流式生成结论，通过 Wails 事件逐步推送给前端
+func (a *App) StreamConclusion(contextStr string, rootCause string) string {
+	ctx := context.Background()
+
+	onToken := func(token string) {
+		runtime.EventsEmit(a.ctx, "conclusion:token", map[string]string{
+			"token": token,
+		})
+	}
+
+	conclusion, err := a.aiService.GenerateConclusionStream(ctx, contextStr, rootCause, onToken)
+	if err != nil {
+		log.Printf("Failed to stream conclusion: %v", err)
+		runtime.EventsEmit(a.ctx, "conclusion:error", map[string]string{
+			"error": err.Error(),
+		})
+		return fmt.Sprintf("Error generating conclusion: %v", err)
+	}
+
+	// Signal completion
+	runtime.EventsEmit(a.ctx, "conclusion:done", map[string]string{
+		"conclusion": conclusion,
+	})
+
+	return conclusion
+}
+
 // --- Saved Session Management ---
 
 func (a *App) GetSavedSessions() []*sessionmanager.Session {

@@ -138,11 +138,14 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 
 	log.Printf("[Agent][%s] Start questionLen=%d knowledgeDir=%q knowledgeExists=%t tools=%d", runID, len(opts.Question), opts.KnowledgeDir, knowledgeExists, len(llmTools))
 
+	var prevToolCalls []llm.ToolCall
+
 	for i := 0; i < maxSteps; i++ {
 		if i == 0 {
 			emitStatus(ctx, runID, "thinking", "正在分析问题，扫描知识库目录...")
 		} else {
-			emitStatus(ctx, runID, "thinking", "正在思考下一步...")
+			msg := inferNextStepMessage(prevToolCalls, i, maxSteps)
+			emitStatus(ctx, runID, "thinking", msg)
 		}
 		stepAt := time.Now()
 		resp, err := retryChatWithTools(ctx, runID, opts.RetryMax, func() (*llm.ChatResponse, error) {
@@ -167,6 +170,8 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 			Content:   resp.Content,
 			ToolCalls: resp.ToolCalls,
 		})
+
+		prevToolCalls = resp.ToolCalls
 
 		if len(resp.ToolCalls) == 0 {
 			if i == 0 {
@@ -412,5 +417,44 @@ func shortErr(err error) string {
 		return s[:200] + "..."
 	}
 	return s
+}
+
+// inferNextStepMessage 根据上一轮的工具调用推断下一步的意图，生成更有信息量的状态消息
+func inferNextStepMessage(toolCalls []llm.ToolCall, step, maxSteps int) string {
+	stepHint := fmt.Sprintf("（第 %d 步）", step+1)
+
+	if len(toolCalls) == 0 {
+		return "正在综合分析..." + stepHint
+	}
+
+	// 分析上一轮调用了哪些工具
+	grepCount := 0
+	readCount := 0
+	mcpCount := 0
+	for _, tc := range toolCalls {
+		switch {
+		case tc.Function.Name == "grep_knowledge":
+			grepCount++
+		case tc.Function.Name == "read_knowledge_file":
+			readCount++
+		case tc.Function.Name == "list_files":
+			// noop
+		default:
+			mcpCount++
+		}
+	}
+
+	switch {
+	case grepCount > 0 && readCount > 0:
+		return fmt.Sprintf("正在分析搜索和文档内容...%s", stepHint)
+	case grepCount > 0:
+		return fmt.Sprintf("正在根据搜索结果进一步分析...%s", stepHint)
+	case readCount > 0:
+		return fmt.Sprintf("正在综合文档内容...%s", stepHint)
+	case mcpCount > 0:
+		return fmt.Sprintf("正在分析诊断结果...%s", stepHint)
+	default:
+		return fmt.Sprintf("正在思考下一步...%s", stepHint)
+	}
 }
 

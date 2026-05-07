@@ -45,6 +45,7 @@ interface TroubleshootingPanelProps {
 const STAGE_CONFIG: Record<string, { label: string; icon: string; color: string }> = {
     thinking:       { label: '分析中',   icon: '🧠', color: '#8b9cf7' },
     catalog_match:  { label: '匹配知识库', icon: '🎯', color: '#7ac5d8' },
+    grepping:       { label: '搜索关键词', icon: '🔍', color: '#d4a843' },
     reading:        { label: '查阅文档', icon: '📖', color: '#7ac5d8' },
     mcp_call:       { label: '调用工具', icon: '🔧', color: '#d4a843' },
     answering:      { label: '生成回答', icon: '✍️', color: '#6ecf8a' },
@@ -784,6 +785,8 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                                     <span style={{...styles.stageLabel, color: cfg.color}}>{cfg.label}</span>
                                     {agentStatus.stage === 'catalog_match' ? (
                                         <span style={styles.stageBreadcrumb}>{agentStatus.message}</span>
+                                    ) : agentStatus.stage === 'thinking' ? (
+                                        <span style={styles.stageMessage}>{agentStatus.message}</span>
                                     ) : (
                                         <span style={styles.stageMessage}>{agentStatus.message.replace(cfg.label, '').replace(cfg.icon, '')}</span>
                                     )}
@@ -794,10 +797,20 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                             <div style={styles.statusHistory}>
                                 {agentStatusHistory.slice(0, -1).map((s, idx) => {
                                     const cfg = getStageConfig(s.stage);
-                                    // 对 catalog_match 显示匹配到的场景名（路径最后一段）
-                                    const detail = s.stage === 'catalog_match'
-                                        ? (() => { const parts = s.message.split(' › '); return parts[parts.length - 1] || ''; })()
-                                        : '';
+                                    // Extract meaningful detail from the message
+                                    let detail = '';
+                                    if (s.stage === 'catalog_match') {
+                                        const parts = s.message.split(' › ');
+                                        detail = parts[parts.length - 1] || '';
+                                    } else if (s.stage === 'grepping') {
+                                        // Extract keyword from "正在搜索关键词: xxx..."
+                                        const m = s.message.match(/关键词:\s*(.+?)(\.\.\.)?$/);
+                                        detail = m ? m[1] : '';
+                                    } else if (s.stage === 'reading') {
+                                        // Extract doc name from "正在阅读文档: xxx..."
+                                        const m = s.message.match(/文档:\s*(.+?)(\.\.\.)?$/);
+                                        detail = m ? m[1] : '';
+                                    }
                                     return (
                                         <div key={idx} style={styles.statusHistoryLine}>
                                             <span style={{...styles.historyIcon, color: cfg.color}}>{cfg.icon}</span>

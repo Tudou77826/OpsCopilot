@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { TimelineEvent, filterTimelineEvents, generateMarkdown } from '../../utils/timeline';
+// @ts-ignore
+import { EventsOn } from '../../../wailsjs/runtime/runtime';
 
 interface ModuleInfo {
     name: string;
@@ -162,18 +164,71 @@ const SessionReviewModal: React.FC<SessionReviewModalProps> = ({ isOpen, onClose
 
     const handleAnalyze = async () => {
         setIsLoading(true);
+        setConclusion('');
+        setView('conclusion'); // Switch to conclusion view immediately so user sees streaming
+
+        let streamConclusion = '';
+        let cancelStream: (() => void) | undefined;
+
         try {
+            // Listen for streaming tokens
+            if (EventsOn) {
+                cancelStream = EventsOn("conclusion:token", (...args: any[]) => {
+                    const data = args?.[0] ?? {};
+                    const token = String(data?.token ?? '');
+                    if (token) {
+                        streamConclusion += token;
+                        setConclusion(streamConclusion);
+                    }
+                });
+
+                // Also listen for error
+                const cancelError = EventsOn("conclusion:error", (...args: any[]) => {
+                    const data = args?.[0] ?? {};
+                    const errMsg = String(data?.error ?? 'Unknown error');
+                    if (!streamConclusion) {
+                        setConclusion(`生成总结失败: ${errMsg}`);
+                    }
+                });
+
+                // Listen for completion
+                const cancelDone = EventsOn("conclusion:done", (...args: any[]) => {
+                    const data = args?.[0] ?? {};
+                    const final = String(data?.conclusion ?? '');
+                    if (final) {
+                        setConclusion(final);
+                    }
+                });
+
+                // Combine cancel functions
+                const origCancel = cancelStream;
+                cancelStream = () => {
+                    origCancel?.();
+                    cancelError?.();
+                    cancelDone?.();
+                };
+            }
+
             // @ts-ignore
-            if (window.go?.main?.App?.GenerateConclusionWithContext) {
+            if (window.go?.main?.App?.StreamConclusion) {
                 // @ts-ignore
-                const result = await window.go.main.App.GenerateConclusionWithContext(markdownContent, rootCause);
-                setConclusion(result);
-                setView('conclusion');
+                await window.go.main.App.StreamConclusion(markdownContent, rootCause);
+            } else {
+                // Fallback to non-streaming
+                // @ts-ignore
+                if (window.go?.main?.App?.GenerateConclusionWithContext) {
+                    // @ts-ignore
+                    const result = await window.go.main.App.GenerateConclusionWithContext(markdownContent, rootCause);
+                    setConclusion(result);
+                }
             }
         } catch (e) {
             console.error(e);
-            alert("生成总结失败: " + e);
+            if (!streamConclusion) {
+                setConclusion(`生成总结失败: ${e}`);
+            }
         } finally {
+            cancelStream?.();
             setIsLoading(false);
         }
     };
@@ -240,8 +295,10 @@ const SessionReviewModal: React.FC<SessionReviewModalProps> = ({ isOpen, onClose
     if (!isOpen) return null;
 
     return ReactDOM.createPortal(
-        <div style={styles.overlay}>
-            <div style={styles.modal}>
+        <>
+            <style>{`@keyframes sr-spin { to { transform: rotate(360deg); } }`}</style>
+            <div style={styles.overlay}>
+                <div style={styles.modal}>
                 <div style={styles.header}>
                     <h3 style={styles.title}>
                         {view === 'timeline' ? '编辑排查记录' : '确认排查总结'}
@@ -366,8 +423,15 @@ const SessionReviewModal: React.FC<SessionReviewModalProps> = ({ isOpen, onClose
                             style={styles.primaryButton}
                             disabled={isLoading}
                         >
-                            {isLoading ? '分析中...' : 'AI 解析'}
+                            AI 解析
                         </button>
+                    ) : isLoading ? (
+                        <div style={styles.footerRow}>
+                            <div style={styles.streamingHint}>
+                                <div style={styles.loadingSpinner} />
+                                <span>AI 正在生成总结...</span>
+                            </div>
+                        </div>
                     ) : (
                         <>
                             <button onClick={() => setView('timeline')} style={styles.secondaryButton}>上一步</button>
@@ -386,7 +450,8 @@ const SessionReviewModal: React.FC<SessionReviewModalProps> = ({ isOpen, onClose
                     )}
                 </div>
             </div>
-        </div>,
+        </div>
+        </>,
         document.body
     );
 };
@@ -469,6 +534,30 @@ const styles = {
         border: 'none',
         borderRadius: '4px',
         cursor: 'pointer',
+    },
+    footerRow: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        gap: '12px',
+        width: '100%',
+    },
+    streamingHint: {
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        color: '#aaa',
+        fontSize: '13px',
+    },
+    loadingSpinner: {
+        width: '14px',
+        height: '14px',
+        border: '2px solid #444',
+        borderTopColor: '#007acc',
+        borderRadius: '50%',
+        animation: 'sr-spin 0.8s linear infinite',
+        flexShrink: 0,
     },
     secondaryButton: {
         padding: '8px 16px',

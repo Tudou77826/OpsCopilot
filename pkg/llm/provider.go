@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"strings"
 	"time"
 
 	openai "github.com/sashabaranov/go-openai"
@@ -49,11 +50,16 @@ type ChatResponse struct {
 
 // --- Interfaces ---
 
+// StreamTokenCallback 流式 token 回调函数类型
+type StreamTokenCallback func(token string)
+
 type Provider interface {
 	// ChatCompletion Simple chat without tools
 	ChatCompletion(ctx context.Context, messages []ChatMessage) (string, error)
 	// ChatWithTools Chat with tool definitions
 	ChatWithTools(ctx context.Context, messages []ChatMessage, tools []Tool) (*ChatResponse, error)
+	// ChatCompletionStream 流式 chat，每个 token 通过 onToken 回调返回，最终返回完整内容
+	ChatCompletionStream(ctx context.Context, messages []ChatMessage, onToken StreamTokenCallback) (string, error)
 }
 
 // --- Mock Implementation ---
@@ -76,6 +82,17 @@ func (m *MockProvider) ChatWithTools(ctx context.Context, messages []ChatMessage
 		Content:   m.Response,
 		ToolCalls: m.ToolCalls,
 	}, m.Err
+}
+
+func (m *MockProvider) ChatCompletionStream(ctx context.Context, messages []ChatMessage, onToken StreamTokenCallback) (string, error) {
+	m.LastMessages = messages
+	if m.Err != nil {
+		return "", m.Err
+	}
+	if onToken != nil {
+		onToken(m.Response)
+	}
+	return m.Response, nil
 }
 
 // --- OpenAI Implementation ---
@@ -202,5 +219,86 @@ func (p *OpenAIProvider) ChatWithTools(ctx context.Context, messages []ChatMessa
 		}
 	}
 
+	return result, nil
+}
+
+// ChatCompletionStream 流式输出 chat completion，每个 token 通过 onToken 回调
+func (p *OpenAIProvider) ChatCompletionStream(ctx context.Context, messages []ChatMessage, onToken StreamTokenCallback) (string, error) {
+	return p.streamChatCompletion(ctx, messages, onToken, false)
+}
+
+// ChatCompletionStreamNoThinking 流式输出并禁用思考模式，仅用于结论生成等不需要推理的场景。
+// 此方法不在 Provider 接口中，通过类型断言调用。
+func (p *OpenAIProvider) ChatCompletionStreamNoThinking(ctx context.Context, messages []ChatMessage, onToken StreamTokenCallback) (string, error) {
+	return p.streamChatCompletion(ctx, messages, onToken, true)
+}
+
+// streamChatCompletion 内部共用实现
+func (p *OpenAIProvider) streamChatCompletion(ctx context.Context, messages []ChatMessage, onToken StreamTokenCallback, disableThinking bool) (string, error) {
+	if p.client == nil {
+		return "", errors.New("client not initialized")
+	}
+	startAt := time.Now()
+
+	reqMessages := make([]openai.ChatCompletionMessage, len(messages))
+	for i, m := range messages {
+		reqMessages[i] = openai.ChatCompletionMessage{
+			Role:       m.Role,
+			Content:    m.Content,
+			Name:       m.Name,
+			ToolCallID: m.ToolCallID,
+		}
+	}
+
+	req := openai.ChatCompletionRequest{
+		Model:    p.model,
+		Messages: reqMessages,
+		Stream:   true,
+	}
+
+	label := "stream"
+	if disableThinking {
+		req.ChatTemplateKwargs = map[string]any{
+			"enable_thinking": false,
+		}
+		label = "stream (no-thinking)"
+	}
+
+	log.Printf("[OpenAIProvider] Starting %s: model=%s numMessages=%d", label, p.model, len(reqMessages))
+
+	stream, err := p.client.CreateChatCompletionStream(ctx, req)
+	if err != nil {
+		log.Printf("[OpenAIProvider] Stream error: %v cost=%s", err, time.Since(startAt))
+		return "", err
+	}
+	defer stream.Close()
+
+	var fullContent strings.Builder
+	for {
+		resp, err := stream.Recv()
+		if err != nil {
+			if err.Error() == "EOF" || err.Error() == "stream finished" {
+				break
+			}
+			if strings.Contains(err.Error(), "stream") && strings.Contains(err.Error(), "finish") {
+				break
+			}
+			log.Printf("[OpenAIProvider] Stream recv error: %v", err)
+			break
+		}
+
+		if len(resp.Choices) > 0 {
+			delta := resp.Choices[0].Delta
+			if delta.Content != "" {
+				fullContent.WriteString(delta.Content)
+				if onToken != nil {
+					onToken(delta.Content)
+				}
+			}
+		}
+	}
+
+	result := fullContent.String()
+	log.Printf("[OpenAIProvider] %s done: cost=%s contentLen=%d", label, time.Since(startAt), len(result))
 	return result, nil
 }

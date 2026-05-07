@@ -138,6 +138,8 @@ export function StopScriptRecording():Promise<script.Script>;
 
 export function StopSession(arg1:string,arg2:string):Promise<string>;
 
+export function StreamConclusion(arg1:string,arg2:string):Promise<string>;
+
 export function UpdateSavedSession(arg1:string,arg2:sshclient.ConnectConfig):Promise<string>;
 
 export function UpdateScript(arg1:script.Script):Promise<void>;
