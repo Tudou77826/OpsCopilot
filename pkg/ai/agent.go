@@ -11,6 +11,7 @@ import (
 	"opscopilot/pkg/tools"
 	knowledgetools "opscopilot/pkg/tools/knowledge"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +19,50 @@ import (
 	openai "github.com/sashabaranov/go-openai"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+const (
+	maxContextTokens = 75000                            // 上下文 token 上限
+	charsPerToken    = 3                                // 中英混合估算：~3 字符/token
+	maxContextChars  = maxContextTokens * charsPerToken // ≈225K 字符
+	trimTargetRatio  = 0.7                              // 截断目标：降到 70% 以下
+)
+
+// estimateMessagesChars 估算消息列表的总字符数
+func estimateMessagesChars(messages []llm.ChatMessage) int {
+	total := 0
+	for _, msg := range messages {
+		total += len(msg.Content)
+		for _, tc := range msg.ToolCalls {
+			total += len(tc.Function.Arguments)
+		}
+	}
+	return total
+}
+
+// trimEarlyToolResults 截断最早的大体积工具结果，保持最近上下文完整
+// 不动 messages[0]（system）和 messages[1]（user），从 messages[2] 开始扫描
+// 保留最后 4 条消息不动（通常是最近的 assistant + tool results）
+func trimEarlyToolResults(messages []llm.ChatMessage, maxChars int) {
+	total := estimateMessagesChars(messages)
+	if total <= maxChars {
+		return
+	}
+
+	target := int(float64(maxChars) * trimTargetRatio)
+	protected := len(messages) - 4 // 保护最近 4 条
+	if protected < 3 {              // 至少保护 system + user + 第一条
+		protected = 3
+	}
+
+	for i := 2; i < protected && total > target; i++ {
+		if messages[i].Role == "tool" && len(messages[i].Content) > 200 {
+			head := messages[i].Content[:150]
+			removed := len(messages[i].Content) - 200
+			messages[i].Content = head + "\n...[已截断]..."
+			total -= removed
+		}
+	}
+}
 
 // AgentRunOptions defines options for the agent execution
 type AgentRunOptions struct {
@@ -93,7 +138,7 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 	messages = append(messages, llm.ChatMessage{Role: "user", Content: opts.Question})
 
 	provider := s.complexProvider
-	maxSteps := 10
+	maxSteps := 30
 
 	knowledgeExists := false
 	if opts.KnowledgeDir != "" {
@@ -189,6 +234,16 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 		}
 
 		log.Printf("[Agent][%s] Step=%d toolOutputsAppended=%d messageCount=%d", runID, i+1, len(resp.ToolCalls), len(messages))
+
+		// 检测累积上下文，超限时截断最早的工具结果
+		trimEarlyToolResults(messages, maxContextChars)
+
+		// 发送上下文用量到前端
+		totalChars := estimateMessagesChars(messages)
+		estimatedTokens := totalChars / charsPerToken
+		emitContextUsage(ctx, runID, estimatedTokens, maxContextTokens)
+		log.Printf("[Agent][%s] Step=%d contextEstimate=%dChars(~%dK tokens) messageCount=%d",
+			runID, i+1, totalChars, estimatedTokens/1000, len(messages))
 	}
 
 	log.Printf("[Agent][%s] ExceededMaxSteps totalCost=%s maxSteps=%d", runID, time.Since(startAt), maxSteps)
@@ -221,6 +276,15 @@ func emitStatus(ctx context.Context, runID string, stage string, message string)
 	}
 	log.Printf("[Agent][%s] Status stage=%s message=%s", runID, stage, message)
 	safeEmit(ctx, "agent:status", payload)
+}
+
+func emitContextUsage(ctx context.Context, runID string, usedTokens, maxTokens int) {
+	payload := map[string]string{
+		"runId":      runID,
+		"usedTokens": strconv.Itoa(usedTokens),
+		"maxTokens":  strconv.Itoa(maxTokens),
+	}
+	safeEmit(ctx, "agent:context", payload)
 }
 
 func retryChatWithTools(ctx context.Context, runID string, maxAttempts int, fn func() (*llm.ChatResponse, error)) (*llm.ChatResponse, error) {

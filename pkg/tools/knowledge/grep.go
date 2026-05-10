@@ -39,7 +39,7 @@ func (t *GrepTool) Parameters() json.RawMessage {
 		"properties": {
 			"pattern": {"type": "string", "description": "Search pattern. Supports regex OR for multi-keyword: 'timeout|504|超时'. Case-insensitive."},
 			"path": {"type": "string", "description": "Optional file path to limit search scope, e.g. 'payment_system_sop.md'"},
-			"max_results": {"type": "integer", "description": "Maximum number of matching lines to return (default 20, max 50)", "minimum": 1, "maximum": 50}
+			"max_results": {"type": "integer", "description": "Maximum number of matching lines to return (default 20, max 100)", "minimum": 1, "maximum": 100}
 		},
 		"required": ["pattern"],
 		"additionalProperties": false
@@ -54,8 +54,8 @@ func (t *GrepTool) Execute(ctx context.Context, args map[string]interface{}, emi
 
 	if mr, ok := toInt(args["max_results"]); ok && mr > 0 {
 		maxResults = mr
-		if maxResults > 50 {
-			maxResults = 50
+		if maxResults > 100 {
+			maxResults = 100
 		}
 	}
 

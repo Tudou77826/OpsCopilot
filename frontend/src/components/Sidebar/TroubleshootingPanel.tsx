@@ -48,6 +48,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
     const [messages, setMessages] = useState<Message[]>([]);
     const [agentStatus, setAgentStatus] = useState<{ stage: string; message: string } | null>(null);
     const [agentStatusHistory, setAgentStatusHistory] = useState<AgentStatusEvent[]>([]);
+    const [contextUsage, setContextUsage] = useState<{ used: number; max: number } | null>(null);
     const [catalogMatches, setCatalogMatches] = useState<string[]>([]);
     const catalogMatchRef = useRef<string[]>([]);
     const [lastUsedDocs, setLastUsedDocs] = useState<string[]>([]);
@@ -114,6 +115,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
             setLastUsedDocs([]);
             usedDocsRef.current = new Set();
             let cancelStatus: (() => void) | undefined;
+            let cancelContext: (() => void) | undefined;
             try {
                 if (EventsOn) {
                     cancelStatus = EventsOn("agent:status", (...args: any[]) => {
@@ -139,6 +141,13 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                             catalogMatchRef.current = [...catalogMatchRef.current, message];
                             setCatalogMatches([...catalogMatchRef.current]);
                         }
+                    });
+                    cancelContext = EventsOn("agent:context", (...args: any[]) => {
+                        const data = args?.[0] ?? {};
+                        setContextUsage({
+                            used: parseInt(data?.usedTokens ?? '0'),
+                            max: parseInt(data?.maxTokens ?? '75000'),
+                        });
                     });
                 }
             } catch (err) {
@@ -169,12 +178,14 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                 }
             }
             if (cancelStatus) cancelStatus();
+            if (cancelContext) cancelContext();
         } catch (e: any) {
             console.error("Initial AI analysis failed", e);
         } finally {
             setAgentStatus(null);
             setAgentStatusHistory([]);
             setLastUsedDocs(Array.from(usedDocsRef.current));
+            setContextUsage(null);
         }
         
         setInput('');
@@ -296,6 +307,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         setLastUsedDocs([]);
         usedDocsRef.current = new Set();
         let cancelStatus: (() => void) | undefined;
+        let cancelContext: (() => void) | undefined;
         try {
             if (EventsOn) {
                 cancelStatus = EventsOn("agent:status", (...args: any[]) => {
@@ -322,6 +334,13 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                         setCatalogMatches([...catalogMatchRef.current]);
                     }
                 });
+                cancelContext = EventsOn("agent:context", (...args: any[]) => {
+                    const data = args?.[0] ?? {};
+                    setContextUsage({
+                        used: parseInt(data?.usedTokens ?? '0'),
+                        max: parseInt(data?.maxTokens ?? '75000'),
+                    });
+                });
             }
         } catch (err) {
             console.error("Failed to register event listener:", err);
@@ -344,7 +363,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                  if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskAI) {
                     // @ts-ignore
                     const response = await window.go.main.App.AskAI(userMsg.content);
-                    
+
                     setMessages(prev => [...prev, {
                         role: 'ai',
                         content: response,
@@ -366,9 +385,11 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
             }]);
         } finally {
             if (cancelStatus) cancelStatus();
+            if (cancelContext) cancelContext();
             setAgentStatus(null);
             setAgentStatusHistory([]);
             setLastUsedDocs(Array.from(usedDocsRef.current));
+            setContextUsage(null);
         }
     };
 
@@ -557,6 +578,24 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                                     ) : (
                                         <span style={styles.stageMessage}>{agentStatus.message.replace(cfg.label, '').replace(cfg.icon, '')}</span>
                                     )}
+                                </div>
+                            );
+                        })()}
+                        {contextUsage && (() => {
+                            const ratio = contextUsage.used / contextUsage.max;
+                            const pct = Math.min(ratio * 100, 100);
+                            return (
+                                <div style={styles.contextBar}>
+                                    <div style={styles.contextBarTrack}>
+                                        <div style={{
+                                            ...styles.contextBarFill,
+                                            width: `${pct}%`,
+                                            backgroundColor: ratio > 0.8 ? '#e06060' : '#4a9eda',
+                                        }} />
+                                    </div>
+                                    <span style={styles.contextBarLabel}>
+                                        {Math.round(contextUsage.used / 1000)}K / {Math.round(contextUsage.max / 1000)}K
+                                    </span>
                                 </div>
                             );
                         })()}
@@ -940,6 +979,30 @@ const styles = {
         border: '1px solid #3a3a3a',
         color: '#bbb',
         fontSize: '12px',
+    },
+    contextBar: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '4px 12px',
+        margin: '0 4px',
+    },
+    contextBarTrack: {
+        flex: 1,
+        height: '4px',
+        borderRadius: '2px',
+        backgroundColor: '#333',
+        overflow: 'hidden' as const,
+    },
+    contextBarFill: {
+        height: '100%',
+        borderRadius: '2px',
+        transition: 'width 0.3s ease',
+    },
+    contextBarLabel: {
+        fontSize: '10px',
+        color: '#666',
+        whiteSpace: 'nowrap' as const,
     },
     structuredResponse: {
         display: 'flex',
