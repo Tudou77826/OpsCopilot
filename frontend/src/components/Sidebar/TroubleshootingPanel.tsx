@@ -9,10 +9,6 @@ import 'highlight.js/styles/github-dark.css';
 // @ts-ignore
 import { EventsOn } from '../../../wailsjs/runtime/runtime';
 
-interface MCPStatus {
-    servers: Record<string, boolean>;
-}
-
 interface Message {
     role: 'user' | 'ai';
     content: string;
@@ -26,16 +22,6 @@ interface AgentStatusEvent {
     ts: number;
 }
 
-interface TroubleshootResult {
-    opsCopilotAnswer: string;
-    externalAnswer: string;
-    integratedAnswer: string;
-    opsCopilotReady: boolean;
-    externalReady: boolean;
-    integratedReady: boolean;
-    externalError?: string;
-}
-
 interface TroubleshootingPanelProps {
     onStart?: () => void;
     onStop?: () => void;
@@ -47,7 +33,6 @@ const STAGE_CONFIG: Record<string, { label: string; icon: string; color: string 
     catalog_match:  { label: '匹配知识库', icon: '🎯', color: '#7ac5d8' },
     grepping:       { label: '搜索关键词', icon: '🔍', color: '#d4a843' },
     reading:        { label: '查阅文档', icon: '📖', color: '#7ac5d8' },
-    mcp_call:       { label: '调用工具', icon: '🔧', color: '#d4a843' },
     answering:      { label: '生成回答', icon: '✍️', color: '#6ecf8a' },
     retrying:       { label: '重试中',   icon: '🔄', color: '#e0a050' },
     error:          { label: '出错',     icon: '⚠️', color: '#e06060' },
@@ -72,11 +57,6 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
     const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
     const [isPolishing, setIsPolishing] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const [viewMode, setViewMode] = useState<'opscopilot' | 'external' | 'integrated'>('opscopilot');
-    const [troubleshootResult, setTroubleshootResult] = useState<TroubleshootResult | null>(null);
-    const [mcpToolEnhanced, setMcpToolEnhanced] = useState(false);
-    const [showExternalHelp, setShowExternalHelp] = useState(false);
-    const [mcpStatus, setMcpStatus] = useState<MCPStatus | null>(null);
 
     const extractDocFromReadingMessage = (message: string): string | null => {
         const idx = message.indexOf('正在阅读文档:');
@@ -93,29 +73,6 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         scrollToBottom();
     }, [messages, agentStatus]);
 
-    // Load MCP status on mount
-    useEffect(() => {
-        const loadMcpStatus = async () => {
-            try {
-                console.log('[MCP] Loading status...');
-                // @ts-ignore
-                if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetMCPStatus) {
-                    // @ts-ignore
-                    const statusStr = await window.go.main.App.GetMCPStatus();
-                    console.log('[MCP] Raw status:', statusStr);
-                    const status = JSON.parse(statusStr) as MCPStatus;
-                    console.log('[MCP] Parsed status:', status);
-                    setMcpStatus(status);
-                } else {
-                    console.log('[MCP] GetMCPStatus not available');
-                }
-            } catch (e) {
-                console.error('[MCP] Failed to load status:', e);
-            }
-        };
-        loadMcpStatus();
-    }, []); // Empty deps - load once on mount
-
     const handleStart = async () => {
         if (!input.trim()) {
             setMessages([{
@@ -128,9 +85,6 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
 
         setIsInvestigating(true);
         if (onStart) onStart();
-
-        // Reset troubleshootResult to clear previous structured response
-        setTroubleshootResult(null);
 
         const problem = input;
         
@@ -194,36 +148,13 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
             // @ts-ignore
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskTroubleshoot) {
                 // @ts-ignore
-                const response = await window.go.main.App.AskTroubleshoot(problem, mcpToolEnhanced);
-                let parsedResponse = response;
-                let result: TroubleshootResult | null = null;
+                const response = await window.go.main.App.AskTroubleshoot(problem);
 
-                try {
-                    // Only try to parse as JSON if it starts with '{' (JSON object)
-                    if (response.trim().startsWith('{')) {
-                        result = JSON.parse(response);
-                        // Validate that it's a proper TroubleshootResult
-                        if (result && result.opsCopilotReady) {
-                            parsedResponse = result.opsCopilotAnswer;
-                        } else {
-                            // Not a valid structured response, treat as plain text
-                            result = null;
-                        }
-                    }
-                } catch (e) {
-                    console.error('Failed to parse troubleshoot result:', e);
-                    result = null;
-                }
-
-                if (result) {
-                    setTroubleshootResult(result);
-                } else {
-                    setMessages(prev => [...prev, {
-                        role: 'ai',
-                        content: parsedResponse,
-                        timestamp: Date.now()
-                    }]);
-                }
+                setMessages(prev => [...prev, {
+                    role: 'ai',
+                    content: response,
+                    timestamp: Date.now()
+                }]);
             } else {
                  // Fallback to AskAI if AskTroubleshoot is not available (e.g. bindings not updated yet)
                  // @ts-ignore
@@ -279,8 +210,6 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         catalogMatchRef.current = [];
         setLastUsedDocs([]);
         usedDocsRef.current = new Set();
-        setViewMode('opscopilot');
-        setTroubleshootResult(null);
         setIsStopping(false);
         setRootCause('');
         if (onStart) onStart();
@@ -402,36 +331,13 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
             // @ts-ignore
             if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskTroubleshoot) {
                 // @ts-ignore
-                const response = await window.go.main.App.AskTroubleshoot(userMsg.content, mcpToolEnhanced);
-                let parsedResponse = response;
-                let result: TroubleshootResult | null = null;
+                const response = await window.go.main.App.AskTroubleshoot(userMsg.content);
 
-                try {
-                    // Only try to parse as JSON if it starts with '{' (JSON object)
-                    if (response.trim().startsWith('{')) {
-                        result = JSON.parse(response);
-                        // Validate that it's a proper TroubleshootResult
-                        if (result && result.opsCopilotReady) {
-                            parsedResponse = result.opsCopilotAnswer;
-                        } else {
-                            // Not a valid structured response, treat as plain text
-                            result = null;
-                        }
-                    }
-                } catch (e) {
-                    console.error('Failed to parse troubleshoot result:', e);
-                    result = null;
-                }
-
-                if (result) {
-                    setTroubleshootResult(result);
-                } else {
-                    setMessages(prev => [...prev, {
-                        role: 'ai',
-                        content: parsedResponse,
-                        timestamp: Date.now()
-                    }]);
-                }
+                setMessages(prev => [...prev, {
+                    role: 'ai',
+                    content: response,
+                    timestamp: Date.now()
+                }]);
             } else {
                  // Fallback to AskAI if AskTroubleshoot is not available (e.g. bindings not updated yet)
                  // @ts-ignore
@@ -600,24 +506,6 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         );
     };
 
-    const renderViewContent = () => {
-        if (!troubleshootResult) return null;
-
-        switch (viewMode) {
-            case 'opscopilot':
-                return renderMessageContent(troubleshootResult.opsCopilotAnswer);
-            case 'external':
-                if (troubleshootResult.externalError) {
-                    return <div style={{...styles.messageContent, color: '#ff6b6b'}}>{troubleshootResult.externalError}</div>;
-                }
-                return renderMessageContent(troubleshootResult.externalAnswer || '加载中...');
-            case 'integrated':
-                return renderMessageContent(troubleshootResult.integratedAnswer || '生成中...');
-            default:
-                return null;
-        }
-    };
-
     return (
         <div style={styles.container}>
             {!isInvestigating ? (
@@ -634,48 +522,6 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                             style={{...styles.textarea, minHeight: '80px', backgroundColor: '#333'}}
                         />
 
-                        {/* 高级选项 - 默认折叠，包含 MCP 工具增强 */}
-                        <details style={styles.advancedOptions}>
-                            <summary style={styles.advancedSummary}>高级选项</summary>
-                            <div style={styles.advancedContent}>
-                                {/* MCP 工具增强模式开关 */}
-                                <div style={styles.enhancedModeToggle}>
-                                    <div style={styles.toggleContainer}>
-                                        <label style={styles.switchLabel} title={mcpToolEnhanced ? '已启用 MCP 工具增强' : '已禁用 MCP 工具增强'}>
-                                            <input
-                                                type="checkbox"
-                                                checked={mcpToolEnhanced}
-                                                onChange={(e) => setMcpToolEnhanced(e.target.checked)}
-                                                style={styles.switchCheckbox}
-                                                className="troubleshoot-switch-checkbox"
-                                            />
-                                            <span style={styles.switchSlider} className="troubleshoot-switch-slider"></span>
-                                        </label>
-                                        <span style={styles.toggleText}>工具增强</span>
-                                    </div>
-                                    <div
-                                        style={styles.helpIcon}
-                                        onClick={() => setShowExternalHelp(!showExternalHelp)}
-                                    >
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <circle cx="12" cy="12" r="10"/>
-                                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                                            <line x1="12" y1="17" x2="12.01" y2="17"/>
-                                        </svg>
-                                    </div>
-                                </div>
-
-                                {/* MCP 工具帮助说明 */}
-                                {showExternalHelp && (
-                                    <div style={styles.externalHelpBox}>
-                                        <div style={styles.helpContent}>
-                                            启用后可调用配置的诊断工具进行深度分析。需要在设置中配置服务器。
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </details>
-
                         <button onClick={handleStart} style={styles.primaryButton}>
                             开始排查
                         </button>
@@ -683,87 +529,8 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                 </div>
             ) : (
                 <div style={styles.chatContainer}>
-                    {troubleshootResult && (
-                        <div style={styles.viewSwitcher}>
-                            <button
-                                role="tab"
-                                aria-selected={viewMode === 'opscopilot'}
-                                onClick={() => setViewMode('opscopilot')}
-                                disabled={!troubleshootResult.opsCopilotReady}
-                                style={{
-                                    ...(viewMode === 'opscopilot' ? styles.activeViewBtn : styles.viewBtn),
-                                    opacity: troubleshootResult.opsCopilotReady ? 1 : 0.5,
-                                    cursor: troubleshootResult.opsCopilotReady ? 'pointer' : 'default'
-                                }}
-                            >
-                                <span style={styles.tabIcon}>
-                                    {troubleshootResult.opsCopilotReady === true ? (
-                                        <span style={styles.statusIcon} aria-label="完成">✓</span>
-                                    ) : troubleshootResult.opsCopilotReady === false ? (
-                                        <span style={styles.statusIconError} aria-label="失败">✗</span>
-                                    ) : (
-                                        <span style={styles.loadingSpinner} aria-label="加载中">⏳</span>
-                                    )}
-                                </span>
-                                <span style={styles.tabLabel}>OpsCopilot</span>
-                            </button>
-                            <button
-                                role="tab"
-                                aria-selected={viewMode === 'external'}
-                                onClick={() => setViewMode('external')}
-                                disabled={!troubleshootResult.externalReady}
-                                style={{
-                                    ...(viewMode === 'external' ? styles.activeViewBtn : styles.viewBtn),
-                                    opacity: troubleshootResult.externalReady ? 1 : 0.5,
-                                    cursor: troubleshootResult.externalReady ? 'pointer' : 'default'
-                                }}
-                            >
-                                <span style={styles.tabIcon}>
-                                    {troubleshootResult.externalReady === true ? (
-                                        <span style={styles.statusIcon} aria-label="完成">✓</span>
-                                    ) : troubleshootResult.externalReady === false ? (
-                                        <span style={styles.statusIconError} aria-label="失败">✗</span>
-                                    ) : (
-                                        <span style={styles.loadingSpinner} aria-label="加载中">⏳</span>
-                                    )}
-                                </span>
-                                <span style={styles.tabLabel}>外部定位</span>
-                            </button>
-                            <button
-                                role="tab"
-                                aria-selected={viewMode === 'integrated'}
-                                onClick={() => setViewMode('integrated')}
-                                disabled={!troubleshootResult.integratedReady}
-                                style={{
-                                    ...(viewMode === 'integrated' ? styles.activeViewBtn : styles.viewBtn),
-                                    opacity: troubleshootResult.integratedReady ? 1 : 0.5,
-                                    cursor: troubleshootResult.integratedReady ? 'pointer' : 'default'
-                                }}
-                            >
-                                <span style={styles.tabIcon}>
-                                    {troubleshootResult.integratedReady === true ? (
-                                        <span style={styles.statusIcon} aria-label="完成">✓</span>
-                                    ) : (
-                                        <span style={styles.loadingSpinner} aria-label="加载中">⏳</span>
-                                    )}
-                                </span>
-                                <span style={styles.tabLabel}>综合答复</span>
-                            </button>
-                        </div>
-                    )}
                     <div style={styles.messageList}>
-                        {troubleshootResult ? (
-                            <div style={{
-                                ...styles.messageItem,
-                                alignSelf: 'flex-start',
-                                backgroundColor: '#333',
-                                maxWidth: '95%',
-                                width: '95%'
-                            }}>
-                                {renderViewContent()}
-                            </div>
-                        ) : (
-                            messages.map((msg, idx) => (
+                        {messages.map((msg, idx) => (
                                 <div key={idx} style={{
                                     ...styles.messageItem,
                                     alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
@@ -775,7 +542,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                                     )}
                                 </div>
                             ))
-                        )}
+                        }
                         <div ref={messagesEndRef} />
                         {agentStatus && (() => {
                             const cfg = getStageConfig(agentStatus.stage);
@@ -821,7 +588,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                                 })}
                             </div>
                         )}
-                        {!troubleshootResult && !agentStatus && catalogMatches.length > 0 && (
+                        {!agentStatus && catalogMatches.length > 0 && (
                             <div style={styles.usedDocsBox}>
                                 <div style={styles.usedDocsTitle}>知识库匹配路径</div>
                                 <div style={styles.usedDocsList}>
@@ -844,7 +611,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                                 </div>
                             </div>
                         )}
-                        {!troubleshootResult && !agentStatus && lastUsedDocs.length > 0 && catalogMatches.length === 0 && (
+                        {!agentStatus && lastUsedDocs.length > 0 && catalogMatches.length === 0 && (
                             <div style={styles.usedDocsBox}>
                                 <div style={styles.usedDocsTitle}>本次参考文档</div>
                                 <div style={styles.usedDocsList}>
@@ -897,22 +664,6 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                                     <span style={styles.stopButtonText}>结束排查</span>
                                 </button>
                             </div>
-
-                            {/* 增强模式状态显示（只读） - 简化为小标签 */}
-                            {mcpToolEnhanced && (
-                                <div style={styles.enhancedModeTag}>
-                                    <span style={styles.enhancedModeTagText}>工具增强</span>
-                                    {mcpStatus && mcpStatus.servers && Object.keys(mcpStatus.servers).length > 0 && (
-                                        <span style={styles.enhancedModeTagDot}
-                                            title={Object.entries(mcpStatus.servers)
-                                                .map(([name, ready]) => `${name}: ${ready ? '已连接' : '未连接'}`)
-                                                .join('\n')}
-                                        >
-                                            {Object.values(mcpStatus.servers).some(Boolean) ? '●' : '○'}
-                                        </span>
-                                    )}
-                                </div>
-                            )}
 
                             <div style={styles.inputBox}>
                                 <textarea
@@ -1244,402 +995,6 @@ const styles = {
         justifyContent: 'flex-end',
         gap: '8px',
     },
-    viewSwitcher: {
-        display: 'flex',
-        gap: '0',
-        padding: '0',
-        backgroundColor: '#252526',
-        borderBottom: '1px solid #3e3e42',
-        flexShrink: 0,
-    },
-    tabIcon: {
-        fontSize: '14px',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minWidth: '20px',
-    },
-    tabLabel: {
-        fontSize: '13px',
-        fontWeight: '400',
-    },
-    statusIcon: {
-        color: '#4CAF50',
-        fontSize: '14px',
-        fontWeight: '500',
-    },
-    statusIconError: {
-        color: '#f44336',
-        fontSize: '14px',
-        fontWeight: '500',
-    },
-    loadingSpinner: {
-        color: '#666',
-        fontSize: '14px',
-        animation: 'spin 1s linear infinite',
-    },
-    viewBtn: {
-        flex: 1,
-        padding: '8px 12px',
-        backgroundColor: 'transparent',
-        color: '#888',
-        border: 'none',
-        borderRight: '1px solid #3e3e42',
-        borderRadius: '0',
-        cursor: 'pointer',
-        fontSize: '12px',
-        fontWeight: '400',
-        transition: 'all 0.15s ease',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '6px',
-    },
-    activeViewBtn: {
-        flex: 1,
-        padding: '8px 12px',
-        backgroundColor: '#37373d',
-        color: '#fff',
-        border: 'none',
-        borderRight: '1px solid #3e3e42',
-        borderRadius: '0',
-        cursor: 'pointer',
-        fontSize: '12px',
-        fontWeight: '400',
-        transition: 'all 0.15s ease',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '6px',
-    },
-    enhancedModeSection: {
-        padding: '8px 12px',
-        borderBottom: '1px solid #3a3a3a',
-    },
-    checkboxLabel: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        cursor: 'pointer',
-    },
-    checkbox: {
-        width: '16px',
-        height: '16px',
-        cursor: 'pointer',
-    },
-    checkboxText: {
-        color: '#ccc',
-        fontSize: '13px',
-    },
-    enhancedConfig: {
-        marginTop: '10px',
-        padding: '12px',
-        backgroundColor: '#1a1a1a',
-        borderRadius: '6px',
-        display: 'flex',
-        flexDirection: 'column' as const,
-        gap: '8px',
-    },
-    configRow: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-    },
-    configLabel: {
-        color: '#999',
-        fontSize: '12px',
-        minWidth: '100px',
-    },
-    configInput: {
-        flex: 1,
-        backgroundColor: '#252526',
-        color: '#ddd',
-        border: '1px solid #3a3a3a',
-        borderRadius: '4px',
-        padding: '6px 10px',
-        fontSize: '13px',
-        outline: 'none',
-    },
-    editButton: {
-        backgroundColor: '#3a3a3a',
-        color: '#ccc',
-        border: '1px solid #4a4a4a',
-        borderRadius: '4px',
-        padding: '4px 12px',
-        fontSize: '12px',
-        cursor: 'pointer',
-    },
-    customVarEditor: {
-        display: 'flex',
-        flexDirection: 'column' as const,
-        gap: '6px',
-        paddingLeft: '108px',
-    },
-    varRow: {
-        display: 'flex',
-        gap: '6px',
-        alignItems: 'center',
-    },
-    varInput: {
-        backgroundColor: '#252526',
-        color: '#ddd',
-        border: '1px solid #3a3a3a',
-        borderRadius: '4px',
-        padding: '6px 10px',
-        fontSize: '13px',
-        outline: 'none',
-    },
-    deleteButton: {
-        backgroundColor: '#5c3a3a',
-        color: '#ff8080',
-        border: '1px solid #6c4a4a',
-        borderRadius: '4px',
-        padding: '4px 8px',
-        fontSize: '11px',
-        cursor: 'pointer',
-    },
-    addButton: {
-        backgroundColor: '#3a5a3a',
-        color: '#80cc80',
-        border: '1px solid #4a6a4a',
-        borderRadius: '4px',
-        padding: '4px 12px',
-        fontSize: '12px',
-        cursor: 'pointer',
-    },
-    enhancedModeConfig: {
-        width: '100%',
-        padding: '12px',
-        backgroundColor: '#1a1a1a',
-        borderRadius: '8px',
-        border: '1px solid #3a3a3a',
-    },
-    enhancedModeHeader: {
-        marginBottom: '10px',
-    },
-    enhancedModeStatus: {
-        padding: '8px 12px',
-        backgroundColor: '#1a2a1a',
-        borderRadius: '6px',
-        border: '1px solid #3a4a3a',
-    },
-    statusItem: {
-        display: 'flex',
-        flexDirection: 'column' as const,
-        gap: '4px',
-    },
-    statusLabel: {
-        color: '#7aaa88',
-        fontSize: '12px',
-        fontWeight: '500',
-    },
-    statusDetail: {
-        color: '#888',
-        fontSize: '11px',
-        paddingLeft: '16px',
-    },
-    enhancedModeToggle: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '10px 12px',
-        backgroundColor: '#2a2a2a',
-        borderRadius: '6px',
-        border: '1px solid #3a3a3a',
-    },
-    toggleContainer: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-    },
-    toggleText: {
-        color: '#ccc',
-        fontSize: '13px',
-        fontWeight: '400',
-    },
-    helpIcon: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '20px',
-        height: '20px',
-        color: '#888',
-        cursor: 'pointer',
-        borderRadius: '4px',
-        transition: 'all 0.15s ease',
-    },
-    externalHelpBox: {
-        padding: '12px',
-        backgroundColor: '#1e1e1e',
-        borderRadius: '6px',
-        border: '1px solid #3a3a3a',
-        marginTop: '8px',
-    },
-    helpTitle: {
-        fontSize: '13px',
-        fontWeight: '600',
-        color: '#e0e0e0',
-        marginBottom: '8px',
-    },
-    helpContent: {
-        fontSize: '12px',
-        color: '#b0b0b0',
-        lineHeight: '1.5',
-        marginBottom: '10px',
-    },
-    helpSection: {
-        marginBottom: '8px',
-    },
-    helpSectionTitle: {
-        fontSize: '12px',
-        fontWeight: '500',
-        color: '#ccc',
-        marginBottom: '4px',
-    },
-    helpSectionContent: {
-        fontSize: '12px',
-        color: '#999',
-        lineHeight: '1.4',
-        paddingLeft: '4px',
-    },
-    inlineCode: {
-        backgroundColor: '#2a2a2a',
-        color: '#4ec9b0',
-        padding: '2px 6px',
-        borderRadius: '3px',
-        fontFamily: 'var(--font-mono)',
-        fontSize: '11px',
-    },
-    serverStatusList: {
-        display: 'flex',
-        flexDirection: 'column' as const,
-        gap: '4px',
-        marginTop: '8px',
-    },
-    serverStatusItem: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '6px',
-    },
-    serverStatusDot: {
-        width: '6px',
-        height: '6px',
-        borderRadius: '50%',
-    },
-    serverStatusName: {
-        color: '#bbb',
-        fontSize: '11px',
-    },
-    serverStatusText: {
-        fontSize: '11px',
-        fontWeight: '500',
-    },
-    mcpStatusBox: {
-        padding: '10px 12px',
-        backgroundColor: '#1e1e1e',
-        borderRadius: '6px',
-        border: '1px solid #3a3a3a',
-        marginTop: '10px',
-    },
-    mcpStatusTitle: {
-        fontSize: '12px',
-        fontWeight: '600',
-        color: '#e0e0e0',
-        marginBottom: '8px',
-    },
-    mcpServerList: {
-        display: 'flex',
-        flexDirection: 'column' as const,
-        gap: '4px',
-    },
-    mcpServerItem: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        padding: '4px 0',
-    },
-    mcpStatusDot: {
-        width: '8px',
-        height: '8px',
-        borderRadius: '50%',
-    },
-    mcpServerName: {
-        color: '#bbb',
-        fontSize: '13px',
-        flex: 1,
-    },
-    mcpStatusText: {
-        fontSize: '12px',
-        fontWeight: '500',
-    },
-    advancedOptions: {
-        width: '100%',
-        fontSize: '12px',
-    },
-    advancedSummary: {
-        padding: '6px 0',
-        color: '#888',
-        cursor: 'pointer',
-        userSelect: 'none' as const,
-        outline: 'none',
-        listStyle: 'none',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '4px',
-    },
-    advancedContent: {
-        padding: '8px 0',
-        display: 'flex',
-        flexDirection: 'column' as const,
-        gap: '8px',
-    },
-    mcpStatusBoxCompact: {
-        display: 'flex',
-        flexWrap: 'wrap' as const,
-        gap: '8px',
-    },
-    mcpServerItemCompact: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '4px',
-    },
-    mcpServerNameCompact: {
-        color: '#999',
-        fontSize: '11px',
-    },
-    enhancedModeTag: {
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '4px',
-        padding: '2px 8px',
-        backgroundColor: '#2a3a2a',
-        borderRadius: '4px',
-        fontSize: '11px',
-    },
-    enhancedModeTagText: {
-        color: '#7a9a7a',
-    },
-    enhancedModeTagDot: {
-        color: '#4ade80',
-        fontSize: '8px',
-        cursor: 'help',
-    },
-    switchLabel: {
-        display: 'flex',
-        alignItems: 'center',
-        cursor: 'pointer',
-        userSelect: 'none' as const,
-    },
-    switchCheckbox: {
-        display: 'none',
-    },
-    switchSlider: {
-        width: '36px',
-        height: '20px',
-        borderRadius: '10px',
-        position: 'relative' as const,
-        transition: 'all 0.2s ease',
-    },
 };
 
 const existing = document.getElementById('opscopilot-animations');
@@ -1647,44 +1002,7 @@ if (!existing) {
     const styleSheet = document.createElement("style");
     styleSheet.id = 'opscopilot-animations';
     styleSheet.textContent = `
-        @keyframes spin { 100% { transform: rotate(360deg); } }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-
-        /* Troubleshooting switch toggle styles */
-        .troubleshoot-switch-slider {
-            background-color: #424242;
-        }
-        .troubleshoot-switch-checkbox:checked + .troubleshoot-switch-slider {
-            background-color: #4ade80;
-        }
-        .troubleshoot-switch-checkbox:checked + .troubleshoot-switch-slider::after {
-            transform: translateX(16px);
-        }
-        .troubleshoot-switch-slider::after {
-            content: '';
-            position: absolute;
-            top: 2px;
-            left: 2px;
-            width: 16px;
-            height: 16px;
-            background-color: white;
-            border-radius: 50%;
-            transition: transform 0.2s ease;
-        }
-
-        /* Advanced options details/summary styles */
-        details summary::-webkit-details-marker {
-            display: none;
-        }
-        details summary::before {
-            content: '▸';
-            display: inline-block;
-            font-size: 10px;
-            transition: transform 0.2s ease;
-        }
-        details[open] summary::before {
-            transform: rotate(90deg);
-        }
     `;
     document.head.appendChild(styleSheet);
 }

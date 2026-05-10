@@ -336,8 +336,6 @@ func (a *App) startup(ctx context.Context) {
 		} else {
 			log.Println("[MCP] MCP servers initialized successfully")
 		}
-		// 将 MCP 管理器设置到 AIService
-		a.aiService.SetMCPManager(a.mcpManager)
 	}
 
 	// 启动 IPC 服务（供独立文件管理器连接）
@@ -994,12 +992,10 @@ func (a *App) AskAI(question string) string {
 }
 
 // AskTroubleshoot handles the troubleshooting request from frontend
-// enableExternal: whether to enable MCP tools (controlled by user toggle in UI)
-// 当 enableExternal 为 true 且配置了 MCP 服务器时，Agent 会自动使用 MCP 工具进行诊断
-func (a *App) AskTroubleshoot(problem string, enableExternal bool) string {
+func (a *App) AskTroubleshoot(problem string) string {
 	knowledgeDir := a.resolveKnowledgeBase()
-	log.Printf("[AskTroubleshoot] Problem: %s, EnableMCP: %v", problem, enableExternal)
-	answer, err := a.aiService.AskTroubleshoot(a.ctx, problem, knowledgeDir, enableExternal)
+	log.Printf("[AskTroubleshoot] Problem: %s", problem)
+	answer, err := a.aiService.AskTroubleshoot(a.ctx, problem, knowledgeDir)
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
 	}

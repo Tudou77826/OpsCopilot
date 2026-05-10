@@ -8,29 +8,17 @@ import (
 	"opscopilot/pkg/config"
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/llm"
-	"opscopilot/pkg/mcp"
 	"opscopilot/pkg/sshclient"
 	"regexp"
 	"strings"
-	"sync"
-	"time"
-
-	"github.com/google/uuid"
 )
 
 type AIService struct {
 	fastProvider    llm.Provider
 	complexProvider llm.Provider
 	cfgMgr          *config.Manager
-	mcpClient       mcp.Client // MCP 客户端（可选）
-	mcpManager      MCPManagerProvider // MCP 管理器（可选）
 	catalog         *knowledge.Catalog // 知识库目录
 	knowledgeDir    string             // 知识库目录路径
-}
-
-// MCPManagerProvider MCP 管理器接口
-type MCPManagerProvider interface {
-	GetAllClients() map[string]mcp.Client
 }
 
 type CommandQueryResult struct {
@@ -43,18 +31,7 @@ func NewAIService(fastProvider llm.Provider, complexProvider llm.Provider, cfgMg
 		fastProvider:    fastProvider,
 		complexProvider: complexProvider,
 		cfgMgr:          cfgMgr,
-		mcpClient:       nil, // 将在 App 启动后设置
 	}
-}
-
-// SetMCPClient 设置 MCP 客户端（旧接口，保持兼容）
-func (s *AIService) SetMCPClient(client mcp.Client) {
-	s.mcpClient = client
-}
-
-// SetMCPManager 设置 MCP 管理器
-func (s *AIService) SetMCPManager(manager MCPManagerProvider) {
-	s.mcpManager = manager
 }
 
 // UpdateCatalog 构建并更新知识库目录
@@ -208,269 +185,27 @@ func (s *AIService) AskWithContext(ctx context.Context, question string, knowled
 		RetryMax:     5,
 	})
 	if err != nil {
-		log.Printf("[AIService] Agent mode failed: %v. Falling back to legacy RAG.", err)
-
-		// Fallback: Load all knowledge and ask directly
-		contextContent, loadErr := knowledge.LoadAll(knowledgeDir)
-		if loadErr != nil {
-			log.Printf("[AIService] Fallback load failed: %v", loadErr)
-			contextContent = "" // Continue with empty context
-		}
-
-		fullContent := fmt.Sprintf("Context:\n%s\n\nQuestion: %s", contextContent, question)
-		messages := []llm.ChatMessage{
-			{Role: "system", Content: prompt},
-			{Role: "user", Content: fullContent},
-		}
-
-		runID := uuid.NewString()
-		maxAttempts := 5
-		for attempt := 1; attempt <= maxAttempts; attempt++ {
-			resp, err := s.complexProvider.ChatCompletion(ctx, messages)
-			if err == nil {
-				return resp, nil
-			}
-			if !isRetriableLLMError(err) || attempt == maxAttempts {
-				emitStatus(ctx, runID, "error", fmt.Sprintf("请求失败：%s", shortErr(err)))
-				return "", err
-			}
-			wait := retryBackoff(attempt)
-			emitStatus(ctx, runID, "retrying", fmt.Sprintf("请求失败，正在重试（%d/%d），等待 %s... %s", attempt+1, maxAttempts, wait, shortErr(err)))
-			timer := time.NewTimer(wait)
-			select {
-			case <-ctx.Done():
-				timer.Stop()
-				return "", ctx.Err()
-			case <-timer.C:
-			}
-		}
-		return "", err
+		return "", fmt.Errorf("AI 问答失败: %w", err)
 	}
 
 	return resp, nil
 }
 
-// TroubleshootResult 故障排查结果结构
-type TroubleshootResult struct {
-	OpsCopilotAnswer  string `json:"opsCopilotAnswer"`
-	ExternalAnswer    string `json:"externalAnswer"`
-	IntegratedAnswer  string `json:"integratedAnswer"`
-	OpsCopilotReady   bool   `json:"opsCopilotReady"`
-	ExternalReady     bool   `json:"externalReady"`
-	IntegratedReady   bool   `json:"integratedReady"`
-	ExternalError     string `json:"externalError,omitempty"`
-}
-
-func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowledgeDir string, enableMCP bool) (string, error) {
+func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowledgeDir string) (string, error) {
 	prompt := config.DefaultTroubleshootPrompt
 
-	result := TroubleshootResult{
-		OpsCopilotReady:  false,
-		ExternalReady:    false,
-		IntegratedReady:  false,
-	}
-
-	// 如果不启用 MCP，只运行知识库问答
-	if !enableMCP {
-		resp, err := s.RunAgent(ctx, AgentRunOptions{
-			Question:     problem,
-			KnowledgeDir: knowledgeDir,
-			SystemPrompt: prompt,
-			RetryMax:     5,
-			EnableMCP:    false,
-			Catalog:      s.catalog,
-		})
-		if err != nil {
-			return "", err
-		}
-		return normalizeAgentResponse(resp), nil
-	}
-
-	// 启用 MCP 时，并行运行知识库问答和 MCP 诊断
-	var opsCopilotAnswer, externalAnswer string
-	var opsCopilotErr, externalErr error
-	var wg sync.WaitGroup
-
-	// 使用 channel 来实现"先完成先返回"的逻辑
-	opsCopilotDone := make(chan struct{})
-	mcpDone := make(chan struct{})
-
-	// 知识库问答
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer close(opsCopilotDone)
-		resp, err := s.RunAgent(ctx, AgentRunOptions{
-			Question:     problem,
-			KnowledgeDir: knowledgeDir,
-			SystemPrompt: prompt,
-			RetryMax:     5,
-			EnableMCP:    false, // 知识库问答不使用 MCP
-			Catalog:      s.catalog,
-		})
-		if err != nil {
-			opsCopilotErr = err
-			return
-		}
-		opsCopilotAnswer = normalizeAgentResponse(resp)
-	}()
-
-	// MCP 诊断
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer close(mcpDone)
-
-		// 首先检查是否有可用的 MCP 工具
-		hasMCPTools := false
-		log.Printf("[AskTroubleshoot.MCP] Checking for MCP tools...")
-		if s.mcpManager != nil {
-			clients := s.mcpManager.GetAllClients()
-			log.Printf("[AskTroubleshoot.MCP] Got %d clients from manager", len(clients))
-			for serverName, client := range clients {
-				log.Printf("[AskTroubleshoot.MCP] Checking server '%s', IsReady=%v", serverName, client.IsReady())
-				if client.IsReady() {
-					tools, err := client.ListTools(ctx)
-					if err != nil {
-						log.Printf("[AskTroubleshoot.MCP] Failed to list tools from '%s': %v", serverName, err)
-					} else {
-						log.Printf("[AskTroubleshoot.MCP] Server '%s' has %d tools", serverName, len(tools))
-						if len(tools) > 0 {
-							hasMCPTools = true
-							for _, t := range tools {
-								log.Printf("[AskTroubleshoot.MCP] Tool: %s - %s", t.Name, t.Description)
-							}
-							break
-						}
-					}
-				}
-			}
-		} else {
-			log.Printf("[AskTroubleshoot.MCP] MCP Manager is nil!")
-		}
-
-		if !hasMCPTools {
-			log.Printf("[AskTroubleshoot] No MCP tools available")
-			externalAnswer = "## MCP 诊断结果\n\n**当前没有可用的 MCP 诊断工具。**\n\n请确保：\n1. 已在 `mcp.json` 中正确配置 MCP 服务器\n2. MCP 服务器已正确启动\n3. MCP 服务器提供了诊断工具\n\n您可以在设置页面查看 MCP 服务器状态。"
-			return
-		}
-
-		resp, err := s.RunAgent(ctx, AgentRunOptions{
-			Question:     problem,
-			KnowledgeDir: "", // MCP 诊断不需要知识库
-			SystemPrompt: `你是外部诊断工具的调用助手。
-
-任务：
-1. 调用 MCP 工具获取诊断信息
-2. 根据返回结果，推测可能导致问题的原因
-3. 提供可能有用的日志关键词或命令
-
-输出格式：
-### 可能原因
-- 列出 2-3 个最可能的原因
-
-### 日志关键词
-- 列出可用于定位问题的日志关键词
-
-### 建议命令
-- 列出相关的排查命令
-
-规则：
-- 必须使用 MCP 工具，不要编造
-- 用中文回答
-- 简洁直接，不要冗余`,
-			RetryMax:     5,
-			EnableMCP:    true, // MCP 诊断使用 MCP 工具
-		})
-		if err != nil {
-			externalErr = err
-			return
-		}
-		externalAnswer = normalizeAgentResponse(resp)
-	}()
-
-	// 等待知识库问答完成（这是主要结果，必须等待）
-	<-opsCopilotDone
-
-	// 设置知识库问答结果
-	if opsCopilotErr != nil {
-		log.Printf("[AskTroubleshoot] OpsCopilot error: %v", opsCopilotErr)
-		result.OpsCopilotAnswer = fmt.Sprintf("知识库分析失败: %v", opsCopilotErr)
-		result.OpsCopilotReady = false
-	} else {
-		result.OpsCopilotAnswer = opsCopilotAnswer
-		result.OpsCopilotReady = true
-	}
-
-	// 等待 MCP 结果，但设置超时（最多等待 30 秒）
-	select {
-	case <-mcpDone:
-		// MCP 完成
-		if externalErr != nil {
-			log.Printf("[AskTroubleshoot] MCP error: %v", externalErr)
-			result.ExternalError = fmt.Sprintf("MCP 诊断失败: %v", externalErr)
-			result.ExternalAnswer = ""
-			result.ExternalReady = false
-		} else {
-			result.ExternalAnswer = externalAnswer
-			result.ExternalReady = true
-		}
-	case <-time.After(30 * time.Second):
-		// MCP 超时，先返回知识库结果
-		log.Printf("[AskTroubleshoot] MCP timeout after 30s, returning LLM result first")
-		result.ExternalAnswer = "MCP 诊断正在进行中，请稍后刷新查看结果..."
-		result.ExternalReady = false
-	}
-
-	// 生成综合答复
-	if result.OpsCopilotReady && result.ExternalReady {
-		integratedPrompt := fmt.Sprintf(`请综合以下诊断信息，输出格式化的排查报告。
-
-## 知识库分析
-%s
-
-## 外部工具分析
-%s
-
-## 输出要求
-按以下格式输出，不要添加额外内容：
-
-### 问题分析
-- 简要总结问题本质
-
-### 可能原因
-- 列出 2-3 个最可能的原因
-
-### 日志关键词
-- 列出可用于定位的关键词
-
-### 建议操作
-- 列出具体排查步骤或命令`, result.OpsCopilotAnswer, result.ExternalAnswer)
-
-		integratedResp, err := s.fastProvider.ChatCompletion(ctx, []llm.ChatMessage{
-			{Role: "system", Content: "你是运维诊断助手，负责综合多个来源的信息生成简洁的排查报告。用中文回答。"},
-			{Role: "user", Content: integratedPrompt},
-		})
-		if err != nil {
-			log.Printf("[AskTroubleshoot] Integrated answer error: %v", err)
-			result.IntegratedAnswer = "综合答复生成失败"
-			result.IntegratedReady = false
-		} else {
-			result.IntegratedAnswer = integratedResp
-			result.IntegratedReady = true
-		}
-	} else {
-		// 如果 MCP 未就绪，使用知识库结果作为综合答复
-		result.IntegratedAnswer = result.OpsCopilotAnswer
-		result.IntegratedReady = result.OpsCopilotReady
-	}
-
-	// 返回 JSON 格式
-	jsonData, err := json.Marshal(result)
+	resp, err := s.RunAgent(ctx, AgentRunOptions{
+		Question:     problem,
+		KnowledgeDir: knowledgeDir,
+		SystemPrompt: prompt,
+		RetryMax:     5,
+		Catalog:      s.catalog,
+	})
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal result: %w", err)
+		return "", fmt.Errorf("故障排查失败: %w", err)
 	}
-	return string(jsonData), nil
+
+	return normalizeAgentResponse(resp), nil
 }
 
 func (s *AIService) GenerateConclusion(timeline string, rootCause string) (string, error) {

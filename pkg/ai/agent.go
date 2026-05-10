@@ -8,7 +8,6 @@ import (
 	"log"
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/llm"
-	"opscopilot/pkg/mcp"
 	"opscopilot/pkg/tools"
 	knowledgetools "opscopilot/pkg/tools/knowledge"
 	"os"
@@ -26,7 +25,6 @@ type AgentRunOptions struct {
 	KnowledgeDir string
 	SystemPrompt string
 	RetryMax     int
-	EnableMCP    bool               // 是否启用 MCP 工具增强
 	Catalog      *knowledge.Catalog // 知识库目录（注入 Agent 系统提示）
 }
 
@@ -50,7 +48,6 @@ const agentBasePrompt = "你是 OpsCopilot 运维诊断助手。你可以查阅�
 	"- 如果目录中没有与用户问题相关的场景，如实告知用户知识库中暂无相关排障文档，不要凭空编造排查建议\n" +
 	"- 输出 Markdown 格式，用 ## 分节，命令用 ```bash 代码块\n" +
 	"- 用中文回答\n" +
-	"- 当调用 MCP 工具时，提供清晰结构化的问题描述\n" +
 	"- Always follow additional system instructions about output format."
 
 // RunAgent executes the ReAct loop
@@ -65,37 +62,6 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 
 	// 构建LLM工具列表
 	llmTools := registry.ToLLMTools()
-
-	// 添加 MCP 工具（如果启用且可用）
-	// 优先使用 MCP Manager，如果没有则使用单个 mcpClient
-	if opts.EnableMCP {
-		if s.mcpManager != nil {
-			clients := s.mcpManager.GetAllClients()
-			for serverName, client := range clients {
-				if client.IsReady() {
-					mcpTools, err := client.ListTools(ctx)
-					if err != nil {
-						log.Printf("[Agent][%s] Warning: Failed to list MCP tools from %s: %v", runID, serverName, err)
-					} else if len(mcpTools) > 0 {
-						log.Printf("[Agent][%s] Adding %d MCP tools from %s to agent (MCP enabled)", runID, len(mcpTools), serverName)
-						mcpLLMTools := mcp.ToLLMTools(mcpTools)
-						llmTools = append(llmTools, mcpLLMTools...)
-					}
-				}
-			}
-		} else if s.mcpClient != nil && s.mcpClient.IsReady() {
-			mcpTools, err := s.mcpClient.ListTools(ctx)
-			if err != nil {
-				log.Printf("[Agent][%s] Warning: Failed to list MCP tools: %v", runID, err)
-			} else if len(mcpTools) > 0 {
-				log.Printf("[Agent][%s] Adding %d MCP tools to agent (MCP enabled)", runID, len(mcpTools))
-				mcpLLMTools := mcp.ToLLMTools(mcpTools)
-				llmTools = append(llmTools, mcpLLMTools...)
-			}
-		}
-	} else {
-		log.Printf("[Agent][%s] MCP tools disabled by user", runID)
-	}
 
 	// 合并 system messages 为一个，避免某些模型报错 "System message must be at the beginning"
 	var systemPromptBuilder strings.Builder
@@ -207,78 +173,6 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 					} else {
 						toolResult = result
 						log.Printf("[Agent][%s] ToolOk name=%s cost=%s resultLen=%d", runID, tc.Function.Name, toolCost, len(toolResult))
-					}
-				}
-			} else if mcp.IsMCPTool(tc.Function.Name) {
-				// MCP工具处理
-				log.Printf("[Agent][%s] Executing MCP tool: %s", runID, tc.Function.Name)
-				emitStatus(ctx, runID, "mcp_call", fmt.Sprintf("正在调用 MCP 工具: %s...", tc.Function.Name))
-
-				var args map[string]interface{}
-				if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
-					toolResult = fmt.Sprintf("Error parsing MCP tool arguments: %v", err)
-					log.Printf("[Agent][%s] MCPToolErr name=%s parseArgsErr=%v", runID, tc.Function.Name, err)
-				} else {
-					// 尝试从 MCP Manager 查找能处理此工具的客户端
-					var result string
-					var err error
-
-					if s.mcpManager != nil {
-						clients := s.mcpManager.GetAllClients()
-						// 遍历所有客户端，找到能处理此工具的
-						for serverName, client := range clients {
-							if client.IsReady() {
-								// 先列出工具，看是否包含此工具
-								mcpTools, listErr := client.ListTools(ctx)
-								if listErr != nil {
-									continue
-								}
-
-								// 检查工具是否在这个客户端中
-								found := false
-								for _, tool := range mcpTools {
-									if tool.Name == tc.Function.Name {
-										found = true
-										break
-									}
-								}
-
-								if found {
-									toolAt := time.Now()
-									result, err = client.CallTool(ctx, tc.Function.Name, args)
-									toolCost := time.Since(toolAt)
-									if err != nil {
-										toolResult = mcp.FormatToolCallResult(tc.Function.Name, "", err)
-										log.Printf("[Agent][%s] MCPToolErr name=%s server=%s cost=%s err=%v", runID, tc.Function.Name, serverName, toolCost, err)
-									} else {
-										toolResult = mcp.FormatToolCallResult(tc.Function.Name, result, nil)
-										log.Printf("[Agent][%s] MCPToolOk name=%s server=%s cost=%s resultLen=%d", runID, tc.Function.Name, serverName, toolCost, len(result))
-									}
-									break
-								}
-							}
-						}
-
-						// 如果所有客户端都无法处理，返回错误
-						if result == "" && err == nil {
-							toolResult = fmt.Sprintf("Error: No MCP server found that can handle tool %s", tc.Function.Name)
-							log.Printf("[Agent][%s] MCPToolErr name=%s noServerFound=true", runID, tc.Function.Name)
-						}
-					} else if s.mcpClient != nil && s.mcpClient.IsReady() {
-						// 回退到单个客户端模式
-						toolAt := time.Now()
-						result, err = s.mcpClient.CallTool(ctx, tc.Function.Name, args)
-						toolCost := time.Since(toolAt)
-						if err != nil {
-							toolResult = mcp.FormatToolCallResult(tc.Function.Name, "", err)
-							log.Printf("[Agent][%s] MCPToolErr name=%s cost=%s err=%v", runID, tc.Function.Name, toolCost, err)
-						} else {
-							toolResult = mcp.FormatToolCallResult(tc.Function.Name, result, nil)
-							log.Printf("[Agent][%s] MCPToolOk name=%s cost=%s resultLen=%d", runID, tc.Function.Name, toolCost, len(result))
-						}
-					} else {
-						toolResult = fmt.Sprintf("Error: MCP not available for tool %s", tc.Function.Name)
-						log.Printf("[Agent][%s] MCPToolErr name=%s notAvailable=true", runID, tc.Function.Name)
 					}
 				}
 			} else {
@@ -430,17 +324,12 @@ func inferNextStepMessage(toolCalls []llm.ToolCall, step, maxSteps int) string {
 	// 分析上一轮调用了哪些工具
 	grepCount := 0
 	readCount := 0
-	mcpCount := 0
 	for _, tc := range toolCalls {
 		switch {
 		case tc.Function.Name == "grep_knowledge":
 			grepCount++
 		case tc.Function.Name == "read_knowledge_file":
 			readCount++
-		case tc.Function.Name == "list_files":
-			// noop
-		default:
-			mcpCount++
 		}
 	}
 
@@ -451,8 +340,6 @@ func inferNextStepMessage(toolCalls []llm.ToolCall, step, maxSteps int) string {
 		return fmt.Sprintf("正在根据搜索结果进一步分析...%s", stepHint)
 	case readCount > 0:
 		return fmt.Sprintf("正在综合文档内容...%s", stepHint)
-	case mcpCount > 0:
-		return fmt.Sprintf("正在分析诊断结果...%s", stepHint)
 	default:
 		return fmt.Sprintf("正在思考下一步...%s", stepHint)
 	}
