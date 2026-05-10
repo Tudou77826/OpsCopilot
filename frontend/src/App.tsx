@@ -112,7 +112,7 @@ function App() {
             // Listen for session-disconnected events (保留会话，不关闭tab)
             // @ts-ignore
             cancelDisconnected = window.runtime.EventsOn("session-disconnected", (event: SessionDisconnectedEvent) => {
-                console.log("[App] Session disconnected:", event);
+                console.debug("[App] Session disconnected:", event);
                 setTerminals(prev => prev.map(t =>
                     t.id === event.sessionId
                         ? { ...t, status: SessionStatus.DISCONNECTED, disconnectReason: event.message }
@@ -123,7 +123,7 @@ function App() {
             // Listen for confirm-close event from backend
             // @ts-ignore
             cancelConfirmClose = window.runtime.EventsOn("confirm-close", (data: any) => {
-                console.log("[App] Received confirm-close event:", data);
+                console.debug("[App] Received confirm-close event:", data);
                 setConfirmCloseMessage(data.message || "确定要关闭应用吗？");
                 setIsConfirmCloseOpen(true);
             });
@@ -586,7 +586,7 @@ function App() {
     };
 
     const handleConfirmClose = () => {
-        console.log("[App] User confirmed close");
+        console.debug("[App] User confirmed close");
         setIsConfirmCloseOpen(false);
         // Call backend to force quit
         // @ts-ignore
@@ -597,7 +597,7 @@ function App() {
     };
 
     const handleCancelClose = () => {
-        console.log("[App] User cancelled close");
+        console.debug("[App] User cancelled close");
         setIsConfirmCloseOpen(false);
     };
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"strings"
 	"time"
@@ -31,11 +32,14 @@ func (c *Client) SSHClient() *ssh.Client {
 }
 
 func NewClient(config *ConnectConfig) (*Client, error) {
+	slog.Info("ssh connecting", "host", config.Host, "port", config.Port, "user", config.User, "bastion", config.Bastion != nil)
+
 	// 递归建立 Bastion 连接
 	var bastionClient *Client // Change type to *Client to use dialViaNetcat
 	if config.Bastion != nil {
 		bastion, err := NewClient(config.Bastion)
 		if err != nil {
+			slog.Error("ssh bastion connect failed", "host", config.Bastion.Host, "error", err)
 			return nil, fmt.Errorf("failed to connect to bastion: %w", err)
 		}
 		bastionClient = bastion
@@ -95,10 +99,12 @@ func NewClient(config *ConnectConfig) (*Client, error) {
 		// 直连
 		client, err = ssh.Dial("tcp", addr, sshConfig)
 		if err != nil {
+			slog.Error("ssh direct connect failed", "host", config.Host, "error", err)
 			return nil, fmt.Errorf("failed to dial: %w", err)
 		}
 	}
 
+	slog.Info("ssh connected", "host", config.Host, "user", config.User, "bastion", config.Bastion != nil)
 	return &Client{client: client}, nil
 }
 

@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
@@ -27,20 +27,20 @@ func NewSCPTransport(client *ssh.Client) *SCPTransport {
 func (t *SCPTransport) Check(ctx context.Context) (bool, string, error) {
 	out, err := t.run(ctx, "command -v scp >/dev/null 2>&1 && echo 1 || echo 0")
 	if err != nil {
-		log.Printf("[SCP] 检查 SCP 可用性: 错误 (%v)", err)
+		slog.Debug("scp availability check error", "error", err)
 		return false, "", toTransferError(err)
 	}
 	if strings.TrimSpace(out) == "1" {
-		log.Printf("[SCP] 检查 SCP 可用性: 可用")
+		slog.Info("scp available")
 		return true, "", nil
 	}
-	log.Printf("[SCP] 检查 SCP 可用性: 不可用（对端未安装 scp）")
+	slog.Debug("scp not available")
 	return false, "对端未安装 scp", nil
 }
 
 func (t *SCPTransport) Upload(ctx context.Context, localPath, remotePath string, progress func(Progress)) (TransferResult, error) {
 	lp := filepath.Clean(localPath)
-	log.Printf("[SCP] 上传开始: %s -> %s", lp, remotePath)
+	slog.Info("scp upload started", "src", lp, "dst", remotePath)
 	f, err := os.Open(lp)
 	if err != nil {
 		return TransferResult{}, toTransferError(err)
@@ -124,7 +124,7 @@ func (t *SCPTransport) Upload(ctx context.Context, localPath, remotePath string,
 		return TransferResult{}, toTransferError(err)
 	}
 
-	log.Printf("[SCP] 上传完成: %s -> %s (传输=%d 字节)", lp, remotePath, n)
+	slog.Info("scp upload completed", "src", lp, "dst", remotePath, "bytes", n)
 	return TransferResult{Bytes: n}, nil
 }
 
@@ -134,7 +134,7 @@ func (t *SCPTransport) Download(ctx context.Context, remotePath, localPath strin
 		return TransferResult{}, &TransferError{Code: ErrorCodeUnknown, Message: "远端路径为空"}
 	}
 
-	log.Printf("[SCP] 下载开始: %s -> %s", rp, localPath)
+	slog.Info("scp download started", "src", rp, "dst", localPath)
 
 	cmd := "scp -f " + shellSingleQuote(rp)
 
@@ -221,7 +221,7 @@ func (t *SCPTransport) Download(ctx context.Context, remotePath, localPath strin
 		return TransferResult{}, toTransferError(err)
 	}
 
-	log.Printf("[SCP] 下载完成: %s -> %s (传输=%d 字节)", rp, localPath, n)
+	slog.Info("scp download completed", "src", rp, "dst", localPath, "bytes", n)
 	return TransferResult{Bytes: n}, nil
 }
 

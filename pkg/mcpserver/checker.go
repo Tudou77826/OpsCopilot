@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
 )
@@ -98,7 +99,7 @@ func NewCommandChecker() *CommandChecker {
 	for _, pattern := range allowedCommands {
 		compiled, err := regexp.Compile(pattern)
 		if err != nil {
-			fmt.Printf("[MCP] Warning: Invalid pattern %s: %v\n", pattern, err)
+			slog.Warn("mcp invalid whitelist pattern", "pattern", pattern, "error", err)
 			continue
 		}
 		c.allowedPatterns = append(c.allowedPatterns, compiled)

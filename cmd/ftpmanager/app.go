@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,10 +37,10 @@ func (a *FTPApp) startup(ctx context.Context) {
 		dir := filepath.Dir(a.ipcTokenFile)
 		client, err := ftipc.NewClientFromTokenFile(dir)
 		if err != nil {
-			log.Printf("[FTP] IPC 连接失败: %v", err)
+			slog.Error("ftp ipc connection failed", "error", err)
 		} else {
 			a.ipcClient = client
-			log.Println("[FTP] 已通过 IPC 连接主应用")
+			slog.Info("ftp ipc connected to main app")
 		}
 	}
 }
@@ -247,7 +247,7 @@ func (a *FTPApp) callIPCGetSessions() (string, bool) {
 	}
 	resp, err := a.ipcClient.GetSessions()
 	if err != nil {
-		log.Printf("[FTP] IPC 获取会话失败: %v", err)
+		slog.Error("ftp ipc get sessions failed", "error", err)
 		return "", false
 	}
 	return normalizeIPCResponse(resp), true
@@ -260,7 +260,7 @@ func (a *FTPApp) callIPCAction(action string, req ftipc.IPCRequest) (string, boo
 	req.Action = action
 	resp, err := a.ipcClient.DoAction(req)
 	if err != nil {
-		log.Printf("[FTP] IPC 动作失败 action=%s err=%v", action, err)
+		slog.Error("ftp ipc action failed", "action", action, "error", err)
 		return "", false
 	}
 	raw := normalizeIPCResponse(resp)

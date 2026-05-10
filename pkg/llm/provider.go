@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"strings"
 	"time"
+
+	"opscopilot/pkg/logging"
 
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -170,7 +172,7 @@ func (p *OpenAIProvider) ChatWithTools(ctx context.Context, messages []ChatMessa
 	}
 
 	// Logging
-	log.Printf("\n========== [LLM Request] ==========\nModel: %s\nNumMessages: %d\nNumTools: %d\n===================================", p.model, len(reqMessages), len(reqTools))
+	slog.Debug("llm request", "model", p.model, "messages", len(reqMessages), "tools", len(reqTools))
 
 	// 3. Make Request
 	req := openai.ChatCompletionRequest{
@@ -181,7 +183,7 @@ func (p *OpenAIProvider) ChatWithTools(ctx context.Context, messages []ChatMessa
 
 	resp, err := p.client.CreateChatCompletion(ctx, req)
 	if err != nil {
-		log.Printf("[OpenAIProvider] Error: %v cost=%s", err, time.Since(startAt))
+		slog.Error("llm error", "model", p.model, "error", err, "cost", logging.Cost(time.Since(startAt)))
 		return nil, err
 	}
 
@@ -212,10 +214,10 @@ func (p *OpenAIProvider) ChatWithTools(ctx context.Context, messages []ChatMessa
 	}
 
 	// Log concise response info
-	log.Printf("\n========== [LLM Response] ==========\nCost: %s\nContentLen: %d\nToolCalls: %d\n====================================", time.Since(startAt), len(result.Content), len(result.ToolCalls))
+	slog.Debug("llm response", "model", p.model, "cost", logging.Cost(time.Since(startAt)), "contentLen", len(result.Content), "toolCalls", len(result.ToolCalls))
 	if len(result.ToolCalls) > 0 {
 		for i, tc := range result.ToolCalls {
-			log.Printf("[LLM ToolCall#%d] name=%s argsLen=%d id=%s", i+1, tc.Function.Name, len(tc.Function.Arguments), tc.ID)
+			slog.Debug("llm toolcall", "index", i+1, "name", tc.Function.Name, "argsLen", len(tc.Function.Arguments))
 		}
 	}
 
@@ -264,11 +266,11 @@ func (p *OpenAIProvider) streamChatCompletion(ctx context.Context, messages []Ch
 		label = "stream (no-thinking)"
 	}
 
-	log.Printf("[OpenAIProvider] Starting %s: model=%s numMessages=%d", label, p.model, len(reqMessages))
+	slog.Debug("llm stream starting", "label", label, "model", p.model, "messages", len(reqMessages))
 
 	stream, err := p.client.CreateChatCompletionStream(ctx, req)
 	if err != nil {
-		log.Printf("[OpenAIProvider] Stream error: %v cost=%s", err, time.Since(startAt))
+		slog.Error("llm stream error", "model", p.model, "error", err, "cost", logging.Cost(time.Since(startAt)))
 		return "", err
 	}
 	defer stream.Close()
@@ -283,7 +285,7 @@ func (p *OpenAIProvider) streamChatCompletion(ctx context.Context, messages []Ch
 			if strings.Contains(err.Error(), "stream") && strings.Contains(err.Error(), "finish") {
 				break
 			}
-			log.Printf("[OpenAIProvider] Stream recv error: %v", err)
+			slog.Warn("llm stream recv error", "error", err)
 			break
 		}
 
@@ -299,6 +301,6 @@ func (p *OpenAIProvider) streamChatCompletion(ctx context.Context, messages []Ch
 	}
 
 	result := fullContent.String()
-	log.Printf("[OpenAIProvider] %s done: cost=%s contentLen=%d", label, time.Since(startAt), len(result))
+	slog.Debug("llm stream done", "label", label, "model", p.model, "cost", logging.Cost(time.Since(startAt)), "contentLen", len(result))
 	return result, nil
 }

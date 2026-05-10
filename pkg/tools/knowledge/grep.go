@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/tools"
 	"path/filepath"
@@ -70,9 +70,9 @@ func (t *GrepTool) Execute(ctx context.Context, args map[string]interface{}, emi
 	// 尝试编译为正则（支持 OR: "timeout|504|超时"），失败则退化为子串匹配
 	re, regexErr := regexp.Compile("(?i)" + pattern)
 	if regexErr != nil {
-		log.Printf("[Grep] Regex compile failed, falling back to substring: pattern=%q err=%v", pattern, regexErr)
+		slog.Warn("grep regex compile failed, falling back to substring", "pattern", pattern, "error", regexErr)
 	} else {
-		log.Printf("[Grep] Using regex match: pattern=%q files=%d", pattern, 0)
+		slog.Debug("grep using regex match", "pattern", pattern)
 	}
 	matchLine := func(line string) bool {
 		if regexErr == nil {
@@ -111,7 +111,7 @@ func (t *GrepTool) Execute(ctx context.Context, args map[string]interface{}, emi
 
 		content, err := knowledge.ReadFile(t.knowledgeDir, relPath)
 		if err != nil {
-			log.Printf("[Grep] Skip file %s: %v", relPath, err)
+			slog.Debug("grep skip file", "path", relPath, "error", err)
 			continue
 		}
 
@@ -140,7 +140,7 @@ func (t *GrepTool) Execute(ctx context.Context, args map[string]interface{}, emi
 		sb.WriteString(fmt.Sprintf("... (%d more matches, showing first %d)", totalMatches-maxResults, maxResults))
 	}
 
-	log.Printf("[Grep] pattern=%q files=%d matches=%d returned=%d", pattern, len(files), totalMatches, len(results))
+	slog.Debug("grep result", "pattern", pattern, "files", len(files), "matches", totalMatches, "returned", len(results))
 	return sb.String(), nil
 }
 

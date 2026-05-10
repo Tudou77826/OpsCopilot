@@ -3,7 +3,7 @@ package script
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -221,12 +221,12 @@ func (m *Manager) ReplayScript(scriptID string, sessionID string) error {
 
 // ReplayScriptWithVars 带变量值的回放脚本
 func (m *Manager) ReplayScriptWithVars(scriptID string, sessionID string, varValues map[string]string) error {
-	log.Printf("[ScriptReplay] Starting replay: scriptID=%s, sessionID=%s", scriptID, sessionID)
+	slog.Info("scriptReplay starting", "scriptId", scriptID, "sessionId", sessionID)
 
 	// 加载脚本
 	scriptData, err := m.LoadScript(scriptID)
 	if err != nil {
-		log.Printf("[ScriptReplay] Failed to load script: %v", err)
+		slog.Error("scriptreplay Failed to load script", "error", err)
 		return err
 	}
 
@@ -247,7 +247,7 @@ func (m *Manager) ReplayScriptWithVars(scriptID string, sessionID string, varVal
 	}
 
 	// 降级到旧的命令列表模式
-	log.Printf("[ScriptReplay] Loaded script '%s' with %d commands (legacy mode)", scriptData.Name, len(scriptData.Commands))
+	slog.Info("scriptReplay loaded script", "name", scriptData.Name, "commands", len(scriptData.Commands))
 	return m.replayCommands(scriptData.Commands, ctx, sessionID)
 }
 
@@ -267,7 +267,7 @@ func (m *Manager) replayCommands(commands []ScriptCommand, ctx *PlaybackContext,
 
 	for i, cmd := range commands {
 		if !cmd.Enabled {
-			log.Printf("[ScriptReplay] Skipping disabled command %d: %s", i, cmd.Content)
+			slog.Debug("scriptReplay skipping disabled command", "index", i, "cmd", cmd.Content)
 			continue
 		}
 
@@ -276,16 +276,16 @@ func (m *Manager) replayCommands(commands []ScriptCommand, ctx *PlaybackContext,
 		}
 
 		command := SubstituteVariables(cmd.Content, ctx.Variables)
-		log.Printf("[ScriptReplay] Executing command %d: %s", i, command)
+		slog.Debug("scriptReplay executing command", "index", i, "cmd", command)
 		if err := m.commandSender.SendCommand(sessionID, command+"\n"); err != nil {
-			log.Printf("[ScriptReplay] Failed to execute command '%s': %v", cmd.Content, err)
+			slog.Error("scriptReplay execute failed", "cmd", cmd.Content, "error", err)
 			return fmt.Errorf("failed to execute command '%s': %w", cmd.Content, err)
 		}
 
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	log.Printf("[ScriptReplay] Replay completed successfully")
+	slog.Debug("scriptreplay Replay completed successfully")
 	return nil
 }
 

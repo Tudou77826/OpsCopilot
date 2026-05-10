@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -46,7 +47,7 @@ func (m *Manager) Load() error {
 
 	// 检查配置文件是否存在
 	if _, err := os.Stat(m.configPath); os.IsNotExist(err) {
-		fmt.Printf("[MCP.Load] Config file not found: %s\n", m.configPath)
+		slog.Debug("mcp config file not found", "path", m.configPath)
 		// 配置文件不存在，创建空配置
 		m.config = &MCPConfig{
 			Servers: make(map[string]MCPServerConfig),
@@ -54,13 +55,13 @@ func (m *Manager) Load() error {
 		return nil
 	}
 
-	fmt.Printf("[MCP.Load] Loading config from: %s\n", m.configPath)
+	slog.Debug("mcp loading config", "path", m.configPath)
 	data, err := os.ReadFile(m.configPath)
 	if err != nil {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	fmt.Printf("[MCP.Load] Config content: %s\n", string(data))
+	// SECURITY: Do NOT log config content (may contain env secrets)
 
 	var config MCPConfig
 	if err := json.Unmarshal(data, &config); err != nil {
@@ -68,9 +69,9 @@ func (m *Manager) Load() error {
 	}
 
 	m.config = &config
-	fmt.Printf("[MCP.Load] Loaded %d server configs\n", len(config.Servers))
+	slog.Info("mcp config loaded", "servers", len(config.Servers))
 	for name, cfg := range config.Servers {
-		fmt.Printf("[MCP.Load] Server '%s': command=%s, args=%v\n", name, cfg.Command, cfg.Args)
+		slog.Debug("mcp server configured", "name", name, "command", cfg.Command, "args", cfg.Args)
 	}
 	return nil
 }
@@ -128,7 +129,7 @@ func (m *Manager) GetStatus() map[string]bool {
 	status := make(map[string]bool)
 	for name, client := range m.clients {
 		status[name] = client.IsReady()
-		fmt.Printf("[MCP.GetStatus] Server %s: ready=%v\n", name, client.IsReady())
+		slog.Debug("mcp server status", "name", name, "ready", client.IsReady())
 	}
 
 	// 添加配置了但未启动的服务器
@@ -136,14 +137,12 @@ func (m *Manager) GetStatus() map[string]bool {
 		for name := range m.config.Servers {
 			if _, exists := status[name]; !exists {
 				status[name] = false
-				fmt.Printf("[MCP.GetStatus] Configured server %s: not started (added as false)\n", name)
+				slog.Debug("mcp server not started", "name", name)
 			}
 		}
-	} else {
-		fmt.Println("[MCP.GetStatus] Config is nil")
 	}
 
-	fmt.Printf("[MCP.GetStatus] Final status: %+v\n", status)
+	slog.Debug("mcp status result", "total", len(status))
 	return status
 }
 
@@ -180,15 +179,14 @@ func (m *Manager) StartAll() error {
 			cmd = filepath.Join(baseDir, cmd)
 		}
 
-		fmt.Printf("[MCP] Starting server %s with command: %s, args: %v\n", name, cmd, serverConfig.Args)
+		slog.Info("mcp starting server", "name", name, "command", cmd, "args", serverConfig.Args)
 		if err := client.Start(ctx, cmd, serverConfig.Args...); err != nil {
-			// 记录错误但继续启动其他服务器
-			fmt.Printf("[MCP] Failed to start server %s: %v\n", name, err)
+			slog.Error("mcp failed to start server", "name", name, "error", err)
 			continue
 		}
 
 		m.clients[name] = client
-		fmt.Printf("[MCP] Server %s started successfully\n", name)
+		slog.Info("mcp server started", "name", name)
 	}
 
 	return nil
@@ -203,7 +201,7 @@ func (m *Manager) StopAll() error {
 	ctx := context.Background()
 	for name, client := range m.clients {
 		if err := client.Stop(ctx); err != nil {
-			fmt.Printf("[MCP] Error stopping server %s: %v\n", name, err)
+			slog.Error("mcp error stopping server", "name", name, "error", err)
 			lastErr = err
 		}
 		delete(m.clients, name)

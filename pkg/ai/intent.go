@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"opscopilot/pkg/config"
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/llm"
+	"opscopilot/pkg/logging"
 	"opscopilot/pkg/sshclient"
 	"regexp"
 	"strings"
@@ -96,15 +97,15 @@ func (s *AIService) ParseConnectIntent(input string) ([]sshclient.ConnectConfig,
 		{Role: "user", Content: input},
 	}
 
-	log.Printf("[AIService] Sending request to LLM: %s", input)
+	slog.Debug("ai sending request to LLM", "input", logging.Truncate(input, 100))
 
 	resp, err := s.fastProvider.ChatCompletion(context.Background(), messages)
 	if err != nil {
-		log.Printf("[AIService] Provider error: %v", err)
+		slog.Error("ai provider error", "error", err)
 		return nil, fmt.Errorf("AI provider error: %w", err)
 	}
 
-	log.Printf("[AIService] Raw response from LLM: %s", resp)
+	slog.Debug("ai raw response", "response", logging.Truncate(resp, 200))
 
 	// 尝试解析 JSON
 	var configs []sshclient.ConnectConfig
@@ -113,7 +114,7 @@ func (s *AIService) ParseConnectIntent(input string) ([]sshclient.ConnectConfig,
 	cleanedResp := CleanJSONResponse(resp)
 
 	if err := json.Unmarshal([]byte(cleanedResp), &configs); err != nil {
-		log.Printf("[AIService] JSON parse error: %v. Cleaned response: %s", err, cleanedResp)
+		slog.Warn("ai json parse error", "error", err, "response", logging.Truncate(cleanedResp, 200))
 		return nil, fmt.Errorf("failed to parse AI response as JSON: %v. Raw: %s", err, resp)
 	}
 
@@ -219,7 +220,7 @@ func (s *AIService) GenerateConclusion(timeline string, rootCause string) (strin
 		{Role: "user", Content: content},
 	}
 
-	log.Printf("[AIService] Generating conclusion")
+	slog.Info("ai generating conclusion")
 
 	resp, err := s.fastProvider.ChatCompletion(context.Background(), messages)
 	if err != nil {
@@ -241,7 +242,7 @@ func (s *AIService) GenerateConclusionStream(ctx context.Context, timeline strin
 		{Role: "user", Content: content},
 	}
 
-	log.Printf("[AIService] Generating conclusion (stream, no-thinking)")
+	slog.Info("ai generating conclusion stream")
 
 	// 优先使用 OpenAIProvider 的 no-thinking 专用方法
 	if p, ok := s.fastProvider.(*llm.OpenAIProvider); ok {
@@ -268,7 +269,7 @@ func (s *AIService) PolishContent(content string) (string, error) {
 		{Role: "user", Content: content},
 	}
 
-	log.Printf("[AIService] Polishing content")
+	slog.Info("ai polishing content")
 
 	resp, err := s.fastProvider.ChatCompletion(context.Background(), messages)
 	if err != nil {

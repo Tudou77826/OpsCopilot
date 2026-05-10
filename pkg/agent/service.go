@@ -4,6 +4,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"opscopilot/pkg/bridge"
@@ -115,7 +116,7 @@ func (s *ServiceImpl) handleEvent(ctx context.Context, event bridge.Event) error
 
 	for _, h := range handlers {
 		if err := h(event.Payload); err != nil {
-			fmt.Printf("event handler error for %s: %v\n", event.Type, err)
+			slog.Error("event handler error", "type", event.Type, "error", err)
 		}
 	}
 

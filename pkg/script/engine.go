@@ -2,7 +2,7 @@ package script
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"regexp"
 	"strings"
 	"time"
@@ -47,7 +47,7 @@ func ExecuteSteps(steps []ScriptStep, ctx *PlaybackContext, sender CommandSender
 
 		step := &steps[i]
 		if !step.Enabled {
-			log.Printf("[Engine] Skipping disabled command: %s", step.Command)
+			slog.Debug("engine Skipping disabled command", "detail", step.Command)
 			continue
 		}
 
@@ -56,7 +56,7 @@ func ExecuteSteps(steps []ScriptStep, ctx *PlaybackContext, sender CommandSender
 		}
 
 		command := SubstituteVariables(step.Command, ctx.Variables)
-		log.Printf("[Engine] Executing command: %s", command)
+		slog.Debug("engine Executing command", "detail", command)
 
 		if err := sender.SendCommand(sessionID, command+"\n"); err != nil {
 			return fmt.Errorf("failed to execute command '%s': %w", step.Command, err)

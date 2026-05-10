@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,6 +26,7 @@ import (
 	"opscopilot/pkg/ftipc"
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/llm"
+	"opscopilot/pkg/logging"
 	"opscopilot/pkg/mcp"
 	"opscopilot/pkg/mcpserver"
 	"opscopilot/pkg/recorder"
@@ -72,7 +73,7 @@ type App struct {
 func NewApp() *App {
 	configMgr := config.NewManager()
 	if err := configMgr.Load(); err != nil {
-		fmt.Printf("Warning: Failed to load config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[WARN] Failed to load config: %v\n", err)
 	}
 
 	// Initialize LLM provider using loaded config
@@ -109,13 +110,13 @@ func NewApp() *App {
 	// Initialize Saved Session Manager
 	savedMgr := sessionmanager.NewManager()
 	if err := savedMgr.Load(); err != nil {
-		fmt.Printf("Warning: Failed to load saved sessions: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[WARN] Failed to load saved sessions: %v\n", err)
 	}
 
 	// Initialize Completion Service
 	completionDB, err := completion.NewDatabase()
 	if err != nil {
-		fmt.Printf("Warning: Failed to initialize completion database: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[WARN] Failed to initialize completion database: %v\n", err)
 	}
 	completionService := completion.NewService(completionDB)
 
@@ -140,7 +141,7 @@ func NewApp() *App {
 	// 初始化白名单管理器
 	whitelistPath := "command_whitelist.json"
 	if whitelistMgr, err := mcpserver.NewWhitelistManager(whitelistPath); err != nil {
-		fmt.Printf("Warning: Failed to initialize whitelist manager: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[WARN] Failed to initialize whitelist manager: %v\n", err)
 	} else {
 		app.whitelistMgr = whitelistMgr
 	}
@@ -148,7 +149,7 @@ func NewApp() *App {
 	// 初始化文件访问控制管理器
 	fileAccessPath := "file_access.json"
 	if fileAccessMgr, err := mcpserver.NewFileAccessChecker(fileAccessPath); err != nil {
-		fmt.Printf("Warning: Failed to initialize file access checker: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[WARN] Failed to initialize file access checker: %v\n", err)
 	} else {
 		app.fileAccessMgr = fileAccessMgr
 	}
@@ -160,9 +161,9 @@ func NewApp() *App {
 	knowledgeDir := app.resolveKnowledgeBase()
 	if knowledgeDir != "" {
 		if err := aiService.UpdateCatalog(knowledgeDir); err != nil {
-			fmt.Printf("Warning: Failed to build knowledge catalog: %v\n", err)
+			fmt.Fprintf(os.Stderr, "[WARN] Failed to build knowledge catalog: %v\n", err)
 		} else if aiService.GetCatalog() != nil {
-			fmt.Printf("[App] Knowledge catalog built: %d scenarios\n", aiService.GetCatalog().TotalScenarios())
+			fmt.Fprintf(os.Stderr, "[INFO] Knowledge catalog built: %d scenarios\n", aiService.GetCatalog().TotalScenarios())
 		}
 	}
 
@@ -199,17 +200,17 @@ func (a *App) getRelayTransport(sessionID string) *filetransfer.RootRelayTranspo
 
 	sess, ok := a.sessionMgr.Get(sessionID)
 	if !ok || sess.Client == nil || sess.Client.SSHClient() == nil {
-		log.Printf("[FT] getRelayTransport 会话 %s 不存在或 SSH 客户端为空", sessionID[:8])
+		slog.Debug("ft getRelayTransport session not found or SSH client nil", "session", sessionID[:8])
 		return nil
 	}
 
 	cfg, cfgOk := a.getConfig(sessionID)
 	if !cfgOk || cfg.RootPassword == "" {
-		log.Printf("[FT] getRelayTransport 会话 %s 无 root 密码配置", sessionID[:8])
+		slog.Debug("ft getRelayTransport session has no root password", "session", sessionID[:8])
 		return nil
 	}
 
-	log.Printf("[FT] getRelayTransport 会话 %s 创建新 RootRelayTransport (loginUser=%s)", sessionID[:8], cfg.User)
+	slog.Info("ft getRelayTransport created new RootRelayTransport", "session", sessionID[:8], "loginUser", cfg.User)
 	t := filetransfer.NewRootRelayTransport(sess.Client.SSHClient(), cfg.RootPassword, cfg.User)
 	if cfg.Bastion != nil {
 		t.SetSkipRelay(true)
@@ -246,7 +247,7 @@ func (a *App) getShellTransport(sessionID string, client *ssh.Client) *filetrans
 	}
 
 	// loginUser="" means we are already root, RootRelayTransport will skip su
-	log.Printf("[FT] getShellTransport 会话 %s 创建新 ShellTransport (root 直连，跳过 su)", sessionID[:8])
+	slog.Info("ft getShellTransport created new ShellTransport (root direct, skip su)", "session", sessionID[:8])
 	t := filetransfer.NewRootRelayTransport(client, "", "")
 	a.shellTransports[sessionID] = t
 	return t
@@ -260,62 +261,17 @@ func (a *App) startup(ctx context.Context) {
 	// 初始化命令提取器
 	a.commandExtractors = make(map[string]*terminal.CommandExtractor)
 
-	// 初始化日志文件
-	logDir := a.configMgr.Config.Log.Dir
+	// 初始化日志：slog + lumberjack 轮转
+	logging.Setup(logging.Config{
+		Dir:        a.configMgr.Config.Log.Dir,
+		Level:      a.configMgr.Config.Log.Level,
+		DevMode:    os.Getenv("OPSCOPILOT_DEV_MODE") == "true",
+		MaxSizeMB:  10,
+		MaxBackups: 5,
+		Compress:   true,
+	})
 
-	// 如果配置的目录是相对路径，转换为绝对路径
-	if !filepath.IsAbs(logDir) {
-		// 优先尝试获取可执行文件所在目录
-		execPath, err := os.Executable()
-		var baseDir string
-		if err == nil {
-			baseDir = filepath.Dir(execPath)
-		} else {
-			// 回退到工作目录
-			baseDir, _ = os.Getwd()
-		}
-		logDir = filepath.Join(baseDir, logDir)
-	}
-
-	// Debug print
-	fmt.Printf("[Startup] Initializing log in directory: %s\n", logDir)
-
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		fmt.Printf("[Startup] Failed to create log directory: %v\n", err)
-		return
-	}
-
-	logFile := filepath.Join(logDir, "opscopilot.log")
-	fmt.Printf("[Startup] Log file path: %s\n", logFile)
-
-	f, err := os.OpenFile(logFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		fmt.Printf("[Startup] Failed to open log file: %v\n", err)
-		return
-	}
-
-	// 同时输出到文件和控制台
-	// 注意：在 Windows GUI 应用中（wails build），os.Stdout 可能不可见或无效
-	// 为了确保安全，我们先测试写入
-	if _, err := f.WriteString(fmt.Sprintf("[Startup] Log initialized at %s\n", logDir)); err != nil {
-		fmt.Printf("[Startup] Failed to write test log: %v\n", err)
-	}
-
-	// 根据环境变量判断是否启用控制台输出
-	// 在开发模式下 (OPSCOPILOT_DEV_MODE=true)，我们希望同时看到控制台和文件日志
-	// 在生产模式下 (build)，Stdout 可能无效，因此只输出到文件
-	if os.Getenv("OPSCOPILOT_DEV_MODE") == "true" {
-		fmt.Println("[Startup] Dev mode detected: Enabling console + file logging")
-		multiWriter := io.MultiWriter(os.Stdout, f)
-		log.SetOutput(multiWriter)
-	} else {
-		// 生产模式：仅文件
-		log.SetOutput(f)
-	}
-
-	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
-
-	log.Println("App started")
+	slog.Info("app started")
 
 	// 初始化 MCP 管理器
 	// MCP 配置文件放在可执行文件所在目录（根目录）
@@ -323,33 +279,33 @@ func (a *App) startup(ctx context.Context) {
 	if execPath, err := os.Executable(); err == nil {
 		mcpConfigPath = filepath.Join(filepath.Dir(execPath), "mcp.json")
 	} else {
-		mcpConfigPath = filepath.Join(logDir, "mcp.json") // 回退到 log 目录
+		mcpConfigPath = filepath.Join(a.configMgr.Config.Log.Dir, "mcp.json") // 回退到 log 目录
 	}
-	log.Printf("[MCP] Config path: %s", mcpConfigPath)
+	slog.Info("mcp config path", "path", mcpConfigPath)
 	a.mcpManager = mcp.NewManager(mcpConfigPath)
 	if err := a.mcpManager.Load(); err != nil {
-		log.Printf("[MCP] Failed to load MCP config: %v", err)
+		slog.Error("mcp failed to load config", "error", err)
 	} else {
 		// 启动所有配置的 MCP 服务器
 		if err := a.mcpManager.StartAll(); err != nil {
-			log.Printf("[MCP] Failed to start MCP servers: %v", err)
+			slog.Error("mcp failed to start servers", "error", err)
 		} else {
-			log.Println("[MCP] MCP servers initialized successfully")
+			slog.Info("mcp servers initialized successfully")
 		}
 	}
 
 	// 启动 IPC 服务（供独立文件管理器连接）
 	a.ipcServer = ftipc.NewServer()
 	if err := a.ipcServer.Start(); err != nil {
-		log.Printf("[IPC] 启动失败: %v", err)
+		slog.Error("ipc start failed", "error", err)
 	} else {
 		a.registerFTIPCHandlers()
 		// 写入 IPC 配置到临时目录
 		tmpDir := filepath.Join(os.TempDir(), "opscopilot")
 		if err := a.ipcServer.WriteTokenFile(tmpDir); err != nil {
-			log.Printf("[IPC] 写入 token 文件失败: %v", err)
+			slog.Error("ipc failed to write token file", "error", err)
 		} else {
-			log.Printf("[IPC] 服务已启动，端口: %d", a.ipcServer.Info().Port)
+			slog.Info("ipc server started", "port", a.ipcServer.Info().Port)
 		}
 	}
 }
@@ -359,7 +315,7 @@ func (a *App) startup(ctx context.Context) {
 func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 	// If this is a forced quit, skip confirmation and allow close
 	if a.isForceQuitting {
-		log.Println("[beforeClose] Force quitting, allowing close")
+		slog.Info("beforeClose force quitting, allowing close")
 		a.cleanupMCPClient()
 		return false
 	}
@@ -373,7 +329,7 @@ func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 
 	// If there's any active work, we need to ask for confirmation
 	if hasTerminals || hasTroubleshooting {
-		log.Printf("[beforeClose] Active work detected: terminals=%d, troubleshooting=%v", len(activeSessions), hasTroubleshooting)
+		slog.Info("beforeClose active work detected", "terminals", len(activeSessions), "troubleshooting", hasTroubleshooting)
 
 		// Emit event to frontend to show custom confirmation dialog
 		var message string
@@ -396,7 +352,7 @@ func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 		return true
 	}
 
-	log.Println("[beforeClose] No active work, allowing close")
+	slog.Info("beforeClose no active work, allowing close")
 	a.cleanupMCPClient()
 	// No active work, allow close
 	return false
@@ -406,15 +362,15 @@ func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 func (a *App) cleanupMCPClient() {
 	// 停止 IPC 服务
 	if a.ipcServer != nil {
-		log.Println("[IPC] 停止 IPC 服务")
+		slog.Info("ipc stopping server")
 		if err := a.ipcServer.Stop(); err != nil {
-			log.Printf("[IPC] 停止失败: %v", err)
+			slog.Error("ipc stop failed", "error", err)
 		}
 	}
 	if a.mcpManager != nil {
-		log.Println("[MCP] Stopping MCP servers")
+		slog.Info("mcp stopping servers")
 		if err := a.mcpManager.StopAll(); err != nil {
-			log.Printf("[MCP] Error stopping MCP servers: %v", err)
+			slog.Error("mcp error stopping servers", "error", err)
 		}
 	}
 }
@@ -422,29 +378,29 @@ func (a *App) cleanupMCPClient() {
 // GetMCPStatus 获取 MCP 服务器状态（供前端调用）
 func (a *App) GetMCPStatus() string {
 	if a.mcpManager == nil {
-		log.Println("[GetMCPStatus] MCP Manager is nil")
+		slog.Debug("getMCPStatus manager is nil")
 		return `{"servers": {}}`
 	}
 
 	status := a.mcpManager.GetStatus()
-	log.Printf("[GetMCPStatus] Returning status: %+v", status)
+	slog.Debug("getMCPStatus returning status", "status", status)
 	result := map[string]interface{}{
 		"servers": status,
 	}
 
 	jsonBytes, err := json.Marshal(result)
 	if err != nil {
-		log.Printf("[GetMCPStatus] Failed to marshal: %v", err)
+		slog.Error("getMCPStatus failed to marshal", "error", err)
 		return fmt.Sprintf(`{"error": "Failed to marshal status: %v"}`, err)
 	}
 
-	log.Printf("[GetMCPStatus] Returning JSON: %s", string(jsonBytes))
+	slog.Debug("getMCPStatus returning JSON", "json", string(jsonBytes))
 	return string(jsonBytes)
 }
 
 // ForceQuit forces the application to quit without confirmation
 func (a *App) ForceQuit() {
-	log.Println("[ForceQuit] Setting force quit flag and calling runtime.Quit()")
+	slog.Info("forceQuit setting flag and calling runtime.Quit()")
 
 	// Set flag to skip confirmation on next beforeClose call
 	a.isForceQuitting = true
@@ -565,7 +521,7 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 
 	// Auto-save session to persistent storage
 	if err := a.savedSessionMgr.Upsert(*clientConfig, config.Group); err != nil {
-		fmt.Printf("Warning: Failed to auto-save session: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[WARN] Failed to auto-save session: %v\n", err)
 	}
 
 	// Read loop
@@ -633,7 +589,7 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 						if a.coreRecorder != nil {
 							// 更新最后一条命令（Tab 补全场景）
 							if a.coreRecorder.UpdateLastCommand(sessionID, cmd) {
-								log.Printf("[Recorder] Corrected command via output (tab completion): %q", cmd)
+								slog.Debug("recorder corrected command via output (tab completion)", "cmd", cmd)
 							}
 						}
 					}
@@ -648,7 +604,7 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 // ResizeTerminal resizes the PTY for a given session
 func (a *App) ResizeTerminal(sessionID string, cols int, rows int) {
 	if err := a.sessionMgr.Resize(sessionID, cols, rows); err != nil {
-		log.Printf("[ResizeTerminal] Failed to resize session %s: %v", sessionID, err)
+		slog.Warn("resizeTerminal failed to resize session", "session", sessionID, "error", err)
 	}
 }
 
@@ -677,7 +633,7 @@ func (a *App) recordInput(sessionID string, data string) {
 		"session_id": sessionID,
 	})
 	if err != nil {
-		log.Printf("[recordInput] Error recording input: %v", err)
+		slog.Warn("recordInput error recording input", "error", err)
 		return
 	}
 
@@ -689,7 +645,7 @@ func (a *App) recordInput(sessionID string, data string) {
 	// 如果命令被提交且有内容
 	if result.Committed && result.Line != "" {
 		runtime.EventsEmit(a.ctx, "script-command-recorded", result.Line)
-		log.Printf("[ScriptRecording] Recorded command from session %s: %q", sessionID, result.Line)
+		slog.Debug("scriptRecording recorded command", "session", sessionID, "cmd", result.Line)
 
 		// 设置待匹配的命令前缀（用于检测 Tab 补全修正）
 		if extractorOk && extractor != nil {
@@ -723,7 +679,7 @@ func (a *App) StopSession(rootCause string, conclusion string) string {
 		var err error
 		conclusion, err = a.aiService.GenerateConclusion(timelineStr, rootCause)
 		if err != nil {
-			log.Printf("Failed to generate conclusion: %v", err)
+			slog.Error("failed to generate conclusion", "error", err)
 			conclusion = "Failed to generate conclusion via AI."
 		}
 	}
@@ -735,7 +691,7 @@ func (a *App) StopSession(rootCause string, conclusion string) string {
 
 	// Append to troubleshooting_history.md in docs directory
 	if err := a.appendConclusionToDocs(conclusion); err != nil {
-		log.Printf("Failed to append conclusion to docs: %v", err)
+		slog.Error("failed to append conclusion to docs", "error", err)
 		return fmt.Sprintf("Session saved, but failed to update history docs: %v", err)
 	}
 
@@ -802,13 +758,13 @@ func (a *App) ArchiveSession(rootCause string, conclusion string, service string
 	if conclusion == "" {
 		timelineBytes, err := json.Marshal(currentSession.Timeline)
 		if err != nil {
-			log.Printf("Failed to marshal timeline: %v", err)
+			slog.Error("failed to marshal timeline", "error", err)
 			return toJSONError("Failed to serialize timeline")
 		}
 		timelineStr := string(timelineBytes)
 		conclusion, err = a.aiService.GenerateConclusion(timelineStr, rootCause)
 		if err != nil {
-			log.Printf("Failed to generate conclusion: %v", err)
+			slog.Error("failed to generate conclusion", "error", err)
 			return toJSONError("Failed to generate conclusion")
 		}
 	}
@@ -825,21 +781,21 @@ func (a *App) ArchiveSession(rootCause string, conclusion string, service string
 
 	relPath, err := knowledge.AppendRecord(knowledgeDir, input)
 	if err != nil {
-		log.Printf("Failed to archive session: %v", err)
+		slog.Error("failed to archive session", "error", err)
 		return toJSONError("Failed to archive session")
 	}
 
 	// 保留 recorder JSON 保存
 	if err := a.coreRecorder.StopSession(rootCause, conclusion); err != nil {
-		log.Printf("Failed to save session recording: %v", err)
+		slog.Error("failed to save session recording", "error", err)
 	}
 
 	// 重建 Catalog
 	if err := a.aiService.UpdateCatalog(knowledgeDir); err != nil {
-		log.Printf("Failed to update catalog after archive: %v", err)
+		slog.Error("failed to update catalog after archive", "error", err)
 	}
 
-	log.Printf("[ArchiveSession] Archived to %s, catalog rebuilt", relPath)
+	slog.Info("archiveSession archived", "path", relPath)
 	result, _ := json.Marshal(map[string]interface{}{
 		"success":    true,
 		"conclusion": conclusion,
@@ -949,7 +905,7 @@ func (a *App) resolveKnowledgeBase() string {
 			return configuredDir
 		}
 		// If configured dir is invalid, fall through to auto-discovery
-		log.Printf("Configured docs directory not found: %s, falling back to auto-discovery", configuredDir)
+		slog.Warn("configured docs directory not found, falling back to auto-discovery", "dir", configuredDir)
 	}
 
 	candidates := []string{"docs", "knowledge"}
@@ -994,7 +950,7 @@ func (a *App) AskAI(question string) string {
 // AskTroubleshoot handles the troubleshooting request from frontend
 func (a *App) AskTroubleshoot(problem string) string {
 	knowledgeDir := a.resolveKnowledgeBase()
-	log.Printf("[AskTroubleshoot] Problem: %s", problem)
+	slog.Info("askTroubleshoot problem", "problem", problem)
 	answer, err := a.aiService.AskTroubleshoot(a.ctx, problem, knowledgeDir)
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
@@ -1035,9 +991,9 @@ func (a *App) SaveSettings(cfg config.AppConfig) string {
 	// 如果知识库目录发生变化，重建 Catalog
 	newDir := a.resolveKnowledgeBase()
 	if err := a.aiService.UpdateCatalog(newDir); err != nil {
-		log.Printf("[App] Warning: Failed to rebuild knowledge catalog: %v", err)
+		slog.Warn("app failed to rebuild knowledge catalog", "error", err)
 	} else if a.aiService.GetCatalog() != nil {
-		log.Printf("[App] Knowledge catalog rebuilt: %d scenarios", a.aiService.GetCatalog().TotalScenarios())
+		slog.Info("app knowledge catalog rebuilt", "scenarios", a.aiService.GetCatalog().TotalScenarios())
 	}
 
 	return ""
@@ -1102,7 +1058,7 @@ func (a *App) ImportConfigFromDirectory(dirPath string) string {
 	a.aiService.UpdateProviders(fastProvider, complexProvider)
 
 	if err := a.savedSessionMgr.Load(); err != nil {
-		log.Printf("Failed to reload sessions after import: %v", err)
+		slog.Error("failed to reload sessions after import", "error", err)
 	}
 
 	return a.configMgr.LastImportMessage()
@@ -1415,23 +1371,23 @@ func (a *App) getTransferClientWithRelay(sessionID string) (transferClientInfo, 
 
 	cfg, ok := a.getConfig(sessionID)
 	if !ok {
-		log.Printf("[FT] 会话 %s 无连接配置，使用 login 身份", sessionID[:8])
+		slog.Debug("ft session has no config, using login identity", "session", sessionID[:8])
 		return transferClientInfo{client: base, closeFn: baseClose, identity: identity}, nil
 	}
 
 	if cfg.RootPassword == "" {
-		log.Printf("[FT] 会话 %s 无 root 密码，使用 login 身份 (user=%s)", sessionID[:8], cfg.User)
+		slog.Debug("ft session has no root password, using login identity", "session", sessionID[:8], "user", cfg.User)
 		return transferClientInfo{client: base, closeFn: baseClose, identity: identity}, nil
 	}
 	if strings.EqualFold(cfg.User, "root") {
-		log.Printf("[FT] 会话 %s 已使用 root 登录", sessionID[:8])
+		slog.Debug("ft session already logged in as root", "session", sessionID[:8])
 		return transferClientInfo{client: base, closeFn: baseClose, identity: "root"}, nil
 	}
 
 	// Through bastion: root direct SSH is typically blocked (bastion restricts root login).
 	// Skip the failed attempt and go directly to root-relay mode.
 	if cfg.Bastion != nil {
-		log.Printf("[FT] 会话 %s 通过跳板机，跳过 root 直连，直接使用 root-relay 中转模式", sessionID[:8])
+		slog.Debug("ft session via bastion, skipping root direct, using root-relay", "session", sessionID[:8])
 		return transferClientInfo{
 			client:     base,
 			closeFn:    baseClose,
@@ -1441,7 +1397,7 @@ func (a *App) getTransferClientWithRelay(sessionID string) (transferClientInfo, 
 	}
 
 	// Try root SSH direct connection
-	log.Printf("[FT] 会话 %s 尝试 root 直连 (host=%s)", sessionID[:8], cfg.Host)
+	slog.Debug("ft session trying root direct connection", "session", sessionID[:8], "host", cfg.Host)
 	rootCfg := &sshclient.ConnectConfig{
 		Host:     cfg.Host,
 		Port:     cfg.Port,
@@ -1459,7 +1415,7 @@ func (a *App) getTransferClientWithRelay(sessionID string) (transferClientInfo, 
 
 	rootClient, err := sshclient.NewClient(rootCfg)
 	if err == nil && rootClient != nil && rootClient.SSHClient() != nil {
-		log.Printf("[FT] 会话 %s root 直连成功", sessionID[:8])
+		slog.Debug("ft session root direct connection succeeded", "session", sessionID[:8])
 		return transferClientInfo{
 			client:   rootClient.SSHClient(),
 			closeFn:  func() { _ = rootClient.Close() },
@@ -1468,7 +1424,7 @@ func (a *App) getTransferClientWithRelay(sessionID string) (transferClientInfo, 
 	}
 
 	// Root SSH failed but we have root password → use relay mode
-	log.Printf("[FT] 会话 %s root 直连失败 (%v)，降级为 root-relay 中转模式", sessionID[:8], err)
+	slog.Debug("ft session root direct failed, falling back to root-relay", "session", sessionID[:8], "error", err)
 	return transferClientInfo{
 		client:     base,
 		closeFn:    baseClose,
@@ -1507,13 +1463,13 @@ func (a *App) FTList(sessionID, remotePath string) string {
 	}
 	defer info.closeFn()
 
-	log.Printf("[FTList] 会话 %s 列目录 %s (identity=%s)", sessionID[:8], remotePath, info.identity)
+	slog.Debug("ftList session listing directory", "session", sessionID[:8], "path", remotePath, "identity", info.identity)
 
 	var entries []filetransfer.Entry
 	if info.identity == "root-relay" {
 		relay := a.getRelayTransport(sessionID)
 		if relay == nil {
-			log.Printf("[FTList] 会话 %s root-relay 传输未就绪", sessionID[:8])
+			slog.Debug("ftList session root-relay transport not ready", "session", sessionID[:8])
 			return mustJSON(remoteFSResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotFound, Message: "root-relay 传输未就绪"}})
 		}
 		entries, err = relay.List(context.Background(), remotePath)
@@ -1522,17 +1478,17 @@ func (a *App) FTList(sessionID, remotePath string) string {
 		entries, err = tr.List(context.Background(), remotePath)
 		// SFTP failed but we have root access — fall back to shell commands
 		if err != nil && info.identity == "root" {
-			log.Printf("[FTList] 会话 %s SFTP 列目录失败 (%v)，降级到 shell 命令", sessionID[:8], err)
+			slog.Debug("ftList session SFTP list failed, falling back to shell", "session", sessionID[:8], "error", err)
 			shell := a.getShellTransport(sessionID, info.client)
 			entries, err = shell.List(context.Background(), remotePath)
 		}
 	}
 	if err != nil {
-		log.Printf("[FTList] 会话 %s 列目录失败: %v", sessionID[:8], err)
+		slog.Error("ftList session list directory failed", "session", sessionID[:8], "error", err)
 		te := toTransferErr(err)
 		return mustJSON(ftResponse{OK: false, Error: te})
 	}
-	log.Printf("[FTList] 会话 %s 列目录成功，共 %d 条目", sessionID[:8], len(entries))
+	slog.Debug("ftList session list directory succeeded", "session", sessionID[:8], "entries", len(entries))
 	return mustJSON(ftResponse{OK: true, Entries: entries})
 }
 
@@ -1624,37 +1580,37 @@ func (a *App) OpenFileManager(sessionID string) string {
 func (a *App) FTCheck(sessionID string) string {
 	info, err := a.getTransferClientWithRelay(sessionID)
 	if err != nil {
-		log.Printf("[FTCheck] 会话 %s 获取传输客户端失败: %v", sessionID[:8], err)
+		slog.Error("ftCheck session failed to get transfer client", "session", sessionID[:8], "error", err)
 		return mustJSON(ftResponse{OK: false, Error: toTransferErr(err)})
 	}
 	defer info.closeFn()
 
-	log.Printf("[FTCheck] 会话 %s 身份=%s", sessionID[:8], info.identity)
+	slog.Debug("ftCheck session identity", "session", sessionID[:8], "identity", info.identity)
 
 	// Root relay mode: SFTP works for relay dir operations, so always available
 	if info.identity == "root-relay" {
 		// Through bastion: SFTP (not enabled on target) and SCP (hangs via bastion) are both unusable.
 		// Skip them and go directly to base64 transfer via su session.
 		if info.viaBastion {
-			log.Printf("[FTCheck] 会话 %s 检测到跳板机，跳过 SFTP/SCP，直接使用 base64 直传模式", sessionID[:8])
+			slog.Debug("ftCheck session detected bastion, skipping SFTP/SCP, using base64 direct", "session", sessionID[:8])
 			return mustJSON(ftResponse{OK: true, Message: "su-relay(root-relay)"})
 		}
 		sftpTr := filetransfer.NewSFTPTransport(info.client)
 		_, _, sftpErr := sftpTr.Check(context.Background())
 		if sftpErr == nil {
-			log.Printf("[FTCheck] 会话 %s → sftp(root-relay)", sessionID[:8])
+			slog.Debug("ftCheck session resolved to sftp(root-relay)", "session", sessionID[:8])
 			return mustJSON(ftResponse{OK: true, Message: "sftp(root-relay)"})
 		}
 		// SFTP not available, check SCP as fallback
-		log.Printf("[FTCheck] 会话 %s SFTP 不可用 (%v)，尝试 SCP 兜底", sessionID[:8], sftpErr)
+		slog.Debug("ftCheck sftp unavailable, trying scp fallback", "session", sessionID[:8], "error", sftpErr)
 		scpTr := filetransfer.NewSCPTransport(info.client)
 		scpOk, _, scpErr := scpTr.Check(context.Background())
 		if scpErr == nil && scpOk {
-			log.Printf("[FTCheck] 会话 %s → scp(root-relay)", sessionID[:8])
+			slog.Debug("ftCheck resolved to scp(root-relay)", "session", sessionID[:8])
 			return mustJSON(ftResponse{OK: true, Message: "scp(root-relay)"})
 		}
 		// Even SFTP and SCP not available, but relay can still work via su
-		log.Printf("[FTCheck] 会话 %s SFTP/SCP 均不可用，使用 su-relay 模式", sessionID[:8])
+		slog.Debug("ftCheck sftp/scp unavailable, using su-relay mode", "session", sessionID[:8])
 		return mustJSON(ftResponse{OK: true, Message: "su-relay(root-relay)"})
 	}
 
@@ -1663,19 +1619,19 @@ func (a *App) FTCheck(sessionID string) string {
 	_, _, sftpErr := sftpTr.Check(context.Background())
 	if sftpErr == nil {
 		if info.identity == "root" {
-			log.Printf("[FTCheck] 会话 %s → sftp(root)", sessionID[:8])
+			slog.Debug("ftCheck resolved to sftp(root)", "session", sessionID[:8])
 			return mustJSON(ftResponse{OK: true, Message: "sftp(root)"})
 		}
-		log.Printf("[FTCheck] 会话 %s → sftp(login)", sessionID[:8])
+		slog.Debug("ftCheck resolved to sftp(login)", "session", sessionID[:8])
 		return mustJSON(ftResponse{OK: true, Message: "sftp(login)"})
 	}
 
 	te := toTransferErr(sftpErr)
-	log.Printf("[FTCheck] 会话 %s SFTP 检查失败: code=%s err=%v", sessionID[:8], te.Code, sftpErr)
+	slog.Debug("ftCheck sftp check failed", "session", sessionID[:8], "code", te.Code, "error", sftpErr)
 	if te != nil && (te.Code == filetransfer.ErrorCodeSFTPNotSupported || te.Code == filetransfer.ErrorCodeUnknown || te.Code == filetransfer.ErrorCodeNetwork) {
 		// Root identity can manage files via shell commands even without SFTP
 		if info.identity == "root" {
-			log.Printf("[FTCheck] 会话 %s root 身份，SFTP 不可用但可通过 shell 命令管理文件", sessionID[:8])
+			slog.Debug("ftCheck root identity, sftp unavailable but shell available", "session", sessionID[:8])
 			return mustJSON(ftResponse{OK: true, Message: "sftp(root)"})
 		}
 		scpTr := filetransfer.NewSCPTransport(c)
@@ -1697,10 +1653,10 @@ func (a *App) FTCheck(sessionID string) string {
 }
 
 func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string) string {
-	log.Printf("[FT] 开始文件传输任务: op=%s session=%s local=%s remote=%s", op, sessionID[:8], localPath, remotePath)
+	slog.Info("ft transfer started", "op", op, "session", sessionID[:8], "local", localPath, "remote", remotePath)
 	info, err := a.getTransferClientWithRelay(sessionID)
 	if err != nil {
-		log.Printf("[FT] 获取传输客户端失败: %v", err)
+		slog.Error("ft failed to get transfer client", "error", err)
 		return mustJSON(ftResponse{OK: false, Error: toTransferErr(err)})
 	}
 
@@ -1721,7 +1677,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 		// Re-resolve client inside goroutine (session may have changed)
 		taskInfo, err := a.getTransferClientWithRelay(sessionID)
 		if err != nil {
-			log.Printf("[FT] 任务 %s 重新获取传输客户端失败: %v", taskID[:8], err)
+			slog.Error("ft task failed to re-resolve transfer client", "task", taskID[:8], "error", err)
 			if a.ctx != nil {
 				te := toTransferErr(err)
 				runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
@@ -1762,10 +1718,10 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 
 		// Root relay mode: use RootRelayTransport for actual transfer
 		if taskInfo.identity == "root-relay" {
-			log.Printf("[FT] 任务 %s 使用 root-relay 模式传输 (op=%s)", taskID[:8], op)
+			slog.Debug("ft task using root-relay mode", "task", taskID[:8], "op", op)
 			relay := a.getRelayTransport(sessionID)
 			if relay == nil {
-				log.Printf("[FT] 任务 %s root-relay 传输未就绪", taskID[:8])
+				slog.Warn("ft task root-relay transport not ready", "task", taskID[:8])
 				if a.ctx != nil {
 					runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
 						"taskId":    taskID,
@@ -1788,7 +1744,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 				return
 			}
 			if opErr != nil {
-				log.Printf("[FT] 任务 %s root-relay 传输失败: %v", taskID[:8], opErr)
+				slog.Error("ft task root-relay transfer failed", "task", taskID[:8], "error", opErr)
 				te := toTransferErr(opErr)
 				runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
 					"taskId":    taskID,
@@ -1813,7 +1769,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 		c := taskInfo.client
 		identity := taskInfo.identity
 
-		log.Printf("[FT] 任务 %s 使用常规模式 (identity=%s, op=%s)", taskID[:8], identity, op)
+		slog.Debug("ft task using normal mode", "task", taskID[:8], "identity", identity, "op", op)
 		sftpTr := filetransfer.NewSFTPTransport(c)
 		if op == "upload" {
 			res, opErr = sftpTr.Upload(ctx, localPath, remotePath, progressFn)
@@ -1830,7 +1786,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 
 		if opErr != nil {
 			te := toTransferErr(opErr)
-			log.Printf("[FT] 任务 %s SFTP 失败 (code=%s)，尝试 SCP 降级", taskID[:8], te.Code)
+			slog.Debug("ft task sftp failed, trying scp fallback", "task", taskID[:8], "code", te.Code)
 			if te != nil && (te.Code == filetransfer.ErrorCodeSFTPNotSupported || te.Code == filetransfer.ErrorCodeUnknown || te.Code == filetransfer.ErrorCodeNetwork) {
 				scpTr := filetransfer.NewSCPTransport(c)
 				ok, _, checkErr := scpTr.Check(ctx)
@@ -1857,7 +1813,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 			return
 		}
 		if opErr != nil {
-			log.Printf("[FT] 任务 %s 传输失败 (transport=%s): %v", taskID[:8], usedTransport, opErr)
+			slog.Error("ft task transfer failed", "task", taskID[:8], "transport", usedTransport, "error", opErr)
 			te := toTransferErr(opErr)
 			runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
 				"taskId":    taskID,
@@ -1875,7 +1831,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 			"bytes":     res.Bytes,
 			"message":   "完成 (" + usedTransport + ")",
 		})
-		log.Printf("[FT] 任务 %s 传输成功 (transport=%s, bytes=%d)", taskID[:8], usedTransport, res.Bytes)
+		slog.Info("ft task transfer completed", "task", taskID[:8], "transport", usedTransport, "bytes", res.Bytes)
 	}()
 
 	// Suppress unused warning
@@ -2127,7 +2083,7 @@ func (a *App) GenerateConclusionWithContext(contextStr string, rootCause string)
 	// Generate Conclusion using AI with provided context
 	conclusion, err := a.aiService.GenerateConclusion(contextStr, rootCause)
 	if err != nil {
-		log.Printf("Failed to generate conclusion: %v", err)
+		slog.Error("failed to generate conclusion", "error", err)
 		return fmt.Sprintf("Error generating conclusion: %v", err)
 	}
 	return conclusion
@@ -2145,7 +2101,7 @@ func (a *App) StreamConclusion(contextStr string, rootCause string) string {
 
 	conclusion, err := a.aiService.GenerateConclusionStream(ctx, contextStr, rootCause, onToken)
 	if err != nil {
-		log.Printf("Failed to stream conclusion: %v", err)
+		slog.Error("failed to stream conclusion", "error", err)
 		runtime.EventsEmit(a.ctx, "conclusion:error", map[string]string{
 			"error": err.Error(),
 		})
@@ -2231,14 +2187,14 @@ func (a *App) GetCompletions(input string, cursor int) string {
 
 	resp, err := a.completionService.GetCompletions(req)
 	if err != nil {
-		log.Printf("[GetCompletions] Error: %v", err)
+		slog.Error("getCompletions error", "error", err)
 		return "[]"
 	}
 
 	// Convert to JSON
 	data, err := json.Marshal(resp)
 	if err != nil {
-		log.Printf("[GetCompletions] JSON error: %v", err)
+		slog.Error("getCompletions json error", "error", err)
 		return "[]"
 	}
 

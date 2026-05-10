@@ -7,7 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
@@ -89,7 +89,7 @@ func (t *RootRelayTransport) getSession(ctx context.Context) (*rootShellSession,
 		return t.shell, nil
 	}
 
-	log.Printf("[RootRelay] 创建新 su 会话 (loginUser=%s)", t.loginUser)
+	slog.Debug("rootRelay creating new su session", "loginUser", t.loginUser)
 
 	session, err := t.sshClient.NewSession()
 	if err != nil {
@@ -129,7 +129,7 @@ func (t *RootRelayTransport) getSession(ctx context.Context) (*rootShellSession,
 	// If loginUser is empty, we are already the target user (e.g., connected as root).
 	// Skip su entirely and use the shell directly.
 	if t.loginUser == "" {
-		log.Printf("[RootRelay] loginUser 为空，跳过 su 提权，直接使用当前 shell")
+		slog.Debug("rootRelay loginUser empty, skipping su, using current shell")
 	} else {
 		// Send "su -"
 		if _, err := io.WriteString(stdin, "su -\n"); err != nil {
@@ -151,11 +151,11 @@ func (t *RootRelayTransport) getSession(ctx context.Context) (*rootShellSession,
 
 		// Wait for root shell prompt (# or $)
 		if err := waitForOutput(stdout, []string{"# ", "$ "}, 10*time.Second); err != nil {
-			log.Printf("[RootRelay] su 认证失败: %v", err)
+			slog.Error("rootRelay su auth failed", "error", err)
 			session.Close()
 			return nil, &TransferError{Code: ErrorCodeAuthFailed, Message: "su 认证失败或超时"}
 		}
-		log.Printf("[RootRelay] su 认证成功")
+		slog.Debug("rootRelay su auth succeeded")
 	}
 
 	shell := &rootShellSession{
@@ -164,7 +164,7 @@ func (t *RootRelayTransport) getSession(ctx context.Context) (*rootShellSession,
 		stdout:  stdout,
 	}
 	t.shell = shell
-	log.Printf("[RootRelay] 会话创建成功")
+	slog.Debug("rootRelay session created")
 	return shell, nil
 }
 
@@ -173,7 +173,7 @@ func (t *RootRelayTransport) invalidateSession() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.shell != nil {
-		log.Printf("[RootRelay] 会话失效，关闭并重建")
+		slog.Debug("rootRelay session invalid, closing and recreating")
 		t.shell.session.Close()
 		t.shell = nil
 	}
@@ -187,7 +187,7 @@ func (t *RootRelayTransport) runAsRoot(ctx context.Context, cmd string) (string,
 	if len(logCmd) > 200 {
 		logCmd = logCmd[:200] + fmt.Sprintf("... (truncated, total %d bytes)", len(cmd))
 	}
-	log.Printf("[RootRelay] 执行 root 命令: %s", logCmd)
+	slog.Debug("rootRelay executing root command", "cmd", logCmd)
 	shell, err := t.getSession(ctx)
 	if err != nil {
 		return "", err
@@ -211,11 +211,11 @@ func (t *RootRelayTransport) runAsRoot(ctx context.Context, cmd string) (string,
 	}
 
 	if output.failed {
-		log.Printf("[RootRelay] 命令执行失败: %s", output.raw)
+		slog.Error("rootRelay command failed", "output", output.raw)
 		return "", &TransferError{Code: ErrorCodePermissionDenied, Message: fmt.Sprintf("root 命令执行失败: %s", output.raw)}
 	}
 
-	log.Printf("[RootRelay] 命令执行成功，输出长度=%d", len(output.raw))
+	slog.Debug("rootRelay command succeeded", "outputLen", len(output.raw))
 	return output.raw, nil
 }
 
@@ -229,7 +229,7 @@ type relayOutput struct {
 func (t *RootRelayTransport) prepareRelayDir(ctx context.Context) (relayDir string, cleanup func(), err error) {
 	id := uuid.New().String()[:8]
 	relayDir = defaultRelayBaseDir + "/" + id + "/"
-	log.Printf("[RootRelay] 创建中转目录: %s", relayDir)
+	slog.Debug("rootRelay creating relay directory", "dir", relayDir)
 
 	// Ensure base directory exists
 	if _, err := t.runAsRoot(ctx, "mkdir -p "+defaultRelayBaseDir); err != nil {
@@ -313,7 +313,7 @@ func (t *RootRelayTransport) computeRemoteMD5(ctx context.Context, remotePath st
 
 // Upload uploads a local file to a remote path via root relay.
 func (t *RootRelayTransport) Upload(ctx context.Context, localPath, remotePath string, progress func(Progress)) (TransferResult, error) {
-	log.Printf("[RootRelay] 上传开始: %s -> %s", localPath, remotePath)
+	slog.Debug("rootRelay upload starting", "src", localPath, "dst", remotePath)
 	emitStep(progress, "正在检查本地文件...")
 
 	// Get local file size for space check
@@ -330,11 +330,11 @@ func (t *RootRelayTransport) Upload(ctx context.Context, localPath, remotePath s
 		return TransferResult{}, err
 	}
 
-	log.Printf("[RootRelay] 文件大小=%d 字节", fileSize)
+	slog.Debug("rootRelay file size", "bytes", fileSize)
 
 	// Through bastion: skip SFTP/SCP relay entirely, go directly to base64
 	if t.skipRelay {
-		log.Printf("[RootRelay] 跳过 SFTP/SCP 中转，直接使用 base64 直传模式")
+		slog.Debug("rootRelay skipping SFTP/SCP relay, using base64 direct mode")
 		emitStep(progress, "正在通过 base64 直传...")
 		return t.uploadViaBase64(ctx, lp, normalizeRemotePath(remotePath), fileSize, progress)
 	}
@@ -347,7 +347,7 @@ func (t *RootRelayTransport) Upload(ctx context.Context, localPath, remotePath s
 	}
 	defer cleanup()
 
-	log.Printf("[RootRelay] 使用中转目录: %s", relayDir)
+	slog.Debug("rootRelay using relay directory", "dir", relayDir)
 
 	// Upload to relay directory via SFTP (as normal user), fallback to SCP
 	fileName := path.Base(normalizeRemotePath(remotePath))
@@ -363,7 +363,7 @@ func (t *RootRelayTransport) Upload(ctx context.Context, localPath, remotePath s
 	sftpTr := NewSFTPTransport(t.sshClient)
 	res, err := sftpTr.Upload(relayCtx, localPath, relayPath, progress)
 	if err != nil {
-		log.Printf("[RootRelay] SFTP 上传到中转目录失败: %v", err)
+		slog.Debug("rootRelay SFTP upload to relay failed", "error", err)
 		// SFTP failed, fallback to SCP
 		emitStep(progress, "SFTP 不可用，切换 SCP 上传...")
 		scpTr := NewSCPTransport(t.sshClient)
@@ -371,7 +371,7 @@ func (t *RootRelayTransport) Upload(ctx context.Context, localPath, remotePath s
 		if err != nil {
 			// Both SFTP and SCP failed, fallback to base64 direct upload via su
 			emitStep(progress, "SFTP/SCP 均不可用，使用 base64 直传...")
-			log.Printf("[RootRelay] SFTP/SCP 均失败，降级为 base64 直传模式")
+			slog.Debug("rootRelay SFTP/SCP both failed, falling back to base64 direct mode")
 			cleanup() // clean relay dir, we don't need it
 			return t.uploadViaBase64(ctx, lp, normalizeRemotePath(remotePath), fileSize, progress)
 		}
@@ -392,7 +392,7 @@ func (t *RootRelayTransport) Upload(ctx context.Context, localPath, remotePath s
 		return TransferResult{}, err
 	}
 
-	log.Printf("[RootRelay] 上传完成: %s -> %s", localPath, remotePath)
+	slog.Info("rootRelay upload done", "src", localPath, "dst", remotePath, "bytes", res.Bytes)
 	return res, nil
 }
 
@@ -421,7 +421,7 @@ func (t *RootRelayTransport) uploadViaBase64(ctx context.Context, lp string, rem
 	emitStep(progress, "正在计算文件校验和...")
 	localMD5, md5Err := computeLocalMD5(lp)
 	if md5Err != nil {
-		log.Printf("[RootRelay] 计算本地 MD5 失败（继续传输）: %v", md5Err)
+		slog.Debug("rootRelay failed to compute local MD5 (continuing)", "error", md5Err)
 	}
 
 	emitStep(progress, fmt.Sprintf("正在通过 base64 直传 (%d 字节)...", total))
@@ -436,7 +436,7 @@ func (t *RootRelayTransport) uploadViaBase64(ctx context.Context, lp string, rem
 		if progress != nil {
 			progress(Progress{BytesDone: total, BytesTotal: total})
 		}
-		log.Printf("[RootRelay] base64 直传完成: %s -> %s (%d 字节)", lp, remotePath, total)
+		slog.Info("rootRelay upload done", "src", lp, "dst", remotePath, "bytes", total, "mode", "base64-direct")
 	} else {
 		// For larger files, write in chunks using >> append
 		// First chunk: truncate (>)
@@ -475,7 +475,7 @@ func (t *RootRelayTransport) uploadViaBase64(ctx context.Context, lp string, rem
 			}
 		}
 
-		log.Printf("[RootRelay] base64 分块直传完成: %s -> %s (%d 字节)", lp, remotePath, total)
+		slog.Info("rootRelay upload done", "src", lp, "dst", remotePath, "bytes", total, "mode", "base64-chunked")
 	}
 
 	// Post-transfer MD5 verification
@@ -483,16 +483,16 @@ func (t *RootRelayTransport) uploadViaBase64(ctx context.Context, lp string, rem
 		emitStep(progress, "正在验证文件完整性...")
 		remoteMD5, md5Err := t.computeRemoteMD5(ctx, remotePath)
 		if md5Err != nil {
-			log.Printf("[RootRelay] 远程 MD5 计算失败（跳过验证）: %v", md5Err)
+			slog.Debug("rootRelay failed to compute remote MD5 (skipping verification)", "error", md5Err)
 		} else if !strings.EqualFold(localMD5, remoteMD5) {
-			log.Printf("[RootRelay] MD5 校验失败: local=%s remote=%s", localMD5, remoteMD5)
+			slog.Warn("rootRelay MD5 verification failed", "local", localMD5, "remote", remoteMD5)
 			_, _ = t.runAsRoot(ctx, "rm -f "+shellSingleQuote(remotePath))
 			return TransferResult{}, &TransferError{
 				Code:    ErrorCodeChecksumMismatch,
 				Message: fmt.Sprintf("文件校验失败：本地 %s，远端 %s。已删除远端文件，请重新上传", localMD5, remoteMD5),
 			}
 		}
-		log.Printf("[RootRelay] MD5 校验通过: %s", localMD5)
+		slog.Debug("rootRelay MD5 verification passed", "md5", localMD5)
 	}
 
 	return TransferResult{Bytes: total}, nil
@@ -515,7 +515,7 @@ func (t *RootRelayTransport) downloadViaBase64(ctx context.Context, remotePath s
 	emitStep(progress, "正在计算远端文件校验和...")
 	remoteMD5, md5Err := t.computeRemoteMD5(ctx, rp)
 	if md5Err != nil {
-		log.Printf("[RootRelay] 远程 MD5 计算失败（继续传输）: %v", md5Err)
+		slog.Debug("rootRelay failed to compute remote MD5 (continuing)", "error", md5Err)
 	}
 
 	// Use base64 encoding to transfer file content
@@ -550,29 +550,29 @@ func (t *RootRelayTransport) downloadViaBase64(ctx context.Context, remotePath s
 		emitStep(progress, "正在验证文件完整性...")
 		localMD5, md5Err := computeLocalMD5(lp)
 		if md5Err != nil {
-			log.Printf("[RootRelay] 本地 MD5 计算失败（跳过验证）: %v", md5Err)
+			slog.Debug("rootRelay failed to compute local MD5 (skipping verification)", "error", md5Err)
 		} else if !strings.EqualFold(localMD5, remoteMD5) {
-			log.Printf("[RootRelay] MD5 校验失败: remote=%s local=%s", remoteMD5, localMD5)
+			slog.Warn("rootRelay MD5 verification failed", "remote", remoteMD5, "local", localMD5)
 			_ = os.Remove(lp)
 			return TransferResult{}, &TransferError{
 				Code:    ErrorCodeChecksumMismatch,
 				Message: fmt.Sprintf("文件校验失败：远端 %s，本地 %s。已删除本地文件，请重新下载", remoteMD5, localMD5),
 			}
 		}
-		log.Printf("[RootRelay] MD5 校验通过: %s", remoteMD5)
+		slog.Debug("rootRelay MD5 verification passed", "md5", remoteMD5)
 	}
 
 	if progress != nil {
 		progress(Progress{BytesDone: int64(len(decoded)), BytesTotal: int64(len(decoded))})
 	}
 
-	log.Printf("[RootRelay] base64 直传下载完成: %s -> %s (%d 字节)", remotePath, localPath, len(decoded))
+	slog.Info("rootRelay download done", "src", remotePath, "dst", localPath, "bytes", len(decoded), "mode", "base64-direct")
 	return TransferResult{Bytes: int64(len(decoded))}, nil
 }
 
 // Download downloads a remote file to a local path via root relay.
 func (t *RootRelayTransport) Download(ctx context.Context, remotePath, localPath string, progress func(Progress)) (TransferResult, error) {
-	log.Printf("[RootRelay] 下载开始: %s -> %s", remotePath, localPath)
+	slog.Debug("rootRelay download starting", "src", remotePath, "dst", localPath)
 	emitStep(progress, "正在获取远程文件信息...")
 
 	rp := normalizeRemotePath(remotePath)
@@ -586,7 +586,7 @@ func (t *RootRelayTransport) Download(ctx context.Context, remotePath, localPath
 
 	// Through bastion: skip SFTP/SCP relay entirely, go directly to base64
 	if t.skipRelay {
-		log.Printf("[RootRelay] 跳过 SFTP/SCP 中转，直接使用 base64 直传下载模式")
+		slog.Debug("rootRelay skipping SFTP/SCP relay, using base64 direct download mode")
 		emitStep(progress, "正在通过 base64 直传下载...")
 		return t.downloadViaBase64(ctx, normalizeRemotePath(remotePath), localPath, fileSize, progress)
 	}
@@ -638,19 +638,19 @@ func (t *RootRelayTransport) Download(ctx context.Context, remotePath, localPath
 		if err != nil {
 			// Both SFTP and SCP failed, fallback to base64 direct download
 			emitStep(progress, "SFTP/SCP 均不可用，使用 base64 直传下载...")
-			log.Printf("[RootRelay] SFTP/SCP 下载均失败，降级为 base64 直传模式")
+			slog.Debug("rootRelay SFTP/SCP download both failed, falling back to base64 direct mode")
 			cleanup() // clean relay dir
 			return t.downloadViaBase64(ctx, normalizeRemotePath(remotePath), localPath, fileSize, progress)
 		}
 	}
-	log.Printf("[RootRelay] 下载完成: %s -> %s", remotePath, localPath)
+	slog.Info("rootRelay download done", "src", remotePath, "dst", localPath, "bytes", res.Bytes)
 	return res, nil
 }
 
 // List lists directory contents via su.
 func (t *RootRelayTransport) List(ctx context.Context, remotePath string) ([]Entry, error) {
 	p := normalizeRemotePath(remotePath)
-	log.Printf("[RootRelay] 列出目录: %s", p)
+	slog.Debug("rootRelay listing directory", "path", p)
 
 	// Try find -printf first (more reliable), fall back to ls
 	// Note: %T@ is modification time as seconds.nanoseconds since epoch (NOT %Y which is link type)
@@ -734,7 +734,7 @@ func (t *RootRelayTransport) ReadFile(ctx context.Context, remotePath string, ma
 		maxBytes = 256 * 1024
 	}
 	p := normalizeRemotePath(remotePath)
-	log.Printf("[RootRelay] 读取文件: %s (maxBytes=%d)", p, maxBytes)
+	slog.Debug("rootRelay reading file", "path", p, "maxBytes", maxBytes)
 
 	// Use base64 encoding to safely transfer content
 	cmd := fmt.Sprintf("base64 %s | head -c %d", shellSingleQuote(p), maxBytes*2)
@@ -758,7 +758,7 @@ func (t *RootRelayTransport) ReadFile(ctx context.Context, remotePath string, ma
 // WriteFile writes content to a remote file via base64 decoding through su.
 func (t *RootRelayTransport) WriteFile(ctx context.Context, remotePath string, content []byte) error {
 	p := normalizeRemotePath(remotePath)
-	log.Printf("[RootRelay] 写入文件: %s (大小=%d 字节)", p, len(content))
+	slog.Debug("rootRelay writing file", "path", p, "bytes", len(content))
 	encoded := base64.StdEncoding.EncodeToString(content)
 
 	// Write base64 content and decode on remote

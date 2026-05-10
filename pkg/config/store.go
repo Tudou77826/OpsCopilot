@@ -56,7 +56,8 @@ type QuickCommand struct {
 }
 
 type LogConfig struct {
-	Dir string `json:"dir"`
+	Dir   string `json:"dir"`
+	Level string `json:"level,omitempty"` // debug, info, warn, error
 }
 
 type DocsConfig struct {

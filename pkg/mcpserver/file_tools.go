@@ -3,7 +3,7 @@ package mcpserver
 import (
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -37,14 +37,14 @@ func (s *Server) ensureSFTP(conn *Connection) (*sftp.Client, error) {
 	if err != nil {
 		conn.sftpTested = true
 		conn.sftpAvailable = false
-		log.Printf("[MCP] SFTP not available for %s: %v", conn.Name, err)
+		slog.Warn("mcp sftp not available", "name", conn.Name, "error", err)
 		return nil, fmt.Errorf("该服务器不支持 SFTP 文件传输: %w", err)
 	}
 
 	conn.sftpClient = client
 	conn.sftpTested = true
 	conn.sftpAvailable = true
-	log.Printf("[MCP] SFTP client established for %s", conn.Name)
+	slog.Debug("mcp SFTP client established for", "detail", conn.Name)
 	return client, nil
 }
 
@@ -166,7 +166,7 @@ func (s *Server) toolFileDownload(args map[string]interface{}) (interface{}, err
 	// 更新连接活跃时间
 	conn.LastActive.Store(time.Now().UnixNano())
 
-	log.Printf("[MCP] File downloaded: %s:%s -> %s (%d bytes)", serverName, remotePath, localPath, written)
+	slog.Info("mcp file downloaded", "server", serverName, "remote", remotePath, "local", localPath, "bytes", written)
 
 	return map[string]interface{}{
 		"success": true,
@@ -248,7 +248,7 @@ func (s *Server) toolFileUpload(args map[string]interface{}) (interface{}, error
 				return nil, fmt.Errorf("备份远程文件失败: %w", err)
 			}
 			backupCreated = true
-			log.Printf("[MCP] Remote file backed up: %s -> %s", remotePath, backupPath)
+			slog.Debug("mcp remote file backed up", "src", remotePath, "dst", backupPath)
 		}
 	}
 
@@ -285,7 +285,7 @@ func (s *Server) toolFileUpload(args map[string]interface{}) (interface{}, error
 	// 更新连接活跃时间
 	conn.LastActive.Store(time.Now().UnixNano())
 
-	log.Printf("[MCP] File uploaded: %s -> %s:%s (%d bytes)", localPath, serverName, remotePath, written)
+	slog.Info("mcp file uploaded", "local", localPath, "server", serverName, "remote", remotePath, "bytes", written)
 
 	return map[string]interface{}{
 		"success": true,

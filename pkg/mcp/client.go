@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os/exec"
 	"sync"
 	"time"
@@ -111,7 +112,7 @@ func (c *stdioClient) initialize() error {
 		return fmt.Errorf("initialize error: %s", resp.Error.Message)
 	}
 
-	fmt.Printf("[MCP] Initialize response received: %+v\n", resp.Result)
+	slog.Info("mcp initialized")
 
 	// 发送 notifications/initialized（可选但推荐）
 	initializedReq := JSONRPCRequest{

@@ -4,6 +4,7 @@ package bridge
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -62,7 +63,7 @@ func (b *EventBus) Publish(ctx context.Context, event Event) error {
 		for _, sub := range subs {
 			if err := b.callHandler(ctx, sub, event); err != nil {
 				// 记录错误但继续处理其他订阅者
-				fmt.Printf("handler error for event %s: %v\n", event.Type, err)
+				slog.Error("event handler error", "type", event.Type, "error", err)
 			}
 		}
 	}
@@ -70,7 +71,7 @@ func (b *EventBus) Publish(ctx context.Context, event Event) error {
 	// 调用订阅所有事件的处理器
 	for _, sub := range b.allHandlers {
 		if err := b.callHandler(ctx, sub, event); err != nil {
-			fmt.Printf("all-handler error for event %s: %v\n", event.Type, err)
+			slog.Error("event all-handler error", "type", event.Type, "error", err)
 		}
 	}
 

@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -66,7 +66,7 @@ func (s *Server) Start() error {
 
 	go func() {
 		if err := s.server.Serve(listener); err != nil && err != http.ErrServerClosed {
-			log.Printf("IPC server error: %v", err)
+			slog.Error("ipc server error", "error", err)
 		}
 	}()
 

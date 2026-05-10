@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/tools"
 	"os"
@@ -69,8 +69,7 @@ func (t *ReadFileTool) Execute(ctx context.Context, args map[string]interface{},
 		entry := t.catalog.FindEntry(path, section)
 		if entry != nil {
 			loc := t.catalog.FindEntryLocation(entry)
-			log.Printf("[ReadFile] Catalog hit: path=%s section=%q location=%q lines=%d-%d",
-				path, section, loc, entry.LineStart, entry.LineEnd)
+			slog.Debug("readFile catalog hit", "path", path, "section", section, "location", loc, "lines", fmt.Sprintf("%d-%d", entry.LineStart, entry.LineEnd))
 			if emitStatus != nil && loc != "" {
 				emitStatus("catalog_match", loc)
 			}
@@ -79,17 +78,17 @@ func (t *ReadFileTool) Execute(ctx context.Context, args map[string]interface{},
 			}
 			content, err := t.readSectionWithLineNumbers(entry)
 			if err == nil && content != "" {
-				log.Printf("[ReadFile] Catalog section read OK: %d bytes", len(content))
+				slog.Debug("readFile catalog section read OK", "bytes", len(content))
 				return content, nil
 			}
-			log.Printf("[ReadFile] Catalog section read failed (err=%v), falling back to full file", err)
+			slog.Debug("readFile catalog section read failed, falling back to full file", "error", err)
 		} else {
-			log.Printf("[ReadFile] Catalog miss: path=%s section=%q (no matching entry), reading full file", path, section)
+			slog.Debug("readFile catalog miss", "path", path, "section", section)
 		}
 	} else if section != "" {
-		log.Printf("[ReadFile] Section requested but no catalog: path=%s section=%q, reading full file", path, section)
+		slog.Debug("readFile section requested but no catalog", "path", path, "section", section)
 	} else {
-		log.Printf("[ReadFile] Full file read: path=%s (no section specified)", path)
+		slog.Debug("readFile full file read", "path", path)
 	}
 
 	// 全文件读取（无 section 或精准读取失败）
@@ -177,7 +176,7 @@ func (t *ReadFileTool) readByLineRange(path string, startLine, endLine int, hasS
 	if len(result) > 20000 {
 		result = result[:20000] + "\n...(truncated)..."
 	}
-	log.Printf("[ReadFile] Line range read: path=%s lines=%d-%d resultLen=%d", path, start+1, end, len(result))
+	slog.Debug("readFile line range read", "path", path, "lines", fmt.Sprintf("%d-%d", start+1, end), "resultLen", len(result))
 	return result, nil
 }
 
@@ -194,7 +193,7 @@ func (t *ReadFileTool) readFullFileWithLineNumbers(path string) (string, error) 
 	if len(result) > 20000 {
 		result = result[:20000] + "\n...(truncated)..."
 	}
-	log.Printf("[ReadFile] Full file read OK: path=%s lines=%d resultLen=%d", path, len(lines), len(result))
+	slog.Debug("readFile full file read OK", "path", path, "lines", len(lines), "resultLen", len(result))
 	return result, nil
 }
 

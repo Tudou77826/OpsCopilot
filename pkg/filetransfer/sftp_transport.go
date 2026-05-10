@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -64,7 +64,7 @@ func NewSFTPTransport(client *ssh.Client) *SFTPTransport {
 func (t *SFTPTransport) Check(ctx context.Context) (bool, string, error) {
 	c, err := t.newClient()
 	if err != nil {
-		log.Printf("[SFTP] 检查 SFTP 可用性: 不可用 (%v)", err)
+		slog.Debug("sftp availability check failed", "error", err)
 		var te *TransferError
 		if errors.As(err, &te) && te.Code == ErrorCodeSFTPNotSupported {
 			return false, te.Message, te
@@ -72,7 +72,7 @@ func (t *SFTPTransport) Check(ctx context.Context) (bool, string, error) {
 		return false, "", err
 	}
 	_ = c.Close()
-	log.Printf("[SFTP] 检查 SFTP 可用性: 可用")
+	slog.Info("sftp available")
 	return true, "", nil
 }
 
@@ -84,7 +84,7 @@ func (t *SFTPTransport) List(ctx context.Context, remotePath string) ([]Entry, e
 	defer c.Close()
 
 	p := normalizeRemotePath(remotePath)
-	log.Printf("[SFTP] 列出目录: %s", p)
+	slog.Debug("sftp list directory", "path", p)
 	infos, err := c.ReadDir(p)
 	if err != nil {
 		return nil, toTransferError(err)
@@ -145,7 +145,7 @@ func (t *SFTPTransport) Upload(ctx context.Context, localPath, remotePath string
 		total = st.Size()
 	}
 
-	log.Printf("[SFTP] 上传开始: %s -> %s (大小=%d)", lp, remotePath, total)
+	slog.Info("sftp upload started", "src", lp, "dst", remotePath, "size", total)
 
 	rp := normalizeRemotePath(remotePath)
 	w, err := c.Create(rp)
@@ -158,7 +158,7 @@ func (t *SFTPTransport) Upload(ctx context.Context, localPath, remotePath string
 	if err != nil {
 		return TransferResult{}, err
 	}
-	log.Printf("[SFTP] 上传完成: %s -> %s (传输=%d 字节)", lp, rp, n)
+	slog.Info("sftp upload completed", "src", lp, "dst", rp, "bytes", n)
 	return TransferResult{Bytes: n}, nil
 }
 
@@ -170,7 +170,7 @@ func (t *SFTPTransport) Download(ctx context.Context, remotePath, localPath stri
 	defer c.Close()
 
 	rp := normalizeRemotePath(remotePath)
-	log.Printf("[SFTP] 下载开始: %s -> %s", rp, localPath)
+	slog.Info("sftp download started", "src", rp, "dst", localPath)
 	r, err := c.Open(rp)
 	if err != nil {
 		return TransferResult{}, toTransferError(err)
@@ -196,7 +196,7 @@ func (t *SFTPTransport) Download(ctx context.Context, remotePath, localPath stri
 	if err != nil {
 		return TransferResult{}, err
 	}
-	log.Printf("[SFTP] 下载完成: %s -> %s (传输=%d 字节)", rp, lp, n)
+	slog.Info("sftp download completed", "src", rp, "dst", lp, "bytes", n)
 	return TransferResult{Bytes: n}, nil
 }
 
@@ -265,7 +265,7 @@ func (t *SFTPTransport) ReadFile(ctx context.Context, remotePath string, maxByte
 	defer c.Close()
 
 	p := normalizeRemotePath(remotePath)
-	log.Printf("[SFTP] 读取文件: %s (maxBytes=%d)", p, maxBytes)
+	slog.Debug("sftp read file", "path", p, "maxBytes", maxBytes)
 	f, err := c.Open(p)
 	if err != nil {
 		return nil, toTransferError(err)
@@ -293,7 +293,7 @@ func (t *SFTPTransport) WriteFile(ctx context.Context, remotePath string, conten
 	defer c.Close()
 
 	p := normalizeRemotePath(remotePath)
-	log.Printf("[SFTP] 写入文件: %s (大小=%d 字节)", p, len(content))
+	slog.Debug("sftp write file", "path", p, "size", len(content))
 	f, err := c.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
 	if err != nil {
 		return toTransferError(err)

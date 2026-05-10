@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/llm"
+	"opscopilot/pkg/logging"
 	"opscopilot/pkg/tools"
 	knowledgetools "opscopilot/pkg/tools/knowledge"
 	"os"
@@ -118,14 +119,12 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 		if catalogText != "" {
 			systemPromptBuilder.WriteString("\n\n## 知识库问题目录\n\n")
 			systemPromptBuilder.WriteString(catalogText)
-			log.Printf("[Agent][%s] Catalog injected: %d scenarios, %d bytes",
-				runID, opts.Catalog.TotalScenarios(), len(catalogText))
-			log.Printf("[Agent][%s] Catalog content:\n%s", runID, catalogText)
+			slog.Debug("agent catalog injected", "runId", runID, "scenarios", opts.Catalog.TotalScenarios(), "bytes", len(catalogText))
 		} else {
-			log.Printf("[Agent][%s] Catalog present but empty (0 scenarios)", runID)
+			slog.Debug("agent catalog present but empty", "runId", runID)
 		}
 	} else {
-		log.Printf("[Agent][%s] No catalog available", runID)
+		slog.Debug("agent no catalog available", "runId", runID)
 	}
 
 	if opts.SystemPrompt != "" {
@@ -147,7 +146,7 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 		}
 	}
 
-	log.Printf("[Agent][%s] Start questionLen=%d knowledgeDir=%q knowledgeExists=%t tools=%d", runID, len(opts.Question), opts.KnowledgeDir, knowledgeExists, len(llmTools))
+	slog.Info("agent start", "runId", runID, "questionLen", len(opts.Question), "knowledgeDir", opts.KnowledgeDir, "knowledgeExists", knowledgeExists, "tools", len(llmTools))
 
 	var prevToolCalls []llm.ToolCall
 
@@ -164,16 +163,16 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 		})
 		llmCost := time.Since(stepAt)
 		if err != nil {
-			log.Printf("[Agent][%s] Step=%d LLMError cost=%s err=%v", runID, i+1, llmCost, err)
+			slog.Error("agent llm error", "runId", runID, "step", i+1, "cost", logging.Cost(llmCost), "error", err)
 			return "", err
 		}
 
-		log.Printf("[Agent][%s] Step=%d LLMOk cost=%s contentLen=%d toolCalls=%d", runID, i+1, llmCost, len(resp.Content), len(resp.ToolCalls))
+		slog.Debug("agent llm response", "runId", runID, "step", i+1, "cost", logging.Cost(llmCost), "contentLen", len(resp.Content), "toolCalls", len(resp.ToolCalls))
 		if resp.Content != "" {
-			log.Printf("[Agent][%s] Step=%d LLM thinking: %s", runID, i+1, resp.Content)
+			slog.Debug("agent llm thinking", "runId", runID, "step", i+1, "content", logging.Truncate(resp.Content, 200))
 		}
 		for idx, tc := range resp.ToolCalls {
-			log.Printf("[Agent][%s] Step=%d ToolCall#%d name=%s args=%s", runID, i+1, idx+1, tc.Function.Name, tc.Function.Arguments)
+			slog.Debug("agent tool call", "runId", runID, "step", i+1, "index", idx+1, "name", tc.Function.Name, "args", logging.Truncate(tc.Function.Arguments, 200))
 		}
 
 		messages = append(messages, llm.ChatMessage{
@@ -190,21 +189,22 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 			} else {
 				emitStatus(ctx, runID, "answering", "正在生成回答...")
 			}
-			log.Printf("[Agent][%s] Done totalCost=%s", runID, time.Since(startAt))
+			slog.Info("agent done", "runId", runID, "cost", logging.Cost(time.Since(startAt)))
 			return resp.Content, nil
 		}
 
 		for _, tc := range resp.ToolCalls {
 			var toolResult string
 
-			log.Printf("[Agent][%s] ExecuteTool name=%s", runID, tc.Function.Name)
+			slog.Info("agent calling tool", "runId", runID, "step", i+1, "name", tc.Function.Name)
+			slog.Debug("agent tool args", "runId", runID, "args", logging.Truncate(tc.Function.Arguments, 200))
 
 			// 优先使用注册器中的工具（知识库工具）
 			if tool, ok := registry.Get(tc.Function.Name); ok {
 				var args map[string]interface{}
 				if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
 					toolResult = fmt.Sprintf("Error parsing arguments: %v", err)
-					log.Printf("[Agent][%s] ToolErr name=%s parseArgsErr=%v", runID, tc.Function.Name, err)
+					slog.Error("agent tool parse args error", "runId", runID, "name", tc.Function.Name, "error", err)
 				} else {
 					toolAt := time.Now()
 					statusEmitter := func(stage, message string) {
@@ -214,15 +214,16 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 					toolCost := time.Since(toolAt)
 					if err != nil {
 						toolResult = fmt.Sprintf("Error: %v", err)
-						log.Printf("[Agent][%s] ToolErr name=%s cost=%s err=%v", runID, tc.Function.Name, toolCost, err)
+						slog.Error("agent tool error", "runId", runID, "name", tc.Function.Name, "cost", logging.Cost(toolCost), "error", err)
 					} else {
 						toolResult = result
-						log.Printf("[Agent][%s] ToolOk name=%s cost=%s resultLen=%d", runID, tc.Function.Name, toolCost, len(toolResult))
+						slog.Info("agent tool done", "runId", runID, "name", tc.Function.Name, "cost", logging.Cost(toolCost))
+						slog.Debug("agent tool result", "runId", runID, "resultLen", len(toolResult))
 					}
 				}
 			} else {
 				toolResult = fmt.Sprintf("Error: Unknown tool %s", tc.Function.Name)
-				log.Printf("[Agent][%s] ToolErr name=%s unknownTool=true", runID, tc.Function.Name)
+				slog.Error("agent unknown tool", "runId", runID, "name", tc.Function.Name)
 			}
 
 			messages = append(messages, llm.ChatMessage{
@@ -233,7 +234,7 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 			})
 		}
 
-		log.Printf("[Agent][%s] Step=%d toolOutputsAppended=%d messageCount=%d", runID, i+1, len(resp.ToolCalls), len(messages))
+		slog.Debug("agent step outputs appended", "runId", runID, "step", i+1, "outputs", len(resp.ToolCalls), "messageCount", len(messages))
 
 		// 检测累积上下文，超限时截断最早的工具结果
 		trimEarlyToolResults(messages, maxContextChars)
@@ -242,18 +243,17 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 		totalChars := estimateMessagesChars(messages)
 		estimatedTokens := totalChars / charsPerToken
 		emitContextUsage(ctx, runID, estimatedTokens, maxContextTokens)
-		log.Printf("[Agent][%s] Step=%d contextEstimate=%dChars(~%dK tokens) messageCount=%d",
-			runID, i+1, totalChars, estimatedTokens/1000, len(messages))
+		slog.Debug("agent context estimate", "runId", runID, "step", i+1, "chars", totalChars, "tokensK", estimatedTokens/1000, "messages", len(messages))
 	}
 
-	log.Printf("[Agent][%s] ExceededMaxSteps totalCost=%s maxSteps=%d", runID, time.Since(startAt), maxSteps)
+	slog.Error("agent exceeded max steps", "runId", runID, "totalCost", time.Since(startAt), "maxSteps", maxSteps)
 	return "", fmt.Errorf("agent exceeded maximum steps (%d) without reaching a conclusion", maxSteps)
 }
 
 func safeEmit(ctx context.Context, eventName string, data interface{}) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("Recovered from emit panic: %v", r)
+			slog.Warn("recovered from emit panic", "error", r)
 		}
 	}()
 
@@ -274,7 +274,7 @@ func emitStatus(ctx context.Context, runID string, stage string, message string)
 		"stage":   stage,
 		"message": message,
 	}
-	log.Printf("[Agent][%s] Status stage=%s message=%s", runID, stage, message)
+	slog.Debug("agent status", "runId", runID, "stage", stage, "message", message)
 	safeEmit(ctx, "agent:status", payload)
 }
 
