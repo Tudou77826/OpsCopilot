@@ -378,7 +378,50 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
     return (
         <div style={styles.container} onClick={() => setContextMenu(null)}>
             {mode === 'tab' && (
-                <div style={styles.tabHeader} role="tablist">
+                <div
+                    style={styles.tabHeader}
+                    role="tablist"
+                    onDragOver={(e) => {
+                        // 只在拖到 tab 栏右侧空白区域时触发（不在任何 tab 上）
+                        if (!dragStateRef.current) return;
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        const lastTab = terminals[terminals.length - 1];
+                        if (lastTab && dragStateRef.current.draggedId !== lastTab.id) {
+                            pendingDragRef.current.tabId = lastTab.id;
+                            pendingDragRef.current.position = 'after';
+                        } else {
+                            pendingDragRef.current.tabId = null;
+                        }
+                        if (!dragRafRef.current) {
+                            dragRafRef.current = requestAnimationFrame(flushDragState);
+                        }
+                    }}
+                    onDrop={(e) => {
+                        e.preventDefault();
+                        const draggedId = dragStateRef.current?.draggedId;
+                        const lastTab = terminals[terminals.length - 1];
+                        if (!draggedId || !lastTab || !onReorderTerminals) return;
+                        // 已在正确的最后一个位置则不动
+                        if (draggedId === lastTab.id) return;
+                        const ids = terminals.map(t => t.id);
+                        const draggedIdx = ids.indexOf(draggedId);
+                        if (draggedIdx === -1) return;
+                        ids.splice(draggedIdx, 1);
+                        ids.push(draggedId);
+                        onReorderTerminals(ids);
+                        setDragOverTabId(null);
+                    }}
+                    onDragLeave={(e) => {
+                        // 只在离开 tabHeader 容器本身时清除指示器
+                        if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node)) {
+                            pendingDragRef.current.tabId = null;
+                            if (!dragRafRef.current) {
+                                dragRafRef.current = requestAnimationFrame(flushDragState);
+                            }
+                        }
+                    }}
+                >
                     {terminals.map(term => {
                         const isDragOver = dragOverTabId === term.id;
                         const isDraggedSelf = dragStateRef.current?.draggedId === term.id;
@@ -693,6 +736,73 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
                     >
                         复制标签
                     </div>
+                    <div style={styles.menuSeparator} />
+                    <div
+                        style={styles.menuItem}
+                        onClick={() => {
+                            onCloseTerminal(contextMenu.id);
+                            setContextMenu(null);
+                        }}
+                    >
+                        关闭
+                    </div>
+                    <div
+                        style={{
+                            ...styles.menuItem,
+                            color: terminals.length <= 1 ? '#555' : '#ccc',
+                            cursor: terminals.length <= 1 ? 'default' : 'pointer',
+                        }}
+                        onClick={() => {
+                            if (terminals.length > 1) {
+                                terminals.forEach(t => {
+                                    if (t.id !== contextMenu.id) onCloseTerminal(t.id);
+                                });
+                            }
+                            setContextMenu(null);
+                        }}
+                    >
+                        关闭其他
+                    </div>
+                    <div
+                        style={{
+                            ...styles.menuItem,
+                            color: (() => {
+                                const idx = terminals.findIndex(t => t.id === contextMenu.id);
+                                return idx >= 0 && idx < terminals.length - 1 ? '#ccc' : '#555';
+                            })(),
+                            cursor: (() => {
+                                const idx = terminals.findIndex(t => t.id === contextMenu.id);
+                                return idx >= 0 && idx < terminals.length - 1 ? 'pointer' : 'default';
+                            })(),
+                        }}
+                        onClick={() => {
+                            const idx = terminals.findIndex(t => t.id === contextMenu.id);
+                            if (idx >= 0 && idx < terminals.length - 1) {
+                                terminals.slice(idx + 1).forEach(t => onCloseTerminal(t.id));
+                            }
+                            setContextMenu(null);
+                        }}
+                    >
+                        关闭右侧全部
+                    </div>
+                    <div style={styles.menuSeparator} />
+                    <div
+                        style={styles.menuItem}
+                        onClick={() => {
+                            const term = terminals.find(t => t.id === contextMenu.id);
+                            if (term?.config) {
+                                const cfg = term.config;
+                                let text = `${cfg.user}@${cfg.host}:${cfg.port}`;
+                                if (cfg.bastion?.host) {
+                                    text += ` (via ${cfg.bastion.user}@${cfg.bastion.host}:${cfg.bastion.port})`;
+                                }
+                                navigator.clipboard.writeText(text);
+                            }
+                            setContextMenu(null);
+                        }}
+                    >
+                        复制连接信息
+                    </div>
                 </div>
             )}
         </div>
@@ -953,6 +1063,11 @@ const styles = {
             backgroundColor: '#094771',
             color: '#fff',
         }
+    },
+    menuSeparator: {
+        height: '1px',
+        backgroundColor: '#454545',
+        margin: '4px 0',
     }
 };
 
