@@ -120,6 +120,7 @@ export namespace config {
 	}
 	export class LogConfig {
 	    dir: string;
+	    level?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new LogConfig(source);
@@ -128,6 +129,7 @@ export namespace config {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.dir = source["dir"];
+	        this.level = source["level"];
 	    }
 	}
 	export class LLMConfig {

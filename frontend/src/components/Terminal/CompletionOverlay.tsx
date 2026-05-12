@@ -89,7 +89,12 @@ const CompletionOverlay: React.FC<CompletionOverlayProps> = ({
             }}
         >
             <div style={styles.header}>
-                {completions.suggestions.length} 个建议
+                <span>{completions.suggestions.length} 个建议</span>
+                <span style={styles.headerHint}>
+                    <span style={styles.kbd}>Shift</span>+<span style={styles.kbd}>Tab</span> 接受
+                    <span style={styles.kbd}>↑</span><span style={styles.kbd}>↓</span> 选择
+                    <span style={styles.kbd}>Esc</span> 关闭
+                </span>
             </div>
             <div style={styles.list}>
                 {completions.suggestions.map((suggestion, index) => (
@@ -151,6 +156,29 @@ const styles = {
         fontSize: '11px',
         borderTopLeftRadius: '4px',
         borderTopRightRadius: '4px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    headerHint: {
+        fontSize: '10px',
+        color: '#666',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '2px',
+    },
+    kbd: {
+        display: 'inline-block',
+        padding: '1px 4px',
+        fontSize: '10px',
+        fontFamily: 'inherit',
+        color: '#aaa',
+        backgroundColor: '#333',
+        border: '1px solid #555',
+        borderRadius: '2px',
+        lineHeight: '1.2',
+        marginLeft: '2px',
+        marginRight: '2px',
     },
     list: {
         overflowY: 'auto' as const,

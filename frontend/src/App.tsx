@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import './App.css';
+import logo from './assets/images/logo-universal.png';
 import { TerminalRef } from './components/Terminal/Terminal';
 import LayoutManager from './components/LayoutManager/LayoutManager';
 import QuickCommandDrawer from './components/QuickCommandDrawer/QuickCommandDrawer';
@@ -614,6 +615,7 @@ function App() {
                 justifyContent: 'space-between'
             }}>
                 <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                    <img src={logo} alt="OpsCopilot" style={{ width: 28, height: 28 }} />
                     {status !== '就绪' && status !== '已连接' && status !== '已重连' && (
                         <div style={{
                             ...styles.loadingIndicator,
