@@ -1,6 +1,9 @@
 # OpsCopilot
 
+
 <div align="center">
+
+![Uploading image.png…](./build/windows/icon.ico)
 
 **AI 驱动的智能运维助手 / AI Agent 远程执行工具**
 
