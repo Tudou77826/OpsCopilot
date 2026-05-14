@@ -6,6 +6,7 @@ import 'xterm/css/xterm.css';
 import CompletionOverlay, { CompletionData, CompletionSuggestion } from './CompletionOverlay';
 import SearchPanel from './SearchPanel';
 import { HighlightRule, TerminalConfig } from './highlightTypes';
+import { parseTimestamp, TimestampResult } from '../../utils/timestampParser';
 
 interface TerminalProps {
     id: string;
@@ -14,6 +15,8 @@ interface TerminalProps {
     completionDelay?: number;  // Completion delay in milliseconds
     terminalConfig?: TerminalConfig;
     highlightRules?: HighlightRule[];
+    /** 选区解析回调，用于置顶栏展示时间戳等解析结果 */
+    onSelectionParsed?: (result: TimestampResult | null) => void;
 }
 
 export interface TerminalRef {
@@ -23,11 +26,12 @@ export interface TerminalRef {
     focus: () => void;
 }
 
-const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionID, onData, completionDelay = 150, terminalConfig, highlightRules }, ref) => {
+const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionID, onData, completionDelay = 150, terminalConfig, highlightRules, onSelectionParsed }, ref) => {
     const terminalRef = useRef<HTMLDivElement>(null);
     const xtermRef = useRef<Terminal | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
     const onDataRef = useRef<((data: string) => void) | undefined>(onData);
+    const onSelectionParsedRef = useRef<((result: TimestampResult | null) => void) | undefined>(onSelectionParsed);
     const sessionIDRef = useRef<string | undefined>(sessionID);
     const completionDelayRef = useRef<number>(completionDelay);
     const terminalConfigRef = useRef<TerminalConfig | undefined>(undefined);
@@ -96,12 +100,13 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
 
     useEffect(() => {
         onDataRef.current = onData;
+        onSelectionParsedRef.current = onSelectionParsed;
         sessionIDRef.current = sessionID;
         completionDelayRef.current = completionDelay;
         terminalConfigRef.current = terminalConfig;
         highlightRulesRef.current = highlightRules;
         highlightEnabledRef.current = terminalConfig?.highlight_enabled ?? true;
-    }, [onData, sessionID, completionDelay, terminalConfig, highlightRules]);
+    }, [onData, onSelectionParsed, sessionID, completionDelay, terminalConfig, highlightRules]);
 
     const getSearchEnabled = () => terminalConfigRef.current?.search_enabled ?? true;
 
@@ -909,6 +914,26 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             }
         });
 
+        // 选区监听：解析时间戳并上报
+        let selectionDebounceTimer: number | null = null;
+        const onSelectionChangeDispose = term.onSelectionChange(() => {
+            // 防抖 150ms，避免拖拽时频繁触发
+            if (selectionDebounceTimer) {
+                window.clearTimeout(selectionDebounceTimer);
+            }
+            selectionDebounceTimer = window.setTimeout(() => {
+                selectionDebounceTimer = null;
+                const selection = term.getSelection();
+                if (!selection) {
+                    // 清空时上报 null，让置顶栏隐藏
+                    onSelectionParsedRef.current?.(null);
+                    return;
+                }
+                const result = parseTimestamp(selection);
+                onSelectionParsedRef.current?.(result);
+            }, 150);
+        });
+
         const triggerCompletion = () => {
             if (debounceTimerRef.current) {
                 clearTimeout(debounceTimerRef.current);
@@ -1085,6 +1110,11 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                 try { currentSearchDecoRef.current.marker?.dispose?.(); } catch { }
                 currentSearchDecoRef.current = null;
             }
+            if (selectionDebounceTimer) {
+                window.clearTimeout(selectionDebounceTimer);
+                selectionDebounceTimer = null;
+            }
+            onSelectionChangeDispose.dispose();
             onScrollDispose.dispose();
             clearDecorations();
             window.removeEventListener('resize', handleResize);

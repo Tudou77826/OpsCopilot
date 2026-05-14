@@ -2,6 +2,7 @@ import React, { useRef, useState, useCallback } from 'react';
 import TerminalComponent, { TerminalRef } from '../Terminal/Terminal';
 import { HighlightRule, TerminalConfig } from '../Terminal/highlightTypes';
 import { SessionStatus } from '../../types';
+import { TimestampResult } from '../../utils/timestampParser';
 
 interface TerminalSession {
     id: string;
@@ -31,9 +32,11 @@ interface LayoutManagerProps {
     highlightRules?: HighlightRule[];
     onReorderTerminals?: (reorderedIds: string[]) => void;
     scheduleFitAll?: (delay?: number) => void;
+    /** 选区解析回调，用于置顶栏展示时间戳等解析结果 */
+    onSelectionParsed?: (result: TimestampResult | null) => void;
 }
 
-const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTerminalData, terminalRefs, onCloseTerminal, onRenameTerminal, onDuplicateTerminal, onReconnect, onActiveTerminalChange, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast, completionDelay, terminalConfig, highlightRules, onReorderTerminals, scheduleFitAll }) => {
+const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTerminalData, terminalRefs, onCloseTerminal, onRenameTerminal, onDuplicateTerminal, onReconnect, onActiveTerminalChange, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast, completionDelay, terminalConfig, highlightRules, onReorderTerminals, scheduleFitAll, onSelectionParsed }) => {
     const [activeTab, setActiveTab] = useState<string>(terminals[0]?.id || '');
     const [editingTab, setEditingTab] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
@@ -618,6 +621,7 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
                                         completionDelay={completionDelay}
                                         terminalConfig={terminalConfig}
                                         highlightRules={highlightRules}
+                                        onSelectionParsed={onSelectionParsed}
                                         ref={(el) => {
                                             if (el) {
                                                 terminalRefs.current.set(term.id, el);
