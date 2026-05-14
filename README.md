@@ -168,6 +168,10 @@ OpsCopilot 可作为 **MCP Server** 运行，让 Claude、Cursor 等 AI Agent �
 
 自动记录排查过程，生成可归档的 Markdown 文档：
 
+- **归档分类**：可选择归档到 service 或 module 目录
+- **独立存放**：归档文件自动放入 `archive/` 子目录，与已有文档区隔
+- **一键归档**：排查完成后点击归档，自动生成结构化文档
+
 ```markdown
 # MySQL 连接池满排查记录
 
