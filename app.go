@@ -157,15 +157,16 @@ func NewApp() *App {
 	// Set the CommandSender to app itself
 	scriptMgr.SetCommandSender(app)
 
-	// 构建知识库目录
-	knowledgeDir := app.resolveKnowledgeBase()
-	if knowledgeDir != "" {
-		if err := aiService.UpdateCatalog(knowledgeDir); err != nil {
-			fmt.Fprintf(os.Stderr, "[WARN] Failed to build knowledge catalog: %v\n", err)
-		} else if aiService.GetCatalog() != nil {
-			fmt.Fprintf(os.Stderr, "[INFO] Knowledge catalog built: %d scenarios\n", aiService.GetCatalog().TotalScenarios())
+		// 构建知识库目录
+		knowledgeDir := app.resolveKnowledgeBase()
+		slog.Info("startup: resolved knowledge base", "dir", knowledgeDir)
+		if knowledgeDir != "" {
+			if err := aiService.UpdateCatalog(knowledgeDir); err != nil {
+				slog.Error("startup: failed to build knowledge catalog", "error", err)
+			} else if aiService.GetCatalog() != nil {
+				slog.Info("startup: knowledge catalog built", "scenarios", aiService.GetCatalog().TotalScenarios())
+			}
 		}
-	}
 
 	return app
 }
@@ -721,8 +722,24 @@ type ModuleInfo struct {
 // GetCatalogServices 返回 Catalog 中的 service/module 结构供前端选择
 func (a *App) GetCatalogServices() []ServiceInfo {
 	catalog := a.aiService.GetCatalog()
+
+	// 如果 Catalog 为空，尝试重新构建一次（可能是首次启动时构建时机问题）
+	if catalog == nil || len(catalog.Services) == 0 {
+		knowledgeDir := a.resolveKnowledgeBase()
+		slog.Info("GetCatalogServices: catalog empty, rebuilding", "knowledgeDir", knowledgeDir)
+		if knowledgeDir != "" {
+			if err := a.aiService.UpdateCatalog(knowledgeDir); err != nil {
+				slog.Error("GetCatalogServices: failed to rebuild catalog", "error", err)
+			} else {
+				catalog = a.aiService.GetCatalog()
+				slog.Info("GetCatalogServices: catalog rebuilt", "services", len(catalog.Services))
+			}
+		}
+	}
+
 	if catalog == nil {
-		return nil
+		slog.Warn("GetCatalogServices: catalog is nil after rebuild attempt")
+		return []ServiceInfo{} // 返回空数组而不是 nil，方便前端处理
 	}
 
 	result := make([]ServiceInfo, 0, len(catalog.Services))
@@ -744,6 +761,7 @@ func (a *App) GetCatalogServices() []ServiceInfo {
 		}
 		result = append(result, info)
 	}
+	slog.Info("GetCatalogServices: returning", "services", len(result))
 	return result
 }
 

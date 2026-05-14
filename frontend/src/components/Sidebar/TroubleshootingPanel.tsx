@@ -226,12 +226,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         if (onStart) onStart();
     };
 
-    const handleArchive = async (params: ArchiveParams) => {
-        setIsReviewModalOpen(false);
-        setIsStopping(false);
-        setIsInvestigating(false);
-        if (onStop) onStop();
-
+    const handleArchive = async (params: ArchiveParams): Promise<{ success: boolean; message: string }> => {
         // @ts-ignore
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.ArchiveSession) {
             try {
@@ -244,19 +239,14 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                         content: parsed.conclusion || '会话已结束并归档。',
                         timestamp: Date.now()
                     }]);
+                    // 不在这里关闭 Modal，让 SessionReviewModal 显示庆祝动画后自己关闭
+                    // 清理状态由 SessionReviewModal 的 onClose 回调处理
+                    return { success: true, message: '归档成功' };
                 } else {
-                    setMessages(prev => [...prev, {
-                        role: 'ai',
-                        content: `归档失败: ${parsed.error || '未知错误'}`,
-                        timestamp: Date.now()
-                    }]);
+                    return { success: false, message: parsed.error || '未知错误' };
                 }
             } catch (e) {
-                setMessages(prev => [...prev, {
-                    role: 'ai',
-                    content: `归档异常: ${e}`,
-                    timestamp: Date.now()
-                }]);
+                return { success: false, message: `归档异常: ${e}` };
             }
         } else {
             setMessages(prev => [...prev, {
@@ -264,9 +254,8 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                 content: '会话已结束。',
                 timestamp: Date.now()
             }]);
+            return { success: true, message: '会话已结束' };
         }
-
-        setRootCause('');
     };
 
     const handlePolishRootCause = async () => {
@@ -721,9 +710,15 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                 </div>
             )}
 
-            <SessionReviewModal 
+            <SessionReviewModal
                 isOpen={isReviewModalOpen}
-                onClose={() => setIsReviewModalOpen(false)}
+                onClose={() => {
+                    setIsReviewModalOpen(false);
+                    setIsStopping(false);
+                    setIsInvestigating(false);
+                    if (onStop) onStop();
+                    setRootCause('');
+                }}
                 rootCause={rootCause}
                 onArchive={handleArchive}
             />
