@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { EventsOn } from '../../../wailsjs/runtime/runtime';
 
 interface ReleaseInfo {
@@ -164,9 +165,9 @@ const AboutPanel: React.FC = () => {
                     {changelog && (
                         <div style={styles.changelogBox}>
                             <div style={styles.changelogTitle}>更新内容</div>
-                            <div style={styles.changelogBody}>{changelog.split('\n').map((line, i) => (
-                                <div key={i} style={styles.changelogLine}>{line}</div>
-                            ))}</div>
+                            <div style={styles.changelogBody}>
+                                <ReactMarkdown>{changelog}</ReactMarkdown>
+                            </div>
                         </div>
                     )}
                     <div style={styles.btnRow}>
@@ -297,9 +298,6 @@ const styles: Record<string, React.CSSProperties> = {
         color: '#ccc',
         fontSize: '12px',
         lineHeight: 1.6,
-    },
-    changelogLine: {
-        minHeight: '1em',
     },
     btnRow: {
         display: 'flex',
