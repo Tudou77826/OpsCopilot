@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { EventsOn } from '../../../wailsjs/runtime/runtime';
+import logo from '../../assets/images/logo-universal.png';
 
 interface ReleaseInfo {
     tag_name: string;
@@ -27,6 +28,14 @@ interface DownloadProgress {
 type UpdateState = 'idle' | 'checking' | 'available' | 'no-update' | 'error' | 'downloading' | 'ready';
 
 const GITHUB_REPO = 'https://github.com/Tudou77826/OpsCopilot';
+
+const techStack = [
+    { label: 'Go', color: '#00ADD8' },
+    { label: 'React', color: '#61DAFB' },
+    { label: 'Wails', color: '#F0C674' },
+    { label: 'TypeScript', color: '#3178C6' },
+    { label: 'xterm.js', color: '#74B636' },
+];
 
 const friendlyError = (raw: string): string => {
     const lower = raw.toLowerCase();
@@ -145,18 +154,40 @@ const AboutPanel: React.FC = () => {
 
     return (
         <div style={styles.container}>
-            {/* App info — always visible */}
-            <div style={styles.section}>
-                <div style={styles.appName}>OpsCopilot</div>
-                <div style={styles.desc}>AI 驱动的智能运维助手</div>
-                <div style={styles.infoRow}>
-                    <span style={styles.infoLabel}>版本</span>
-                    <span style={styles.infoValue}>{currentVersion}</span>
+            {/* Hero card */}
+            <div style={styles.heroCard}>
+                <img src={logo} alt="OpsCopilot" style={styles.heroLogo} />
+                <div style={styles.heroInfo}>
+                    <div style={styles.heroName}>OpsCopilot</div>
+                    <div style={styles.heroDesc}>AI 驱动的智能运维助手</div>
+                    <div style={styles.heroVersion}>v{currentVersion}</div>
                 </div>
-                <div style={styles.infoRow}>
-                    <span style={styles.infoLabel}>项目主页</span>
+            </div>
+
+            {/* Info grid */}
+            <div style={styles.infoGrid}>
+                <div style={styles.infoCard}>
+                    <div style={styles.infoLabel}>技术栈</div>
+                    <div style={styles.tagList}>
+                        {techStack.map(t => (
+                            <span key={t.label} style={{ ...styles.tag, borderColor: t.color, color: t.color }}>
+                                {t.label}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+                <div style={styles.infoCard}>
+                    <div style={styles.infoLabel}>开源协议</div>
+                    <div style={styles.infoValue}>MIT License</div>
+                </div>
+                <div style={styles.infoCard}>
+                    <div style={styles.infoLabel}>作者</div>
+                    <div style={styles.infoValue}>z-yibo</div>
+                </div>
+                <div style={styles.infoCard}>
+                    <div style={styles.infoLabel}>项目主页</div>
                     <a href={GITHUB_REPO} target="_blank" rel="noopener noreferrer" style={styles.link}>
-                        {GITHUB_REPO}
+                        GitHub
                     </a>
                 </div>
             </div>
@@ -241,61 +272,117 @@ const AboutPanel: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            {/* Footer */}
+            <div style={styles.footer}>
+                Made with dedication for Ops teams
+            </div>
         </div>
     );
 };
-
-const SPINNER_ANIMATION = `@keyframes about-spin { to { transform: rotate(360deg); } }`;
 
 const styles: Record<string, React.CSSProperties> = {
     container: {
         display: 'flex',
         flexDirection: 'column',
         gap: '0',
-        padding: '8px 0',
+        padding: '4px 0 0 0',
     },
-    section: {
+    // Hero
+    heroCard: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '16px',
+        padding: '20px',
+        backgroundColor: '#1e1e1e',
+        borderRadius: '8px',
+        border: '1px solid #333',
+    },
+    heroLogo: {
+        width: 56,
+        height: 56,
+        borderRadius: '12px',
+        flexShrink: 0,
+    },
+    heroInfo: {
         display: 'flex',
         flexDirection: 'column',
-        gap: '10px',
+        gap: '2px',
     },
-    divider: {
-        borderTop: '1px solid #333',
-        margin: '16px 0',
-    },
-    sectionTitle: {
+    heroName: {
         color: '#fff',
-        fontSize: '13px',
-        fontWeight: 600,
+        fontSize: '20px',
+        fontWeight: 700,
+        letterSpacing: '-0.3px',
     },
-    appName: {
-        color: '#fff',
-        fontSize: '18px',
-        fontWeight: 600,
-    },
-    desc: {
+    heroDesc: {
         color: '#888',
         fontSize: '13px',
-        marginTop: '-6px',
     },
-    infoRow: {
+    heroVersion: {
+        color: '#58a6ff',
+        fontSize: '12px',
+        fontFamily: 'monospace',
+        marginTop: '2px',
+    },
+    // Info grid
+    infoGrid: {
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '8px',
+        marginTop: '12px',
+    },
+    infoCard: {
+        padding: '10px 12px',
+        backgroundColor: '#1e1e1e',
+        borderRadius: '6px',
+        border: '1px solid #2a2a2a',
         display: 'flex',
-        gap: '12px',
-        alignItems: 'center',
+        flexDirection: 'column',
+        gap: '6px',
     },
     infoLabel: {
-        color: '#888',
-        fontSize: '12px',
-        minWidth: '48px',
+        color: '#666',
+        fontSize: '11px',
+        textTransform: 'uppercase' as const,
+        letterSpacing: '0.5px',
     },
     infoValue: {
         color: '#ccc',
         fontSize: '13px',
     },
+    tagList: {
+        display: 'flex',
+        flexWrap: 'wrap' as const,
+        gap: '4px',
+    },
+    tag: {
+        padding: '2px 8px',
+        borderRadius: '3px',
+        border: '1px solid',
+        fontSize: '11px',
+        fontFamily: 'monospace',
+    },
     link: {
         color: '#58a6ff',
-        fontSize: '12px',
+        fontSize: '13px',
         textDecoration: 'none',
+    },
+    // Divider
+    divider: {
+        borderTop: '1px solid #333',
+        margin: '16px 0',
+    },
+    // Update section
+    section: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+    },
+    sectionTitle: {
+        color: '#fff',
+        fontSize: '13px',
+        fontWeight: 600,
     },
     checkBtn: {
         padding: '8px 16px',
@@ -318,7 +405,7 @@ const styles: Record<string, React.CSSProperties> = {
         border: '2px solid #444',
         borderTopColor: '#007acc',
         borderRadius: '50%',
-        animation: `${SPINNER_ANIMATION} 0.8s linear infinite`,
+        animation: 'about-spin 0.8s linear infinite',
         flexShrink: 0,
     },
     checkingText: {
@@ -412,6 +499,15 @@ const styles: Record<string, React.CSSProperties> = {
     errorMsg: {
         color: '#f44336',
         fontSize: '12px',
+    },
+    // Footer
+    footer: {
+        color: '#444',
+        fontSize: '11px',
+        textAlign: 'center' as const,
+        marginTop: '16px',
+        paddingTop: '12px',
+        borderTop: '1px solid #222',
     },
 };
 
