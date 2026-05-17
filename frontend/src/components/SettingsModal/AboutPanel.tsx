@@ -29,14 +29,6 @@ type UpdateState = 'idle' | 'checking' | 'available' | 'no-update' | 'error' | '
 
 const GITHUB_REPO = 'https://github.com/Tudou77826/OpsCopilot';
 
-const techStack = [
-    { label: 'Go', color: '#00ADD8' },
-    { label: 'React', color: '#61DAFB' },
-    { label: 'Wails', color: '#F0C674' },
-    { label: 'TypeScript', color: '#3178C6' },
-    { label: 'xterm.js', color: '#74B636' },
-];
-
 const friendlyError = (raw: string): string => {
     const lower = raw.toLowerCase();
     if (lower.includes('timeout') || lower.includes('deadline')) return '连接超时，请检查网络后重试';
@@ -166,20 +158,6 @@ const AboutPanel: React.FC = () => {
 
             {/* Info grid */}
             <div style={styles.infoGrid}>
-                <div style={styles.infoCard}>
-                    <div style={styles.infoLabel}>技术栈</div>
-                    <div style={styles.tagList}>
-                        {techStack.map(t => (
-                            <span key={t.label} style={{ ...styles.tag, borderColor: t.color, color: t.color }}>
-                                {t.label}
-                            </span>
-                        ))}
-                    </div>
-                </div>
-                <div style={styles.infoCard}>
-                    <div style={styles.infoLabel}>开源协议</div>
-                    <div style={styles.infoValue}>MIT License</div>
-                </div>
                 <div style={styles.infoCard}>
                     <div style={styles.infoLabel}>作者</div>
                     <div style={styles.infoValue}>z-yibo</div>
@@ -330,7 +308,7 @@ const styles: Record<string, React.CSSProperties> = {
         display: 'grid',
         gridTemplateColumns: '1fr 1fr',
         gap: '8px',
-        marginTop: '12px',
+        marginTop: '10px',
     },
     infoCard: {
         padding: '10px 12px',
@@ -350,18 +328,6 @@ const styles: Record<string, React.CSSProperties> = {
     infoValue: {
         color: '#ccc',
         fontSize: '13px',
-    },
-    tagList: {
-        display: 'flex',
-        flexWrap: 'wrap' as const,
-        gap: '4px',
-    },
-    tag: {
-        padding: '2px 8px',
-        borderRadius: '3px',
-        border: '1px solid',
-        fontSize: '11px',
-        fontFamily: 'monospace',
     },
     link: {
         color: '#58a6ff',
