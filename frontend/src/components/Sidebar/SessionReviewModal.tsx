@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { TimelineEvent, filterTimelineEvents, generateMarkdown } from '../../utils/timeline';
 import { EventsOn } from '../../../wailsjs/runtime/runtime';
@@ -290,12 +290,16 @@ const SessionReviewModal: React.FC<SessionReviewModalProps> = ({ isOpen, onClose
         }
     }, [isOpen]);
 
-    // Update isNewService when serviceOptions loaded
+    // Auto-switch out of new-service mode only when catalog first loads
+    // (services transitions from 0 to >0). Do NOT re-trigger on user action.
+    const prevServiceCountRef = useRef(0);
     useEffect(() => {
-        if (isOpen && selection.serviceOptions.length > 0 && selection.isNewService) {
+        const count = selection.serviceOptions.length;
+        if (isOpen && prevServiceCountRef.current === 0 && count > 0 && selection.isNewService) {
             setSelection(prev => ({ ...prev, isNewService: false }));
         }
-    }, [isOpen, selection.serviceOptions.length, selection.isNewService]);
+        prevServiceCountRef.current = count;
+    }, [isOpen, selection.serviceOptions.length]);
 
     // Load catalog services
     const loadCatalogServices = async () => {
@@ -306,7 +310,9 @@ const SessionReviewModal: React.FC<SessionReviewModalProps> = ({ isOpen, onClose
                 setSelection(prev => ({
                     ...prev,
                     serviceOptions: services,
-                    isNewService: services.length === 0,
+                    // Only auto-enter new-service mode if catalog is empty
+                    // AND user hasn't already started interacting
+                    isNewService: services.length === 0 && !prev.selectedService,
                 }));
             }
         } catch (e) {
