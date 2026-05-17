@@ -26,6 +26,21 @@ interface DownloadProgress {
 
 type UpdateState = 'idle' | 'checking' | 'available' | 'no-update' | 'error' | 'downloading' | 'ready';
 
+const GITHUB_REPO = 'https://github.com/Tudou77826/OpsCopilot';
+
+const friendlyError = (raw: string): string => {
+    const lower = raw.toLowerCase();
+    if (lower.includes('timeout') || lower.includes('deadline')) return '连接超时，请检查网络后重试';
+    if (lower.includes('no such host') || lower.includes('dns') || lower.includes('lookup')) return '无法连接到更新服务器，请检查网络连接';
+    if (lower.includes('connection refused') || lower.includes('network is unreachable')) return '网络不可用，请检查网络连接';
+    if (lower.includes('tls') || lower.includes('certificate') || lower.includes('x509')) return '安全连接失败，请检查系统时间或网络代理设置';
+    if (lower.includes('403') || lower.includes('rate limit')) return '更新服务暂不可用，请稍后再试';
+    if (lower.includes('404')) return '未找到可用更新';
+    if (lower.includes('dial tcp') || lower.includes('connect')) return '无法连接到更新服务器，请检查网络连接';
+    if (lower.includes('no network') || lower.includes('offline')) return '当前无网络连接';
+    return '检查更新失败，请稍后再试';
+};
+
 const AboutPanel: React.FC = () => {
     const [currentVersion, setCurrentVersion] = useState('...');
     const [updateState, setUpdateState] = useState<UpdateState>('idle');
@@ -54,13 +69,13 @@ const AboutPanel: React.FC = () => {
             const raw = await window.go?.main?.App?.CheckUpdate?.();
             if (!raw) {
                 setUpdateState('error');
-                setErrorMsg('无响应');
+                setErrorMsg('未收到响应');
                 return;
             }
             const status: UpdateStatus = typeof raw === 'string' ? JSON.parse(raw) : raw;
             if (status.error) {
                 setUpdateState('error');
-                setErrorMsg(status.error);
+                setErrorMsg(friendlyError(status.error));
                 return;
             }
             if (status.hasUpdate && status.downloadUrl) {
@@ -74,7 +89,7 @@ const AboutPanel: React.FC = () => {
             }
         } catch (e: any) {
             setUpdateState('error');
-            setErrorMsg(e.toString());
+            setErrorMsg(friendlyError(e.toString()));
         }
     }, []);
 
@@ -104,12 +119,12 @@ const AboutPanel: React.FC = () => {
                 const result = typeof raw === 'string' ? JSON.parse(raw) : raw;
                 if (!result.ok) {
                     setUpdateState('error');
-                    setErrorMsg(result.error || '更新失败');
+                    setErrorMsg(friendlyError(result.error || ''));
                 }
             }
         } catch (e: any) {
             setUpdateState('error');
-            setErrorMsg(e.toString());
+            setErrorMsg(friendlyError(e.toString()));
         } finally {
             offProgress?.();
             offReady?.();
@@ -130,114 +145,157 @@ const AboutPanel: React.FC = () => {
 
     return (
         <div style={styles.container}>
-            {/* App info */}
-            <div style={styles.appInfo}>
+            {/* App info — always visible */}
+            <div style={styles.section}>
                 <div style={styles.appName}>OpsCopilot</div>
-                <div style={styles.version}>当前版本: {currentVersion}</div>
+                <div style={styles.desc}>AI 驱动的智能运维助手</div>
+                <div style={styles.infoRow}>
+                    <span style={styles.infoLabel}>版本</span>
+                    <span style={styles.infoValue}>{currentVersion}</span>
+                </div>
+                <div style={styles.infoRow}>
+                    <span style={styles.infoLabel}>项目主页</span>
+                    <a href={GITHUB_REPO} target="_blank" rel="noopener noreferrer" style={styles.link}>
+                        {GITHUB_REPO}
+                    </a>
+                </div>
             </div>
 
-            {/* Check button */}
-            {updateState === 'idle' && (
-                <button style={styles.checkBtn} onClick={handleCheck}>
-                    检查更新
-                </button>
-            )}
-            {updateState === 'checking' && (
-                <button style={{ ...styles.checkBtn, opacity: 0.6 }} disabled>
-                    检查中...
-                </button>
-            )}
+            <div style={styles.divider} />
 
-            {/* No update */}
-            {updateState === 'no-update' && (
-                <div style={styles.resultBox}>
-                    <div style={styles.upToDate}>已是最新版本 ({latestVersion})</div>
-                    <button style={styles.secondaryBtn} onClick={() => setUpdateState('idle')}>
-                        重新检查
+            {/* Update section */}
+            <div style={styles.section}>
+                <div style={styles.sectionTitle}>更新</div>
+
+                {updateState === 'idle' && (
+                    <button style={styles.checkBtn} onClick={handleCheck}>
+                        检查更新
                     </button>
-                </div>
-            )}
+                )}
+                {updateState === 'checking' && (
+                    <div style={styles.checkingRow}>
+                        <div style={styles.loadingSpinner} />
+                        <span style={styles.checkingText}>正在检查...</span>
+                    </div>
+                )}
 
-            {/* Update available */}
-            {updateState === 'available' && (
-                <div style={styles.resultBox}>
-                    <div style={styles.newVersion}>发现新版本: {latestVersion}</div>
-                    {changelog && (
-                        <div style={styles.changelogBox}>
-                            <div style={styles.changelogTitle}>更新内容</div>
-                            <div style={styles.changelogBody}>
-                                <ReactMarkdown>{changelog}</ReactMarkdown>
-                            </div>
-                        </div>
-                    )}
-                    <div style={styles.btnRow}>
-                        <button style={styles.updateBtn} onClick={handleUpdate}>
-                            立即更新
-                        </button>
+                {updateState === 'no-update' && (
+                    <div style={styles.resultBox}>
+                        <div style={styles.upToDate}>已是最新版本 ({latestVersion})</div>
                         <button style={styles.secondaryBtn} onClick={() => setUpdateState('idle')}>
-                            取消
+                            重新检查
                         </button>
                     </div>
-                </div>
-            )}
+                )}
 
-            {/* Downloading */}
-            {updateState === 'downloading' && (
-                <div style={styles.resultBox}>
-                    <div style={styles.progressLabel}>正在下载更新...</div>
-                    <div style={styles.progressBarBg}>
-                        <div style={{
-                            ...styles.progressBarFill,
-                            width: `${Math.min(progress.percentage, 100)}%`,
-                        }} />
+                {updateState === 'available' && (
+                    <div style={styles.resultBox}>
+                        <div style={styles.newVersion}>发现新版本: {latestVersion}</div>
+                        {changelog && (
+                            <div style={styles.changelogBox}>
+                                <div style={styles.changelogTitle}>更新内容</div>
+                                <div style={styles.changelogBody}>
+                                    <ReactMarkdown>{changelog}</ReactMarkdown>
+                                </div>
+                            </div>
+                        )}
+                        <div style={styles.btnRow}>
+                            <button style={styles.updateBtn} onClick={handleUpdate}>
+                                立即更新
+                            </button>
+                            <button style={styles.secondaryBtn} onClick={() => setUpdateState('idle')}>
+                                稍后再说
+                            </button>
+                        </div>
                     </div>
-                    <div style={styles.progressInfo}>
-                        <span>{formatBytes(progress.bytesDownloaded)} / {formatBytes(progress.bytesTotal)}</span>
-                        <span>{formatSpeed(progress.speedBps)}</span>
+                )}
+
+                {updateState === 'downloading' && (
+                    <div style={styles.resultBox}>
+                        <div style={styles.progressLabel}>正在下载更新...</div>
+                        <div style={styles.progressBarBg}>
+                            <div style={{
+                                ...styles.progressBarFill,
+                                width: `${Math.min(progress.percentage, 100)}%`,
+                            }} />
+                        </div>
+                        <div style={styles.progressInfo}>
+                            <span>{formatBytes(progress.bytesDownloaded)} / {formatBytes(progress.bytesTotal)}</span>
+                            <span>{formatSpeed(progress.speedBps)}</span>
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            {/* Ready to restart */}
-            {updateState === 'ready' && (
-                <div style={styles.resultBox}>
-                    <div style={styles.readyMsg}>下载完成，正在重启应用...</div>
-                </div>
-            )}
+                {updateState === 'ready' && (
+                    <div style={styles.resultBox}>
+                        <div style={styles.readyMsg}>下载完成，正在重启应用...</div>
+                    </div>
+                )}
 
-            {/* Error */}
-            {updateState === 'error' && (
-                <div style={styles.resultBox}>
-                    <div style={styles.errorMsg}>更新失败: {errorMsg}</div>
-                    <button style={styles.secondaryBtn} onClick={() => setUpdateState('idle')}>
-                        重试
-                    </button>
-                </div>
-            )}
+                {updateState === 'error' && (
+                    <div style={styles.resultBox}>
+                        <div style={styles.errorMsg}>{errorMsg}</div>
+                        <button style={styles.secondaryBtn} onClick={handleCheck}>
+                            重试
+                        </button>
+                    </div>
+                )}
+            </div>
         </div>
     );
 };
+
+const SPINNER_ANIMATION = `@keyframes about-spin { to { transform: rotate(360deg); } }`;
 
 const styles: Record<string, React.CSSProperties> = {
     container: {
         display: 'flex',
         flexDirection: 'column',
-        gap: '16px',
+        gap: '0',
         padding: '8px 0',
     },
-    appInfo: {
+    section: {
         display: 'flex',
         flexDirection: 'column',
-        gap: '4px',
+        gap: '10px',
+    },
+    divider: {
+        borderTop: '1px solid #333',
+        margin: '16px 0',
+    },
+    sectionTitle: {
+        color: '#fff',
+        fontSize: '13px',
+        fontWeight: 600,
     },
     appName: {
         color: '#fff',
         fontSize: '18px',
         fontWeight: 600,
     },
-    version: {
-        color: '#aaa',
+    desc: {
+        color: '#888',
         fontSize: '13px',
+        marginTop: '-6px',
+    },
+    infoRow: {
+        display: 'flex',
+        gap: '12px',
+        alignItems: 'center',
+    },
+    infoLabel: {
+        color: '#888',
+        fontSize: '12px',
+        minWidth: '48px',
+    },
+    infoValue: {
+        color: '#ccc',
+        fontSize: '13px',
+    },
+    link: {
+        color: '#58a6ff',
+        fontSize: '12px',
+        textDecoration: 'none',
     },
     checkBtn: {
         padding: '8px 16px',
@@ -249,6 +307,24 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: '13px',
         alignSelf: 'flex-start',
     },
+    checkingRow: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+    },
+    loadingSpinner: {
+        width: '14px',
+        height: '14px',
+        border: '2px solid #444',
+        borderTopColor: '#007acc',
+        borderRadius: '50%',
+        animation: `${SPINNER_ANIMATION} 0.8s linear infinite`,
+        flexShrink: 0,
+    },
+    checkingText: {
+        color: '#aaa',
+        fontSize: '13px',
+    },
     secondaryBtn: {
         padding: '6px 12px',
         backgroundColor: 'transparent',
@@ -257,6 +333,7 @@ const styles: Record<string, React.CSSProperties> = {
         borderRadius: '4px',
         cursor: 'pointer',
         fontSize: '12px',
+        alignSelf: 'flex-start',
     },
     updateBtn: {
         padding: '8px 16px',
