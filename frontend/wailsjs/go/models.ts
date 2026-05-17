@@ -1,5 +1,23 @@
 export namespace config {
 	
+	export class PatchStoreConfig {
+	    enabled: boolean;
+	    type: string;
+	    remote_url: string;
+	    branch: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PatchStoreConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.type = source["type"];
+	        this.remote_url = source["remote_url"];
+	        this.branch = source["branch"];
+	    }
+	}
 	export class HighlightStyle {
 	    background_color?: string;
 	    color?: string;
@@ -163,6 +181,7 @@ export namespace config {
 	    experimental: any;
 	    terminal: TerminalConfig;
 	    highlight_rules: HighlightRule[];
+	    patch_store: PatchStoreConfig;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppConfig(source);
@@ -179,6 +198,7 @@ export namespace config {
 	        this.experimental = this.convertValues(source["experimental"], null);
 	        this.terminal = this.convertValues(source["terminal"], TerminalConfig);
 	        this.highlight_rules = this.convertValues(source["highlight_rules"], HighlightRule);
+	        this.patch_store = this.convertValues(source["patch_store"], PatchStoreConfig);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -199,6 +219,7 @@ export namespace config {
 		    return a;
 		}
 	}
+	
 	
 	
 	

@@ -22,6 +22,10 @@ export function CancelSession() {
   return window['go']['main']['App']['CancelSession']();
 }
 
+export function CheckUpdate() {
+  return window['go']['main']['App']['CheckUpdate']();
+}
+
 export function CloseSession(arg1) {
   return window['go']['main']['App']['CloseSession'](arg1);
 }
@@ -40,6 +44,10 @@ export function DeleteSavedSession(arg1) {
 
 export function DeleteScript(arg1) {
   return window['go']['main']['App']['DeleteScript'](arg1);
+}
+
+export function DoUpdate(arg1) {
+  return window['go']['main']['App']['DoUpdate'](arg1);
 }
 
 export function DuplicateSession(arg1) {
@@ -130,6 +138,10 @@ export function GetMCPStatus() {
   return window['go']['main']['App']['GetMCPStatus']();
 }
 
+export function GetPatchSyncStatus() {
+  return window['go']['main']['App']['GetPatchSyncStatus']();
+}
+
 export function GetQuickCommandGroups() {
   return window['go']['main']['App']['GetQuickCommandGroups']();
 }
@@ -152,6 +164,10 @@ export function GetSessionTimeline() {
 
 export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
+}
+
+export function GetVersion() {
+  return window['go']['main']['App']['GetVersion']();
 }
 
 export function HasActiveWork() {
@@ -220,6 +236,10 @@ export function ReplayScriptWithVars(arg1, arg2, arg3) {
 
 export function ResizeTerminal(arg1, arg2, arg3) {
   return window['go']['main']['App']['ResizeTerminal'](arg1, arg2, arg3);
+}
+
+export function RetryPatchSync() {
+  return window['go']['main']['App']['RetryPatchSync']();
 }
 
 export function SaveCommandWhitelist(arg1) {
