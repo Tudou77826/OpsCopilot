@@ -37,7 +37,11 @@ import (
 	"opscopilot/pkg/sshclient"
 	"opscopilot/pkg/terminal"
 	"opscopilot/pkg/troubleshoot"
+	"opscopilot/pkg/updater"
 )
+
+// Version is set via -ldflags "-X main.Version=..." at build time.
+var Version = "dev"
 
 // App struct
 type App struct {
@@ -252,6 +256,67 @@ func (a *App) getShellTransport(sessionID string, client *ssh.Client) *filetrans
 	t := filetransfer.NewRootRelayTransport(client, "", "")
 	a.shellTransports[sessionID] = t
 	return t
+}
+
+// GetVersion returns the current application version.
+func (a *App) GetVersion() string {
+	return Version
+}
+
+// CheckUpdate checks GitHub for the latest release and returns update status as JSON.
+func (a *App) CheckUpdate() string {
+	status, err := updater.CheckForUpdate(Version)
+	if err != nil {
+		slog.Warn("check update failed", "error", err)
+		result, _ := json.Marshal(map[string]interface{}{
+			"hasUpdate":      false,
+			"currentVersion": Version,
+			"error":          err.Error(),
+		})
+		return string(result)
+	}
+	result, _ := json.Marshal(status)
+	slog.Info("check update result", "hasUpdate", status.HasUpdate, "latest", status.LatestVer)
+	return string(result)
+}
+
+// DoUpdate downloads the update, prepares the updater script, and quits the app.
+func (a *App) DoUpdate(downloadURL string) string {
+	exePath, err := os.Executable()
+	if err != nil {
+		return toJSONError(fmt.Sprintf("get exe path: %v", err))
+	}
+	exeDir := filepath.Dir(exePath)
+	tempDir := filepath.Join(os.TempDir(), "opscopilot_update")
+
+	progressFn := func(p updater.DownloadProgress) {
+		runtime.EventsEmit(a.ctx, "update-download-progress", map[string]interface{}{
+			"bytesDownloaded": p.BytesDownloaded,
+			"bytesTotal":      p.BytesTotal,
+			"percentage":      p.Percentage,
+			"speedBps":        p.SpeedBps,
+		})
+	}
+
+	extractedDir, err := updater.DownloadAndExtract(downloadURL, tempDir, progressFn)
+	if err != nil {
+		return toJSONError(fmt.Sprintf("download: %v", err))
+	}
+
+	if err := updater.ApplyUpdate(exeDir, extractedDir, exePath); err != nil {
+		return toJSONError(fmt.Sprintf("apply update: %v", err))
+	}
+
+	runtime.EventsEmit(a.ctx, "update-ready", map[string]interface{}{"ok": true})
+
+	go func() {
+		time.Sleep(2 * time.Second)
+		a.isForceQuitting = true
+		runtime.Quit(a.ctx)
+	}()
+
+	result, _ := json.Marshal(map[string]interface{}{"ok": true})
+	return string(result)
 }
 
 // startup is called when the app starts. The context is saved

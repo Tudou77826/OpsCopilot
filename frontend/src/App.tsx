@@ -49,6 +49,7 @@ function App() {
     const commandQueryShortcut = 'Ctrl+K';
     const [connectErrors, setConnectErrors] = useState<{ title: string; message: string }[]>([]);
     const [parsedTimestamp, setParsedTimestamp] = useState<TimestampResult | null>(null);
+    const [updateAvailable, setUpdateAvailable] = useState(false);
     const statusResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Refs to hold latest state for callbacks
@@ -168,6 +169,19 @@ function App() {
             }
         };
         loadSettings();
+
+        // Check for updates on startup (background, non-blocking)
+        const checkUpdate = async () => {
+            try {
+                // @ts-ignore
+                const raw = await window.go?.main?.App?.CheckUpdate?.();
+                if (raw) {
+                    const result = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    if (result.hasUpdate) setUpdateAvailable(true);
+                }
+            } catch { /* silent */ }
+        };
+        checkUpdate();
     }, []);
 
     useEffect(() => {
@@ -634,11 +648,23 @@ function App() {
                     <button onClick={() => setIsSmartModalOpen(true)} style={styles.primaryBtn}>
                         + 新建连接
                     </button>
-                    <button onClick={() => setIsSettingsOpen(true)} style={styles.iconBtnUnified} title="设置">
+                    <button onClick={() => setIsSettingsOpen(true)} style={{ ...styles.iconBtnUnified, position: 'relative' }} title="设置">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <circle cx="12" cy="12" r="3"></circle>
                             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                         </svg>
+                        {updateAvailable && (
+                            <span style={{
+                                position: 'absolute',
+                                top: '2px',
+                                right: '2px',
+                                width: '8px',
+                                height: '8px',
+                                borderRadius: '50%',
+                                backgroundColor: '#4caf50',
+                                border: '1px solid #1e1e1e',
+                            }} />
+                        )}
                     </button>
                     {parsedTimestamp && (
                         <div style={{

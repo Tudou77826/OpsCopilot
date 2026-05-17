@@ -3,6 +3,7 @@ import KeysMap from './KeysMap';
 import HighlightRulesModal from './HighlightRulesModal';
 import CommandWhitelistPanel from './CommandWhitelist/CommandWhitelistPanel';
 import FileAccessPanel from './FileAccess/FileAccessPanel';
+import AboutPanel from './AboutPanel';
 import { HighlightRule, TerminalConfig } from '../Terminal/highlightTypes';
 
 interface AppConfig {
@@ -40,7 +41,7 @@ interface SettingsModalProps {
     onHighlightRulesChange?: (rules: HighlightRule[]) => void;
 }
 
-type TabId = 'llm' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'filetransfer' | 'whitelist' | 'fileaccess' | 'experimental';
+type TabId = 'llm' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'filetransfer' | 'whitelist' | 'fileaccess' | 'experimental' | 'about';
 
 interface NavItem {
     id: TabId;
@@ -82,6 +83,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         { id: 'whitelist', label: '命令白名单', icon: '🛡️', category: '安全' },
         { id: 'fileaccess', label: '文件访问控制', icon: '🔒', category: '安全' },
         { id: 'experimental', label: '高级选项', icon: '🔧', category: '系统' },
+        { id: 'about', label: '关于', icon: '📋', category: '系统' },
     ];
 
     // Filter navigation items based on search query
@@ -564,6 +566,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
                     </div>
                 );
+
+            case 'about':
+                return <AboutPanel />;
 
             default:
                 return null;

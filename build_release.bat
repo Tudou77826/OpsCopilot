@@ -18,9 +18,18 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+:: 提取版本号（优先使用环境变量，回退到 git tag）
+if defined GITHUB_REF_NAME (
+    set "TAG_VERSION=%GITHUB_REF_NAME%"
+) else (
+    for /f "delims=" %%v in ('git describe --tags --always --dirty 2^>nul') do set "TAG_VERSION=%%v"
+)
+if "%TAG_VERSION%"=="" set "TAG_VERSION=dev"
+echo [INFO] Building version: %TAG_VERSION%
+
 :: 执行构建
 :: 注意：这里不设置 OPSCOPILOT_DEV_MODE，确保日志只输出到文件
-wails build
+wails build -ldflags "-X main.Version=%TAG_VERSION%"
 
 if %errorlevel% neq 0 (
     echo [ERROR] Build failed.
