@@ -23,6 +23,17 @@ const (
 	latestReleaseURL = "https://api.github.com/repos/" + owner + "/" + repo + "/releases/latest"
 )
 
+// newHTTPClient creates an HTTP client that respects system proxy settings
+// (HTTP_PROXY, HTTPS_PROXY, http_proxy, https_proxy environment variables).
+func newHTTPClient(timeout time.Duration) *http.Client {
+	return &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+		},
+	}
+}
+
 // ReleaseInfo represents a GitHub release.
 type ReleaseInfo struct {
 	TagName     string    `json:"tag_name"`
@@ -231,7 +242,7 @@ func buildCopyCommands(srcDir string, dstDir string) string {
 
 // fetchLatestRelease calls the GitHub API to get the latest release.
 func fetchLatestRelease() (*ReleaseInfo, error) {
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := newHTTPClient(15 * time.Second)
 	req, err := http.NewRequest("GET", latestReleaseURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
@@ -258,7 +269,7 @@ func fetchLatestRelease() (*ReleaseInfo, error) {
 
 // downloadFile downloads a file with optional progress reporting.
 func downloadFile(url string, destPath string, progressFn func(DownloadProgress)) error {
-	client := &http.Client{Timeout: 10 * time.Minute}
+	client := newHTTPClient(10 * time.Minute)
 	resp, err := client.Get(url)
 	if err != nil {
 		return fmt.Errorf("download request: %w", err)
