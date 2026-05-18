@@ -1166,6 +1166,7 @@ func (a *App) GetSettings() config.AppConfig {
 }
 
 func (a *App) GetPatchSyncStatus() string {
+	a.refreshPatchSyncStatusConfig()
 	status := a.getPatchSyncStatusSnapshot()
 	data, _ := json.Marshal(status)
 	return string(data)

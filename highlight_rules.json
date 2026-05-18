@@ -1,1 +1,13 @@
-[]
+[
+  {
+    "id": "89a838f0-ce5d-46a9-96b4-91a7552177f2",
+    "name": "test-lll",
+    "pattern": "performance",
+    "is_enabled": true,
+    "priority": 10,
+    "style": {
+      "color": "#c90303",
+      "font_weight": "bold"
+    }
+  }
+]

@@ -137,11 +137,16 @@ func (s *GitPatchStore) LastSyncTime(ctx context.Context) (time.Time, error) {
 
 // --- 内部方法 ---
 
-// ensureRepo 确保本地仓库存在（clone 或 open）
+// ensureRepo 确保本地仓库存在且配置（remote URL、分支）与当前配置一致
 func (s *GitPatchStore) ensureRepo(ctx context.Context) error {
 	gitDir := filepath.Join(s.localDir, ".git")
 	if _, err := os.Stat(gitDir); err == nil {
-		return nil // 已存在
+		// 已存在：校验 remote URL 和分支是否匹配
+		if !s.repoConfigMatches(ctx) {
+			_ = os.RemoveAll(s.localDir)
+		} else {
+			return nil
+		}
 	}
 
 	// clone 仓库（git clone 会自动创建目标目录）
@@ -151,6 +156,21 @@ func (s *GitPatchStore) ensureRepo(ctx context.Context) error {
 	}
 
 	return s.gitCmdInDir(ctx, parentDir, "clone", "-b", s.branch, s.remoteURL, s.localDir)
+}
+
+// repoConfigMatches 检查本地仓库的 remote URL 和当前分支是否与配置一致
+func (s *GitPatchStore) repoConfigMatches(ctx context.Context) bool {
+	currentRemote, err := s.gitOutput(ctx, "remote", "get-url", "origin")
+	if err != nil || currentRemote != s.remoteURL {
+		return false
+	}
+
+	currentBranch, err := s.gitOutput(ctx, "branch", "--show-current")
+	if err != nil || currentBranch != s.branch {
+		return false
+	}
+
+	return true
 }
 
 // pull 执行 git pull --rebase
