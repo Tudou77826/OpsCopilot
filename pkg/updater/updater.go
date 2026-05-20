@@ -25,13 +25,14 @@ const (
 	latestReleaseURL = "https://api.github.com/repos/" + owner + "/" + repo + "/releases/latest"
 )
 
-// newHTTPClient creates an HTTP client that respects system proxy settings
-// (HTTP_PROXY, HTTPS_PROXY, http_proxy, https_proxy environment variables).
+// newHTTPClient creates an HTTP client that respects system proxy settings.
+// It checks environment variables first, then falls back to Windows Internet
+// Settings (the same proxy the browser uses).
 func newHTTPClient(timeout time.Duration) *http.Client {
 	return &http.Client{
 		Timeout: timeout,
 		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
+			Proxy: systemProxyFunc,
 		},
 	}
 }
