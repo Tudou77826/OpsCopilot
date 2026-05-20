@@ -96,23 +96,19 @@ const AboutPanel: React.FC = () => {
 
     const handleUpdate = useCallback(async () => {
         if (!downloadURL) return;
+        setProgress({ bytesDownloaded: 0, bytesTotal: 0, percentage: 0, speedBps: 0 });
         setUpdateState('downloading');
 
         let offProgress: (() => void) | undefined;
         let offReady: (() => void) | undefined;
 
         try {
-            // @ts-ignore
-            if (window.runtime?.EventsOn) {
-                // @ts-ignore
-                offProgress = EventsOn('update-download-progress', (data: DownloadProgress) => {
-                    setProgress(data);
-                });
-                // @ts-ignore
-                offReady = EventsOn('update-ready', () => {
-                    setUpdateState('ready');
-                });
-            }
+            offProgress = EventsOn('update-download-progress', (data: DownloadProgress) => {
+                setProgress(data);
+            });
+            offReady = EventsOn('update-ready', () => {
+                setUpdateState('ready');
+            });
 
             // @ts-ignore
             const raw = await window.go?.main?.App?.DoUpdate?.(downloadURL);
@@ -121,6 +117,14 @@ const AboutPanel: React.FC = () => {
                 if (!result.ok) {
                     setUpdateState('error');
                     setErrorMsg(friendlyError(result.error || ''));
+                } else {
+                    // Wails event delivery can lag behind the RPC response. Mark ready
+                    // here as a fallback so the UI doesn't remain stuck at 100%.
+                    setProgress((prev) => ({
+                        ...prev,
+                        percentage: 100,
+                    }));
+                    setUpdateState('ready');
                 }
             }
         } catch (e: any) {
@@ -152,7 +156,7 @@ const AboutPanel: React.FC = () => {
                 <div style={styles.heroInfo}>
                     <div style={styles.heroName}>OpsCopilot</div>
                     <div style={styles.heroDesc}>AI 驱动的智能运维助手</div>
-                    <div style={styles.heroVersion}>v{currentVersion}</div>
+                    <div style={styles.heroVersion}>{currentVersion.startsWith('v') ? currentVersion : `v${currentVersion}`}</div>
                 </div>
             </div>
 
@@ -221,7 +225,9 @@ const AboutPanel: React.FC = () => {
 
                 {updateState === 'downloading' && (
                     <div style={styles.resultBox}>
-                        <div style={styles.progressLabel}>正在下载更新...</div>
+                        <div style={styles.progressLabel}>
+                            {progress.percentage >= 100 ? '下载完成，正在准备安装...' : '正在下载更新...'}
+                        </div>
                         <div style={styles.progressBarBg}>
                             <div style={{
                                 ...styles.progressBarFill,

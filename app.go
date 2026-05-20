@@ -363,12 +363,15 @@ func (a *App) CheckUpdate() string {
 
 // DoUpdate downloads the update, prepares the updater script, and quits the app.
 func (a *App) DoUpdate(downloadURL string) string {
+	slog.Info("update: starting", "url", downloadURL)
+
 	exePath, err := os.Executable()
 	if err != nil {
 		return toJSONError(fmt.Sprintf("get exe path: %v", err))
 	}
 	exeDir := filepath.Dir(exePath)
 	tempDir := filepath.Join(os.TempDir(), "opscopilot_update")
+	slog.Info("update: paths resolved", "exePath", exePath, "exeDir", exeDir, "tempDir", tempDir)
 
 	progressFn := func(p updater.DownloadProgress) {
 		runtime.EventsEmit(a.ctx, "update-download-progress", map[string]interface{}{
@@ -379,14 +382,19 @@ func (a *App) DoUpdate(downloadURL string) string {
 		})
 	}
 
+	slog.Info("update: downloading and extracting...")
 	extractedDir, err := updater.DownloadAndExtract(downloadURL, tempDir, progressFn)
 	if err != nil {
+		slog.Error("update: download/extract failed", "error", err)
 		return toJSONError(fmt.Sprintf("download: %v", err))
 	}
+	slog.Info("update: download complete, extracted", "extractedDir", extractedDir)
 
 	if err := updater.ApplyUpdate(exeDir, extractedDir, exePath); err != nil {
+		slog.Error("update: apply failed", "error", err)
 		return toJSONError(fmt.Sprintf("apply update: %v", err))
 	}
+	slog.Info("update: script launched, scheduling quit")
 
 	runtime.EventsEmit(a.ctx, "update-ready", map[string]interface{}{"ok": true})
 
