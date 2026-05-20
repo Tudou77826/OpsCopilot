@@ -14,7 +14,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -1811,7 +1810,6 @@ func (a *App) OpenFileManager(sessionID string) string {
 		"--ipc-token-file="+tokenFile,
 		"--session="+sessionID,
 	)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	// Don't wait for the process - let it run in background
 	if err := cmd.Start(); err != nil {
 		return mustJSON(ftResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeUnknown, Message: "启动文件管理器失败: " + err.Error()}})
