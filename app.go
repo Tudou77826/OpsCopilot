@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,6 +26,7 @@ import (
 	"opscopilot/pkg/filetransfer"
 	"opscopilot/pkg/ftipc"
 	"opscopilot/pkg/knowledge"
+	"opscopilot/pkg/knowledge/patchstore"
 	"opscopilot/pkg/llm"
 	"opscopilot/pkg/logging"
 	"opscopilot/pkg/mcp"
@@ -71,6 +73,11 @@ type App struct {
 	sessionStateMu    sync.RWMutex
 	commandExtractors map[string]*terminal.CommandExtractor // 命令提取器（Tab 补全修正）
 	extractorMu       sync.RWMutex                     // 命令提取器锁
+	patchStoreMu      sync.RWMutex
+	patchStore        patchstore.PatchStore // 补丁存储（可选）
+	patchSyncStatusMu sync.RWMutex
+	patchSyncStatus   PatchSyncStatus
+	patchSyncing      atomic.Bool
 }
 
 // NewApp creates a new App application struct
@@ -190,6 +197,80 @@ func (a *App) setConfig(sessionID string, cfg ConnectConfig) {
 	a.activeConfigsMu.Unlock()
 }
 
+func (a *App) getPatchStore() patchstore.PatchStore {
+	a.patchStoreMu.RLock()
+	defer a.patchStoreMu.RUnlock()
+	return a.patchStore
+}
+
+func (a *App) setPatchStore(store patchstore.PatchStore) {
+	a.patchStoreMu.Lock()
+	a.patchStore = store
+	a.patchStoreMu.Unlock()
+}
+
+func (a *App) updatePatchSyncStatus(update func(*PatchSyncStatus)) {
+	a.patchSyncStatusMu.Lock()
+	defer a.patchSyncStatusMu.Unlock()
+	update(&a.patchSyncStatus)
+}
+
+func (a *App) getPatchSyncStatusSnapshot() PatchSyncStatus {
+	a.patchSyncStatusMu.RLock()
+	defer a.patchSyncStatusMu.RUnlock()
+	return a.patchSyncStatus
+}
+
+func (a *App) refreshPatchSyncStatusConfig() {
+	cfg := a.configMgr.Config.PatchStore
+	remoteURL := strings.TrimSpace(cfg.RemoteURL)
+	branch := strings.TrimSpace(cfg.Branch)
+	if branch == "" {
+		branch = "main"
+	}
+
+	pendingCount := 0
+	if pendingStore := a.newPendingPatchStore(); pendingStore != nil {
+		if patches, err := pendingStore.List(); err == nil {
+			pendingCount = len(patches)
+		}
+	}
+
+	a.updatePatchSyncStatus(func(status *PatchSyncStatus) {
+		status.Enabled = cfg.Enabled
+		status.Configured = remoteURL != ""
+		status.RemoteURL = remoteURL
+		status.Branch = branch
+		status.PendingCount = pendingCount
+		if !cfg.Enabled || remoteURL == "" {
+			status.Running = false
+		}
+	})
+}
+
+func (a *App) pendingPatchStoreDir() string {
+	return filepath.Join(filepath.Dir(a.configMgr.Config.Log.Dir), "patchstore-pending")
+}
+
+func (a *App) newPendingPatchStore() *patchstore.PendingStore {
+	return patchstore.NewPendingStore(a.pendingPatchStoreDir())
+}
+
+func (a *App) buildArchivePatch(input *knowledge.ArchiveInput, archivedAt time.Time) *patchstore.Patch {
+	record := input.Record
+	if record == "" {
+		record = knowledge.BuildArchiveRecord(input, archivedAt)
+	}
+
+	return &patchstore.Patch{
+		ID:        uuid.New().String()[:8],
+		Service:   input.Service,
+		Module:    input.Module,
+		Timestamp: archivedAt,
+		Content:   strings.TrimSpace(record),
+	}
+}
+
 // getRelayTransport returns a cached RootRelayTransport for the session.
 func (a *App) getRelayTransport(sessionID string) *filetransfer.RootRelayTransport {
 	a.relayMu.Lock()
@@ -282,12 +363,15 @@ func (a *App) CheckUpdate() string {
 
 // DoUpdate downloads the update, prepares the updater script, and quits the app.
 func (a *App) DoUpdate(downloadURL string) string {
+	slog.Info("update: starting", "url", downloadURL)
+
 	exePath, err := os.Executable()
 	if err != nil {
 		return toJSONError(fmt.Sprintf("get exe path: %v", err))
 	}
 	exeDir := filepath.Dir(exePath)
 	tempDir := filepath.Join(os.TempDir(), "opscopilot_update")
+	slog.Info("update: paths resolved", "exePath", exePath, "exeDir", exeDir, "tempDir", tempDir)
 
 	progressFn := func(p updater.DownloadProgress) {
 		runtime.EventsEmit(a.ctx, "update-download-progress", map[string]interface{}{
@@ -298,14 +382,19 @@ func (a *App) DoUpdate(downloadURL string) string {
 		})
 	}
 
+	slog.Info("update: downloading and extracting...")
 	extractedDir, err := updater.DownloadAndExtract(downloadURL, tempDir, progressFn)
 	if err != nil {
+		slog.Error("update: download/extract failed", "error", err)
 		return toJSONError(fmt.Sprintf("download: %v", err))
 	}
+	slog.Info("update: download complete, extracted", "extractedDir", extractedDir)
 
 	if err := updater.ApplyUpdate(exeDir, extractedDir, exePath); err != nil {
+		slog.Error("update: apply failed", "error", err)
 		return toJSONError(fmt.Sprintf("apply update: %v", err))
 	}
+	slog.Info("update: script launched, scheduling quit")
 
 	runtime.EventsEmit(a.ctx, "update-ready", map[string]interface{}{"ok": true})
 
@@ -338,6 +427,9 @@ func (a *App) startup(ctx context.Context) {
 	})
 
 	slog.Info("app started")
+
+	// 初始化补丁存储（如果已配置）
+	a.initPatchStore()
 
 	// 初始化 MCP 管理器
 	// MCP 配置文件放在可执行文件所在目录（根目录）
@@ -508,6 +600,18 @@ type ConnectResult struct {
 	Success   bool   `json:"success"`
 	SessionID string `json:"sessionId"`
 	Message   string `json:"message"`
+}
+
+type PatchSyncStatus struct {
+	Enabled         bool   `json:"enabled"`
+	Configured      bool   `json:"configured"`
+	Running         bool   `json:"running"`
+	PendingCount    int    `json:"pendingCount"`
+	LastSyncAt      string `json:"lastSyncAt,omitempty"`
+	LastSyncSuccess bool   `json:"lastSyncSuccess"`
+	LastSyncMessage string `json:"lastSyncMessage,omitempty"`
+	RemoteURL       string `json:"remoteURL,omitempty"`
+	Branch          string `json:"branch,omitempty"`
 }
 
 func (a *App) Connect(config ConnectConfig) ConnectResult {
@@ -854,6 +958,7 @@ func (a *App) ArchiveSession(rootCause string, conclusion string, service string
 
 	// 追加归档记录到知识库文件
 	knowledgeDir := a.resolveKnowledgeBase()
+	archivedAt := time.Now()
 	input := &knowledge.ArchiveInput{
 		Session:    currentSession,
 		Conclusion: conclusion,
@@ -861,9 +966,26 @@ func (a *App) ArchiveSession(rootCause string, conclusion string, service string
 		Module:     module,
 		FilePath:   targetFile,
 	}
+	input.Record = knowledge.BuildArchiveRecord(input, archivedAt)
+
+	var pendingStore *patchstore.PendingStore
+	var patch *patchstore.Patch
+	if store := a.getPatchStore(); store != nil {
+		pendingStore = a.newPendingPatchStore()
+		patch = a.buildArchivePatch(input, archivedAt)
+		if err := pendingStore.Save(*patch); err != nil {
+			slog.Error("failed to save pending patch", "error", err, "service", input.Service, "module", input.Module)
+			return toJSONError("Failed to queue patch for sync")
+		}
+	}
 
 	relPath, err := knowledge.AppendRecord(knowledgeDir, input)
 	if err != nil {
+		if pendingStore != nil && patch != nil {
+			if rmErr := pendingStore.Delete(*patch); rmErr != nil {
+				slog.Warn("failed to rollback pending patch after archive failure", "error", rmErr, "patch_id", patch.ID)
+			}
+		}
 		slog.Error("failed to archive session", "error", err)
 		return toJSONError("Failed to archive session")
 	}
@@ -879,6 +1001,12 @@ func (a *App) ArchiveSession(rootCause string, conclusion string, service string
 	}
 
 	slog.Info("archiveSession archived", "path", relPath)
+
+	// 上传补丁到共享存储（异步，不阻塞归档）
+	if store := a.getPatchStore(); store != nil && pendingStore != nil && patch != nil {
+		go a.uploadPatch(store, pendingStore, *patch)
+	}
+
 	result, _ := json.Marshal(map[string]interface{}{
 		"success":    true,
 		"conclusion": conclusion,
@@ -1045,7 +1173,34 @@ func (a *App) GetSettings() config.AppConfig {
 	return *a.configMgr.Config
 }
 
+func (a *App) GetPatchSyncStatus() string {
+	a.refreshPatchSyncStatusConfig()
+	status := a.getPatchSyncStatusSnapshot()
+	data, _ := json.Marshal(status)
+	return string(data)
+}
+
+func (a *App) RetryPatchSync() string {
+	store := a.getPatchStore()
+	if store == nil {
+		a.refreshPatchSyncStatusConfig()
+		return "补丁同步未启用或未配置 Git 仓库"
+	}
+
+	if err := a.runPatchSync(store); err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
 func (a *App) SaveSettings(cfg config.AppConfig) string {
+	cfg.PatchStore.Type = "git"
+	cfg.PatchStore.RemoteURL = strings.TrimSpace(cfg.PatchStore.RemoteURL)
+	cfg.PatchStore.Branch = strings.TrimSpace(cfg.PatchStore.Branch)
+	if cfg.PatchStore.Branch == "" {
+		cfg.PatchStore.Branch = "main"
+	}
+
 	// Update config in memory
 	*a.configMgr.Config = cfg
 
@@ -1078,6 +1233,9 @@ func (a *App) SaveSettings(cfg config.AppConfig) string {
 	} else if a.aiService.GetCatalog() != nil {
 		slog.Info("app knowledge catalog rebuilt", "scenarios", a.aiService.GetCatalog().TotalScenarios())
 	}
+
+	// 让补丁同步配置在保存后立即生效
+	a.initPatchStore()
 
 	return ""
 }
@@ -2441,4 +2599,191 @@ func readTerminalChunk(r io.Reader, buf []byte, n int) string {
 		}
 	}
 	return agg.String()
+}
+
+// initPatchStore 根据配置初始化补丁存储
+func (a *App) initPatchStore() {
+	cfg := a.configMgr.Config.PatchStore
+	remoteURL := strings.TrimSpace(cfg.RemoteURL)
+	a.refreshPatchSyncStatusConfig()
+	if !cfg.Enabled || remoteURL == "" {
+		a.setPatchStore(nil)
+		a.updatePatchSyncStatus(func(status *PatchSyncStatus) {
+			status.LastSyncMessage = "补丁同步未启用"
+		})
+		return
+	}
+
+	localDir := filepath.Join(filepath.Dir(a.configMgr.Config.Log.Dir), "patchstore")
+	branch := strings.TrimSpace(cfg.Branch)
+	if branch == "" {
+		branch = "main"
+	}
+
+	store := patchstore.NewGitPatchStore(
+		remoteURL,
+		localDir,
+		branch,
+		"",
+		"",
+	)
+	a.setPatchStore(store)
+
+	go func(store patchstore.PatchStore) {
+		if err := a.runPatchSync(store); err != nil {
+			slog.Error("initial patch sync failed", "error", err)
+		}
+	}(store)
+}
+
+func (a *App) runPatchSync(store patchstore.PatchStore) error {
+	if !a.patchSyncing.CompareAndSwap(false, true) {
+		return fmt.Errorf("patch sync already running")
+	}
+	defer a.patchSyncing.Store(false)
+
+	a.refreshPatchSyncStatusConfig()
+	a.updatePatchSyncStatus(func(status *PatchSyncStatus) {
+		status.Running = true
+		status.LastSyncMessage = "正在同步..."
+	})
+
+	err := a.syncPatches(store)
+	now := time.Now().Format("2006-01-02 15:04:05")
+	if err != nil {
+		a.refreshPatchSyncStatusConfig()
+		a.updatePatchSyncStatus(func(status *PatchSyncStatus) {
+			status.Running = false
+			status.LastSyncAt = now
+			status.LastSyncSuccess = false
+			status.LastSyncMessage = err.Error()
+		})
+		return err
+	}
+
+	a.refreshPatchSyncStatusConfig()
+	a.updatePatchSyncStatus(func(status *PatchSyncStatus) {
+		status.Running = false
+		status.LastSyncAt = now
+		status.LastSyncSuccess = true
+		if status.PendingCount > 0 {
+			status.LastSyncMessage = fmt.Sprintf("同步完成，仍有 %d 条待重试补丁", status.PendingCount)
+		} else {
+			status.LastSyncMessage = "同步完成"
+		}
+	})
+	return nil
+}
+
+// syncPatches 从共享存储同步补丁并重建本地知识文件
+func (a *App) syncPatches(store patchstore.PatchStore) error {
+	if store == nil {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	remotePatches, err := store.DownloadAll(ctx)
+	if err != nil {
+		return fmt.Errorf("download patches: %w", err)
+	}
+
+	pendingStore := a.newPendingPatchStore()
+	pendingPatches, err := pendingStore.List()
+	if err != nil {
+		return fmt.Errorf("list pending patches: %w", err)
+	}
+
+	patches := mergePatches(remotePatches, pendingPatches)
+	if len(patches) == 0 {
+		return nil
+	}
+
+	knowledgeDir := a.resolveKnowledgeBase()
+	count, err := knowledge.RebuildFromPatches(knowledgeDir, patches)
+	if err != nil {
+		return fmt.Errorf("rebuild from patches: %w", err)
+	}
+
+	if count > 0 {
+		if err := a.aiService.UpdateCatalog(knowledgeDir); err != nil {
+			slog.Error("failed to update catalog after patch sync", "error", err)
+		}
+		slog.Info("patch sync completed", "patches", len(patches), "files_rebuilt", count)
+	}
+
+	if err := a.flushPendingPatches(store, pendingStore, remotePatches, pendingPatches); err != nil {
+		slog.Warn("flush pending patches failed", "error", err)
+	}
+
+	return nil
+}
+
+// uploadPatch 异步上传补丁到共享存储
+func (a *App) uploadPatch(store patchstore.PatchStore, pendingStore *patchstore.PendingStore, patch patchstore.Patch) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := store.Upload(ctx, patch); err != nil {
+		slog.Error("failed to upload patch", "error", err, "service", patch.Service, "patch_id", patch.ID)
+		return
+	}
+
+	if err := pendingStore.Delete(patch); err != nil {
+		slog.Warn("failed to delete pending patch after upload", "error", err, "patch_id", patch.ID)
+	}
+
+	slog.Info("patch uploaded", "id", patch.ID, "service", patch.Service, "module", patch.Module)
+}
+
+func (a *App) flushPendingPatches(store patchstore.PatchStore, pendingStore *patchstore.PendingStore, remotePatches []patchstore.Patch, pendingPatches []patchstore.Patch) error {
+	remoteByID := make(map[string]struct{}, len(remotePatches))
+	for _, patch := range remotePatches {
+		remoteByID[patch.ID] = struct{}{}
+	}
+
+	sort.Slice(pendingPatches, func(i, j int) bool {
+		return pendingPatches[i].Timestamp.Before(pendingPatches[j].Timestamp)
+	})
+
+	for _, patch := range pendingPatches {
+		if _, exists := remoteByID[patch.ID]; exists {
+			if err := pendingStore.Delete(patch); err != nil {
+				return err
+			}
+			continue
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err := store.Upload(ctx, patch)
+		cancel()
+		if err != nil {
+			return err
+		}
+		if err := pendingStore.Delete(patch); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func mergePatches(remotePatches []patchstore.Patch, pendingPatches []patchstore.Patch) []patchstore.Patch {
+	merged := make([]patchstore.Patch, 0, len(remotePatches)+len(pendingPatches))
+	seen := make(map[string]struct{}, len(remotePatches)+len(pendingPatches))
+
+	appendUnique := func(patches []patchstore.Patch) {
+		for _, patch := range patches {
+			if _, exists := seen[patch.ID]; exists {
+				continue
+			}
+			seen[patch.ID] = struct{}{}
+			merged = append(merged, patch)
+		}
+	}
+
+	appendUnique(remotePatches)
+	appendUnique(pendingPatches)
+	return merged
 }

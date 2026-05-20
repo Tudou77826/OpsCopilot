@@ -300,7 +300,7 @@ MySQL 慢查询导致 PHP-FPM 阻塞，进程池耗尽
 		Module:     "Core",
 	}
 
-	record := buildArchiveRecord(input)
+	record := BuildArchiveRecord(input, time.Date(2026, 5, 18, 10, 30, 0, 0, time.Local))
 
 	if !strings.Contains(record, "## 场景：") {
 		t.Error("record should contain scenario heading")

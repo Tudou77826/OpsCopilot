@@ -19,6 +19,15 @@ type AppConfig struct {
 	Experimental         ExperimentalConfig `json:"experimental"`
 	Terminal             TerminalConfig     `json:"terminal"`
 	HighlightRules       []HighlightRule    `json:"highlight_rules"`
+	PatchStore           PatchStoreConfig   `json:"patch_store"`
+}
+
+// PatchStoreConfig 补丁存储配置
+type PatchStoreConfig struct {
+	Enabled    bool   `json:"enabled"`
+	Type       string `json:"type"`        // "git"（未来: "http", "sftp"）
+	RemoteURL  string `json:"remote_url"`  // Git 仓库地址
+	Branch     string `json:"branch"`      // 分支名，默认 "main"
 }
 
 // ExperimentalConfig 实验性功能配置（保留结构以便未来扩展）
@@ -290,6 +299,7 @@ func (m *Manager) Save() error {
 		CommandQueryShortcut string             `json:"command_query_shortcut"`
 		Experimental         ExperimentalConfig `json:"experimental"`
 		Terminal             TerminalConfig     `json:"terminal"`
+		PatchStore           PatchStoreConfig   `json:"patch_store"`
 	}
 
 	cfg := ConfigForSave{
@@ -300,6 +310,7 @@ func (m *Manager) Save() error {
 		CommandQueryShortcut: m.Config.CommandQueryShortcut,
 		Experimental:         m.Config.Experimental,
 		Terminal:             m.Config.Terminal,
+		PatchStore:           m.Config.PatchStore,
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")

@@ -22,6 +22,7 @@ type ArchiveInput struct {
 	Service    string // 用户选择的微服务名
 	Module     string // 用户选择的模块名
 	FilePath   string // 追加到的目标文件（空则新建）
+	Record     string // 预先生成的归档记录（可选）
 }
 
 // AppendRecord 追加排查记录到目标文件，返回文件路径
@@ -33,7 +34,10 @@ func AppendRecord(knowledgeDir string, input *ArchiveInput) (string, error) {
 		input.Module = "默认模块"
 	}
 
-	record := buildArchiveRecord(input)
+	record := input.Record
+	if record == "" {
+		record = BuildArchiveRecord(input, time.Now())
+	}
 
 	var targetPath string
 	if input.FilePath != "" {
@@ -83,9 +87,9 @@ func validatePathWithinDir(baseDir, targetPath string) error {
 	return nil
 }
 
-// buildArchiveRecord 构建归档记录文本
+// BuildArchiveRecord 构建归档记录文本
 // 策略：保留 AI 结论的完整原文，只在开头加 `## 场景：` 标题 + bullet points（供 Catalog 索引器识别）
-func buildArchiveRecord(input *ArchiveInput) string {
+func BuildArchiveRecord(input *ArchiveInput, archivedAt time.Time) string {
 	var sb strings.Builder
 
 	// 提取索引字段（仅用于 bullet points，供 Catalog 索引器识别）
@@ -102,7 +106,7 @@ func buildArchiveRecord(input *ArchiveInput) string {
 		title = "未命名问题"
 	}
 
-	dateStr := time.Now().Format("2006-01-02")
+	dateStr := archivedAt.Format("2006-01-02")
 	sb.WriteString(fmt.Sprintf("\n\n## 场景：%s - %s 排查记录\n", title, dateStr))
 
 	// 索引用 bullet points（Catalog extractSOPScenarios 需要识别这些字段）
@@ -127,7 +131,7 @@ func buildArchiveRecord(input *ArchiveInput) string {
 	if input.Session != nil {
 		sessionID = input.Session.ID
 	}
-	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	timestamp := archivedAt.Format("2006-01-02 15:04:05")
 	sb.WriteString(fmt.Sprintf("\n---\n*归档时间: %s | 会话ID: %s*\n", timestamp, sessionID))
 
 	return sb.String()

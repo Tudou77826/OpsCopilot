@@ -18,6 +18,8 @@ export function Broadcast(arg1:Array<string>,arg2:string):Promise<void>;
 
 export function CancelSession():Promise<string>;
 
+export function CheckUpdate():Promise<string>;
+
 export function CloseSession(arg1:string):Promise<void>;
 
 export function Connect(arg1:main.ConnectConfig):Promise<main.ConnectResult>;
@@ -27,6 +29,8 @@ export function ConnectWithID(arg1:main.ConnectConfig,arg2:string):Promise<main.
 export function DeleteSavedSession(arg1:string):Promise<string>;
 
 export function DeleteScript(arg1:string):Promise<void>;
+
+export function DoUpdate(arg1:string):Promise<string>;
 
 export function DuplicateSession(arg1:string):Promise<main.ConnectResult>;
 
@@ -72,6 +76,8 @@ export function GetHighlightRules():Promise<Array<config.HighlightRule>>;
 
 export function GetMCPStatus():Promise<string>;
 
+export function GetPatchSyncStatus():Promise<string>;
+
 export function GetQuickCommandGroups():Promise<Array<string>>;
 
 export function GetSavedSessions():Promise<Array<sessionmanager.Session>>;
@@ -83,6 +89,8 @@ export function GetScriptRecordingStatus():Promise<script.ScriptStatus>;
 export function GetSessionTimeline():Promise<recorder.RecordingSession>;
 
 export function GetSettings():Promise<config.AppConfig>;
+
+export function GetVersion():Promise<string>;
 
 export function HasActiveWork():Promise<Record<string, any>>;
 
@@ -117,6 +125,8 @@ export function ReplayScript(arg1:string,arg2:string):Promise<void>;
 export function ReplayScriptWithVars(arg1:string,arg2:string,arg3:Record<string, string>):Promise<void>;
 
 export function ResizeTerminal(arg1:string,arg2:number,arg3:number):Promise<void>;
+
+export function RetryPatchSync():Promise<string>;
 
 export function SaveCommandWhitelist(arg1:mcpserver.WhitelistConfig):Promise<void>;
 

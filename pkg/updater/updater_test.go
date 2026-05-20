@@ -81,6 +81,40 @@ func TestParseGitHubRelease(t *testing.T) {
 	}
 }
 
+func TestSelectDownloadURLPrefersZip(t *testing.T) {
+	assets := []Asset{
+		{
+			Name:               "opscopilot.exe",
+			BrowserDownloadURL: "https://example.com/opscopilot.exe",
+		},
+		{
+			Name:               "opscopilot-windows.zip",
+			BrowserDownloadURL: "https://example.com/opscopilot-windows.zip",
+		},
+	}
+
+	got := selectDownloadURL(assets)
+	want := "https://example.com/opscopilot-windows.zip"
+	if got != want {
+		t.Fatalf("selectDownloadURL() = %q, want %q", got, want)
+	}
+}
+
+func TestSelectDownloadURLFallsBackToExe(t *testing.T) {
+	assets := []Asset{
+		{
+			Name:               "opscopilot.exe",
+			BrowserDownloadURL: "https://example.com/opscopilot.exe",
+		},
+	}
+
+	got := selectDownloadURL(assets)
+	want := "https://example.com/opscopilot.exe"
+	if got != want {
+		t.Fatalf("selectDownloadURL() = %q, want %q", got, want)
+	}
+}
+
 func TestProtectedFiles(t *testing.T) {
 	protected := []string{
 		"config.json",

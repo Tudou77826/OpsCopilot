@@ -25,6 +25,12 @@ interface AppConfig {
     };
     terminal?: TerminalConfig;
     highlight_rules?: HighlightRule[];
+    patch_store?: {
+        enabled: boolean;
+        type: string;
+        remote_url: string;
+        branch: string;
+    };
     completion_delay: number;
     command_query_shortcut: string;
 }
@@ -41,7 +47,19 @@ interface SettingsModalProps {
     onHighlightRulesChange?: (rules: HighlightRule[]) => void;
 }
 
-type TabId = 'llm' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'filetransfer' | 'whitelist' | 'fileaccess' | 'experimental' | 'about';
+interface PatchSyncStatus {
+    enabled: boolean;
+    configured: boolean;
+    running: boolean;
+    pendingCount: number;
+    lastSyncAt?: string;
+    lastSyncSuccess: boolean;
+    lastSyncMessage?: string;
+    remoteURL?: string;
+    branch?: string;
+}
+
+type TabId = 'llm' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'filetransfer' | 'knowledge' | 'whitelist' | 'fileaccess' | 'experimental' | 'about';
 
 interface NavItem {
     id: TabId;
@@ -49,6 +67,30 @@ interface NavItem {
     icon: string;
     category: string;
 }
+
+const defaultPatchStore = {
+    enabled: false,
+    type: 'git',
+    remote_url: '',
+    branch: 'main'
+};
+
+const normalizePatchStore = (patchStore?: AppConfig['patch_store']) => ({
+    ...defaultPatchStore,
+    ...patchStore,
+    type: 'git',
+    remote_url: (patchStore?.remote_url || '').trim(),
+    branch: ((patchStore?.branch || defaultPatchStore.branch).trim() || defaultPatchStore.branch)
+});
+
+const defaultPatchSyncStatus: PatchSyncStatus = {
+    enabled: false,
+    configured: false,
+    running: false,
+    pendingCount: 0,
+    lastSyncSuccess: false,
+    lastSyncMessage: ''
+};
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
     isOpen,
@@ -70,6 +112,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const [importLoading, setImportLoading] = useState(false);
     const [importMsg, setImportMsg] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
+    const [patchSyncStatus, setPatchSyncStatus] = useState<PatchSyncStatus>(defaultPatchSyncStatus);
+    const [patchSyncLoading, setPatchSyncLoading] = useState(false);
     const searchInputRef = useRef<HTMLInputElement>(null);
 
     // Navigation items structure
@@ -80,6 +124,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         { id: 'shortcuts', label: '快捷键', icon: '⌨️', category: '交互' },
         { id: 'broadcast', label: '多窗口', icon: '🪟', category: '交互' },
         { id: 'filetransfer', label: '文件传输', icon: '📁', category: '工具' },
+        { id: 'knowledge', label: '知识共享', icon: '📚', category: '知识' },
         { id: 'whitelist', label: '命令白名单', icon: '🛡️', category: '安全' },
         { id: 'fileaccess', label: '文件访问控制', icon: '🔒', category: '安全' },
         { id: 'experimental', label: '高级选项', icon: '🔧', category: '系统' },
@@ -102,6 +147,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     useEffect(() => {
         if (isOpen) {
             loadSettings();
+            loadPatchSyncStatus();
             setMsg('');
             setImportDir('');
             setImportMsg('');
@@ -176,6 +222,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     experimental: cfg.experimental || {},
                     terminal,
                     highlight_rules,
+                    patch_store: normalizePatchStore(cfg.patch_store),
                     command_query_shortcut: cfg.command_query_shortcut || 'Ctrl+K',
                 });
             }
@@ -184,6 +231,27 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             setMsg('加载设置失败');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadPatchSyncStatus = async () => {
+        setPatchSyncLoading(true);
+        try {
+            // @ts-ignore
+            const raw = await window.go.main.App.GetPatchSyncStatus();
+            const parsed = raw ? JSON.parse(raw) : {};
+            setPatchSyncStatus({
+                ...defaultPatchSyncStatus,
+                ...parsed
+            });
+        } catch (e) {
+            console.error(e);
+            setPatchSyncStatus({
+                ...defaultPatchSyncStatus,
+                lastSyncMessage: '加载同步状态失败'
+            });
+        } finally {
+            setPatchSyncLoading(false);
         }
     };
 
@@ -196,20 +264,26 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         if (!config) return;
         setLoading(true);
         try {
+            const nextConfig = {
+                ...config,
+                patch_store: normalizePatchStore(config.patch_store)
+            };
+            setConfig(nextConfig);
             // @ts-ignore
-            const err = await window.go.main.App.SaveSettings(config);
+            const err = await window.go.main.App.SaveSettings(nextConfig);
             if (err) {
                 setMsg('错误: ' + err);
             } else {
                 setMsg('设置已保存！');
-                if (onCompletionDelayChange && config.completion_delay !== undefined) {
-                    onCompletionDelayChange(config.completion_delay);
+                await loadPatchSyncStatus();
+                if (onCompletionDelayChange && nextConfig.completion_delay !== undefined) {
+                    onCompletionDelayChange(nextConfig.completion_delay);
                 }
-                if (onTerminalConfigChange && config.terminal) {
-                    onTerminalConfigChange(config.terminal);
+                if (onTerminalConfigChange && nextConfig.terminal) {
+                    onTerminalConfigChange(nextConfig.terminal);
                 }
                 if (onHighlightRulesChange) {
-                    onHighlightRulesChange(config.highlight_rules || []);
+                    onHighlightRulesChange(nextConfig.highlight_rules || []);
                 }
                 setTimeout(() => {
                     setMsg('');
@@ -266,6 +340,43 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             ...config,
             completion_delay: value
         });
+    };
+
+    const handlePatchStoreChange = (key: keyof NonNullable<AppConfig['patch_store']>, value: string | boolean) => {
+        if (!config) return;
+        setConfig({
+            ...config,
+            patch_store: {
+                ...normalizePatchStore(config.patch_store),
+                [key]: value
+            }
+        });
+    };
+
+    const handleRetryPatchSync = async () => {
+        setPatchSyncLoading(true);
+        try {
+            // @ts-ignore
+            const err = await window.go.main.App.RetryPatchSync();
+            if (err) {
+                setMsg('同步失败: ' + err);
+            } else {
+                setMsg('已触发补丁同步');
+            }
+        } catch (e: any) {
+            setMsg('同步失败: ' + e.toString());
+        } finally {
+            await loadPatchSyncStatus();
+        }
+    };
+
+    const renderPatchSyncState = () => {
+        if (patchSyncLoading) return '正在读取同步状态...';
+        if (patchSyncStatus.running) return '同步中';
+        if (!patchSyncStatus.enabled) return '已关闭';
+        if (!patchSyncStatus.configured) return '待配置仓库';
+        if (patchSyncStatus.lastSyncMessage) return patchSyncStatus.lastSyncMessage;
+        return '待同步';
     };
 
     const handleImportConfig = async () => {
@@ -459,6 +570,93 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             </button>
                             <div style={styles.settingDescription}>
                                 通过 IPC 与主程序通信，使用独立文件管理进程
+                            </div>
+                        </div>
+                    </div>
+                );
+
+            case 'knowledge':
+                return (
+                    <div style={styles.settingsGroup}>
+                        <div style={styles.groupTitle}>知识共享</div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>启用补丁同步</label>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <label style={styles.switch}>
+                                    <input
+                                        type="checkbox"
+                                        checked={!!config.patch_store?.enabled}
+                                        onChange={(e) => handlePatchStoreChange('enabled', e.target.checked)}
+                                    />
+                                    <span style={styles.slider}></span>
+                                </label>
+                                <span style={{ color: '#ccc', fontSize: '0.9rem' }}>
+                                    {config.patch_store?.enabled ? '已开启' : '已关闭'}
+                                </span>
+                            </div>
+                            <div style={styles.settingDescription}>
+                                归档后会将最新场景以补丁形式推送到共享 Git 仓库，保存后立即重载当前同步配置
+                            </div>
+                        </div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>Git 仓库地址</label>
+                            <input
+                                style={styles.input}
+                                value={config.patch_store?.remote_url || ''}
+                                onChange={(e) => handlePatchStoreChange('remote_url', e.target.value)}
+                                placeholder="例如：git@github.com:team/opscopilot-patches.git"
+                            />
+                            <div style={styles.settingDescription}>
+                                支持本地路径、SSH 或 HTTPS 地址；认证依赖本机 Git 凭据、SSH Agent 或系统凭据管理
+                            </div>
+                        </div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>同步分支</label>
+                            <input
+                                style={styles.input}
+                                value={config.patch_store?.branch || defaultPatchStore.branch}
+                                onChange={(e) => handlePatchStoreChange('branch', e.target.value)}
+                                placeholder="main"
+                            />
+                            <div style={styles.settingDescription}>
+                                作者名自动读取本机 `git config user.name`，无需再手动填写
+                            </div>
+                        </div>
+                        <div style={styles.groupTitle}>同步状态</div>
+                        <div style={styles.statusGrid}>
+                            <div style={styles.statusCard}>
+                                <div style={styles.statusCardLabel}>当前状态</div>
+                                <div style={styles.statusCardValue}>{renderPatchSyncState()}</div>
+                            </div>
+                            <div style={styles.statusCard}>
+                                <div style={styles.statusCardLabel}>待上传补丁</div>
+                                <div style={styles.statusCardValue}>{patchSyncStatus.pendingCount}</div>
+                            </div>
+                            <div style={styles.statusCard}>
+                                <div style={styles.statusCardLabel}>最近同步时间</div>
+                                <div style={styles.statusCardValue}>{patchSyncStatus.lastSyncAt || '暂无'}</div>
+                            </div>
+                        </div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>手动重试</label>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' as const }}>
+                                <button
+                                    onClick={handleRetryPatchSync}
+                                    style={styles.secondaryButton}
+                                    disabled={patchSyncLoading || patchSyncStatus.running || !patchSyncStatus.enabled || !patchSyncStatus.configured}
+                                >
+                                    {patchSyncStatus.running ? '正在同步...' : '立即重试同步'}
+                                </button>
+                                <button
+                                    onClick={loadPatchSyncStatus}
+                                    style={styles.secondaryButton}
+                                    disabled={patchSyncLoading}
+                                >
+                                    刷新状态
+                                </button>
+                            </div>
+                            <div style={styles.settingDescription}>
+                                {patchSyncStatus.lastSyncMessage || '保存配置后会自动刷新运行中的补丁同步实例'}
                             </div>
                         </div>
                     </div>
@@ -877,6 +1075,30 @@ const styles = {
             backgroundColor: '#4C4C4C',
             borderColor: '#6A6A6A',
         }
+    },
+    statusGrid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+        gap: '12px',
+    },
+    statusCard: {
+        padding: '14px',
+        borderRadius: '6px',
+        border: '1px solid #3E3E42',
+        backgroundColor: '#252526',
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '8px',
+    },
+    statusCardLabel: {
+        fontSize: '12px',
+        color: '#999999',
+    },
+    statusCardValue: {
+        fontSize: '14px',
+        color: '#FFFFFF',
+        fontWeight: 600,
+        wordBreak: 'break-word' as const,
     },
     footer: {
         padding: '16px 24px',
