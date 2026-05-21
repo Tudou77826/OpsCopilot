@@ -124,6 +124,9 @@ func TestProtectedFiles(t *testing.T) {
 		"command_whitelist.json",
 		"file_access.json",
 		"mcp.json",
+		"mcp-server.exe",
+		"OpsFTP.exe",
+		"ftpmanager.exe",
 	}
 	for _, name := range protected {
 		if !protectedFiles[name] {
@@ -134,8 +137,6 @@ func TestProtectedFiles(t *testing.T) {
 	// Non-protected files should NOT be in the map.
 	notProtected := []string{
 		"opscopilot.exe",
-		"mcp-server.exe",
-		"OpsFTP.exe",
 		"prompts.json",
 		"mcp-config.example.json",
 	}
@@ -146,37 +147,49 @@ func TestProtectedFiles(t *testing.T) {
 	}
 }
 
-func TestBuildCopyCommands(t *testing.T) {
+func TestBuildUpdateCommands(t *testing.T) {
 	// Create a temp directory with some files.
 	srcDir := t.TempDir()
 	dstDir := "C:\\fake\\app"
 
 	// Create files that should be copied.
 	os.WriteFile(filepath.Join(srcDir, "opscopilot.exe"), []byte("exe"), 0644)
-	os.WriteFile(filepath.Join(srcDir, "mcp-server.exe"), []byte("mcp"), 0644)
 	os.WriteFile(filepath.Join(srcDir, "prompts.json"), []byte("{}"), 0644)
 
 	// Create files that should NOT be copied.
 	os.WriteFile(filepath.Join(srcDir, "config.json"), []byte("{}"), 0644)
 	os.WriteFile(filepath.Join(srcDir, "highlight_rules.json"), []byte("[]"), 0644)
+	os.WriteFile(filepath.Join(srcDir, "mcp-server.exe"), []byte("mcp"), 0644)
+	os.WriteFile(filepath.Join(srcDir, "OpsFTP.exe"), []byte("ftp"), 0644)
 
-	result := buildCopyCommands(srcDir, dstDir)
+	_, copyCmds, rollbackCmds := buildUpdateCommands(srcDir, dstDir)
 
-	// Should include exe and prompts, but NOT config or highlight_rules.
-	if !containsSubstring(result, `opscopilot.exe`) {
+	// Copy commands should include exe and prompts, but NOT protected files.
+	if !containsSubstring(copyCmds, `opscopilot.exe`) {
 		t.Error("expected opscopilot.exe in copy commands")
 	}
-	if !containsSubstring(result, `mcp-server.exe`) {
-		t.Error("expected mcp-server.exe in copy commands")
-	}
-	if !containsSubstring(result, `prompts.json`) {
+	if !containsSubstring(copyCmds, `prompts.json`) {
 		t.Error("expected prompts.json in copy commands")
 	}
-	if containsSubstring(result, `config.json`) {
+	if containsSubstring(copyCmds, `config.json`) {
 		t.Error("did NOT expect config.json in copy commands")
 	}
-	if containsSubstring(result, `highlight_rules.json`) {
+	if containsSubstring(copyCmds, `highlight_rules.json`) {
 		t.Error("did NOT expect highlight_rules.json in copy commands")
+	}
+	if containsSubstring(copyCmds, `mcp-server.exe`) {
+		t.Error("did NOT expect mcp-server.exe in copy commands")
+	}
+	if containsSubstring(copyCmds, `OpsFTP.exe`) {
+		t.Error("did NOT expect OpsFTP.exe in copy commands")
+	}
+
+	// Rollback commands should cover the same files as copy.
+	if !containsSubstring(rollbackCmds, `opscopilot.exe`) {
+		t.Error("expected opscopilot.exe in rollback commands")
+	}
+	if !containsSubstring(rollbackCmds, `prompts.json`) {
+		t.Error("expected prompts.json in rollback commands")
 	}
 }
 
