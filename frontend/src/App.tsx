@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { TbClock, TbScreenShare, TbStethoscope, TbMessageChatbot, TbCode } from 'react-icons/tb';
 import './App.css';
 import logo from './assets/images/logo-universal.png';
 import { TerminalRef } from './components/Terminal/Terminal';
@@ -676,7 +677,7 @@ function App() {
                             borderRadius: '4px',
                             fontSize: '0.75rem',
                         }}>
-                            <span style={{ color: '#888' }}>🕐</span>
+                            <span style={{ color: '#888' }}>{TbClock({ size: 12 })}</span>
                             <span style={{ color: '#ccc' }}>{parsedTimestamp.local}</span>
                         </div>
                     )}
@@ -753,7 +754,7 @@ function App() {
                         onClick={() => toggleSidebar('sessions')}
                         title="会话管理"
                     >
-                        🖥️
+                        {TbScreenShare({ size: 20 })}
                     </div>
                     <div
                         style={{
@@ -764,7 +765,7 @@ function App() {
                         onClick={() => toggleSidebar('troubleshoot')}
                         title="定位助手"
                     >
-                        🩺
+                        {TbStethoscope({ size: 20 })}
                     </div>
                     <div
                         style={{
@@ -775,7 +776,7 @@ function App() {
                         onClick={() => toggleSidebar('chat')}
                         title="AI 问答"
                     >
-                        💬
+                        {TbMessageChatbot({ size: 20 })}
                     </div>
                     <div
                         style={{
@@ -786,7 +787,7 @@ function App() {
                         onClick={() => toggleSidebar('script')}
                         title="脚本录制"
                     >
-                        🎬
+                        {TbCode({ size: 20 })}
                     </div>
                 </div>
             </div>
@@ -922,7 +923,7 @@ const styles = {
         fontSize: '0.8rem',
     },
     rightNav: {
-        width: '48px',
+        width: '40px',
         backgroundColor: '#252526',
         display: 'flex',
         flexDirection: 'column' as const,
@@ -932,7 +933,7 @@ const styles = {
     },
     navIcon: {
         width: '100%',
-        height: '48px',
+        height: '42px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

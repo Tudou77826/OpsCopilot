@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { TbFolderOpen, TbFolder, TbTerminal2 } from 'react-icons/tb';
 import { ConnectionConfig } from '../../types';
 import EditSavedSessionModal from './EditSavedSessionModal';
 
@@ -181,7 +182,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                         onClick={() => isFolder ? handleToggleFolder(node.id) : null}
                         onDoubleClick={() => !isFolder && node.config && onConnect(node.config)}
                     >
-                        <span style={{marginRight: '8px', userSelect: 'none'}}>{isFolder ? (isExpanded ? '📂' : '📁') : '🖥️'}</span>
+                        <span style={{marginRight: '8px', userSelect: 'none', display: 'inline-flex', alignItems: 'center'}}>{isFolder ? (isExpanded ? TbFolderOpen({size: 16}) : TbFolder({size: 16})) : TbTerminal2({size: 16})}</span>
                         
                         {isEditing ? (
                             <input 

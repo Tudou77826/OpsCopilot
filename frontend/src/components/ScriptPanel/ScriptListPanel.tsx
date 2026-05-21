@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, forwardRef, useImperativeHandle } from 'react';
+import { TbRefresh, TbFileText, TbEdit, TbPlayerPlay, TbFileExport, TbTrash } from 'react-icons/tb';
 import VariableInputDialog from './VariableInputDialog';
 
 interface ScriptVariable {
@@ -160,7 +161,7 @@ const ScriptListPanel = forwardRef<{
             <div style={styles.header}>
                 <h3 style={styles.title}>我的脚本 ({scripts.length})</h3>
                 <button style={styles.refreshButton} onClick={loadScripts}>
-                    🔄
+                    {TbRefresh({ size: 14 })}
                 </button>
             </div>
 
@@ -179,7 +180,7 @@ const ScriptListPanel = forwardRef<{
                 <div style={styles.empty}>
                     {scripts.length === 0 ? (
                         <>
-                            <div style={styles.emptyIcon}>📜</div>
+                            <div style={{ color: '#555', marginBottom: '12px' }}>{TbFileText({ size: 36 })}</div>
                             <div style={styles.emptyText}>还没有录制的脚本</div>
                             <div style={styles.emptyHint}>使用脚本录制功能记录您的操作</div>
                         </>
@@ -215,7 +216,7 @@ const ScriptListPanel = forwardRef<{
                                     onClick={() => onEditScript(script.id)}
                                     title="编辑"
                                 >
-                                    ✏️
+                                    {TbEdit({ size: 14 })}
                                 </button>
                                 <button
                                     style={{
@@ -227,21 +228,21 @@ const ScriptListPanel = forwardRef<{
                                     title="回放"
                                     disabled={!activeSessionId}
                                 >
-                                    ▶️
+                                    {TbPlayerPlay({ size: 14 })}
                                 </button>
                                 <button
                                     style={styles.iconButton}
                                     onClick={() => handleExport(script.id, script.name)}
                                     title="导出"
                                 >
-                                    📤
+                                    {TbFileExport({ size: 14 })}
                                 </button>
                                 <button
                                     style={{...styles.iconButton, color: '#ff6b6b'}}
                                     onClick={() => handleDelete(script.id, script.name)}
                                     title="删除"
                                 >
-                                    🗑️
+                                    {TbTrash({ size: 14 })}
                                 </button>
                             </div>
                         </div>
@@ -315,10 +316,6 @@ const styles: Record<string, React.CSSProperties> = {
     empty: {
         textAlign: 'center',
         padding: '40px 20px',
-    },
-    emptyIcon: {
-        fontSize: '36px',
-        marginBottom: '12px',
     },
     emptyText: {
         fontSize: '13px',

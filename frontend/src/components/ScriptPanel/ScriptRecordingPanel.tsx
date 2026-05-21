@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { TbPlayerPlay, TbPlayerStop } from 'react-icons/tb';
 
 interface ScriptStatus {
     is_recording: boolean;
@@ -134,14 +135,14 @@ const ScriptRecordingPanel: React.FC<ScriptRecordingPanelProps> = ({ activeSessi
                         onClick={handleStartRecording}
                         disabled={!activeSessionId}
                     >
-                        🔴 开始录制
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>{TbPlayerPlay({ size: 14 })} 开始录制</span>
                     </button>
                 ) : (
                     <button
                         style={styles.stopButton}
                         onClick={handleStopRecording}
                     >
-                        ⏹ 停止录制
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>{TbPlayerStop({ size: 14 })} 停止录制</span>
                     </button>
                 )}
             </div>

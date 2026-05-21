@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { TbRobot, TbTerminal2, TbPalette, TbKeyboard, TbLayoutGrid, TbFolder, TbBooks, TbShieldCheck, TbLock, TbSettings, TbInfoCircle, TbSearch } from 'react-icons/tb';
 import KeysMap from './KeysMap';
 import HighlightRulesModal from './HighlightRulesModal';
 import CommandWhitelistPanel from './CommandWhitelist/CommandWhitelistPanel';
@@ -64,7 +65,7 @@ type TabId = 'llm' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'fil
 interface NavItem {
     id: TabId;
     label: string;
-    icon: string;
+    icon: React.ReactNode;
     category: string;
 }
 
@@ -118,17 +119,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
     // Navigation items structure
     const navItems: NavItem[] = [
-        { id: 'llm', label: '模型服务', icon: '🤖', category: 'AI' },
-        { id: 'terminal', label: '终端设置', icon: '🖥️', category: '终端' },
-        { id: 'highlight', label: '突出显示', icon: '🎨', category: '终端' },
-        { id: 'shortcuts', label: '快捷键', icon: '⌨️', category: '交互' },
-        { id: 'broadcast', label: '多窗口', icon: '🪟', category: '交互' },
-        { id: 'filetransfer', label: '文件传输', icon: '📁', category: '工具' },
-        { id: 'knowledge', label: '知识共享', icon: '📚', category: '知识' },
-        { id: 'whitelist', label: '命令白名单', icon: '🛡️', category: '安全' },
-        { id: 'fileaccess', label: '文件访问控制', icon: '🔒', category: '安全' },
-        { id: 'experimental', label: '高级选项', icon: '🔧', category: '系统' },
-        { id: 'about', label: '关于', icon: '📋', category: '系统' },
+        { id: 'llm', label: '模型服务', icon: TbRobot({}), category: 'AI' },
+        { id: 'terminal', label: '终端设置', icon: TbTerminal2({}), category: '终端' },
+        { id: 'highlight', label: '突出显示', icon: TbPalette({}), category: '终端' },
+        { id: 'shortcuts', label: '快捷键', icon: TbKeyboard({}), category: '交互' },
+        { id: 'broadcast', label: '多窗口', icon: TbLayoutGrid({}), category: '交互' },
+        { id: 'filetransfer', label: '文件传输', icon: TbFolder({}), category: '工具' },
+        { id: 'knowledge', label: '知识共享', icon: TbBooks({}), category: '知识' },
+        { id: 'whitelist', label: '命令白名单', icon: TbShieldCheck({}), category: '安全' },
+        { id: 'fileaccess', label: '文件访问控制', icon: TbLock({}), category: '安全' },
+        { id: 'experimental', label: '高级选项', icon: TbSettings({}), category: '系统' },
+        { id: 'about', label: '关于', icon: TbInfoCircle({}), category: '系统' },
     ];
 
     // Filter navigation items based on search query
@@ -809,10 +810,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     {/* Left Sidebar */}
                     <div style={styles.sidebar}>
                         <div style={styles.searchBox}>
+                            <span style={styles.searchIcon}>{TbSearch({})}</span>
                             <input
                                 ref={searchInputRef}
                                 style={styles.searchInput}
-                                placeholder="🔍 搜索设置..."
+                                placeholder="搜索设置..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                             />
@@ -951,10 +953,20 @@ const styles = {
     },
     searchBox: {
         padding: '0 12px 12px',
+        position: 'relative' as const,
+    },
+    searchIcon: {
+        position: 'absolute' as const,
+        left: '24px',
+        top: '50%',
+        transform: 'translateY(-50%)',
+        color: '#888',
+        fontSize: '14px',
+        pointerEvents: 'none' as const,
     },
     searchInput: {
         width: '100%',
-        padding: '8px 12px',
+        padding: '8px 12px 8px 32px',
         backgroundColor: '#3C3C3C',
         border: '1px solid #5A5A5A',
         borderRadius: '4px',
@@ -990,9 +1002,13 @@ const styles = {
         fontWeight: 500,
     },
     navIcon: {
-        fontSize: '16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         width: '20px',
-        textAlign: 'center' as const,
+        height: '20px',
+        fontSize: '16px',
+        flexShrink: 0,
     },
     navText: {
         flex: 1,

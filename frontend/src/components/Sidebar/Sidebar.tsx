@@ -24,7 +24,7 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart, onStop, onConnect, activeTerminalId, terminals }) => {
-    const [width, setWidth] = useState(350);
+    const [width, setWidth] = useState(300);
     const [editingScriptId, setEditingScriptId] = useState<string | null>(null);
     const scriptListRef = useRef<any>(null);
 

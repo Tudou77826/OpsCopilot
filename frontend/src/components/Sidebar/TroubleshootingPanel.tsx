@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { TbBrain, TbTarget, TbSearch, TbBook, TbWriting, TbRefresh, TbAlertTriangle, TbSettings, TbSparkles } from 'react-icons/tb';
 import TroubleshootingStep from './TroubleshootingStep';
 import CommandCard from './CommandCard';
 import SessionReviewModal, { ArchiveParams } from './SessionReviewModal';
@@ -28,18 +29,18 @@ interface TroubleshootingPanelProps {
 }
 
 // Stage display configuration: maps backend stage names to user-friendly labels, icons, and colors
-const STAGE_CONFIG: Record<string, { label: string; icon: string; color: string }> = {
-    thinking:       { label: '分析中',   icon: '🧠', color: '#8b9cf7' },
-    catalog_match:  { label: '匹配知识库', icon: '🎯', color: '#7ac5d8' },
-    grepping:       { label: '搜索关键词', icon: '🔍', color: '#d4a843' },
-    reading:        { label: '查阅文档', icon: '📖', color: '#7ac5d8' },
-    answering:      { label: '生成回答', icon: '✍️', color: '#6ecf8a' },
-    retrying:       { label: '重试中',   icon: '🔄', color: '#e0a050' },
-    error:          { label: '出错',     icon: '⚠️', color: '#e06060' },
+const STAGE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+    thinking:       { label: '分析中',   icon: TbBrain({size: 14}), color: '#8b9cf7' },
+    catalog_match:  { label: '匹配知识库', icon: TbTarget({size: 14}), color: '#7ac5d8' },
+    grepping:       { label: '搜索关键词', icon: TbSearch({size: 14}), color: '#d4a843' },
+    reading:        { label: '查阅文档', icon: TbBook({size: 14}), color: '#7ac5d8' },
+    answering:      { label: '生成回答', icon: TbWriting({size: 14}), color: '#6ecf8a' },
+    retrying:       { label: '重试中',   icon: TbRefresh({size: 14}), color: '#e0a050' },
+    error:          { label: '出错',     icon: TbAlertTriangle({size: 14}), color: '#e06060' },
 };
 
 function getStageConfig(stage: string) {
-    return STAGE_CONFIG[stage] || { label: stage, icon: '⚙️', color: '#888' };
+    return STAGE_CONFIG[stage] || { label: stage, icon: TbSettings({size: 14}), color: '#888' };
 }
 
 const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, onStop }) => {
@@ -565,7 +566,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                                     ) : agentStatus.stage === 'thinking' ? (
                                         <span style={styles.stageMessage}>{agentStatus.message}</span>
                                     ) : (
-                                        <span style={styles.stageMessage}>{agentStatus.message.replace(cfg.label, '').replace(cfg.icon, '')}</span>
+                                        <span style={styles.stageMessage}>{agentStatus.message.replace(cfg.label, '')}</span>
                                     )}
                                 </div>
                             );
@@ -672,7 +673,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                                     title="AI 润色"
                                     disabled={isPolishing}
                                 >
-                                    {isPolishing ? '...' : '✨'}
+                                    {isPolishing ? '...' : TbSparkles({size: 14})}
                                 </button>
                             </div>
                             <div style={styles.stopActions}>
