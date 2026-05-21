@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -361,7 +362,7 @@ func (a *App) CheckUpdate() string {
 	return string(result)
 }
 
-// DoUpdate downloads the update, prepares the updater script, and quits the app.
+// DoUpdate downloads the update, writes a manifest, and relaunches self in update mode.
 func (a *App) DoUpdate(downloadURL string) string {
 	slog.Info("update: starting", "url", downloadURL)
 
@@ -390,11 +391,25 @@ func (a *App) DoUpdate(downloadURL string) string {
 	}
 	slog.Info("update: download complete, extracted", "extractedDir", extractedDir)
 
-	if err := updater.ApplyUpdate(exeDir, extractedDir, exePath); err != nil {
-		slog.Error("update: apply failed", "error", err)
-		return toJSONError(fmt.Sprintf("apply update: %v", err))
+	manifest := &updater.Manifest{
+		ExtractedDir: extractedDir,
+		AppDir:       exeDir,
+		ExePath:      exePath,
+		ParentPid:    os.Getpid(),
+		Version:      Version,
+		LogPath:      filepath.Join(exeDir, "update.log"),
 	}
-	slog.Info("update: script launched, scheduling quit")
+	manifestPath := filepath.Join(tempDir, "manifest.json")
+	if err := updater.WriteManifest(manifest, manifestPath); err != nil {
+		slog.Error("update: write manifest failed", "error", err)
+		return toJSONError(fmt.Sprintf("write manifest: %v", err))
+	}
+
+	if err := launchSelfUpdate(exePath, manifestPath); err != nil {
+		slog.Error("update: launch self-update failed", "error", err)
+		return toJSONError(fmt.Sprintf("launch updater: %v", err))
+	}
+	slog.Info("update: self-update launched, scheduling quit")
 
 	runtime.EventsEmit(a.ctx, "update-ready", map[string]interface{}{"ok": true})
 
@@ -406,6 +421,17 @@ func (a *App) DoUpdate(downloadURL string) string {
 
 	result, _ := json.Marshal(map[string]interface{}{"ok": true})
 	return string(result)
+}
+
+// launchSelfUpdate starts the updater process (detached, hidden window).
+func launchSelfUpdate(exePath, manifestPath string) error {
+	cmd := exec.Command(exePath, "--self-update", manifestPath)
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		HideWindow: true,
+	}
+	return cmd.Start()
 }
 
 // startup is called when the app starts. The context is saved
@@ -464,6 +490,17 @@ func (a *App) startup(ctx context.Context) {
 			slog.Error("ipc failed to write token file", "error", err)
 		} else {
 			slog.Info("ipc server started", "port", a.ipcServer.Info().Port)
+		}
+	}
+
+	// 清理自更新残留文件，并显示更新结果
+	if execPath, err := os.Executable(); err == nil {
+		appDir := filepath.Dir(execPath)
+		if result, err := updater.CleanupAfterUpdate(appDir, updater.OSFS{}); err != nil {
+			slog.Warn("post-update cleanup failed", "error", err)
+		} else if result != nil {
+			slog.Info("update result", "success", result.Success, "version", result.Version)
+			runtime.EventsEmit(ctx, "update-completed", result)
 		}
 	}
 }

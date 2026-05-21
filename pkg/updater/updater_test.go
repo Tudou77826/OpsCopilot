@@ -2,7 +2,6 @@ package updater
 
 import (
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"testing"
 )
@@ -34,7 +33,6 @@ func TestCompareVersions(t *testing.T) {
 }
 
 func TestCompareVersionsWithVPrefix(t *testing.T) {
-	// compareVersions expects stripped versions, but verify the caller strips correctly.
 	a := "1.3.4"
 	b := "1.3.5"
 	if compareVersions(a, b) != -1 {
@@ -144,52 +142,6 @@ func TestProtectedFiles(t *testing.T) {
 		if protectedFiles[name] {
 			t.Errorf("expected %q to NOT be protected", name)
 		}
-	}
-}
-
-func TestBuildUpdateCommands(t *testing.T) {
-	// Create a temp directory with some files.
-	srcDir := t.TempDir()
-	dstDir := "C:\\fake\\app"
-
-	// Create files that should be copied.
-	os.WriteFile(filepath.Join(srcDir, "opscopilot.exe"), []byte("exe"), 0644)
-	os.WriteFile(filepath.Join(srcDir, "prompts.json"), []byte("{}"), 0644)
-
-	// Create files that should NOT be copied.
-	os.WriteFile(filepath.Join(srcDir, "config.json"), []byte("{}"), 0644)
-	os.WriteFile(filepath.Join(srcDir, "highlight_rules.json"), []byte("[]"), 0644)
-	os.WriteFile(filepath.Join(srcDir, "mcp-server.exe"), []byte("mcp"), 0644)
-	os.WriteFile(filepath.Join(srcDir, "OpsFTP.exe"), []byte("ftp"), 0644)
-
-	_, copyCmds, rollbackCmds := buildUpdateCommands(srcDir, dstDir)
-
-	// Copy commands should include exe and prompts, but NOT protected files.
-	if !containsSubstring(copyCmds, `opscopilot.exe`) {
-		t.Error("expected opscopilot.exe in copy commands")
-	}
-	if !containsSubstring(copyCmds, `prompts.json`) {
-		t.Error("expected prompts.json in copy commands")
-	}
-	if containsSubstring(copyCmds, `config.json`) {
-		t.Error("did NOT expect config.json in copy commands")
-	}
-	if containsSubstring(copyCmds, `highlight_rules.json`) {
-		t.Error("did NOT expect highlight_rules.json in copy commands")
-	}
-	if containsSubstring(copyCmds, `mcp-server.exe`) {
-		t.Error("did NOT expect mcp-server.exe in copy commands")
-	}
-	if containsSubstring(copyCmds, `OpsFTP.exe`) {
-		t.Error("did NOT expect OpsFTP.exe in copy commands")
-	}
-
-	// Rollback commands should cover the same files as copy.
-	if !containsSubstring(rollbackCmds, `opscopilot.exe`) {
-		t.Error("expected opscopilot.exe in rollback commands")
-	}
-	if !containsSubstring(rollbackCmds, `prompts.json`) {
-		t.Error("expected prompts.json in rollback commands")
 	}
 }
 

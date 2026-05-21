@@ -9,12 +9,10 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"syscall"
 	"time"
 )
 
@@ -26,8 +24,6 @@ const (
 )
 
 // newHTTPClient creates an HTTP client that respects system proxy settings.
-// It checks environment variables first, then falls back to Windows Internet
-// Settings (the same proxy the browser uses).
 func newHTTPClient(timeout time.Duration) *http.Client {
 	return &http.Client{
 		Timeout: timeout,
@@ -56,12 +52,12 @@ type Asset struct {
 
 // UpdateStatus is returned to the frontend as JSON.
 type UpdateStatus struct {
-	HasUpdate    bool         `json:"hasUpdate"`
-	CurrentVer   string       `json:"currentVersion"`
-	LatestVer    string       `json:"latestVersion"`
-	Release      *ReleaseInfo `json:"release,omitempty"`
-	DownloadURL  string       `json:"downloadUrl,omitempty"`
-	Error        string       `json:"error,omitempty"`
+	HasUpdate   bool         `json:"hasUpdate"`
+	CurrentVer  string       `json:"currentVersion"`
+	LatestVer   string       `json:"latestVersion"`
+	Release     *ReleaseInfo `json:"release,omitempty"`
+	DownloadURL string       `json:"downloadUrl,omitempty"`
+	Error       string       `json:"error,omitempty"`
 }
 
 // DownloadProgress is emitted as a Wails event during download.
@@ -83,9 +79,9 @@ var protectedFiles = map[string]bool{
 	"file_access.json":       true,
 	"mcp.json":               true,
 	// Independent executables — updated separately
-	"mcp-server.exe":         true,
-	"OpsFTP.exe":             true,
-	"ftpmanager.exe":         true,
+	"mcp-server.exe":  true,
+	"OpsFTP.exe":      true,
+	"ftpmanager.exe":  true,
 }
 
 // CheckForUpdate queries the GitHub API for the latest release and compares
@@ -180,159 +176,6 @@ func DownloadAndExtract(downloadURL string, tempDir string, progressFn func(Down
 
 	// Return tempDir as extractDir (exe is directly inside).
 	return tempDir, nil
-}
-
-// ApplyUpdate generates a batch updater script and launches it.
-// The calling application should exit immediately after this returns.
-//
-// Reliability measures:
-//   - All paths are converted to 8.3 short form (pure ASCII) so cmd.exe never
-//     misinterprets Chinese/Unicode characters due to code-page mismatch.
-//   - Process exit is detected by PID (not image name) to avoid conflicts with
-//     other running instances.
-//   - The current exe is backed up before overwriting; on copy failure the
-//     backup is automatically restored (rollback).
-//   - Each file copy is retried up to 3 times to survive transient file locks
-//     (antivirus, search indexer, etc.).
-//   - All actions are logged for post-mortem debugging.
-func ApplyUpdate(exeDir string, extractedDir string, currentExePath string) error {
-	// Convert ALL paths to 8.3 short form — including batPath and logPath.
-	// If the TEMP directory itself contains Chinese characters (e.g. user name
-	// is Chinese), cmd /C <batPath> would also fail.
-	shortExeDir := getShortPath(exeDir)
-	shortExtractedDir := getShortPath(extractedDir)
-	shortExePath := getShortPath(currentExePath)
-	batPath := getShortPath(filepath.Join(os.TempDir(), "opscopilot_update.bat"))
-	logPath := getShortPath(filepath.Join(os.TempDir(), "opscopilot_update.log"))
-
-	pid := os.Getpid()
-	backupCommands, copyCommands, rollbackCommands := buildUpdateCommands(shortExtractedDir, shortExeDir)
-
-	script := `@echo off
-set "LOG=` + logPath + `"
-echo [%date% %time%] [UPDATE] OpsCopilot Auto-Update started > "%LOG%"
-echo [%date% %time%] [UPDATE] exeDir=` + shortExeDir + ` >> "%LOG%"
-echo [%date% %time%] [UPDATE] extractedDir=` + shortExtractedDir + ` >> "%LOG%"
-echo [%date% %time%] [UPDATE] pid=` + strconv.Itoa(pid) + ` >> "%LOG%"
-
-set WAITED=0
-:waitloop
-tasklist /fi "pid eq ` + strconv.Itoa(pid) + `" 2>nul | find /i "` + strconv.Itoa(pid) + `" >nul
-if errorlevel 1 goto apply_update
-set /a WAITED+=1
-if %WAITED% GEQ 30 (
-    echo [%date% %time%] [UPDATE] Timeout waiting for app to exit. >> "%LOG%"
-    exit /b 1
-)
-ping -n 2 127.0.0.1 >nul
-goto waitloop
-
-:apply_update
-echo [%date% %time%] [UPDATE] App exited, waiting 2s for file handles... >> "%LOG%"
-ping -n 3 127.0.0.1 >nul
-
-echo [%date% %time%] [UPDATE] Backing up files... >> "%LOG%"
-` + backupCommands + `
-
-echo [%date% %time%] [UPDATE] Copying new files... >> "%LOG%"
-set COPY_FAILED=0
-` + copyCommands + `
-
-if "%COPY_FAILED%"=="1" (
-    echo [%date% %time%] [UPDATE] Copy failed, rolling back all files... >> "%LOG%"
-    ` + rollbackCommands + `
-    echo [%date% %time%] [UPDATE] Rollback complete, restarting old version... >> "%LOG%"
-    start "" "` + shortExePath + `"
-    (goto) 2>nul & del "%~f0"
-    exit /b 1
-)
-echo [%date% %time%] [UPDATE] Update succeeded, restarting application... >> "%LOG%"
-start "" "` + shortExePath + `"
-(goto) 2>nul & del "%~f0"
-`
-
-	if err := os.WriteFile(batPath, []byte(script), 0644); err != nil {
-		return fmt.Errorf("write updater script: %w", err)
-	}
-
-	slog.Info("updater: launching update script", "script", batPath, "log", logPath, "pid", pid)
-	cmd := exec.Command("cmd", "/C", batPath)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		HideWindow: true,
-	}
-	return cmd.Start()
-}
-
-// buildUpdateCommands generates three sets of batch commands for a safe
-// update: backup (snapshot current files), copy (overwrite with new
-// versions), and rollback (restore from snapshot on failure).
-//
-// Each copy is retried up to 3 times to survive transient file locks
-// (antivirus, search indexer, etc.).  On failure ALL backed-up files are
-// restored so the application is never left in a half-updated state.
-//
-// The returned strings use plain batch %%VAR%% syntax (they are NOT passed
-// through fmt.Sprintf again — ApplyUpdate concatenates them via string +).
-func buildUpdateCommands(srcDir string, dstDir string) (backup, copy, rollback string) {
-	entries, err := os.ReadDir(srcDir)
-	if err != nil {
-		copy = fmt.Sprintf(`xcopy /Y "%s\opscopilot.exe" "%s\" >nul`, srcDir, dstDir)
-		return
-	}
-
-	var backupLines, copyLines, rollbackLines []string
-	idx := 0
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		if protectedFiles[name] {
-			slog.Info("updater: skipping protected file", "file", name)
-			continue
-		}
-		dst := filepath.Join(dstDir, name)
-
-		// Backup: copy current file to .bak (ignore errors — file may not exist yet).
-		backupLines = append(backupLines, fmt.Sprintf(
-			`copy /Y "%s" "%s.bak" >nul 2>nul`, dst, dst))
-
-		// Copy: overwrite with new version, retry up to 3 times.
-		copyLines = append(copyLines, fmt.Sprintf(`set /a _retry=0
-:retry_%d
-xcopy /Y "%s\%s" "%s\" >nul 2>>"%%LOG%%"
-if not errorlevel 1 goto done_%d
-set /a _retry+=1
-if %%_retry%% LSS 3 (
-    echo [%%date%% %%time%%] [UPDATE] Retry %%_retry%%/3: %s >> "%%LOG%%"
-    ping -n 2 127.0.0.1 >nul
-    goto retry_%d
-)
-echo [%%date%% %%time%%] [UPDATE] FAILED: %s >> "%%LOG%%"
-set COPY_FAILED=1
-:done_%d`,
-			idx,
-			srcDir, name, dstDir,
-			idx,
-			name,
-			idx,
-			name,
-			idx,
-		))
-
-		// Rollback: restore .bak to original path.
-		rollbackLines = append(rollbackLines, fmt.Sprintf(
-			`copy /Y "%s.bak" "%s" >nul 2>nul`, dst, dst))
-
-		idx++
-	}
-
-	backup = strings.Join(backupLines, "\n")
-	copy = strings.Join(copyLines, "\n")
-	rollback = strings.Join(rollbackLines, "\n")
-	return
 }
 
 // fetchLatestRelease calls the GitHub API to get the latest release.
