@@ -203,7 +203,7 @@ OpsCopilot 可作为 **MCP Server** 运行，让 Claude、Cursor 等 AI Agent �
 - **多级目录**：服务 → 模块 → 场景 三级结构，LLM 快速剪枝定位
 - **即时可用**：归档后立即进入目录索引，下次排查即可检索
 - **团队共享**：`docs/` 目录可通过 Git 同步，团队经验共享
-- **独立存放**：归档文件放入 `troubleshooting/` 子目录，与手写 SOP 区隔
+- **独立存放**：归档文件放入 `archive/` 子目录，与手写 SOP 区隔
 
 **归档文档示例**：
 
@@ -565,7 +565,7 @@ docs/
 ├── payment_system_sop.md            # 手写 SOP
 ├── network_troubleshooting.md       # 手写 SOP
 ├── database_maintenance.md          # 手写 SOP
-└── troubleshooting/                 # 排查归档目录
+└── archive/                         # 排查归档目录
     ├── 2026-03-14_日志源开启失败调查_xxx.md
     ├── 2026-04-11_支付接口超时_xxx.md
     └── 2026-04-15_数据库连接池耗尽_xxx.md
@@ -580,7 +580,7 @@ OpsCopilot 内置知识库管理能力，无需手动操作：
 3. **Git 自动同步**：将 `docs/` 目录放入 Git 仓库，团队成员 pull 后启动应用即可检索最新知识
 
 ```
-团队成员 A 排查问题 → UI 归档 → docs/troubleshooting/ 新增文件 → Git push
+团队成员 A 排查问题 → UI 归档 → docs/archive/ 新增文件 → Git push
                                                         ↓
 团队成员 B Git pull → 启动 OpsCopilot → 自动索引 → 检索到 A 的经验
 ```
@@ -590,7 +590,7 @@ OpsCopilot 内置知识库管理能力，无需手动操作：
 **目录结构说明**：
 
 - `docs/` - 手写的 SOP 文档，按服务分类
-- `docs/troubleshooting/` - 自动生成的排查归档
+- `docs/archive/` - 自动生成的排查归档
 - `docs/.catalog.json` - 多级目录索引（服务 → 模块 → 场景）
 
 ---
