@@ -152,7 +152,7 @@ func parseDocument(relPath string, content string) (string, string, []ScenarioEn
 
 	// 判断文档类型
 	if docType == "" {
-		if strings.Contains(relPath, "troubleshooting/") {
+		if strings.Contains(relPath, "archive/") {
 			docType = "archive"
 		} else {
 			docType = "sop"

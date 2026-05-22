@@ -246,7 +246,7 @@ MySQL慢查询导致支付服务线程池耗尽
 
 *会话ID: abc123*`
 
-	entries := extractArchiveScenarios(content, "troubleshooting/test.md")
+	entries := extractArchiveScenarios(content, "archive/test.md")
 
 	if len(entries) != 1 {
 		t.Fatalf("len(entries) = %d, want 1", len(entries))
