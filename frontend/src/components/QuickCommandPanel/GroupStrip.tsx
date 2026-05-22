@@ -107,7 +107,7 @@ const styles = {
         backgroundColor: '#161616',
         borderLeft: '1px solid #262626',
         userSelect: 'none' as const,
-        flexShrink: 0,
+        flex: '0 0 64px',
     },
     activeCard: {
         width: '52px',
