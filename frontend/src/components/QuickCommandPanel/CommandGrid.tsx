@@ -98,6 +98,8 @@ const styles = {
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         userSelect: 'none' as const,
+        flex: '0 0 auto',
+        maxWidth: '120px',
         transition: 'background-color 0.2s, border-color 0.2s, color 0.2s',
     },
     addCard: {
@@ -111,6 +113,7 @@ const styles = {
         color: '#444',
         fontSize: '11px',
         backgroundColor: 'transparent',
+        flex: '0 0 auto',
         transition: 'border-color 0.2s, color 0.2s',
     },
     backdrop: {
