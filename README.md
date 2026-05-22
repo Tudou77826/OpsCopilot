@@ -573,14 +573,16 @@ docs/
 
 **团队共享方式**：
 
-```bash
-# 将 docs/ 目录放入 Git 仓库
-git add docs/
-git commit -m "docs: 新增支付系统排查 SOP"
+OpsCopilot 内置知识库管理能力，无需手动操作：
 
-# 团队成员同步后即可检索
-git pull
-# OpsCopilot 启动时自动重建目录索引
+1. **归档即入库**：排查完成后，UI 点击"归档"按钮，自动生成结构化文档并进入目录索引
+2. **启动即同步**：应用启动时自动扫描 docs/ 目录，增量更新目录索引
+3. **Git 自动同步**：将 `docs/` 目录放入 Git 仓库，团队成员 pull 后启动应用即可检索最新知识
+
+```
+团队成员 A 排查问题 → UI 归档 → docs/troubleshooting/ 新增文件 → Git push
+                                                        ↓
+团队成员 B Git pull → 启动 OpsCopilot → 自动索引 → 检索到 A 的经验
 ```
 
 应用启动时会自动加载文档，作为 AI 问答和 MCP `get_hints` 的上下文来源。
