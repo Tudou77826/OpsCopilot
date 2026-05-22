@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { TbClock, TbScreenShare, TbStethoscope, TbMessageChatbot, TbCode } from 'react-icons/tb';
+import { TbClock, TbScreenShare, TbStethoscope, TbMessageChatbot, TbCode, TbBolt } from 'react-icons/tb';
 import './App.css';
 import logo from './assets/images/logo-universal.png';
 import { TerminalRef } from './components/Terminal/Terminal';
 import LayoutManager from './components/LayoutManager/LayoutManager';
-import QuickCommandDrawer from './components/QuickCommandDrawer/QuickCommandDrawer';
+import QuickCommandPanel from './components/QuickCommandPanel/QuickCommandPanel';
+import BottomBar from './components/BottomBar/BottomBar';
 import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal';
 import Sidebar from './components/Sidebar/Sidebar';
 import SettingsModal from './components/SettingsModal/SettingsModal';
@@ -585,12 +586,12 @@ function App() {
         scheduleFitAll(300);
     }, [isSidebarOpen, scheduleFitAll]);
 
-    const [isQuickCommandDrawerOpen, setIsQuickCommandDrawerOpen] = useState(false);
+    const [isQuickCommandOpen, setIsQuickCommandOpen] = useState(false);
 
-    // Force terminal resize when QuickCommandDrawer toggles
+    // Force terminal resize when QuickCommandPanel toggles
     useEffect(() => {
         scheduleFitAll(350);
-    }, [isQuickCommandDrawerOpen, scheduleFitAll]);
+    }, [isQuickCommandOpen, scheduleFitAll]);
 
     const toggleSidebar = (tab: 'sessions' | 'troubleshoot' | 'chat' | 'script') => {
         if (isSidebarOpen && sidebarTab === tab) {
@@ -712,27 +713,34 @@ function App() {
             </div>
 
             <div style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'row' }}>
-                <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-                    <LayoutManager
-                        terminals={terminals}
-                        mode={layoutMode}
-                        onTerminalData={handleTerminalData}
-                        terminalRefs={terminalRefs}
-                        onCloseTerminal={handleCloseTerminal}
-                        onRenameTerminal={handleRenameTerminal}
-                        onDuplicateTerminal={handleDuplicateTerminal}
-                        onActiveTerminalChange={setActiveTerminalId}
-                        onReconnect={handleReconnect}
-                        onClose={() => { }}
-                        isBroadcastMode={isBroadcastMode}
-                        broadcastIds={broadcastIds}
-                        onToggleTerminalBroadcast={handleToggleTerminalBroadcast}
-                        completionDelay={completionDelay}
-                        terminalConfig={terminalConfig}
-                        highlightRules={highlightRules}
-                        onReorderTerminals={handleReorderTerminals}
-                        scheduleFitAll={scheduleFitAll}
-                        onSelectionParsed={setParsedTimestamp}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+                    <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+                        <LayoutManager
+                            terminals={terminals}
+                            mode={layoutMode}
+                            onTerminalData={handleTerminalData}
+                            terminalRefs={terminalRefs}
+                            onCloseTerminal={handleCloseTerminal}
+                            onRenameTerminal={handleRenameTerminal}
+                            onDuplicateTerminal={handleDuplicateTerminal}
+                            onActiveTerminalChange={setActiveTerminalId}
+                            onReconnect={handleReconnect}
+                            onClose={() => { }}
+                            isBroadcastMode={isBroadcastMode}
+                            broadcastIds={broadcastIds}
+                            onToggleTerminalBroadcast={handleToggleTerminalBroadcast}
+                            completionDelay={completionDelay}
+                            terminalConfig={terminalConfig}
+                            highlightRules={highlightRules}
+                            onReorderTerminals={handleReorderTerminals}
+                            scheduleFitAll={scheduleFitAll}
+                            onSelectionParsed={setParsedTimestamp}
+                        />
+                    </div>
+
+                    <QuickCommandPanel
+                        isOpen={isQuickCommandOpen}
+                        onExecute={handleQuickCommand}
                     />
                 </div>
 
@@ -791,14 +799,23 @@ function App() {
                     >
                         {TbCode({ size: 20 })}
                     </div>
+                    <div style={{ flex: 1 }} />
+                    <div
+                        style={{
+                            ...styles.navIcon,
+                            backgroundColor: isQuickCommandOpen ? '#333' : 'transparent',
+                            borderRight: isQuickCommandOpen ? '2px solid #007acc' : '2px solid transparent',
+                        }}
+                        onClick={() => setIsQuickCommandOpen(!isQuickCommandOpen)}
+                        title="快捷命令"
+                        data-testid="nav-icon-quickcommands"
+                    >
+                        {TbBolt({ size: 20 })}
+                    </div>
                 </div>
             </div>
 
-            <QuickCommandDrawer
-                onExecute={handleQuickCommand}
-                isOpen={isQuickCommandDrawerOpen}
-                onToggle={() => setIsQuickCommandDrawerOpen(!isQuickCommandDrawerOpen)}
-            />
+            <BottomBar />
 
             <SmartConnectModal
                 isOpen={isSmartModalOpen}
@@ -932,6 +949,7 @@ const styles = {
         alignItems: 'center',
         borderLeft: '1px solid #333',
         paddingTop: '10px',
+        paddingBottom: '10px',
     },
     navIcon: {
         width: '100%',

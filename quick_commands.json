@@ -7,14 +7,110 @@
   },
   {
     "id": "2",
+    "name": "Check Disk",
+    "content": "df -h",
+    "group": "default"
+  },
+  {
+    "id": "3",
+    "name": "View Logs",
+    "content": "tail -f /var/log/syslog",
+    "group": "default"
+  },
+  {
+    "id": "4",
     "name": "Check MySQL",
     "content": "systemctl status mysql",
     "group": "database"
   },
   {
-    "id": "3",
-    "name": "Test Network",
+    "id": "5",
+    "name": "MySQL Connect",
+    "content": "mysql -u root -p",
+    "group": "database"
+  },
+  {
+    "id": "6",
+    "name": "Show Tables",
+    "content": "mysql -e 'SHOW DATABASES;'",
+    "group": "database"
+  },
+  {
+    "id": "7",
+    "name": "Backup DB",
+    "content": "mysqldump -u root -p --all-databases \u003e backup.sql",
+    "group": "database"
+  },
+  {
+    "id": "8",
+    "name": "Ping Google",
     "content": "ping -c 4 google.com",
     "group": "network"
+  },
+  {
+    "id": "9",
+    "name": "Check Port",
+    "content": "netstat -tuln | grep 80",
+    "group": "network"
+  },
+  {
+    "id": "10",
+    "name": "DNS Lookup",
+    "content": "nslookup google.com",
+    "group": "network"
+  },
+  {
+    "id": "11",
+    "name": "Trace Route",
+    "content": "traceroute google.com",
+    "group": "network"
+  },
+  {
+    "id": "12",
+    "name": "Docker PS",
+    "content": "docker ps -a",
+    "group": "docker"
+  },
+  {
+    "id": "13",
+    "name": "Docker Logs",
+    "content": "docker logs --tail 100",
+    "group": "docker"
+  },
+  {
+    "id": "14",
+    "name": "Docker Stats",
+    "content": "docker stats --no-stream",
+    "group": "docker"
+  },
+  {
+    "id": "15",
+    "name": "Container Exec",
+    "content": "docker exec -it container_name bash",
+    "group": "docker"
+  },
+  {
+    "id": "16",
+    "name": "CPU Usage",
+    "content": "top -bn1 | head -20",
+    "group": "monitoring"
+  },
+  {
+    "id": "17",
+    "name": "Memory Info",
+    "content": "free -h",
+    "group": "monitoring"
+  },
+  {
+    "id": "18",
+    "name": "Disk IO",
+    "content": "iostat -x 1 5",
+    "group": "monitoring"
+  },
+  {
+    "id": "19",
+    "name": "Process Count",
+    "content": "ps aux | wc -l",
+    "group": "monitoring"
   }
 ]
