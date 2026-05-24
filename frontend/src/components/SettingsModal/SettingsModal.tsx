@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { TbRobot, TbTerminal2, TbPalette, TbKeyboard, TbLayoutGrid, TbFolder, TbBooks, TbShieldCheck, TbLock, TbSettings, TbInfoCircle, TbSearch } from 'react-icons/tb';
+import { TbRobot, TbPalette, TbKeyboard, TbLayoutGrid, TbFolder, TbBooks, TbShieldCheck, TbLock, TbSettings, TbInfoCircle, TbSearch } from 'react-icons/tb';
 import KeysMap from './KeysMap';
 import HighlightRulesModal from './HighlightRulesModal';
 import CommandWhitelistPanel from './CommandWhitelist/CommandWhitelistPanel';
@@ -44,7 +44,6 @@ interface SettingsModalProps {
     onCompletionDelayChange?: (delay: number) => void;
     onOpenFileTransfer?: () => void;
     onOpenStandaloneFileTransfer?: () => void;
-    onTerminalConfigChange?: (cfg: TerminalConfig) => void;
     onHighlightRulesChange?: (rules: HighlightRule[]) => void;
 }
 
@@ -60,7 +59,7 @@ interface PatchSyncStatus {
     branch?: string;
 }
 
-type TabId = 'llm' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'filetransfer' | 'knowledge' | 'whitelist' | 'fileaccess' | 'experimental' | 'about';
+type TabId = 'llm' | 'highlight' | 'shortcuts' | 'broadcast' | 'filetransfer' | 'knowledge' | 'whitelist' | 'fileaccess' | 'experimental' | 'about';
 
 interface NavItem {
     id: TabId;
@@ -101,7 +100,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     onCompletionDelayChange,
     onOpenFileTransfer,
     onOpenStandaloneFileTransfer,
-    onTerminalConfigChange,
     onHighlightRulesChange
 }) => {
     const [config, setConfig] = useState<AppConfig | null>(null);
@@ -120,7 +118,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     // Navigation items structure
     const navItems: NavItem[] = [
         { id: 'llm', label: '模型服务', icon: TbRobot({}), category: 'AI' },
-        { id: 'terminal', label: '终端设置', icon: TbTerminal2({}), category: '终端' },
         { id: 'highlight', label: '突出显示', icon: TbPalette({}), category: '终端' },
         { id: 'shortcuts', label: '快捷键', icon: TbKeyboard({}), category: '交互' },
         { id: 'broadcast', label: '多窗口', icon: TbLayoutGrid({}), category: '交互' },
@@ -279,9 +276,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 await loadPatchSyncStatus();
                 if (onCompletionDelayChange && nextConfig.completion_delay !== undefined) {
                     onCompletionDelayChange(nextConfig.completion_delay);
-                }
-                if (onTerminalConfigChange && nextConfig.terminal) {
-                    onTerminalConfigChange(nextConfig.terminal);
                 }
                 if (onHighlightRulesChange) {
                     onHighlightRulesChange(nextConfig.highlight_rules || []);
@@ -447,37 +441,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 onChange={(e) => handleChange('llm', 'ComplexModel', e.target.value)}
                                 placeholder="glm46"
                             />
-                        </div>
-                    </div>
-                );
-
-            case 'terminal':
-                return (
-                    <div style={styles.settingsGroup}>
-                        <div style={styles.groupTitle}>显示设置</div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>Scrollback 历史行数</label>
-                            <input
-                                style={styles.input}
-                                type="number"
-                                min="500"
-                                max="20000"
-                                step="500"
-                                value={config.terminal?.scrollback ?? 5000}
-                                onChange={(e) => {
-                                    const v = Math.max(500, Math.min(20000, parseInt(e.target.value) || 5000));
-                                    setConfig({
-                                        ...config,
-                                        terminal: {
-                                            ...(config.terminal || { scrollback: 5000, search_enabled: true, highlight_enabled: true }),
-                                            scrollback: v
-                                        }
-                                    });
-                                }}
-                            />
-                            <div style={styles.settingDescription}>
-                                影响可搜索与可高亮的历史行数；调整后建议重启应用使其完全生效
-                            </div>
                         </div>
                     </div>
                 );

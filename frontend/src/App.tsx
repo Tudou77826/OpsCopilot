@@ -832,7 +832,6 @@ function App() {
                 onCompletionDelayChange={setCompletionDelay}
                 onOpenFileTransfer={() => setIsFileTransferOpen(true)}
                 onOpenStandaloneFileTransfer={handleOpenStandaloneFileTransfer}
-                onTerminalConfigChange={setTerminalConfig}
                 onHighlightRulesChange={setHighlightRules}
             />
 
