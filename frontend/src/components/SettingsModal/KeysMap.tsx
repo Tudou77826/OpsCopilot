@@ -1,4 +1,5 @@
 import React from 'react';
+import { colors, radius, font } from './settingsStyles';
 
 export interface KeyMapItem {
     keys: string;
@@ -115,45 +116,45 @@ const styles: Record<string, React.CSSProperties> = {
         gap: '10px',
     },
     title: {
-        color: '#fff',
-        fontSize: '0.95rem',
+        color: colors.textPrimary,
+        fontSize: font.lg,
         fontWeight: 600,
     },
     disclaimer: {
-        color: '#888',
-        fontSize: '0.8rem',
+        color: colors.textTertiary,
+        fontSize: font.sm,
         lineHeight: 1.4,
     },
     table: {
-        border: '1px solid #3c3c3c',
-        borderRadius: '6px',
+        border: `1px solid ${colors.borderPrimary}`,
+        borderRadius: radius.md,
         overflow: 'hidden',
-        backgroundColor: '#1e1e1e',
+        backgroundColor: colors.bgPrimary,
     },
     rowHeader: {
         display: 'grid',
         gridTemplateColumns: '140px 140px 1fr',
         gap: '0px',
-        backgroundColor: '#252526',
-        borderBottom: '1px solid #333',
+        backgroundColor: colors.bgSecondary,
+        borderBottom: `1px solid ${colors.borderPrimary}`,
         padding: '8px 10px',
-        fontSize: '12px',
-        color: '#aaa',
+        fontSize: font.sm,
+        color: colors.textTertiary,
     },
     row: {
         display: 'grid',
         gridTemplateColumns: '140px 140px 1fr',
         padding: '10px',
-        borderBottom: '1px solid #2d2d2d',
-        fontSize: '12px',
-        color: '#ccc',
+        borderBottom: `1px solid ${colors.borderSubtle}`,
+        fontSize: font.sm,
+        color: colors.textSecondary,
     },
     cellKey: {
         display: 'flex',
         alignItems: 'flex-start',
     },
     cellScope: {
-        color: '#bbb',
+        color: colors.textSecondary,
     },
     cellAction: {
         display: 'flex',
@@ -163,17 +164,17 @@ const styles: Record<string, React.CSSProperties> = {
     keyPill: {
         display: 'inline-block',
         fontFamily: 'var(--font-mono)',
-        fontSize: '12px',
+        fontSize: font.sm,
         padding: '2px 8px',
         borderRadius: '999px',
-        backgroundColor: '#333',
-        border: '1px solid #444',
-        color: '#fff',
+        backgroundColor: colors.bgHover,
+        border: `1px solid ${colors.borderPrimary}`,
+        color: colors.textPrimary,
         userSelect: 'none',
     },
     notes: {
-        color: '#888',
-        fontSize: '11px',
+        color: colors.textTertiary,
+        fontSize: font.xs,
         lineHeight: 1.4,
     },
 };

@@ -6,6 +6,8 @@ import CommandWhitelistPanel from './CommandWhitelist/CommandWhitelistPanel';
 import FileAccessPanel from './FileAccess/FileAccessPanel';
 import AboutPanel from './AboutPanel';
 import { HighlightRule, TerminalConfig } from '../Terminal/highlightTypes';
+import { colors, radius, font, inputStyle, btnSecondary, descStyle, labelStyle, sectionTitle } from './settingsStyles';
+import Switch from './Switch';
 
 interface AppConfig {
     llm: {
@@ -479,19 +481,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         <div style={styles.settingItem}>
                             <label style={styles.settingLabel}>启用广播模式</label>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <label style={styles.switch}>
-                                    <input
-                                        type="checkbox"
-                                        checked={!!isBroadcastMode}
-                                        onChange={(e) => {
-                                            if (onToggleBroadcast) {
-                                                onToggleBroadcast(e.target.checked);
-                                            }
-                                        }}
-                                    />
-                                    <span style={styles.slider}></span>
-                                </label>
-                                <span style={{ color: '#ccc', fontSize: '0.9rem' }}>
+                                <Switch
+                                    checked={!!isBroadcastMode}
+                                    onChange={(v) => {
+                                        if (onToggleBroadcast) onToggleBroadcast(v);
+                                    }}
+                                />
+                                <span style={{ color: colors.textSecondary, fontSize: font.base }}>
                                     {isBroadcastMode ? '已开启' : '已关闭'}
                                 </span>
                             </div>
@@ -546,15 +542,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         <div style={styles.settingItem}>
                             <label style={styles.settingLabel}>启用补丁同步</label>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <label style={styles.switch}>
-                                    <input
-                                        type="checkbox"
-                                        checked={!!config.patch_store?.enabled}
-                                        onChange={(e) => handlePatchStoreChange('enabled', e.target.checked)}
-                                    />
-                                    <span style={styles.slider}></span>
-                                </label>
-                                <span style={{ color: '#ccc', fontSize: '0.9rem' }}>
+                                <Switch
+                                    checked={!!config.patch_store?.enabled}
+                                    onChange={(v) => handlePatchStoreChange('enabled', v)}
+                                />
+                                <span style={{ color: colors.textSecondary, fontSize: font.base }}>
                                     {config.patch_store?.enabled ? '已开启' : '已关闭'}
                                 </span>
                             </div>
@@ -745,22 +737,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
     return (
         <div style={styles.overlay}>
-            <style>{`
-                input:checked + span {
-                    background-color: #2196F3 !important;
-                }
-                input:focus + span {
-                    box-shadow: 0 0 1px #2196F3;
-                }
-                input:checked + span:before {
-                    transform: translateX(20px);
-                }
-                label input {
-                    opacity: 0;
-                    width: 0;
-                    height: 0;
-                }
-            `}</style>
             <div style={styles.modal}>
                 {/* Header */}
                 <div style={styles.header}>
@@ -853,41 +829,41 @@ const styles = {
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        backgroundColor: colors.overlay,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 2000,
     },
     modal: {
-        backgroundColor: '#252526',
-        borderRadius: '8px',
+        backgroundColor: colors.bgSecondary,
+        borderRadius: radius.lg,
         width: '900px',
         height: '650px',
         display: 'flex',
         flexDirection: 'column' as const,
         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
-        color: '#ccc',
+        color: colors.textSecondary,
         overflow: 'hidden',
     },
     header: {
         padding: '16px 24px',
-        borderBottom: '1px solid #3c3c3c',
+        borderBottom: `1px solid ${colors.borderPrimary}`,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: '#1e1e1e',
+        backgroundColor: colors.bgPrimary,
     },
     title: {
         margin: 0,
         fontSize: '1.1rem',
-        color: '#fff',
+        color: colors.textPrimary,
         fontWeight: 600,
     },
     closeBtn: {
         background: 'none',
         border: 'none',
-        color: '#ccc',
+        color: colors.textSecondary,
         fontSize: '1.5rem',
         cursor: 'pointer',
         padding: '0',
@@ -896,9 +872,9 @@ const styles = {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: '4px',
+        borderRadius: radius.sm,
         ':hover': {
-            backgroundColor: '#3c3c3c',
+            backgroundColor: colors.bgHover,
         }
     },
     mainContent: {
@@ -908,8 +884,8 @@ const styles = {
     },
     sidebar: {
         width: '220px',
-        backgroundColor: '#252526',
-        borderRight: '1px solid #3E3E42',
+        backgroundColor: colors.bgSecondary,
+        borderRight: `1px solid ${colors.borderPrimary}`,
         display: 'flex',
         flexDirection: 'column' as const,
         padding: '12px 0',
@@ -923,22 +899,22 @@ const styles = {
         left: '24px',
         top: '50%',
         transform: 'translateY(-50%)',
-        color: '#888',
-        fontSize: '14px',
+        color: colors.textTertiary,
+        fontSize: font.lg,
         pointerEvents: 'none' as const,
     },
     searchInput: {
         width: '100%',
         padding: '8px 12px 8px 32px',
-        backgroundColor: '#3C3C3C',
-        border: '1px solid #5A5A5A',
-        borderRadius: '4px',
-        color: '#FFFFFF',
-        fontSize: '13px',
+        backgroundColor: colors.bgHover,
+        border: `1px solid ${colors.borderPrimary}`,
+        borderRadius: radius.sm,
+        color: colors.textPrimary,
+        fontSize: font.base,
         outline: 'none',
         boxSizing: 'border-box' as 'border-box',
         ':focus': {
-            borderColor: '#007ACC',
+            borderColor: colors.accent,
         }
     },
     nav: {
@@ -951,17 +927,17 @@ const styles = {
         gap: '12px',
         padding: '10px 12px',
         cursor: 'pointer',
-        fontSize: '13px',
-        color: '#CCCCCC',
-        borderRadius: '4px',
+        fontSize: font.base,
+        color: colors.textSecondary,
+        borderRadius: radius.sm,
         margin: '0 8px',
         ':hover': {
-            backgroundColor: '#37373D',
+            backgroundColor: colors.bgTertiary,
         }
     },
     navItemActive: {
-        backgroundColor: '#37373D',
-        color: '#FFFFFF',
+        backgroundColor: colors.bgTertiary,
+        color: colors.textPrimary,
         fontWeight: 500,
     },
     navIcon: {
@@ -979,21 +955,21 @@ const styles = {
     noResults: {
         padding: '20px 12px',
         textAlign: 'center' as const,
-        color: '#888',
-        fontSize: '13px',
+        color: colors.textTertiary,
+        fontSize: font.base,
     },
     contentArea: {
         flex: 1,
         padding: '20px 24px',
         overflowY: 'auto' as const,
-        backgroundColor: '#2D2D2D',
+        backgroundColor: colors.bgTertiary,
     },
     breadcrumb: {
-        fontSize: '12px',
-        color: '#888',
+        fontSize: font.sm,
+        color: colors.textTertiary,
         marginBottom: '16px',
         paddingBottom: '8px',
-        borderBottom: '1px solid #3E3E42',
+        borderBottom: `1px solid ${colors.borderPrimary}`,
     },
     settingsContent: {
         display: 'flex',
@@ -1006,13 +982,13 @@ const styles = {
         gap: '20px',
     },
     groupTitle: {
-        fontSize: '13px',
+        fontSize: font.base,
         fontWeight: 600,
-        color: '#E0E0E0',
+        color: colors.textSecondary,
         marginTop: '8px',
         marginBottom: '4px',
         paddingBottom: '6px',
-        borderBottom: '1px solid #3E3E42',
+        borderBottom: `1px solid ${colors.borderPrimary}`,
     },
     settingItem: {
         display: 'flex',
@@ -1020,40 +996,17 @@ const styles = {
         gap: '8px',
     },
     settingLabel: {
-        fontSize: '13px',
-        color: '#CCCCCC',
-        fontWeight: 500,
+        ...labelStyle,
     },
     settingDescription: {
-        fontSize: '11px',
-        color: '#999999',
-        lineHeight: '1.4',
+        ...descStyle,
         marginTop: '-4px',
     },
     input: {
-        padding: '8px 12px',
-        borderRadius: '4px',
-        border: '1px solid #3c3c3c',
-        backgroundColor: '#1e1e1e',
-        color: '#fff',
-        outline: 'none',
-        fontSize: '13px',
-        ':focus': {
-            borderColor: '#007ACC',
-        }
+        ...inputStyle,
     },
     secondaryButton: {
-        padding: '8px 16px',
-        borderRadius: '4px',
-        border: '1px solid #5A5A5A',
-        backgroundColor: '#3C3C3C',
-        color: '#fff',
-        cursor: 'pointer',
-        fontSize: '13px',
-        ':hover': {
-            backgroundColor: '#4C4C4C',
-            borderColor: '#6A6A6A',
-        }
+        ...btnSecondary,
     },
     statusGrid: {
         display: 'grid',
@@ -1062,93 +1015,65 @@ const styles = {
     },
     statusCard: {
         padding: '14px',
-        borderRadius: '6px',
-        border: '1px solid #3E3E42',
-        backgroundColor: '#252526',
+        borderRadius: radius.md,
+        border: `1px solid ${colors.borderPrimary}`,
+        backgroundColor: colors.bgSecondary,
         display: 'flex',
         flexDirection: 'column' as const,
         gap: '8px',
     },
     statusCardLabel: {
-        fontSize: '12px',
-        color: '#999999',
+        fontSize: font.sm,
+        color: colors.textTertiary,
     },
     statusCardValue: {
-        fontSize: '14px',
-        color: '#FFFFFF',
+        fontSize: font.lg,
+        color: colors.textPrimary,
         fontWeight: 600,
         wordBreak: 'break-word' as const,
     },
     footer: {
         padding: '16px 24px',
-        borderTop: '1px solid #3c3c3c',
+        borderTop: `1px solid ${colors.borderPrimary}`,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: '#1e1e1e',
+        backgroundColor: colors.bgPrimary,
     },
     footerActions: {
         display: 'flex',
         gap: '12px',
     },
     statusMsg: {
-        color: '#4caf50',
-        fontSize: '13px',
+        color: colors.success,
+        fontSize: font.base,
     },
     saveBtn: {
         padding: '8px 20px',
-        borderRadius: '4px',
+        borderRadius: radius.sm,
         border: 'none',
-        backgroundColor: '#007acc',
-        color: '#fff',
+        backgroundColor: colors.accent,
+        color: colors.textPrimary,
         cursor: 'pointer',
         fontWeight: 500,
-        fontSize: '13px',
+        fontSize: font.base,
         ':hover': {
             backgroundColor: '#005a9e',
         }
     },
     cancelBtn: {
         padding: '8px 20px',
-        borderRadius: '4px',
-        border: '1px solid #5A5A5A',
+        borderRadius: radius.sm,
+        border: `1px solid ${colors.borderPrimary}`,
         backgroundColor: 'transparent',
-        color: '#ccc',
+        color: colors.textSecondary,
         cursor: 'pointer',
         fontWeight: 500,
-        fontSize: '13px',
+        fontSize: font.base,
         ':hover': {
-            backgroundColor: '#3C3C3C',
+            backgroundColor: colors.bgHover,
         }
     },
-    switch: {
-        position: 'relative' as const,
-        display: 'inline-block',
-        width: '40px',
-        height: '20px',
-    },
-    slider: {
-        position: 'absolute' as const,
-        cursor: 'pointer',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: '#ccc',
-        transition: '.4s',
-        borderRadius: '20px',
-        ':before': {
-            position: 'absolute' as const,
-            content: '""',
-            height: '16px',
-            width: '16px',
-            left: '2px',
-            bottom: '2px',
-            backgroundColor: 'white',
-            transition: '.4s',
-            borderRadius: '50%',
-        }
-    }
 };
 
 export default SettingsModal;

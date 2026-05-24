@@ -1,5 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { HighlightRule } from '../Terminal/highlightTypes';
+import { colors, radius, font } from './settingsStyles';
+import Switch from './Switch';
 
 interface HighlightRulesModalProps {
     isOpen: boolean;
@@ -300,19 +302,13 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
                                         <div style={styles.itemHeader}>
                                             <div style={styles.itemLeft}>
                                                 <div style={styles.ruleInfo}>
-                                                    {/* Enable Switch */}
-                                                    <label style={styles.switch}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={!!r.is_enabled}
-                                                            onChange={() => patch(r.id, { is_enabled: !r.is_enabled && canEnable })}
-                                                            disabled={!canEnable}
-                                                        />
-                                                        <span style={{
-                                                            ...styles.slider,
-                                                            ...(risk.level !== 'safe' ? { backgroundColor: '#ff9800' } : {})
-                                                        }}></span>
-                                                    </label>
+                                                    <Switch
+                                                        checked={!!r.is_enabled}
+                                                        onChange={(v) => {
+                                                            if (v && !canEnable) return;
+                                                            patch(r.id, { is_enabled: v });
+                                                        }}
+                                                    />
                                                     <span style={styles.nameText}>{r.name || '未命名'}</span>
                                                     {risk.level !== 'safe' && (
                                                         <span style={{
@@ -586,7 +582,7 @@ const styles = {
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        backgroundColor: colors.overlay,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -594,8 +590,8 @@ const styles = {
         padding: '20px',
     },
     modal: {
-        backgroundColor: '#252526',
-        borderRadius: '8px',
+        backgroundColor: colors.bgSecondary,
+        borderRadius: radius.lg,
         width: '900px',
         maxHeight: '650px',
         height: '650px',
@@ -607,11 +603,11 @@ const styles = {
     },
     header: {
         padding: '16px 24px',
-        borderBottom: '1px solid #3c3c3c',
+        borderBottom: `1px solid ${colors.borderPrimary}`,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: '#1e1e1e',
+        backgroundColor: colors.bgPrimary,
     },
     titleContainer: {
         display: 'flex',
@@ -621,18 +617,18 @@ const styles = {
     title: {
         margin: 0,
         fontSize: '1.1rem',
-        color: '#fff',
+        color: colors.textPrimary,
         fontWeight: 600,
     },
     unsavedIndicator: {
-        color: '#ff9800',
-        fontSize: '13px',
+        color: colors.warning,
+        fontSize: font.base,
         fontWeight: 500,
     },
     closeBtn: {
         background: 'none',
         border: 'none',
-        color: '#ccc',
+        color: colors.textSecondary,
         fontSize: '1.5rem',
         cursor: 'pointer',
         padding: '0',
@@ -641,9 +637,9 @@ const styles = {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: '4px',
+        borderRadius: radius.sm,
         ':hover': {
-            backgroundColor: '#3c3c3c',
+            backgroundColor: colors.bgHover,
         }
     },
     body: {
@@ -658,34 +654,34 @@ const styles = {
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: '16px 24px',
-        borderBottom: '1px solid #3c3c3c',
-        backgroundColor: '#2D2D2D',
+        borderBottom: `1px solid ${colors.borderPrimary}`,
+        backgroundColor: colors.bgTertiary,
     },
     hint: {
-        color: '#888',
-        fontSize: '12px',
+        color: colors.textTertiary,
+        fontSize: font.sm,
     },
     list: {
         flex: 1,
         overflowY: 'auto' as const,
         overflowX: 'hidden' as const,
         padding: '16px 24px',
-        backgroundColor: '#2D2D2D',
+        backgroundColor: colors.bgTertiary,
         display: 'flex',
         flexDirection: 'column' as const,
         gap: '12px',
         minHeight: 0,
     },
     empty: {
-        color: '#666',
-        fontSize: '13px',
+        color: colors.textMuted,
+        fontSize: font.base,
         textAlign: 'center' as const,
         padding: '40px 0',
     },
     item: {
-        border: '1px solid #3c3c3c',
-        borderRadius: '6px',
-        backgroundColor: '#1e1e1e',
+        border: `1px solid ${colors.borderPrimary}`,
+        borderRadius: radius.md,
+        backgroundColor: colors.bgPrimary,
         overflow: 'hidden',
         flexShrink: 0,
     },
@@ -709,8 +705,8 @@ const styles = {
         gap: '10px',
     },
     nameText: {
-        color: '#ccc',
-        fontSize: '13px',
+        color: colors.textSecondary,
+        fontSize: font.base,
         fontWeight: 500,
         overflow: 'hidden',
         textOverflow: 'ellipsis',
@@ -718,45 +714,16 @@ const styles = {
         flex: 1,
     },
     riskBadge: {
-        fontSize: '11px',
+        fontSize: font.xs,
         padding: '2px 6px',
-        borderRadius: '4px',
+        borderRadius: radius.sm,
         fontWeight: 600,
         flexShrink: 0,
     },
     statusText: {
-        fontSize: '11px',
-        color: '#888',
+        fontSize: font.xs,
+        color: colors.textTertiary,
         marginLeft: '50px',
-    },
-    switch: {
-        position: 'relative' as const,
-        display: 'inline-block',
-        width: '40px',
-        height: '20px',
-        flexShrink: 0,
-    },
-    slider: {
-        position: 'absolute' as const,
-        cursor: 'pointer',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: '#ccc',
-        transition: '.4s',
-        borderRadius: '20px',
-        ':before': {
-            position: 'absolute' as const,
-            content: '""',
-            height: '16px',
-            width: '16px',
-            left: '2px',
-            bottom: '2px',
-            backgroundColor: 'white',
-            transition: '.4s',
-            borderRadius: '50%',
-        }
     },
     actions: {
         display: 'flex',
@@ -765,12 +732,12 @@ const styles = {
     },
     editBtn: {
         padding: '6px 12px',
-        borderRadius: '4px',
-        border: '1px solid #5A5A5A',
-        backgroundColor: '#3C3C3C',
-        color: '#fff',
+        borderRadius: radius.sm,
+        border: `1px solid ${colors.borderPrimary}`,
+        backgroundColor: colors.bgHover,
+        color: colors.textPrimary,
         cursor: 'pointer',
-        fontSize: '12px',
+        fontSize: font.sm,
         display: 'flex',
         alignItems: 'center',
         gap: '4px',
@@ -782,12 +749,12 @@ const styles = {
         padding: '0',
         width: '28px',
         height: '28px',
-        borderRadius: '4px',
-        border: '1px solid #5A5A5A',
-        backgroundColor: '#3C3C3C',
-        color: '#bbb',
+        borderRadius: radius.sm,
+        border: `1px solid ${colors.borderPrimary}`,
+        backgroundColor: colors.bgHover,
+        color: colors.textSecondary,
         cursor: 'pointer',
-        fontSize: '14px',
+        fontSize: font.lg,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -797,11 +764,11 @@ const styles = {
     },
     expanded: {
         padding: '16px',
-        borderTop: '1px solid #3c3c3c',
+        borderTop: `1px solid ${colors.borderPrimary}`,
         display: 'flex',
         flexDirection: 'column' as const,
         gap: '12px',
-        backgroundColor: '#252526',
+        backgroundColor: colors.bgSecondary,
     },
     row: {
         display: 'flex',
@@ -819,30 +786,30 @@ const styles = {
         gap: '6px',
     },
     fieldLabel: {
-        fontSize: '13px',
-        color: '#CCCCCC',
+        fontSize: font.base,
+        color: colors.textSecondary,
         fontWeight: 500,
     },
     input: {
         padding: '8px 12px',
-        borderRadius: '4px',
-        border: '1px solid #3c3c3c',
-        backgroundColor: '#1e1e1e',
-        color: '#fff',
+        borderRadius: radius.sm,
+        border: `1px solid ${colors.borderPrimary}`,
+        backgroundColor: colors.bgPrimary,
+        color: colors.textPrimary,
         outline: 'none',
-        fontSize: '13px',
+        fontSize: font.base,
         ':focus': {
-            borderColor: '#007ACC',
+            borderColor: colors.accent,
         }
     },
     select: {
         padding: '8px 12px',
-        borderRadius: '4px',
-        border: '1px solid #3c3c3c',
-        backgroundColor: '#1e1e1e',
-        color: '#fff',
+        borderRadius: radius.sm,
+        border: `1px solid ${colors.borderPrimary}`,
+        backgroundColor: colors.bgPrimary,
+        color: colors.textPrimary,
         outline: 'none',
-        fontSize: '13px',
+        fontSize: font.base,
         cursor: 'pointer',
     },
     colorInput: {
@@ -853,36 +820,36 @@ const styles = {
     colorPicker: {
         width: '40px',
         height: '34px',
-        border: '1px solid #3c3c3c',
-        borderRadius: '4px',
+        border: `1px solid ${colors.borderPrimary}`,
+        borderRadius: radius.sm,
         cursor: 'pointer',
         padding: '2px',
-        backgroundColor: '#1e1e1e',
+        backgroundColor: colors.bgPrimary,
     },
     bgOption: {
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
         cursor: 'pointer',
-        fontSize: '13px',
-        color: '#ccc',
+        fontSize: font.base,
+        color: colors.textSecondary,
         userSelect: 'none' as const,
         position: 'relative' as const,
     },
     customCheckbox: {
         width: '16px',
         height: '16px',
-        border: '2px solid #555',
+        border: `2px solid ${colors.borderPrimary}`,
         borderRadius: '3px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         flexShrink: 0,
-        backgroundColor: '#1e1e1e',
+        backgroundColor: colors.bgPrimary,
     },
     checkmark: {
         color: '#7aaa88',
-        fontSize: '12px',
+        fontSize: font.sm,
         fontWeight: 'bold',
         lineHeight: 1,
     },
@@ -898,7 +865,7 @@ const styles = {
     },
     warningBox: {
         padding: '12px',
-        borderRadius: '4px',
+        borderRadius: radius.sm,
         border: '1px solid',
         marginTop: '8px',
     },
@@ -909,27 +876,27 @@ const styles = {
         marginBottom: '8px',
     },
     warningIcon: {
-        fontSize: '14px',
+        fontSize: font.lg,
     },
     warningTitle: {
         fontWeight: 600,
-        fontSize: '13px',
+        fontSize: font.base,
     },
     warningList: {
         margin: '0 0 12px 0',
         paddingLeft: '24px',
     },
     warningItem: {
-        fontSize: '12px',
-        color: '#ccc',
+        fontSize: font.sm,
+        color: colors.textSecondary,
         marginBottom: '4px',
     },
     ackLabel: {
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
-        fontSize: '12px',
-        color: '#ccc',
+        fontSize: font.sm,
+        color: colors.textSecondary,
         cursor: 'pointer',
     },
     ackCheckbox: {
@@ -938,27 +905,27 @@ const styles = {
         cursor: 'pointer',
     },
     severeMessage: {
-        fontSize: '12px',
-        color: '#ff8080',
+        fontSize: font.sm,
+        color: colors.danger,
         marginTop: '8px',
     },
     previewBg: {
         backgroundColor: '#0d0d0d',
         padding: '12px',
-        borderRadius: '4px',
-        border: '1px solid #3c3c3c',
+        borderRadius: radius.sm,
+        border: `1px solid ${colors.borderPrimary}`,
     },
     footer: {
         padding: '16px 24px',
-        borderTop: '1px solid #3c3c3c',
+        borderTop: `1px solid ${colors.borderPrimary}`,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: '#1e1e1e',
+        backgroundColor: colors.bgPrimary,
     },
     summary: {
-        color: '#888',
-        fontSize: '13px',
+        color: colors.textTertiary,
+        fontSize: font.base,
     },
     footerActions: {
         display: 'flex',
@@ -966,39 +933,39 @@ const styles = {
     },
     saveBtn: {
         padding: '8px 20px',
-        borderRadius: '4px',
+        borderRadius: radius.sm,
         border: 'none',
-        backgroundColor: '#007acc',
-        color: '#fff',
+        backgroundColor: colors.accent,
+        color: colors.textPrimary,
         cursor: 'pointer',
         fontWeight: 500,
-        fontSize: '13px',
+        fontSize: font.base,
         ':hover': {
             backgroundColor: '#005a9e',
         }
     },
     cancelBtn: {
         padding: '8px 20px',
-        borderRadius: '4px',
-        border: '1px solid #5A5A5A',
+        borderRadius: radius.sm,
+        border: `1px solid ${colors.borderPrimary}`,
         backgroundColor: 'transparent',
-        color: '#ccc',
+        color: colors.textSecondary,
         cursor: 'pointer',
         fontWeight: 500,
-        fontSize: '13px',
+        fontSize: font.base,
         ':hover': {
-            backgroundColor: '#3C3C3C',
+            backgroundColor: colors.bgHover,
         }
     },
     primaryButton: {
         padding: '8px 16px',
-        borderRadius: '4px',
+        borderRadius: radius.sm,
         border: 'none',
-        backgroundColor: '#007acc',
-        color: '#fff',
+        backgroundColor: colors.accent,
+        color: colors.textPrimary,
         cursor: 'pointer',
         fontWeight: 500,
-        fontSize: '13px',
+        fontSize: font.base,
         ':hover': {
             backgroundColor: '#005a9e',
         }
@@ -1012,28 +979,28 @@ const unsavedStyles = {
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        backgroundColor: colors.overlay,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 2200,
     },
     modal: {
-        backgroundColor: '#252526',
-        borderRadius: '8px',
+        backgroundColor: colors.bgSecondary,
+        borderRadius: radius.lg,
         padding: '24px',
         width: '400px',
         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
     },
     title: {
-        color: '#fff',
+        color: colors.textPrimary,
         fontSize: '16px',
         fontWeight: 600,
         margin: '0 0 12px 0',
     },
     message: {
-        color: '#ccc',
-        fontSize: '13px',
+        color: colors.textSecondary,
+        fontSize: font.base,
         margin: '0 0 20px 0',
     },
     actions: {
@@ -1043,31 +1010,31 @@ const unsavedStyles = {
     },
     cancelBtn: {
         padding: '8px 16px',
-        borderRadius: '4px',
-        border: '1px solid #5A5A5A',
+        borderRadius: radius.sm,
+        border: `1px solid ${colors.borderPrimary}`,
         backgroundColor: 'transparent',
-        color: '#ccc',
+        color: colors.textSecondary,
         cursor: 'pointer',
         fontWeight: 500,
-        fontSize: '13px',
+        fontSize: font.base,
     },
     discardBtn: {
         padding: '8px 16px',
-        borderRadius: '4px',
+        borderRadius: radius.sm,
         border: '1px solid #6c4a4a',
         backgroundColor: '#5c3a3a',
-        color: '#ff8080',
+        color: colors.danger,
         cursor: 'pointer',
-        fontSize: '13px',
+        fontSize: font.base,
     },
     saveBtn: {
         padding: '8px 16px',
-        borderRadius: '4px',
+        borderRadius: radius.sm,
         border: 'none',
-        backgroundColor: '#007acc',
-        color: '#fff',
+        backgroundColor: colors.accent,
+        color: colors.textPrimary,
         cursor: 'pointer',
         fontWeight: 500,
-        fontSize: '13px',
+        fontSize: font.base,
     }
 };

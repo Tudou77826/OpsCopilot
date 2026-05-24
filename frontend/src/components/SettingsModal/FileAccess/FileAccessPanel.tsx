@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FileAccessConfig, FileAccessPolicy } from './types';
+import { colors, radius, font } from '../settingsStyles';
 
 const FileAccessPanel: React.FC = () => {
   const [config, setConfig] = useState<FileAccessConfig | null>(null);
@@ -464,23 +465,23 @@ const styles: Record<string, React.CSSProperties> = {
   loading: {
     padding: '40px',
     textAlign: 'center',
-    color: '#888',
-    fontSize: '14px',
+    color: colors.textTertiary,
+    fontSize: font.lg,
   },
   section: {
     padding: '16px',
-    backgroundColor: '#1e1e1e',
-    borderRadius: '6px',
-    border: '1px solid #3c3c3c',
+    backgroundColor: colors.bgPrimary,
+    borderRadius: radius.md,
+    border: `1px solid ${colors.borderPrimary}`,
   },
   sectionTitle: {
-    color: '#fff',
-    fontSize: '14px',
+    color: colors.textPrimary,
+    fontSize: font.lg,
     fontWeight: 600,
   },
   sectionDesc: {
-    color: '#888',
-    fontSize: '12px',
+    color: colors.textTertiary,
+    fontSize: font.sm,
     marginTop: '8px',
     lineHeight: 1.5,
   },
@@ -491,12 +492,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
   primaryBtn: {
     padding: '8px 16px',
-    borderRadius: '4px',
+    borderRadius: radius.sm,
     border: 'none',
-    backgroundColor: '#007acc',
-    color: '#fff',
+    backgroundColor: colors.accent,
+    color: colors.textPrimary,
     cursor: 'pointer',
-    fontSize: '13px',
+    fontSize: font.base,
     fontWeight: 500,
   },
   policyList: {
@@ -506,14 +507,14 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: '12px',
   },
   policyItem: {
-    border: '1px solid #3c3c3c',
-    borderRadius: '6px',
+    border: `1px solid ${colors.borderPrimary}`,
+    borderRadius: radius.md,
     overflow: 'hidden',
-    backgroundColor: '#252526',
+    backgroundColor: colors.bgSecondary,
   },
   policyHeader: {
     padding: '12px 16px',
-    backgroundColor: '#2d2d2d',
+    backgroundColor: colors.bgTertiary,
     cursor: 'pointer',
     display: 'flex',
     justifyContent: 'space-between',
@@ -526,20 +527,20 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
   },
   policyName: {
-    color: '#fff',
-    fontSize: '13px',
+    color: colors.textPrimary,
+    fontSize: font.base,
     fontWeight: 500,
   },
   policyMeta: {
-    color: '#888',
-    fontSize: '11px',
+    color: colors.textTertiary,
+    fontSize: font.xs,
     display: 'flex',
     flexWrap: 'wrap',
     gap: '2px',
   },
   policyMetaSecondary: {
-    color: '#666',
-    fontSize: '11px',
+    color: colors.textMuted,
+    fontSize: font.xs,
     display: 'flex',
     flexWrap: 'wrap',
     gap: '2px',
@@ -554,31 +555,31 @@ const styles: Record<string, React.CSSProperties> = {
   },
   editBtn: {
     padding: '4px 10px',
-    borderRadius: '4px',
-    border: '1px solid #5a5a5a',
-    backgroundColor: '#3c3c3c',
-    color: '#fff',
+    borderRadius: radius.sm,
+    border: `1px solid ${colors.borderPrimary}`,
+    backgroundColor: colors.borderPrimary,
+    color: colors.textPrimary,
     cursor: 'pointer',
-    fontSize: '12px',
+    fontSize: font.sm,
   },
   deleteBtn: {
     padding: '4px 10px',
-    borderRadius: '4px',
+    borderRadius: radius.sm,
     border: '1px solid #5a3a3a',
     backgroundColor: 'transparent',
-    color: '#f44336',
+    color: colors.danger,
     cursor: 'pointer',
-    fontSize: '12px',
+    fontSize: font.sm,
   },
   expandIcon: {
-    color: '#888',
-    fontSize: '12px',
+    color: colors.textTertiary,
+    fontSize: font.sm,
     marginLeft: '4px',
   },
   policyContent: {
     padding: '16px',
-    borderTop: '1px solid #3c3c3c',
-    backgroundColor: '#1e1e1e',
+    borderTop: `1px solid ${colors.borderPrimary}`,
+    backgroundColor: colors.bgPrimary,
   },
   detailGrid: {
     display: 'flex',
@@ -591,8 +592,8 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '6px',
   },
   detailTitle: {
-    color: '#ccc',
-    fontSize: '12px',
+    color: colors.textSecondary,
+    fontSize: font.sm,
     fontWeight: 500,
   },
   pathList: {
@@ -605,12 +606,12 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: '#2d3a4a',
     borderRadius: '3px',
     color: '#9cdcfe',
-    fontSize: '12px',
+    fontSize: font.sm,
     fontFamily: 'var(--font-mono)',
   },
   emptyText: {
-    color: '#666',
-    fontSize: '12px',
+    color: colors.textMuted,
+    fontSize: font.sm,
   },
   saveStatus: {
     position: 'fixed',
@@ -618,7 +619,7 @@ const styles: Record<string, React.CSSProperties> = {
     right: '20px',
     padding: '8px 16px',
     borderRadius: '20px',
-    fontSize: '12px',
+    fontSize: font.sm,
     fontWeight: 500,
     zIndex: 1000,
     transition: 'opacity 0.3s',
@@ -629,11 +630,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   saveStatusSaved: {
     backgroundColor: '#1a2a24',
-    color: '#4caf50',
+    color: colors.success,
   },
   saveStatusError: {
     backgroundColor: '#2a1818',
-    color: '#f44336',
+    color: colors.danger,
   },
 };
 
