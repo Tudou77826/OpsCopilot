@@ -1,7 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import SessionManager from './SessionManager';
 import TroubleshootingPanel from './TroubleshootingPanel';
 import AIChatPanel from './AIChatPanel';
+import KnowledgeBrowser from './KnowledgeBrowser';
 import ScriptRecordingPanel from '../ScriptPanel/ScriptRecordingPanel';
 import ScriptListPanel from '../ScriptPanel/ScriptListPanel';
 import ScriptEditorModal from '../ScriptPanel/ScriptEditorModal';
@@ -14,7 +15,7 @@ interface TerminalSessionLite {
 
 interface SidebarProps {
     isOpen: boolean;
-    activeTab: 'sessions' | 'troubleshoot' | 'chat' | 'script';
+    activeTab: 'sessions' | 'troubleshoot' | 'chat' | 'script' | 'knowledge';
     onToggle: () => void;
     onStart?: () => void;
     onStop?: () => void;
@@ -24,9 +25,20 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart, onStop, onConnect, activeTerminalId, terminals }) => {
-    const [width, setWidth] = useState(300);
+    const defaultWidth = 300;
+    const [width, setWidth] = useState(defaultWidth);
     const [editingScriptId, setEditingScriptId] = useState<string | null>(null);
     const scriptListRef = useRef<any>(null);
+
+    // 知识库 Tab 自动拓宽到 60% 屏宽，其他 Tab 恢复默认宽度
+    useEffect(() => {
+        if (activeTab === 'knowledge') {
+            const minKnowledgeWidth = Math.max(Math.floor(document.body.clientWidth * 0.6), 500);
+            setWidth(minKnowledgeWidth);
+        } else {
+            setWidth(defaultWidth);
+        }
+    }, [activeTab]);
 
     const handleEditScript = (scriptId: string) => {
         setEditingScriptId(scriptId);
@@ -96,6 +108,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart,
             case 'sessions': return '会话管理';
             case 'troubleshoot': return '定位助手';
             case 'chat': return 'AI 问答';
+            case 'knowledge': return '知识库';
             case 'script': return '脚本录制';
             default: return '侧边栏';
         }
@@ -156,6 +169,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart,
 
                         <div style={{ display: activeTab === 'chat' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
                             <AIChatPanel />
+                        </div>
+
+                        {/* Knowledge Browser */}
+                        <div style={{ display: activeTab === 'knowledge' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+                            <KnowledgeBrowser />
                         </div>
 
                         {/* Script Recording Panel */}

@@ -134,8 +134,24 @@ export function GetHighlightRules() {
   return window['go']['main']['App']['GetHighlightRules']();
 }
 
+export function GetKnowledgeFileContent(arg1) {
+  return window['go']['main']['App']['GetKnowledgeFileContent'](arg1);
+}
+
+export function GetKnowledgeScenarioContent(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetKnowledgeScenarioContent'](arg1, arg2, arg3);
+}
+
+export function GetKnowledgeTree() {
+  return window['go']['main']['App']['GetKnowledgeTree']();
+}
+
 export function GetMCPStatus() {
   return window['go']['main']['App']['GetMCPStatus']();
+}
+
+export function GetPatchFeedback(arg1) {
+  return window['go']['main']['App']['GetPatchFeedback'](arg1);
 }
 
 export function GetPatchSyncStatus() {
@@ -218,6 +234,10 @@ export function PolishRootCause(arg1) {
   return window['go']['main']['App']['PolishRootCause'](arg1);
 }
 
+export function RatePatch(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RatePatch'](arg1, arg2, arg3);
+}
+
 export function ReconnectSession(arg1) {
   return window['go']['main']['App']['ReconnectSession'](arg1);
 }
@@ -232,6 +252,10 @@ export function ReplayScript(arg1, arg2) {
 
 export function ReplayScriptWithVars(arg1, arg2, arg3) {
   return window['go']['main']['App']['ReplayScriptWithVars'](arg1, arg2, arg3);
+}
+
+export function ReportPatchIssue(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['ReportPatchIssue'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function ResizeTerminal(arg1, arg2, arg3) {
@@ -284,6 +308,10 @@ export function StopSession(arg1, arg2) {
 
 export function StreamConclusion(arg1, arg2) {
   return window['go']['main']['App']['StreamConclusion'](arg1, arg2);
+}
+
+export function UpdatePatchIssueStatus(arg1, arg2, arg3) {
+  return window['go']['main']['App']['UpdatePatchIssueStatus'](arg1, arg2, arg3);
 }
 
 export function UpdateSavedSession(arg1, arg2) {

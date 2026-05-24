@@ -75,7 +75,8 @@ type App struct {
 	commandExtractors map[string]*terminal.CommandExtractor // 命令提取器（Tab 补全修正）
 	extractorMu       sync.RWMutex                     // 命令提取器锁
 	patchStoreMu      sync.RWMutex
-	patchStore        patchstore.PatchStore // 补丁存储（可选）
+	patchStore        patchstore.PatchStore       // 补丁存储（可选）
+	feedbackStore     patchstore.FeedbackStore     // 反馈存储（可选）
 	patchSyncStatusMu sync.RWMutex
 	patchSyncStatus   PatchSyncStatus
 	patchSyncing      atomic.Bool
@@ -456,6 +457,9 @@ func (a *App) startup(ctx context.Context) {
 
 	// 初始化补丁存储（如果已配置）
 	a.initPatchStore()
+
+	// 初始化反馈存储（复用同一 Git 仓库）
+	a.initFeedbackStore()
 
 	// 初始化 MCP 管理器
 	// MCP 配置文件放在可执行文件所在目录（根目录）
@@ -1230,6 +1234,290 @@ func (a *App) RetryPatchSync() string {
 	return ""
 }
 
+// --- 知识库浏览器 API ---
+
+// GetKnowledgeTree 返回完整的 Catalog JSON（服务>模块>场景树）
+func (a *App) GetKnowledgeTree() string {
+	catalog := a.aiService.GetCatalog()
+	if catalog == nil || len(catalog.Services) == 0 {
+		knowledgeDir := a.resolveKnowledgeBase()
+		if knowledgeDir != "" {
+			if err := a.aiService.UpdateCatalog(knowledgeDir); err != nil {
+				slog.Error("GetKnowledgeTree: failed to build catalog", "error", err)
+			} else {
+				catalog = a.aiService.GetCatalog()
+			}
+		}
+	}
+	if catalog == nil {
+		return `{"version":0,"services":[]}`
+	}
+	data, err := json.Marshal(catalog)
+	if err != nil {
+		return `{"version":0,"services":[]}`
+	}
+	return string(data)
+}
+
+// GetKnowledgeFileContent 读取知识库中指定文件的内容
+func (a *App) GetKnowledgeFileContent(relPath string) string {
+	knowledgeDir := a.resolveKnowledgeBase()
+	if knowledgeDir == "" {
+		return toJSONError("知识库未找到")
+	}
+	content, err := knowledge.ReadFile(knowledgeDir, relPath)
+	if err != nil {
+		result, _ := json.Marshal(map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return string(result)
+	}
+	result, _ := json.Marshal(map[string]interface{}{
+		"success": true,
+		"content": content,
+	})
+	return string(result)
+}
+
+// GetKnowledgeScenarioContent 按行范围读取文件中的指定场景段落
+func (a *App) GetKnowledgeScenarioContent(relPath string, lineStart int, lineEnd int) string {
+	knowledgeDir := a.resolveKnowledgeBase()
+	if knowledgeDir == "" {
+		return toJSONError("知识库未找到")
+	}
+	content, err := knowledge.ReadFile(knowledgeDir, relPath)
+	if err != nil {
+		result, _ := json.Marshal(map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return string(result)
+	}
+	lines := strings.Split(content, "\n")
+	start := lineStart - 1
+	if start < 0 {
+		start = 0
+	}
+	end := lineEnd
+	if end > len(lines) {
+		end = len(lines)
+	}
+	if start >= len(lines) {
+		start = len(lines)
+	}
+	section := strings.Join(lines[start:end], "\n")
+	result, _ := json.Marshal(map[string]interface{}{
+		"success": true,
+		"content": section,
+	})
+	return string(result)
+}
+
+// GetPatchFeedback 获取某个 patch 的所有评分和 Issue
+func (a *App) GetPatchFeedback(patchID string) string {
+	fs := a.feedbackStore
+	if fs == nil {
+		return `{"feedback":[]}`
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	feedback, err := fs.GetFeedback(ctx, patchID)
+	if err != nil {
+		slog.Error("GetPatchFeedback failed", "error", err, "patchID", patchID)
+		return `{"feedback":[]}`
+	}
+	result, _ := json.Marshal(map[string]interface{}{
+		"feedback": feedback,
+	})
+	return string(result)
+}
+
+// RatePatch 为当前用户对某个 patch 提交评分
+func (a *App) RatePatch(patchID string, score int, comment string) string {
+	if score < 1 || score > 5 {
+		return toJSONError("评分必须在 1-5 之间")
+	}
+
+	user := a.getCurrentUser()
+
+	fs := a.feedbackStore
+	if fs == nil {
+		return toJSONError("反馈存储未启用")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// 查找该用户已有的反馈（保留 issues）
+	existing, err := fs.GetFeedback(ctx, patchID)
+	if err != nil {
+		slog.Error("RatePatch: failed to get existing feedback", "error", err, "patchID", patchID)
+		return toJSONError("获取已有反馈失败")
+	}
+	var fb patchstore.UserFeedback
+	for _, e := range existing {
+		if e.User == user {
+			fb = e
+			break
+		}
+	}
+	if fb.PatchID == "" {
+		fb = patchstore.UserFeedback{
+			PatchID: patchID,
+			User:    user,
+		}
+	}
+	fb.Rating = &patchstore.Rating{
+		Score:     score,
+		Comment:   comment,
+		Timestamp: time.Now(),
+	}
+
+	if err := fs.SaveFeedback(ctx, fb); err != nil {
+		slog.Error("RatePatch failed", "error", err, "patchID", patchID)
+		return toJSONError(fmt.Sprintf("评分保存失败: %v", err))
+	}
+
+	result, _ := json.Marshal(map[string]interface{}{"success": true})
+	return string(result)
+}
+
+// ReportPatchIssue 为某个 patch 提交 Issue
+func (a *App) ReportPatchIssue(patchID string, issueType string, priority string, title string, description string) string {
+	if strings.TrimSpace(title) == "" {
+		return toJSONError("标题不能为空")
+	}
+	if len(description) > 5000 {
+		return toJSONError("描述过长")
+	}
+	validTypes := map[string]bool{"bug": true, "outdated": true, "suggestion": true}
+	if !validTypes[issueType] {
+		return toJSONError("无效的 Issue 类型")
+	}
+	validPriorities := map[string]bool{"high": true, "medium": true, "low": true}
+	if !validPriorities[priority] {
+		return toJSONError("无效的优先级")
+	}
+
+	user := a.getCurrentUser()
+
+	fs := a.feedbackStore
+	if fs == nil {
+		return toJSONError("反馈存储未启用")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	issue := patchstore.Issue{
+		ID:          shortUUID(),
+		Type:        issueType,
+		Priority:    priority,
+		Title:       title,
+		Description: description,
+		Reporter:    user,
+		Status:      "open",
+		Timestamp:   time.Now(),
+	}
+
+	// 查找该用户已有的反馈（保留 rating）
+	existing, err := fs.GetFeedback(ctx, patchID)
+	if err != nil {
+		slog.Error("ReportPatchIssue: failed to get existing feedback", "error", err, "patchID", patchID)
+		return toJSONError("获取已有反馈失败")
+	}
+	var fb patchstore.UserFeedback
+	for _, e := range existing {
+		if e.User == user {
+			fb = e
+			break
+		}
+	}
+	if fb.PatchID == "" {
+		fb = patchstore.UserFeedback{
+			PatchID: patchID,
+			User:    user,
+		}
+	}
+	fb.Issues = append(fb.Issues, issue)
+
+	if err := fs.SaveFeedback(ctx, fb); err != nil {
+		slog.Error("ReportPatchIssue failed", "error", err, "patchID", patchID)
+		return toJSONError(fmt.Sprintf("Issue 提交失败: %v", err))
+	}
+
+	result, _ := json.Marshal(map[string]interface{}{
+		"success": true,
+		"issueId": issue.ID,
+	})
+	return string(result)
+}
+
+// UpdatePatchIssueStatus 更新 Issue 的状态
+func (a *App) UpdatePatchIssueStatus(patchID string, issueID string, status string) string {
+	validStatuses := map[string]bool{"open": true, "resolved": true, "wontfix": true}
+	if !validStatuses[status] {
+		return toJSONError("无效的状态")
+	}
+
+	fs := a.feedbackStore
+	if fs == nil {
+		return toJSONError("反馈存储未启用")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := fs.UpdateIssueStatus(ctx, patchID, issueID, status); err != nil {
+		return toJSONError(fmt.Sprintf("更新失败: %v", err))
+	}
+
+	result, _ := json.Marshal(map[string]interface{}{"success": true})
+	return string(result)
+}
+
+// getCurrentUser 获取当前用户名（用于评分/Issue 的提交者标识）
+func (a *App) getCurrentUser() string {
+	if u, err := os.UserHomeDir(); err == nil {
+		username := filepath.Base(u)
+		if username != "" && username != "." {
+			return username
+		}
+	}
+	if u := os.Getenv("USERNAME"); u != "" {
+		return u
+	}
+	if u := os.Getenv("USER"); u != "" {
+		return u
+	}
+	return "unknown"
+}
+
+// shortUUID 生成 8 位短 UUID
+func shortUUID() string {
+	return strings.ReplaceAll(uuid.New().String()[:8], "-", "")
+}
+
+// initFeedbackStore 根据补丁存储配置初始化反馈存储
+func (a *App) initFeedbackStore() {
+	cfg := a.configMgr.Config.PatchStore
+	if !cfg.Enabled || strings.TrimSpace(cfg.RemoteURL) == "" {
+		a.feedbackStore = nil
+		return
+	}
+
+	branch := cfg.Branch
+	if branch == "" {
+		branch = "main"
+	}
+
+	localDir := filepath.Join(filepath.Dir(a.configMgr.Config.Log.Dir), "patchstore")
+	a.feedbackStore = patchstore.NewGitFeedbackStore(localDir, cfg.RemoteURL, branch)
+	slog.Info("feedback store initialized", "dir", localDir, "remote", cfg.RemoteURL, "branch", branch)
+}
+
 func (a *App) SaveSettings(cfg config.AppConfig) string {
 	cfg.PatchStore.Type = "git"
 	cfg.PatchStore.RemoteURL = strings.TrimSpace(cfg.PatchStore.RemoteURL)
@@ -1273,10 +1561,10 @@ func (a *App) SaveSettings(cfg config.AppConfig) string {
 
 	// 让补丁同步配置在保存后立即生效
 	a.initPatchStore()
+	a.initFeedbackStore()
 
 	return ""
 }
-
 // GetCommandWhitelist 获取命令白名单配置
 func (a *App) GetCommandWhitelist() (*mcpserver.WhitelistConfig, error) {
 	if a.whitelistMgr == nil {

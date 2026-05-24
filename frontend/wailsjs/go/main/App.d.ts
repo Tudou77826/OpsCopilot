@@ -74,7 +74,15 @@ export function GetFileAccessConfig():Promise<mcpserver.FileAccessConfig>;
 
 export function GetHighlightRules():Promise<Array<config.HighlightRule>>;
 
+export function GetKnowledgeFileContent(arg1:string):Promise<string>;
+
+export function GetKnowledgeScenarioContent(arg1:string,arg2:number,arg3:number):Promise<string>;
+
+export function GetKnowledgeTree():Promise<string>;
+
 export function GetMCPStatus():Promise<string>;
+
+export function GetPatchFeedback(arg1:string):Promise<string>;
 
 export function GetPatchSyncStatus():Promise<string>;
 
@@ -116,6 +124,8 @@ export function ParseIntent(arg1:string):Promise<Array<main.ConnectConfig>>;
 
 export function PolishRootCause(arg1:string):Promise<string>;
 
+export function RatePatch(arg1:string,arg2:number,arg3:string):Promise<string>;
+
 export function ReconnectSession(arg1:string):Promise<main.ConnectResult>;
 
 export function RenameSavedSession(arg1:string,arg2:string):Promise<string>;
@@ -123,6 +133,8 @@ export function RenameSavedSession(arg1:string,arg2:string):Promise<string>;
 export function ReplayScript(arg1:string,arg2:string):Promise<void>;
 
 export function ReplayScriptWithVars(arg1:string,arg2:string,arg3:Record<string, string>):Promise<void>;
+
+export function ReportPatchIssue(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<string>;
 
 export function ResizeTerminal(arg1:string,arg2:number,arg3:number):Promise<void>;
 
@@ -149,6 +161,8 @@ export function StopScriptRecording():Promise<script.Script>;
 export function StopSession(arg1:string,arg2:string):Promise<string>;
 
 export function StreamConclusion(arg1:string,arg2:string):Promise<string>;
+
+export function UpdatePatchIssueStatus(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function UpdateSavedSession(arg1:string,arg2:sshclient.ConnectConfig):Promise<string>;
 

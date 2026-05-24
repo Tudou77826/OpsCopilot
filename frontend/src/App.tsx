@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { TbClock, TbScreenShare, TbStethoscope, TbMessageChatbot, TbCode, TbBolt } from 'react-icons/tb';
+import { TbClock, TbScreenShare, TbStethoscope, TbMessageChatbot, TbCode, TbBolt, TbBook } from 'react-icons/tb';
 import './App.css';
 import logo from './assets/images/logo-universal.png';
 import { TerminalRef } from './components/Terminal/Terminal';
@@ -30,7 +30,7 @@ function App() {
     const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [sidebarTab, setSidebarTab] = useState<'sessions' | 'troubleshoot' | 'chat' | 'script'>('sessions');
+    const [sidebarTab, setSidebarTab] = useState<'sessions' | 'troubleshoot' | 'chat' | 'script' | 'knowledge'>('sessions');
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
     const [layoutMode, setLayoutMode] = useState<'tab' | 'grid'>('tab');
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
@@ -593,7 +593,7 @@ function App() {
         scheduleFitAll(350);
     }, [isQuickCommandOpen, scheduleFitAll]);
 
-    const toggleSidebar = (tab: 'sessions' | 'troubleshoot' | 'chat' | 'script') => {
+    const toggleSidebar = (tab: 'sessions' | 'troubleshoot' | 'chat' | 'script' | 'knowledge') => {
         if (isSidebarOpen && sidebarTab === tab) {
             // If clicking the active tab, close it
             setIsSidebarOpen(false);
@@ -787,6 +787,17 @@ function App() {
                         title="AI 问答"
                     >
                         {TbMessageChatbot({ size: 20 })}
+                    </div>
+                    <div
+                        style={{
+                            ...styles.navIcon,
+                            backgroundColor: (isSidebarOpen && sidebarTab === 'knowledge') ? '#333' : 'transparent',
+                            borderRight: (isSidebarOpen && sidebarTab === 'knowledge') ? '2px solid #007acc' : '2px solid transparent'
+                        }}
+                        onClick={() => toggleSidebar('knowledge')}
+                        title="知识库"
+                    >
+                        {TbBook({ size: 20 })}
                     </div>
                     <div
                         style={{

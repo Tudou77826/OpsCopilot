@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 )
@@ -195,6 +196,242 @@ func TestGitPatchStoreE2E(t *testing.T) {
 	t.Logf("  Last sync time: %s", lastTime.Format("2006-01-02 15:04:05"))
 
 	t.Log("All E2E tests passed!")
+}
+
+// TestGitFeedbackStoreE2E 端到端测试：反馈存储的完整 Git 同步流程
+func TestGitFeedbackStoreE2E(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available, skipping E2E test")
+	}
+
+	tmpDir := t.TempDir()
+	bareRepo := filepath.Join(tmpDir, "knowledge-bare.git")
+
+	// 初始化 bare 仓库（与 patch store 共享）
+	runGit(t, tmpDir, "init", "--bare", bareRepo)
+	cloneDir := filepath.Join(tmpDir, "init-clone")
+	runGit(t, tmpDir, "clone", bareRepo, cloneDir)
+	runGit(t, cloneDir, "config", "user.name", "Test User")
+	runGit(t, cloneDir, "config", "user.email", "test@example.com")
+	os.WriteFile(filepath.Join(cloneDir, ".gitkeep"), []byte(""), 0644)
+	runGit(t, cloneDir, "add", ".gitkeep")
+	runGit(t, cloneDir, "commit", "-m", "init")
+	runGit(t, cloneDir, "branch", "-M", "main")
+	runGit(t, cloneDir, "push", "-u", "origin", "main")
+	os.RemoveAll(cloneDir)
+
+	ctx := context.Background()
+	patchID := "archive/Order_Service_订单处理.md#L10"
+
+	// Step 1: 用户 A 创建反馈存储并提交评分
+	t.Log("Step 1: User A saves a rating")
+	localDirA := filepath.Join(tmpDir, "patchstore-a")
+	storeA := NewGitFeedbackStore(localDirA, bareRepo, "main")
+
+	ratingA := UserFeedback{
+		PatchID: patchID,
+		Service: "Order Service",
+		Module:  "订单处理",
+		User:    "alice",
+		Rating:  &Rating{Score: 5, Comment: "排查路径非常清晰", Timestamp: time.Now()},
+	}
+	if err := storeA.SaveFeedback(ctx, ratingA); err != nil {
+		t.Fatalf("User A save rating failed: %v", err)
+	}
+	t.Log("  User A rating saved and pushed")
+
+	// Step 2: 用户 B 从 remote clone，验证能看到用户 A 的评分
+	t.Log("Step 2: User B clones and sees User A's feedback")
+	localDirB := filepath.Join(tmpDir, "patchstore-b")
+	storeB := NewGitFeedbackStore(localDirB, bareRepo, "main")
+
+	// Pull triggers clone + fetch, simulating what syncPatches does in production
+	if err := storeB.Pull(ctx); err != nil {
+		t.Fatalf("User B pull (initial clone) failed: %v", err)
+	}
+	feedbackB, err := storeB.GetFeedback(ctx, patchID)
+	if err != nil {
+		t.Fatalf("User B get feedback failed: %v", err)
+	}
+	if len(feedbackB) != 1 {
+		t.Fatalf("User B expected 1 feedback, got %d", len(feedbackB))
+	}
+	if feedbackB[0].Rating == nil || feedbackB[0].Rating.Score != 5 {
+		t.Errorf("User B expected rating score 5, got %+v", feedbackB[0].Rating)
+	}
+	t.Logf("  User B sees: %s gave %d stars", feedbackB[0].User, feedbackB[0].Rating.Score)
+
+	// Step 3: 用户 B 提交自己的评分（同一 patch）
+	t.Log("Step 3: User B saves their own rating on same patch")
+	ratingB := UserFeedback{
+		PatchID: patchID,
+		Service: "Order Service",
+		Module:  "订单处理",
+		User:    "bob",
+		Rating:  &Rating{Score: 3, Comment: "根因分析不够深入", Timestamp: time.Now()},
+	}
+	if err := storeB.SaveFeedback(ctx, ratingB); err != nil {
+		t.Fatalf("User B save rating failed: %v", err)
+	}
+	t.Log("  User B rating saved and pushed")
+
+	// Step 4: 用户 A pull 后能看到两人的评分
+	t.Log("Step 4: User A pulls and sees both ratings")
+	if err := storeA.Pull(ctx); err != nil {
+		t.Fatalf("User A pull failed: %v", err)
+	}
+	feedbackA, err := storeA.GetFeedback(ctx, patchID)
+	if err != nil {
+		t.Fatalf("User A get feedback failed: %v", err)
+	}
+	if len(feedbackA) != 2 {
+		t.Fatalf("User A expected 2 feedbacks, got %d", len(feedbackA))
+	}
+	t.Logf("  User A sees %d ratings", len(feedbackA))
+	for _, fb := range feedbackA {
+		t.Logf("    - %s: %d stars", fb.User, fb.Rating.Score)
+	}
+
+	// Step 5: 用户 A 提交一个 Issue
+	t.Log("Step 5: User A reports an issue")
+	issueA := UserFeedback{
+		PatchID: patchID,
+		Service: "Order Service",
+		Module:  "订单处理",
+		User:    "alice",
+		Rating:  ratingA.Rating, // Preserve existing rating
+		Issues: []Issue{
+			{
+				ID:          "a1b2c3d4",
+				Type:        "bug",
+				Priority:    "high",
+				Title:       "curl 命令中的占位符未替换",
+				Description: "排查路径中 <PLACEHOLDER> 没有给出实际值",
+				Reporter:    "alice",
+				Status:      "open",
+				Timestamp:   time.Now(),
+			},
+		},
+	}
+	if err := storeA.SaveFeedback(ctx, issueA); err != nil {
+		t.Fatalf("User A save issue failed: %v", err)
+	}
+	t.Log("  User A issue saved and pushed")
+
+	// Step 6: 用户 B pull 后能看到 Issue
+	t.Log("Step 6: User B pulls and sees the issue")
+	if err := storeB.Pull(ctx); err != nil {
+		t.Fatalf("User B pull failed: %v", err)
+	}
+	feedbackB2, err := storeB.GetFeedback(ctx, patchID)
+	if err != nil {
+		t.Fatalf("User B get feedback (after issue) failed: %v", err)
+	}
+
+	aliceFB := findFeedback(feedbackB2, "alice")
+	if aliceFB == nil || len(aliceFB.Issues) != 1 {
+		t.Fatalf("User B expected alice to have 1 issue, got %+v", aliceFB)
+	}
+	if aliceFB.Issues[0].Status != "open" {
+		t.Errorf("Expected issue status 'open', got '%s'", aliceFB.Issues[0].Status)
+	}
+	t.Logf("  User B sees issue: [%s] %s (status: %s)",
+		aliceFB.Issues[0].Type, aliceFB.Issues[0].Title, aliceFB.Issues[0].Status)
+
+	// Step 7: 用户 B 更新 Issue 状态
+	t.Log("Step 7: User B marks the issue as resolved")
+	if err := storeB.UpdateIssueStatus(ctx, patchID, "a1b2c3d4", "resolved"); err != nil {
+		t.Fatalf("User B update issue status failed: %v", err)
+	}
+	t.Log("  Issue status updated and pushed")
+
+	// Step 8: 用户 A pull 后看到 Issue 已解决
+	t.Log("Step 8: User A pulls and sees resolved issue")
+	if err := storeA.Pull(ctx); err != nil {
+		t.Fatalf("User A pull failed: %v", err)
+	}
+	feedbackA2, err := storeA.GetFeedback(ctx, patchID)
+	if err != nil {
+		t.Fatalf("User A get feedback (after resolve) failed: %v", err)
+	}
+
+	aliceFB2 := findFeedback(feedbackA2, "alice")
+	if aliceFB2 == nil || len(aliceFB2.Issues) != 1 {
+		t.Fatalf("User A expected alice to still have 1 issue")
+	}
+	if aliceFB2.Issues[0].Status != "resolved" {
+		t.Errorf("User A expected issue status 'resolved', got '%s'", aliceFB2.Issues[0].Status)
+	}
+	t.Logf("  User A sees issue status: %s", aliceFB2.Issues[0].Status)
+
+	// Step 9: 第三个用户提交评分，验证三方数据聚合
+	t.Log("Step 9: Third user Charlie saves rating")
+	localDirC := filepath.Join(tmpDir, "patchstore-c")
+	storeC := NewGitFeedbackStore(localDirC, bareRepo, "main")
+
+	ratingC := UserFeedback{
+		PatchID: patchID,
+		Service: "Order Service",
+		Module:  "订单处理",
+		User:    "charlie",
+		Rating:  &Rating{Score: 4, Comment: "整体不错", Timestamp: time.Now()},
+	}
+	if err := storeC.SaveFeedback(ctx, ratingC); err != nil {
+		t.Fatalf("Charlie save rating failed: %v", err)
+	}
+
+	// 用户 A 验证能看到所有三人的数据
+	if err := storeA.Pull(ctx); err != nil {
+		t.Fatalf("User A final pull failed: %v", err)
+	}
+	feedbackA3, err := storeA.GetFeedback(ctx, patchID)
+	if err != nil {
+		t.Fatalf("User A final get feedback failed: %v", err)
+	}
+	if len(feedbackA3) != 3 {
+		t.Fatalf("User A expected 3 feedbacks, got %d", len(feedbackA3))
+	}
+
+	// 验证平均评分
+	var sum int
+	for _, fb := range feedbackA3 {
+		if fb.Rating != nil {
+			sum += fb.Rating.Score
+		}
+	}
+	avg := float64(sum) / float64(len(feedbackA3))
+	if avg != 4.0 { // (5+3+4)/3 = 4.0
+		t.Errorf("Expected avg rating 4.0, got %.1f", avg)
+	}
+	t.Logf("  All 3 users visible, avg rating: %.1f", avg)
+
+	// Step 10: 验证反馈文件在 Git 仓库中的持久化
+	t.Log("Step 10: Verify feedback files persist in Git repo")
+	var fbFileCount int
+	filepath.Walk(filepath.Join(localDirA, "feedback"), func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		if strings.HasSuffix(info.Name(), ".json") {
+			fbFileCount++
+		}
+		return nil
+	})
+	if fbFileCount == 0 {
+		t.Error("No feedback files found in local repo")
+	}
+	t.Logf("  %d feedback JSON files in local repo", fbFileCount)
+
+	t.Log("All feedback E2E tests passed!")
+}
+
+func findFeedback(list []UserFeedback, user string) *UserFeedback {
+	for i := range list {
+		if list[i].User == user {
+			return &list[i]
+		}
+	}
+	return nil
 }
 
 func runGit(t *testing.T, dir string, args ...string) {
