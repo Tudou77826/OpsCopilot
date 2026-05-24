@@ -469,7 +469,25 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             case 'shortcuts':
                 return (
                     <div style={styles.settingsGroup}>
-                        <div style={styles.groupTitle}>键盘快捷键</div>
+                        <div style={styles.groupTitle}>快捷键配置</div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>命令查询快捷键</label>
+                            <input
+                                style={styles.input}
+                                value={formatShortcutLabel(config.command_query_shortcut)}
+                                onChange={(e) => {
+                                    setConfig({
+                                        ...config,
+                                        command_query_shortcut: e.target.value
+                                    });
+                                }}
+                                placeholder="例如：Ctrl+K"
+                            />
+                            <div style={styles.settingDescription}>
+                                呼出命令查询弹窗的快捷键组合（支持 Ctrl+字母、Ctrl+Shift+字母 等格式）
+                            </div>
+                        </div>
+                        <div style={styles.groupTitle}>快捷键说明</div>
                         <KeysMap commandQueryShortcut={formatShortcutLabel(config.command_query_shortcut)} />
                     </div>
                 );
@@ -650,24 +668,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             />
                             <div style={styles.settingDescription}>
                                 本地文档知识库目录，用于 AI 问答增强
-                            </div>
-                        </div>
-                        <div style={styles.groupTitle}>快捷键设置</div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>命令查询快捷键</label>
-                            <input
-                                style={styles.input}
-                                value={formatShortcutLabel(config.command_query_shortcut)}
-                                onChange={(e) => {
-                                    setConfig({
-                                        ...config,
-                                        command_query_shortcut: e.target.value
-                                    });
-                                }}
-                                placeholder="例如：Ctrl+K"
-                            />
-                            <div style={styles.settingDescription}>
-                                呼出命令查询弹窗的快捷键组合（支持 Ctrl+字母、Ctrl+Shift+字母 等格式）
                             </div>
                         </div>
                         <div style={styles.groupTitle}>高级功能</div>
