@@ -33,7 +33,7 @@ export const translateType = (type: string) => {
 
 export const generateMarkdown = (events: TimelineEvent[], problem: string, rootCause: string): string => {
     let md = `# 排查会话记录\n\n`;
-    md += `**排查目标:** ${problem}\n\n`;
+    md += `**原始问题:** ${problem}\n\n`;
     md += `**根本原因:** ${rootCause}\n\n`;
     md += `## 详细过程\n\n`;
 

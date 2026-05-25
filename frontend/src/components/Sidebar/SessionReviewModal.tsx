@@ -24,6 +24,7 @@ interface SessionReviewModalProps {
     isOpen: boolean;
     onClose: () => void;
     rootCause: string;
+    problem: string;
     onArchive: (params: ArchiveParams) => Promise<{ success: boolean; message: string }>;
 }
 
@@ -242,7 +243,7 @@ const ArchiveSection: React.FC<{
 };
 
 // Main Component
-const SessionReviewModal: React.FC<SessionReviewModalProps> = ({ isOpen, onClose, rootCause, onArchive }) => {
+const SessionReviewModal: React.FC<SessionReviewModalProps> = ({ isOpen, onClose, rootCause, problem, onArchive }) => {
     // View state
     const [view, setView] = useState<'timeline' | 'conclusion'>('timeline');
     const [conclusion, setConclusion] = useState('');
@@ -326,12 +327,14 @@ const SessionReviewModal: React.FC<SessionReviewModalProps> = ({ isOpen, onClose
             // @ts-ignore
             const sessionData = await window.go?.main?.App?.GetSessionTimeline?.();
 
+            const effectiveProblem = sessionData?.problem || problem || "未指定";
+
             if (sessionData?.timeline && Array.isArray(sessionData.timeline)) {
                 const filtered = filterTimelineEvents(sessionData.timeline);
-                const md = generateMarkdown(filtered, sessionData.problem || "未指定", rootCause);
+                const md = generateMarkdown(filtered, effectiveProblem, rootCause);
                 setMarkdownContent(md);
             } else {
-                setMarkdownContent(`# 排查会话记录\n\n**根本原因:** ${rootCause}\n\n（无记录）`);
+                setMarkdownContent(`# 排查会话记录\n\n**原始问题:** ${effectiveProblem}\n\n**根本原因:** ${rootCause}\n\n（无记录）`);
             }
         } catch (e) {
             console.error("[SessionReviewModal] Error loading timeline:", e);

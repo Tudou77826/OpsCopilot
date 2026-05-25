@@ -56,6 +56,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
     const usedDocsRef = useRef<Set<string>>(new Set());
     const [isStopping, setIsStopping] = useState(false);
     const [rootCause, setRootCause] = useState('');
+    const [originalProblem, setOriginalProblem] = useState('');
     const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
     const [isPolishing, setIsPolishing] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -89,7 +90,8 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         if (onStart) onStart();
 
         const problem = input;
-        
+        setOriginalProblem(problem);
+
         setMessages(prev => [...prev, {
             role: 'user',
             content: problem,
@@ -224,6 +226,7 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         usedDocsRef.current = new Set();
         setIsStopping(false);
         setRootCause('');
+        setOriginalProblem('');
         if (onStart) onStart();
     };
 
@@ -719,8 +722,10 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                     setIsInvestigating(false);
                     if (onStop) onStop();
                     setRootCause('');
+                    setOriginalProblem('');
                 }}
                 rootCause={rootCause}
+                problem={originalProblem}
                 onArchive={handleArchive}
             />
         </div>
