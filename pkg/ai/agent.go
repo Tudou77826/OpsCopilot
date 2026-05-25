@@ -177,10 +177,10 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 
 		messages = append(messages, llm.ChatMessage{
 			Role:      "assistant",
-			Content:   resp.Content,
-			ToolCalls: resp.ToolCalls,
+			Content:          resp.Content,
+			ToolCalls:        resp.ToolCalls,
+			ReasoningContent: resp.ReasoningContent,
 		})
-
 		prevToolCalls = resp.ToolCalls
 
 		if len(resp.ToolCalls) == 0 {

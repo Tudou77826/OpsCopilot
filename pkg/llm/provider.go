@@ -38,16 +38,18 @@ type FunctionCall struct {
 }
 
 type ChatMessage struct {
-	Role       string
-	Content    string
-	Name       string     // Optional: Author name (e.g., for tool outputs)
-	ToolCalls  []ToolCall // Optional: For assistant messages invoking tools
-	ToolCallID string     // Optional: For tool messages linking back to a call
+	Role             string
+	Content          string
+	Name             string     // Optional: Author name (e.g., for tool outputs)
+	ToolCalls        []ToolCall // Optional: For assistant messages invoking tools
+	ToolCallID       string     // Optional: For tool messages linking back to a call
+	ReasoningContent string     // Optional: DeepSeek thinking mode reasoning content
 }
 
 type ChatResponse struct {
-	Content   string
-	ToolCalls []ToolCall
+	Content          string
+	ToolCalls        []ToolCall
+	ReasoningContent string // DeepSeek thinking mode reasoning content
 }
 
 // --- Interfaces ---
@@ -137,7 +139,8 @@ func (p *OpenAIProvider) ChatWithTools(ctx context.Context, messages []ChatMessa
 			Role:       m.Role,
 			Content:    m.Content,
 			Name:       m.Name,
-			ToolCallID: m.ToolCallID,
+			ToolCallID:       m.ToolCallID,
+			ReasoningContent: m.ReasoningContent,
 		}
 		if len(m.ToolCalls) > 0 {
 			msg.ToolCalls = make([]openai.ToolCall, len(m.ToolCalls))
@@ -196,7 +199,8 @@ func (p *OpenAIProvider) ChatWithTools(ctx context.Context, messages []ChatMessa
 
 	// 4. Convert Response
 	result := &ChatResponse{
-		Content: msg.Content,
+		Content:          msg.Content,
+		ReasoningContent: msg.ReasoningContent,
 	}
 
 	if len(msg.ToolCalls) > 0 {
@@ -248,7 +252,8 @@ func (p *OpenAIProvider) streamChatCompletion(ctx context.Context, messages []Ch
 			Role:       m.Role,
 			Content:    m.Content,
 			Name:       m.Name,
-			ToolCallID: m.ToolCallID,
+			ToolCallID:       m.ToolCallID,
+			ReasoningContent: m.ReasoningContent,
 		}
 	}
 
