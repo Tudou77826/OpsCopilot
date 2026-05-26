@@ -548,7 +548,7 @@ const KnowledgeBrowser: React.FC = () => {
                 {/* Header */}
                 <div style={styles.detailHeader}>
                     <button className="kb-back-btn" style={styles.backButton} onClick={() => { setView('tree'); setError(''); }}>
-                        {TbArrowLeft({ size: 14, style: { marginRight: 4 } })}返回
+                        {TbArrowLeft({ size: 16 })}返回
                     </button>
                     <span style={styles.detailTitle} title={selectedEntry.title}>
                         {selectedEntry.title.length > 80
@@ -711,7 +711,7 @@ const KnowledgeBrowser: React.FC = () => {
             <div style={styles.detailContainer}>
                 <div style={styles.detailHeader}>
                     <button className="kb-back-btn" style={styles.backButton} onClick={() => setView('detail')}>
-                        {TbArrowLeft({ size: 14, style: { marginRight: 4 } })}返回
+                        {TbArrowLeft({ size: 16 })}返回
                     </button>
                     <span style={styles.detailTitle}>新建 Issue</span>
                 </div>
@@ -788,8 +788,9 @@ const KnowledgeBrowser: React.FC = () => {
                     color: #bbb !important;
                 }
                 .kb-back-btn:hover {
-                    background-color: #2a2a2a;
-                    border-radius: 4px;
+                    background-color: #383838 !important;
+                    border-color: #555 !important;
+                    color: #fff !important;
                 }
                 .kb-issue-action:hover {
                     background-color: #27ae60 !important;
@@ -1002,16 +1003,22 @@ const styles: Record<string, React.CSSProperties> = {
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
-        padding: '8px 12px',
+        padding: '10px 12px',
         borderBottom: '1px solid #333',
+        backgroundColor: '#252526',
     },
     backButton: {
-        background: 'none',
-        border: 'none',
-        color: '#007acc',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '4px',
+        background: '#2d2d2d',
+        border: '1px solid #444',
+        color: '#ccc',
         cursor: 'pointer',
-        fontSize: '13px',
-        padding: '2px 6px',
+        fontSize: '12px',
+        padding: '4px 10px',
+        borderRadius: '4px',
+        transition: 'background-color 0.15s, border-color 0.15s',
     },
     detailTitle: {
         fontSize: '14px',
