@@ -20,6 +20,7 @@ const (
 	owner = "Tudou77826"
 	repo  = "OpsCopilot"
 
+	allReleasesURL   = "https://api.github.com/repos/" + owner + "/" + repo + "/releases"
 	latestReleaseURL = "https://api.github.com/repos/" + owner + "/" + repo + "/releases/latest"
 )
 
@@ -52,12 +53,13 @@ type Asset struct {
 
 // UpdateStatus is returned to the frontend as JSON.
 type UpdateStatus struct {
-	HasUpdate   bool         `json:"hasUpdate"`
-	CurrentVer  string       `json:"currentVersion"`
-	LatestVer   string       `json:"latestVersion"`
-	Release     *ReleaseInfo `json:"release,omitempty"`
-	DownloadURL string       `json:"downloadUrl,omitempty"`
-	Error       string       `json:"error,omitempty"`
+	HasUpdate       bool         `json:"hasUpdate"`
+	CurrentVer      string       `json:"currentVersion"`
+	LatestVer       string       `json:"latestVersion"`
+	Release         *ReleaseInfo `json:"release,omitempty"`
+	DownloadURL     string       `json:"downloadUrl,omitempty"`
+	SkippedVersions []string     `json:"skippedVersions,omitempty"`
+	Error           string       `json:"error,omitempty"`
 }
 
 // DownloadProgress is emitted as a Wails event during download.
@@ -86,6 +88,8 @@ var protectedFiles = map[string]bool{
 
 // CheckForUpdate queries the GitHub API for the latest release and compares
 // versions. currentVersion should be the build-time version string (e.g. "v1.3.4").
+// If an update is available, it also fetches all releases between the current
+// version and the latest, merging their changelogs so the user sees everything new.
 func CheckForUpdate(currentVersion string) (*UpdateStatus, error) {
 	release, err := fetchLatestRelease()
 	if err != nil {
@@ -100,8 +104,6 @@ func CheckForUpdate(currentVersion string) (*UpdateStatus, error) {
 	currentVer := strings.TrimPrefix(currentVersion, "v")
 	hasUpdate := compareVersions(currentVer, latestVer) < 0
 
-	// Prefer the zip package: it is more reliable than downloading a raw exe
-	// through proxies/security software, and it contains the full app payload.
 	downloadURL := selectDownloadURL(release.Assets)
 
 	status := &UpdateStatus{
@@ -111,7 +113,63 @@ func CheckForUpdate(currentVersion string) (*UpdateStatus, error) {
 		Release:     release,
 		DownloadURL: downloadURL,
 	}
+
+	// If there is an update, fetch all intermediate releases to build a
+	// cumulative changelog. This is important for users who haven't updated
+	// in a while — they'd otherwise only see the latest patch notes.
+	if hasUpdate {
+		status.SkippedVersions, status.Release.Body = buildCumulativeChangelog(currentVer, release)
+	}
+
 	return status, nil
+}
+
+// buildCumulativeChangelog fetches all releases and merges the bodies of every
+// release newer than currentVer (excluding latestRelease which is already known).
+// Returns the list of skipped version tags and the merged changelog body.
+func buildCumulativeChangelog(currentVer string, latestRelease *ReleaseInfo) ([]string, string) {
+	allReleases, err := fetchAllReleases()
+	if err != nil {
+		// Fallback: just return the latest release body.
+		return nil, latestRelease.Body
+	}
+
+	var parts []string
+	var skipped []string
+
+	for _, r := range allReleases {
+		ver := strings.TrimPrefix(r.TagName, "v")
+		// Only include releases strictly newer than current and older than latest.
+		if compareVersions(ver, currentVer) > 0 && compareVersions(ver, strings.TrimPrefix(latestRelease.TagName, "v")) < 0 {
+			skipped = append(skipped, r.TagName)
+		}
+	}
+
+	// Build cumulative changelog: latest first, then older versions.
+	// Show up to 5 versions of release notes.
+	if latestRelease.Body != "" {
+		parts = append(parts, fmt.Sprintf("## %s\n\n%s", latestRelease.TagName, latestRelease.Body))
+	}
+
+	count := 0
+	for _, r := range allReleases {
+		if count >= 4 {
+			break
+		}
+		ver := strings.TrimPrefix(r.TagName, "v")
+		if compareVersions(ver, currentVer) > 0 && compareVersions(ver, strings.TrimPrefix(latestRelease.TagName, "v")) < 0 {
+			if r.Body != "" {
+				parts = append(parts, fmt.Sprintf("## %s\n\n%s", r.TagName, r.Body))
+				count++
+			}
+		}
+	}
+
+	if len(parts) == 0 {
+		return skipped, latestRelease.Body
+	}
+
+	return skipped, strings.Join(parts, "\n\n---\n\n")
 }
 
 func selectDownloadURL(assets []Asset) string {
@@ -203,6 +261,33 @@ func fetchLatestRelease() (*ReleaseInfo, error) {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 	return &release, nil
+}
+
+// fetchAllReleases fetches all published releases from GitHub (up to 30 per page).
+func fetchAllReleases() ([]ReleaseInfo, error) {
+	client := newHTTPClient(15 * time.Second)
+	req, err := http.NewRequest("GET", allReleasesURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("github api request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf("github api returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	var releases []ReleaseInfo
+	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return releases, nil
 }
 
 // downloadFile downloads a file with optional progress reporting.

@@ -16,6 +16,7 @@ interface UpdateStatus {
     latestVersion?: string;
     release?: ReleaseInfo;
     downloadUrl?: string;
+    skippedVersions?: string[];
     error?: string;
 }
 
@@ -50,6 +51,7 @@ const AboutPanel: React.FC = () => {
     const [changelog, setChangelog] = useState('');
     const [downloadURL, setDownloadURL] = useState('');
     const [errorMsg, setErrorMsg] = useState('');
+    const [skippedVersions, setSkippedVersions] = useState<string[]>([]);
     const [progress, setProgress] = useState<DownloadProgress>({ bytesDownloaded: 0, bytesTotal: 0, percentage: 0, speedBps: 0 });
 
     useEffect(() => {
@@ -84,6 +86,7 @@ const AboutPanel: React.FC = () => {
                 setLatestVersion(status.latestVersion || '');
                 setChangelog(status.release?.body || '');
                 setDownloadURL(status.downloadUrl);
+                setSkippedVersions(status.skippedVersions || []);
                 setUpdateState('available');
             } else {
                 setLatestVersion(status.latestVersion || status.currentVersion);
@@ -205,6 +208,11 @@ const AboutPanel: React.FC = () => {
                 {updateState === 'available' && (
                     <div style={styles.resultBox}>
                         <div style={styles.newVersion}>发现新版本: {latestVersion}</div>
+                        {skippedVersions.length > 0 && (
+                            <div style={styles.skippedHint}>
+                                包含 {skippedVersions.length + 1} 个版本的更新: {latestVersion}, {skippedVersions.slice(0, 2).join(', ')}{skippedVersions.length > 2 ? ' ...' : ''}
+                            </div>
+                        )}
                         {changelog && (
                             <div style={styles.changelogBox}>
                                 <div style={styles.changelogTitle}>更新内容</div>
@@ -418,12 +426,17 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: font.lg,
         fontWeight: 600,
     },
+    skippedHint: {
+        color: colors.textMuted,
+        fontSize: font.xs,
+        lineHeight: 1.5,
+    },
     changelogBox: {
         backgroundColor: colors.bgPrimary,
         border: `1px solid ${colors.borderPrimary}`,
         borderRadius: radius.md,
         padding: '10px 12px',
-        maxHeight: '200px',
+        maxHeight: '360px',
         overflowY: 'auto',
     },
     changelogTitle: {
