@@ -43,7 +43,6 @@ function App() {
     const [terminalConfig, setTerminalConfig] = useState<TerminalConfig>({ scrollback: 5000, search_enabled: true, highlight_enabled: true });
     const [highlightRules, setHighlightRules] = useState<HighlightRule[]>([]);
     const [isCommandQueryOpen, setIsCommandQueryOpen] = useState(false);
-    const [commandQueryPosition, setCommandQueryPosition] = useState({ x: 120, y: 120 });
     const [commandQueryText, setCommandQueryText] = useState('');
     const [commandQueryLoading, setCommandQueryLoading] = useState(false);
     const [commandQueryResult, setCommandQueryResult] = useState<CommandQueryResult | null>(null);
@@ -222,12 +221,7 @@ function App() {
                 alert("请先选择一个激活的终端");
                 return;
             }
-            const pos = terminalRefs.current.get(activeTerminalId)?.getCursorScreenPosition();
-            if (pos) {
-                setCommandQueryPosition(pos);
-            } else {
-                setCommandQueryPosition({ x: window.innerWidth / 2 - 200, y: window.innerHeight / 2 - 120 });
-            }
+            setCommandQueryText('');
             setCommandQueryError('');
             setCommandQueryResult(null);
             setIsCommandQueryOpen(true);
@@ -246,8 +240,10 @@ function App() {
         return () => window.removeEventListener('keydown', handleKeyDown, true);
     }, [activeTerminalId]);
 
-    const generateCommand = async () => {
-        if (!commandQueryText.trim()) return;
+    const generateCommand = async (overrideText?: string) => {
+        const text = (overrideText ?? commandQueryText).trim();
+        if (!text) return;
+        setCommandQueryText(overrideText ?? commandQueryText);
         setCommandQueryLoading(true);
         setCommandQueryError('');
         try {
@@ -257,7 +253,7 @@ function App() {
                 return;
             }
             // @ts-ignore
-            const resp = await window.go.main.App.GenerateLinuxCommand(commandQueryText.trim());
+            const resp = await window.go.main.App.GenerateLinuxCommand(text);
             if (typeof resp === 'string' && resp.startsWith('Error:')) {
                 setCommandQueryError(resp);
                 setCommandQueryResult(null);
@@ -869,7 +865,6 @@ function App() {
 
             <CommandQueryOverlay
                 visible={isCommandQueryOpen}
-                position={commandQueryPosition}
                 query={commandQueryText}
                 loading={commandQueryLoading}
                 result={commandQueryResult}
@@ -880,6 +875,10 @@ function App() {
                 onCopy={copyGeneratedCommand}
                 onType={typeGeneratedCommand}
                 onClose={() => setIsCommandQueryOpen(false)}
+                onSelectHistory={(entry) => {
+                    setIsCommandQueryOpen(false);
+                    handleQuickCommand(entry.command);
+                }}
             />
         </div>
     );

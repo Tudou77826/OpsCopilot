@@ -1,13 +1,49 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback, MouseEvent } from 'react';
 
 export interface CommandQueryResult {
     command: string;
     explanation?: string;
 }
 
+interface HistoryEntry {
+    id: string;
+    query: string;
+    command: string;
+    pinned: boolean;
+    createdAt: number;
+}
+
+const HISTORY_KEY = 'opscopilot:commandQueryHistory';
+const MAX_UNPINNED = 30;
+
+function loadHistory(): HistoryEntry[] {
+    try {
+        const raw = localStorage.getItem(HISTORY_KEY);
+        if (!raw) return [];
+        return JSON.parse(raw);
+    } catch {
+        return [];
+    }
+}
+
+function saveHistory(entries: HistoryEntry[]) {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(entries));
+}
+
+const PinIcon: React.FC<{ active: boolean }> = ({ active }) => (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill={active ? '#e8ab2c' : '#666'}>
+        <path d="M8 1.3l1.8 4.0H14l-3.4 2.7 1.3 4.3L8 9.8 4.1 12.3l1.3-4.3L2 5.3h4.2z"/>
+    </svg>
+);
+
+const TrashIcon: React.FC = () => (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="#666">
+        <path d="M6.5 1a.5.5 0 0 0-.5.5V2H3.5a.5.5 0 0 0 0 1h9a.5.5 0 0 0 0-1H10v-.5a.5.5 0 0 0-.5-.5h-3zM4.5 4l.5 9.5a1 1 0 0 0 1 .5h4a1 1 0 0 0 1-.5L11.5 4h-7z"/>
+    </svg>
+);
+
 interface CommandQueryOverlayProps {
     visible: boolean;
-    position: { x: number; y: number };
     query: string;
     loading: boolean;
     result: CommandQueryResult | null;
@@ -18,11 +54,11 @@ interface CommandQueryOverlayProps {
     onCopy: () => void;
     onType: () => void;
     onClose: () => void;
+    onSelectHistory?: (entry: HistoryEntry) => void;
 }
 
 const CommandQueryOverlay: React.FC<CommandQueryOverlayProps> = ({
     visible,
-    position,
     query,
     loading,
     result,
@@ -33,17 +69,44 @@ const CommandQueryOverlay: React.FC<CommandQueryOverlayProps> = ({
     onCopy,
     onType,
     onClose,
+    onSelectHistory,
 }) => {
     const inputRef = useRef<HTMLInputElement>(null);
+    const [history, setHistory] = useState<HistoryEntry[]>([]);
+    const [showHistory, setShowHistory] = useState(true);
+    const [hoveredId, setHoveredId] = useState<string | null>(null);
+    const [copied, setCopied] = useState(false);
 
-    const adjustedPosition = useMemo(() => {
-        const width = 420;
-        const height = result ? 230 : 160;
-        const x = Math.min(position.x, window.innerWidth - width - 12);
-        const y = Math.min(position.y, window.innerHeight - height - 12);
-        return { x: Math.max(12, x), y: Math.max(12, y) };
-    }, [position.x, position.y, result]);
+    // 加载历史
+    useEffect(() => {
+        if (visible) {
+            setHistory(loadHistory());
+            setShowHistory(true);
+        }
+    }, [visible]);
 
+    // 生成成功后写入历史
+    useEffect(() => {
+        if (!visible || !result?.command || !query.trim()) return;
+        setHistory(prev => {
+            if (prev.some(e => e.command === result.command && e.query === query.trim())) return prev;
+            const entry: HistoryEntry = {
+                id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+                query: query.trim(),
+                command: result.command,
+                pinned: false,
+                createdAt: Date.now(),
+            };
+            const next = [entry, ...prev];
+            const pinned = next.filter(e => e.pinned);
+            const unpinned = next.filter(e => !e.pinned).slice(0, MAX_UNPINNED);
+            const merged = [...pinned, ...unpinned];
+            saveHistory(merged);
+            return merged;
+        });
+    }, [visible, result?.command, query]);
+
+    // Escape 关闭
     useEffect(() => {
         if (!visible) return;
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -56,61 +119,144 @@ const CommandQueryOverlay: React.FC<CommandQueryOverlayProps> = ({
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [visible, onClose]);
 
+    // 自动聚焦
     useEffect(() => {
         if (!visible) return;
         const t = setTimeout(() => inputRef.current?.focus(), 0);
         return () => clearTimeout(t);
     }, [visible]);
 
+    const togglePin = useCallback((id: string) => {
+        setHistory(prev => {
+            const next = prev.map(e => e.id === id ? { ...e, pinned: !e.pinned } : e);
+            saveHistory(next);
+            return next;
+        });
+    }, []);
+
+    const deleteEntry = useCallback((id: string) => {
+        setHistory(prev => {
+            const next = prev.filter(e => e.id !== id);
+            saveHistory(next);
+            return next;
+        });
+    }, []);
+
+    const selectHistory = useCallback((entry: HistoryEntry) => {
+        setShowHistory(false);
+        if (onSelectHistory) {
+            onSelectHistory(entry);
+        } else {
+            onQueryChange(entry.query);
+        }
+    }, [onQueryChange, onSelectHistory]);
+
     if (!visible) return null;
 
     const canOperate = !!result?.command && !loading;
 
+    const sorted = [...history].sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        return b.createdAt - a.createdAt;
+    });
+
+    const shouldShowHistory = showHistory && !query.trim() && sorted.length > 0;
+
     return (
         <>
             <div style={styles.backdrop} onClick={onClose} />
-            <div style={{ ...styles.container, left: adjustedPosition.x, top: adjustedPosition.y }}>
-                <div style={styles.header}>
-                    <div style={styles.title}>命令查询</div>
-                    <button style={styles.closeBtn} onClick={onClose} aria-label="关闭">×</button>
+            <div style={styles.container}>
+                <div style={styles.searchSection}>
+                    <input
+                        ref={inputRef}
+                        style={styles.input}
+                        value={query}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            onQueryChange(val);
+                            setShowHistory(!val.trim());
+                        }}
+                        onFocus={() => { if (!query.trim()) setShowHistory(true); }}
+                        placeholder="描述你的诉求，例如：查端口是否被占用"
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                setShowHistory(false);
+                                onGenerate();
+                            }
+                        }}
+                    />
+                    <button style={styles.primaryBtn} onClick={onGenerate} disabled={loading || !query.trim()}>
+                        {loading ? '生成中…' : '生成'}
+                    </button>
                 </div>
 
-                <div style={styles.body}>
-                    <div style={styles.inputRow}>
-                        <input
-                            ref={inputRef}
-                            style={styles.input}
-                            value={query}
-                            onChange={(e) => onQueryChange(e.target.value)}
-                            placeholder="描述你的诉求，例如：查端口是否被占用"
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    onGenerate();
-                                }
-                            }}
-                        />
-                        <button style={styles.primaryBtn} onClick={onGenerate} disabled={loading || !query.trim()}>
-                            {loading ? '生成中…' : '生成'}
-                        </button>
+                {shouldShowHistory && (
+                    <div style={styles.historyList}>
+                        {sorted.map(entry => (
+                            <div
+                                key={entry.id}
+                                style={{
+                                    ...styles.historyItem,
+                                    backgroundColor: hoveredId === entry.id ? '#2a2d2e' : 'transparent',
+                                }}
+                                onClick={() => selectHistory(entry)}
+                                onMouseEnter={() => setHoveredId(entry.id)}
+                                onMouseLeave={() => setHoveredId(null)}
+                            >
+                                <div style={styles.historyContent}>
+                                    <span style={styles.historyCommand}>{entry.command}</span>
+                                    <span style={styles.historyDesc}>
+                                        {entry.query.length > 40 ? entry.query.slice(0, 40) + '…' : entry.query}
+                                    </span>
+                                </div>
+                                <div style={styles.historyActions} onClick={(e: MouseEvent) => e.stopPropagation()}>
+                                    <button
+                                        style={styles.iconBtn}
+                                        onClick={() => togglePin(entry.id)}
+                                        title={entry.pinned ? '取消钉住' : '钉住'}
+                                    >
+                                        <PinIcon active={entry.pinned} />
+                                    </button>
+                                    <button
+                                        style={styles.iconBtn}
+                                        onClick={() => deleteEntry(entry.id)}
+                                        title="删除"
+                                    >
+                                        <TrashIcon />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
                     </div>
+                )}
 
-                    {result?.command && (
+                {result?.command && (
+                    <div style={styles.resultSection}>
                         <div style={styles.resultBox}>
                             <div style={styles.commandLine}>{result.command}</div>
                             {result.explanation && <div style={styles.explanation}>{result.explanation}</div>}
                         </div>
-                    )}
-                    {!!error && (
-                        <div style={styles.errorText}>{error}</div>
-                    )}
-
-                    <div style={styles.actionsRow}>
-                        <button style={styles.secondaryBtn} onClick={onCopy} disabled={!canOperate}>复制</button>
-                        <button style={styles.secondaryBtn} onClick={onType} disabled={!canOperate}>键入</button>
-                        <button style={styles.secondaryBtn} onClick={onRegenerate} disabled={loading || !query.trim()}>重新生成</button>
+                        <div style={styles.actionsRow}>
+                            <button
+                                style={copied ? styles.copiedBtn : styles.secondaryBtn}
+                                onClick={() => {
+                                    onCopy();
+                                    setCopied(true);
+                                    setTimeout(() => setCopied(false), 1200);
+                                }}
+                                disabled={!canOperate}
+                            >
+                                {copied ? '✓ 已复制' : '复制'}
+                            </button>
+                            <button style={styles.secondaryBtn} onClick={onType} disabled={!canOperate}>键入</button>
+                            <button style={styles.secondaryBtn} onClick={onRegenerate} disabled={loading || !query.trim()}>重新生成</button>
+                        </div>
                     </div>
-                </div>
+                )}
+                {!!error && !result?.command && (
+                    <div style={styles.errorText}>{error}</div>
+                )}
             </div>
         </>
     );
@@ -124,98 +270,142 @@ const styles: Record<string, React.CSSProperties> = {
         right: 0,
         bottom: 0,
         zIndex: 3500,
-        backgroundColor: 'transparent',
+        backgroundColor: 'rgba(0, 0, 0, 0.4)',
     },
     container: {
         position: 'fixed',
+        top: '30%',
+        left: '50%',
+        transform: 'translate(-50%, -30%)',
         zIndex: 3600,
-        width: '420px',
-        backgroundColor: '#252526',
-        border: '1px solid #454545',
-        borderRadius: '8px',
-        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.6)',
+        width: '480px',
+        backgroundColor: '#1e1e1e',
+        border: '1px solid #3c3c3c',
+        borderRadius: '10px',
+        boxShadow: '0 12px 40px rgba(0, 0, 0, 0.7)',
         overflow: 'hidden',
         color: '#ccc',
-    },
-    header: {
-        height: '36px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '0 10px',
-        backgroundColor: '#1e1e1e',
-        borderBottom: '1px solid #333',
-    },
-    title: {
-        fontSize: '12px',
-        color: '#ccc',
-        userSelect: 'none',
-    },
-    closeBtn: {
-        width: '28px',
-        height: '28px',
-        borderRadius: '6px',
-        border: 'none',
-        background: 'transparent',
-        color: '#ccc',
-        fontSize: '18px',
-        cursor: 'pointer',
-    },
-    body: {
-        padding: '10px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '10px',
     },
-    inputRow: {
+    searchSection: {
         display: 'flex',
-        gap: '8px',
+        gap: '10px',
+        padding: '16px 16px 12px',
+        borderBottom: '2px solid #444',
+        backgroundColor: '#2d2d2d',
     },
     input: {
         flex: 1,
-        backgroundColor: '#1e1e1e',
-        border: '1px solid #3c3c3c',
-        borderRadius: '6px',
-        color: '#ccc',
-        fontSize: '12px',
-        padding: '8px 10px',
+        backgroundColor: '#111',
+        border: '2px solid #666',
+        borderRadius: '8px',
+        color: '#fff',
+        fontSize: '14px',
+        padding: '12px 14px',
         outline: 'none',
+        fontWeight: 500,
     },
     primaryBtn: {
-        backgroundColor: '#007acc',
+        backgroundColor: '#0e639c',
         border: 'none',
         color: '#fff',
         borderRadius: '6px',
-        padding: '8px 10px',
-        fontSize: '12px',
+        padding: '10px 16px',
+        fontSize: '13px',
+        fontWeight: 600,
         cursor: 'pointer',
         whiteSpace: 'nowrap',
     },
+    historyList: {
+        maxHeight: '360px',
+        overflowY: 'auto',
+    },
+    historyItem: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '6px 14px',
+        cursor: 'pointer',
+        borderBottom: '1px solid #2a2a2a',
+        transition: 'background-color 0.1s',
+    },
+    historyContent: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '1px',
+        overflow: 'hidden',
+        flex: 1,
+        minWidth: 0,
+    },
+    historyCommand: {
+        fontFamily: 'var(--font-mono)',
+        fontSize: '12px',
+        color: '#ccc',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+    },
+    historyDesc: {
+        fontSize: '11px',
+        color: '#666',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+    },
+    historyActions: {
+        display: 'flex',
+        gap: '2px',
+        flexShrink: 0,
+        marginLeft: '8px',
+        opacity: 0.4,
+    },
+    iconBtn: {
+        width: '20px',
+        height: '20px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        border: 'none',
+        borderRadius: '3px',
+        background: 'transparent',
+        color: '#888',
+        cursor: 'pointer',
+        padding: 0,
+    },
+    resultSection: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        padding: '12px 16px 14px',
+    },
     resultBox: {
-        backgroundColor: '#1e1e1e',
-        border: '1px solid #333',
+        backgroundColor: '#252526',
+        border: '1px solid #3c3c3c',
         borderRadius: '6px',
-        padding: '8px 10px',
+        padding: '10px 12px',
     },
     commandLine: {
         fontFamily: 'var(--font-mono)',
-        fontSize: '12px',
-        color: '#fff',
+        fontSize: '13px',
+        color: '#e0e0e0',
         whiteSpace: 'pre-wrap',
         wordBreak: 'break-word',
+        lineHeight: 1.5,
     },
     explanation: {
-        marginTop: '6px',
-        color: '#aaa',
-        fontSize: '11px',
+        marginTop: '8px',
+        color: '#999',
+        fontSize: '12px',
         lineHeight: 1.4,
     },
     errorText: {
         color: '#f48771',
-        fontSize: '11px',
+        fontSize: '12px',
         lineHeight: 1.4,
         whiteSpace: 'pre-wrap',
         wordBreak: 'break-word',
+        padding: '8px 16px',
     },
     actionsRow: {
         display: 'flex',
@@ -230,6 +420,15 @@ const styles: Record<string, React.CSSProperties> = {
         padding: '6px 10px',
         fontSize: '12px',
         cursor: 'pointer',
+    },
+    copiedBtn: {
+        backgroundColor: '#1a4a2e',
+        border: '1px solid #2d8a4e',
+        color: '#4ec870',
+        borderRadius: '6px',
+        padding: '6px 10px',
+        fontSize: '12px',
+        cursor: 'default',
     },
 };
 
