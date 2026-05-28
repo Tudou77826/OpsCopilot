@@ -151,6 +151,18 @@ const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
         }]);
     };
 
+    const insertStepAfter = (index: number) => {
+        if (!script) return;
+        const newSteps = [...script.steps];
+        newSteps.splice(index + 1, 0, {
+            command: '',
+            comment: '',
+            delay: 0,
+            enabled: true,
+        });
+        updateSteps(newSteps);
+    };
+
     const moveStep = (index: number, direction: -1 | 1) => {
         if (!script) return;
         const target = index + direction;
@@ -331,6 +343,12 @@ const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
                                     </div>
 
                                     <div style={styles.commandActions}>
+                                        <button className="se-btn se-btn-action" style={styles.moveButton}
+                                            onClick={() => insertStepAfter(idx)} title="在下方插入命令">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M12 5v14M5 12h14"/>
+                                            </svg>
+                                        </button>
                                         <button className="se-btn se-btn-action" style={styles.moveButton}
                                             onClick={() => moveStep(idx, -1)} title="上移"
                                             disabled={idx === 0}>

@@ -57,7 +57,13 @@ func (lb *LineBuffer) HandleAll(input string) []HandleResult {
 
 		// Handle Control Characters
 		switch r {
-		case '\r', '\n':
+		case '\r':
+			// Skip following \n for CRLF sequences
+			if i+1 < len(runes) && runes[i+1] == '\n' {
+				i++
+			}
+			fallthrough
+		case '\n':
 			line := string(lb.buffer)
 			historyNav := lb.historyNavigation
 			lb.Reset()
