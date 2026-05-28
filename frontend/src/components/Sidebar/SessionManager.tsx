@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TbFolderOpen, TbFolder, TbTerminal2 } from 'react-icons/tb';
 import { ConnectionConfig } from '../../types';
 import EditSavedSessionModal from './EditSavedSessionModal';
+import { confirmDialog } from '../ConfirmDialog/ConfirmDialog';
 
 // Wails bindings
 declare global {
@@ -125,7 +126,8 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
     };
 
     const handleDelete = async (id: string) => {
-        if (confirm('确定要删除吗？')) {
+        const ok = await confirmDialog.show({ message: '确定要删除吗？', danger: true });
+        if (ok) {
             await window.go.main.App.DeleteSavedSession(id);
             loadSessions();
         }
@@ -147,12 +149,15 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
         return [];
     };
 
-    const handleConnectAll = (folder: SessionNode) => {
+    const handleConnectAll = async (folder: SessionNode) => {
         const all = collectSessions(folder);
         const max = 5;
         if (all.length === 0) return;
         const toConnect = all.slice(0, max);
-        if (all.length > max && !confirm(`该文件夹共有 ${all.length} 个会话，最多同时连接 ${max} 个，是否继续？`)) return;
+        if (all.length > max) {
+            const ok = await confirmDialog.show({ message: `该文件夹共有 ${all.length} 个会话，最多同时连接 ${max} 个，是否继续？` });
+            if (!ok) return;
+        }
         toConnect.forEach(s => { if (s.config) onConnect(s.config); });
     };
 

@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { TbRefresh, TbFileText, TbEdit, TbPlayerPlay, TbFileExport, TbTrash } from 'react-icons/tb';
 import VariableInputDialog from './VariableInputDialog';
+import { useToast } from '../Toast/Toast';
+import { confirmDialog } from '../ConfirmDialog/ConfirmDialog';
 
 interface ScriptVariable {
     name: string;
@@ -11,6 +13,8 @@ interface ScriptVariable {
 }
 
 interface Script {
+    steps?: { command?: string }[];
+    commands?: { content: string }[];
     id: string;
     name: string;
     description: string;
@@ -38,6 +42,7 @@ const ScriptListPanel = forwardRef<{
     const [loading, setLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [varDialog, setVarDialog] = useState<{ scriptId: string; variables: ScriptVariable[] } | null>(null);
+    const toast = useToast();
 
     useEffect(() => {
         loadScripts();
@@ -66,16 +71,18 @@ const ScriptListPanel = forwardRef<{
     }));
 
     const handleDelete = async (scriptId: string, scriptName: string) => {
-        if (!confirm(`确定要删除脚本 "${scriptName}" 吗？`)) {
-            return;
-        }
+        const ok = await confirmDialog.show({
+            message: `确定要删除脚本 "${scriptName}" 吗？`,
+            danger: true,
+        });
+        if (!ok) return;
 
         try {
             // @ts-ignore
             await window.go.main.App.DeleteScript(scriptId);
             await loadScripts();
         } catch (err: any) {
-            alert('删除失败: ' + err.message);
+            toast.error('删除失败: ' + err.message);
         }
     };
 
@@ -85,7 +92,7 @@ const ScriptListPanel = forwardRef<{
             await window.go.main.App.ExportScript(scriptId);
         } catch (err: any) {
             if (err.message) {
-                alert('导出失败: ' + err.message);
+                toast.error('导出失败: ' + err.message);
             }
         }
     };
@@ -143,7 +150,7 @@ const ScriptListPanel = forwardRef<{
             // @ts-ignore
             await window.go.main.App.ReplayScriptWithVars(scriptId, activeSessionId, values);
         } catch (err: any) {
-            alert('回放失败: ' + (err?.message || err));
+            toast.error('回放失败: ' + (err?.message || err));
         }
     };
 

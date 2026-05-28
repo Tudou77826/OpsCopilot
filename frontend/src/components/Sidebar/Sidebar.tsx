@@ -7,6 +7,8 @@ import ScriptRecordingPanel from '../ScriptPanel/ScriptRecordingPanel';
 import ScriptListPanel from '../ScriptPanel/ScriptListPanel';
 import ScriptEditorModal from '../ScriptPanel/ScriptEditorModal';
 import { ConnectionConfig } from '../../types';
+import { useToast } from '../Toast/Toast';
+import { confirmDialog } from '../ConfirmDialog/ConfirmDialog';
 
 interface TerminalSessionLite {
     id: string;
@@ -29,6 +31,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart,
     const [width, setWidth] = useState(defaultWidth);
     const [editingScriptId, setEditingScriptId] = useState<string | null>(null);
     const scriptListRef = useRef<any>(null);
+    const toast = useToast();
 
     // 知识库 Tab 自动拓宽到 60% 屏宽，其他 Tab 恢复默认宽度
     useEffect(() => {
@@ -57,20 +60,24 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart,
 
     const handleReplayScript = async (scriptId: string) => {
         if (!activeTerminalId) {
-            alert('请先连接到SSH会话');
+            toast.warning('请先连接到SSH会话');
             return;
         }
 
-        if (!confirm(`确定要在当前会话中回放此脚本吗？`)) {
-            return;
-        }
+        const ok = await confirmDialog.show({
+            title: '回放脚本',
+            message: '确定要在当前会话中回放此脚本吗？',
+            confirmText: '回放',
+            danger: false,
+        });
+        if (!ok) return;
 
         try {
             // @ts-ignore
             await window.go.main.App.ReplayScript(scriptId, activeTerminalId);
-            alert('脚本回放完成');
+            toast.success('脚本回放完成');
         } catch (err: any) {
-            alert('回放失败: ' + err.message);
+            toast.error('回放失败: ' + err.message);
         }
     };
 

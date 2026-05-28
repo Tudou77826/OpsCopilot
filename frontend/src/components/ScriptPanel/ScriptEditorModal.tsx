@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { useToast } from '../Toast/Toast';
+import { confirmDialog } from '../ConfirmDialog/ConfirmDialog';
 
 // --- Types ---
 
@@ -52,6 +54,7 @@ const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [varsExpanded, setVarsExpanded] = useState(true);
+    const toast = useToast();
 
     // Inject CSS
     useEffect(() => {
@@ -106,7 +109,7 @@ const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
             if (!result.variables) result.variables = [];
             setScript(result);
         } catch (err: any) {
-            alert('加载脚本失败: ' + (err.message || err));
+            toast.error('加载脚本失败: ' + (err.message || err));
             onClose();
         } finally {
             setLoading(false);
@@ -122,7 +125,7 @@ const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
             onSave();
             onClose();
         } catch (err: any) {
-            alert('保存失败: ' + (err.message || err));
+            toast.error('保存失败: ' + (err.message || err));
         } finally {
             setSaving(false);
         }
@@ -172,9 +175,10 @@ const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
         updateSteps(newSteps);
     };
 
-    const deleteStep = (index: number) => {
+    const deleteStep = async (index: number) => {
         if (!script) return;
-        if (!confirm('确定要删除这条命令吗？')) return;
+        const ok = await confirmDialog.show({ message: '确定要删除这条命令吗？', danger: true });
+        if (!ok) return;
         updateSteps(script.steps.filter((_, i) => i !== index));
     };
 
@@ -201,8 +205,9 @@ const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
         updateVariables(newVars);
     };
 
-    const deleteVariable = (index: number) => {
-        if (!confirm('确定要删除这个变量吗？')) return;
+    const deleteVariable = async (index: number) => {
+        const ok = await confirmDialog.show({ message: '确定要删除这个变量吗？', danger: true });
+        if (!ok) return;
         updateVariables(script!.variables.filter((_, i) => i !== index));
     };
 

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { TbClock, TbScreenShare, TbStethoscope, TbMessageChatbot, TbCode, TbBolt, TbBook } from 'react-icons/tb';
+import { useToast } from './components/Toast/Toast';
 import './App.css';
 import logo from './assets/images/logo-universal.png';
 import { TerminalRef } from './components/Terminal/Terminal';
@@ -26,6 +27,7 @@ interface TerminalSession {
 }
 
 function App() {
+    const toast = useToast();
     const [status, setStatus] = useState("就绪");
     const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -218,7 +220,7 @@ function App() {
 
         const openCommandQuery = () => {
             if (!activeTerminalId) {
-                alert("请先选择一个激活的终端");
+                toast.warning("请先选择一个激活的终端");
                 return;
             }
             setCommandQueryText('');
@@ -451,7 +453,7 @@ function App() {
 
     const handleQuickCommand = (command: string) => {
         if (!activeTerminalId) {
-            alert("请先选择一个激活的终端");
+            toast.warning("请先选择一个激活的终端");
             return;
         }
 
@@ -569,11 +571,11 @@ function App() {
                     });
                     unlisteners.current.set(result.sessionId, cancel);
                 } else {
-                    alert("复制失败: " + result.message);
+                    toast.error("复制失败: " + result.message);
                 }
             });
         } else {
-            alert("后端不支持复制会话 (DuplicateSession not implemented)");
+            toast.error("后端不支持复制会话 (DuplicateSession not implemented)");
         }
     };
 

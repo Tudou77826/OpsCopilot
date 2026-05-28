@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { confirmDialog } from '../ConfirmDialog/ConfirmDialog';
 
 interface TerminalSessionLite {
     id: string;
@@ -593,13 +594,13 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                 const raw = await api.FTStat(sessionIdRef.current, dst);
                 const resp = parseResp(raw);
                 if (resp && resp.ok) {
-                    const ok = confirm(`远端已存在同名文件：\n${dst}\n\n是否覆盖？`);
+                    const ok = await confirmDialog.show({ message: `远端已存在同名文件：\n${dst}\n\n是否覆盖？`, confirmText: '覆盖', danger: true });
                     if (!ok) return;
                 }
             } catch {
             }
         } else if (protocolRef.current.startsWith('scp')) {
-            const ok = confirm(`SCP 模式无法检测远端是否存在同名文件：\n${dst}\n\n是否继续上传（可能覆盖）？`);
+            const ok = await confirmDialog.show({ message: `SCP 模式无法检测远端是否存在同名文件：\n${dst}\n\n是否继续上传（可能覆盖）？`, confirmText: '继续上传', danger: true });
             if (!ok) return;
         }
 
@@ -811,7 +812,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
             setMsg('请先选择远端文件或目录');
             return;
         }
-        const ok = confirm('确定要删除所选远端项吗？');
+        const ok = await confirmDialog.show({ message: '确定要删除所选远端项吗？', danger: true });
         if (!ok) return;
         setLoading(true);
         setMsg('');
@@ -965,7 +966,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
             setMsg('请先选择本地文件或目录');
             return;
         }
-        const ok = confirm('确定要删除所选项吗？');
+        const ok = await confirmDialog.show({ message: '确定要删除所选项吗？', danger: true });
         if (!ok) return;
         setLoading(true);
         setMsg('');

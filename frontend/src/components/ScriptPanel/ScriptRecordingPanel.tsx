@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { TbPlayerPlay, TbPlayerStop } from 'react-icons/tb';
+import { useToast } from '../Toast/Toast';
 
 interface ScriptStatus {
     is_recording: boolean;
@@ -22,6 +23,7 @@ const ScriptRecordingPanel: React.FC<ScriptRecordingPanelProps> = ({ activeSessi
         duration: 0
     });
     const [recentCommands, setRecentCommands] = useState<string[]>([]);
+    const toast = useToast();
 
     // 获取录制状态
     const fetchRecordingStatus = async () => {
@@ -50,7 +52,7 @@ const ScriptRecordingPanel: React.FC<ScriptRecordingPanelProps> = ({ activeSessi
 
     const handleStartRecording = async () => {
         if (!activeSessionId) {
-            alert('请先连接到SSH会话');
+            toast.warning('请先连接到SSH会话');
             return;
         }
 
@@ -77,7 +79,7 @@ const ScriptRecordingPanel: React.FC<ScriptRecordingPanelProps> = ({ activeSessi
             } else if (err?.toString && typeof err.toString === 'function') {
                 errorMessage = err.toString();
             }
-            alert(`无法开始录制\n\n${errorMessage}`);
+            toast.error(`无法开始录制: ${errorMessage}`);
             await fetchRecordingStatus(); // 刷新状态
         }
     };
@@ -88,7 +90,7 @@ const ScriptRecordingPanel: React.FC<ScriptRecordingPanelProps> = ({ activeSessi
             const script = await window.go.main.App.StopScriptRecording();
 
             // 显示简短的成功提示
-            alert(`✓ 录制完成\n已保存 ${script.commands.length} 条命令`);
+            toast.success(`录制完成，已保存 ${script.commands.length} 条命令`);
 
             // 清空最近命令列表并刷新状态
             setRecentCommands([]);
@@ -99,7 +101,7 @@ const ScriptRecordingPanel: React.FC<ScriptRecordingPanelProps> = ({ activeSessi
                 onRecordingComplete();
             }
         } catch (err: any) {
-            alert('停止录制失败: ' + err.message);
+            toast.error('停止录制失败: ' + err.message);
             await fetchRecordingStatus(); // 刷新状态
         }
     };
@@ -131,9 +133,13 @@ const ScriptRecordingPanel: React.FC<ScriptRecordingPanelProps> = ({ activeSessi
             <div style={styles.controls}>
                 {!isRecording ? (
                     <button
-                        style={styles.startButton}
+                        style={{
+                            ...styles.startButton,
+                            opacity: activeSessionId ? 1 : 0.6,
+                            cursor: activeSessionId ? 'pointer' : 'not-allowed',
+                        }}
                         onClick={handleStartRecording}
-                        disabled={!activeSessionId}
+                        title={activeSessionId ? undefined : '请先连接到SSH会话'}
                     >
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>{TbPlayerPlay({ size: 14 })} 开始录制</span>
                     </button>

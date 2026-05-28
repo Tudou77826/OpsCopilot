@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ConnectionConfig } from '../../types';
 import ConnectionConfigForm from '../ConnectionConfigForm/ConnectionConfigForm';
+import { useToast } from '../Toast/Toast';
 
 type Props = {
     isOpen: boolean;
@@ -13,6 +14,7 @@ type Props = {
 const EditSavedSessionModal: React.FC<Props> = ({ isOpen, sessionId, initialConfig, onClose, onSaved }) => {
     const [config, setConfig] = useState<ConnectionConfig>(initialConfig);
     const [saving, setSaving] = useState(false);
+    const toast = useToast();
 
     useEffect(() => {
         if (!isOpen) return;
@@ -24,11 +26,11 @@ const EditSavedSessionModal: React.FC<Props> = ({ isOpen, sessionId, initialConf
 
     const handleSave = async () => {
         if (!config.host?.trim()) {
-            alert('主机地址不能为空');
+            toast.warning('主机地址不能为空');
             return;
         }
         if (!config.user?.trim()) {
-            alert('用户名不能为空');
+            toast.warning('用户名不能为空');
             return;
         }
         setSaving(true);
@@ -57,7 +59,7 @@ const EditSavedSessionModal: React.FC<Props> = ({ isOpen, sessionId, initialConf
                 if (bastionClean.name === '') delete (bastionClean as any).name;
                 if (bastionClean.password === '') delete (bastionClean as any).password;
                 if (!bastionClean.host) {
-                    alert('跳板机主机不能为空');
+                    toast.warning('跳板机主机不能为空');
                     setSaving(false);
                     return;
                 }
@@ -66,14 +68,14 @@ const EditSavedSessionModal: React.FC<Props> = ({ isOpen, sessionId, initialConf
 
             const resp = await window.go.main.App.UpdateSavedSession(sessionId, payload);
             if (resp && resp.startsWith('Error:')) {
-                alert(resp);
+                toast.error(resp);
                 setSaving(false);
                 return;
             }
             onSaved();
             onClose();
         } catch (e: any) {
-            alert(e?.toString?.() || '保存失败');
+            toast.error(e?.toString?.() || '保存失败');
             setSaving(false);
         }
     };

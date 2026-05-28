@@ -7,6 +7,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import 'highlight.js/styles/github-dark.css';
+import { confirmDialog } from '../ConfirmDialog/ConfirmDialog';
 // @ts-ignore
 import { EventsOn } from '../../../wailsjs/runtime/runtime';
 
@@ -195,7 +196,11 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
     };
 
     const handleCancelClick = async () => {
-        if (confirm('确定要取消定位吗？这将清空当前的所有记录。')) {
+        const ok = await confirmDialog.show({
+            message: '确定要取消定位吗？这将清空当前的所有记录。',
+            danger: true,
+        });
+        if (ok) {
             try {
                 // @ts-ignore
                 await window.go.main.App.CancelSession();
