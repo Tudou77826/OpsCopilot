@@ -125,18 +125,20 @@ func (r *Recorder) RecordRawInput(sessionID string, rawData string) error {
 		r.lineBuffers[sessionID] = lb
 	}
 
-	// 处理输入
-	result := lb.Handle(rawData)
-	if result.Committed {
-		// 添加到时间线
-		r.addTimelineEventLocked("terminal_input", result.Line, map[string]interface{}{
-			"session_id":         sessionID,
-			"history_navigation": result.HistoryNavigation,
-		})
+	// 处理输入（可能包含多行）
+	results := lb.HandleAll(rawData)
+	for _, result := range results {
+		if result.Committed {
+			// 添加到时间线
+			r.addTimelineEventLocked("terminal_input", result.Line, map[string]interface{}{
+				"session_id":         sessionID,
+				"history_navigation": result.HistoryNavigation,
+			})
 
-		// 同时添加到命令列表（仅当有内容时）
-		if result.Line != "" {
-			r.addCommandLocked(result.Line)
+			// 同时添加到命令列表（仅当有内容时）
+			if result.Line != "" {
+				r.addCommandLocked(result.Line)
+			}
 		}
 	}
 
@@ -177,19 +179,21 @@ func (r *Recorder) AddEvent(eventType string, content string, metadata map[strin
 			r.lineBuffers[sessionID] = lb
 		}
 
-		// 通过 LineBuffer 处理
-		handleResult := lb.Handle(content)
-		result.Committed = handleResult.Committed
-		result.HistoryNavigation = handleResult.HistoryNavigation
+		// 通过 LineBuffer 处理（可能包含多行）
+		handleResults := lb.HandleAll(content)
 
-		if handleResult.Committed {
-			result.Line = handleResult.Line
-			if handleResult.Line != "" {
-				r.addTimelineEventLocked(eventType, handleResult.Line, map[string]interface{}{
-					"session_id":         sessionID,
-					"history_navigation": handleResult.HistoryNavigation,
-				})
-				r.addCommandLocked(handleResult.Line)
+		for _, handleResult := range handleResults {
+			if handleResult.Committed {
+				result.Committed = true
+				result.Line = handleResult.Line
+				result.HistoryNavigation = handleResult.HistoryNavigation
+				if handleResult.Line != "" {
+					r.addTimelineEventLocked(eventType, handleResult.Line, map[string]interface{}{
+						"session_id":         sessionID,
+						"history_navigation": handleResult.HistoryNavigation,
+					})
+					r.addCommandLocked(handleResult.Line)
+				}
 			}
 		}
 		return result, nil
@@ -218,9 +222,11 @@ func (r *Recorder) AddBroadcastInput(sessionIDs []string, content string) error 
 			r.lineBuffers[sessionID] = lb
 		}
 
-		handleResult := lb.Handle(content)
-		if handleResult.Committed && handleResult.Line != "" {
-			committedLines[handleResult.Line] = append(committedLines[handleResult.Line], sessionID)
+		handleResults := lb.HandleAll(content)
+		for _, handleResult := range handleResults {
+			if handleResult.Committed && handleResult.Line != "" {
+				committedLines[handleResult.Line] = append(committedLines[handleResult.Line], sessionID)
+			}
 		}
 	}
 

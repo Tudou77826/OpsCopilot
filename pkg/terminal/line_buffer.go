@@ -23,9 +23,23 @@ type HandleResult struct {
 
 // Handle processes input string and returns HandleResult
 func (lb *LineBuffer) Handle(input string) HandleResult {
-	// Enhanced ANSI sequence parser
-	// We need to iterate runes to handle multibyte characters correctly
+	results := lb.HandleAll(input)
+	if len(results) > 0 {
+		return results[len(results)-1]
+	}
+	return HandleResult{
+		Line:              "",
+		Committed:         false,
+		HistoryNavigation: lb.historyNavigation,
+	}
+}
+
+// HandleAll processes input string and returns all committed lines.
+// Unlike Handle which returns on the first newline, HandleAll continues
+// processing to capture all lines in multi-line input (e.g. paste).
+func (lb *LineBuffer) HandleAll(input string) []HandleResult {
 	runes := []rune(input)
+	var results []HandleResult
 
 	i := 0
 	for i < len(runes) {
@@ -47,11 +61,11 @@ func (lb *LineBuffer) Handle(input string) HandleResult {
 			line := string(lb.buffer)
 			historyNav := lb.historyNavigation
 			lb.Reset()
-			return HandleResult{
+			results = append(results, HandleResult{
 				Line:              line,
 				Committed:         true,
 				HistoryNavigation: historyNav,
-			}
+			})
 		case '\x7f', '\x08': // Backspace
 			lb.backspace()
 			// 退格时重置历史导航标记（用户在编辑命令）
@@ -74,11 +88,7 @@ func (lb *LineBuffer) Handle(input string) HandleResult {
 		i++
 	}
 
-	return HandleResult{
-		Line:              "",
-		Committed:         false,
-		HistoryNavigation: lb.historyNavigation,
-	}
+	return results
 }
 
 // extractEscapeSequence extracts a complete escape sequence and returns (sequence, nextIndex)
