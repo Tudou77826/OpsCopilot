@@ -79,23 +79,14 @@ const ScriptListPanel = forwardRef<{
         }
     };
 
-    const handleExport = async (scriptId: string, scriptName: string) => {
+    const handleExport = async (scriptId: string) => {
         try {
             // @ts-ignore
-            const shellScript = await window.go.main.App.ExportScript(scriptId);
-
-            // 创建下载链接
-            const blob = new Blob([shellScript], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${scriptName}.sh`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            await window.go.main.App.ExportScript(scriptId);
         } catch (err: any) {
-            alert('导出失败: ' + err.message);
+            if (err.message) {
+                alert('导出失败: ' + err.message);
+            }
         }
     };
 
@@ -201,7 +192,7 @@ const ScriptListPanel = forwardRef<{
                                         {formatDate(script.start_time)}
                                     </span>
                                     <span style={styles.metaText}>
-                                        {script.command_count} 条命令
+                                        {(script.steps?.length || script.commands?.length || 0)} 条命令
                                     </span>
                                     {script.variables && script.variables.length > 0 && (
                                         <span style={styles.varBadge}>
@@ -232,7 +223,7 @@ const ScriptListPanel = forwardRef<{
                                 </button>
                                 <button
                                     style={styles.iconButton}
-                                    onClick={() => handleExport(script.id, script.name)}
+                                    onClick={() => handleExport(script.id)}
                                     title="导出"
                                 >
                                     {TbFileExport({ size: 14 })}

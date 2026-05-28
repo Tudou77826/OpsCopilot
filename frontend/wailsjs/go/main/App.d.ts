@@ -34,7 +34,7 @@ export function DoUpdate(arg1:string):Promise<string>;
 
 export function DuplicateSession(arg1:string):Promise<main.ConnectResult>;
 
-export function ExportScript(arg1:string):Promise<string>;
+export function ExportScript(arg1:string):Promise<void>;
 
 export function FTCancel(arg1:string):Promise<string>;
 

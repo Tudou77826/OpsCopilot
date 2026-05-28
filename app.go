@@ -2841,9 +2841,25 @@ func (a *App) ReplayScriptWithVars(scriptID, sessionID string, varValues map[str
 	return a.scriptMgr.ReplayScriptWithVars(scriptID, sessionID, varValues)
 }
 
-// ExportScript 导出脚本为Shell脚本
-func (a *App) ExportScript(scriptID string) (string, error) {
-	return a.scriptMgr.ExportScript(scriptID)
+// ExportScript 导出脚本为Shell脚本（通过系统文件保存对话框）
+func (a *App) ExportScript(scriptID string) error {
+	content, err := a.scriptMgr.ExportScript(scriptID)
+	if err != nil {
+		return err
+	}
+
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		DefaultFilename: "script.sh",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "Shell 脚本", Pattern: "*.sh"},
+			{DisplayName: "所有文件", Pattern: "*.*"},
+		},
+	})
+	if err != nil || path == "" {
+		return err
+	}
+
+	return os.WriteFile(path, []byte(content), 0644)
 }
 
 // GetScriptRecordingStatus 获取脚本录制状态
