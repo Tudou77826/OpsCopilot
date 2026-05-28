@@ -255,6 +255,9 @@ const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
                         </div>
                         {varsExpanded && (
                             <div style={styles.variablesContent}>
+                                <div style={styles.varHint}>
+                                    定义变量后，在命令中使用 <code style={styles.varHintCode}>{'${变量名}'}</code> 引用。回放脚本时，用户可以为变量填入不同的值，实现一个脚本多次复用。
+                                </div>
                                 {/* 表头 */}
                                 <div style={styles.varHeader}>
                                     <span style={{...styles.varHeaderCell, flex: 2}}>变量名</span>
@@ -305,72 +308,99 @@ const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
                                 <label style={styles.sectionTitle}>命令列表</label>
                                 <span style={styles.sectionSubtitle}>{script.steps.length} 条命令</span>
                             </div>
-                            <button className="se-btn se-btn-add" style={styles.addButtonStyle} onClick={addCommandStep}>
-                                + 添加命令
-                            </button>
                         </div>
 
+                        {script.steps.length === 0 && (
+                            <button className="se-btn se-btn-add" style={styles.addFirstButton} onClick={addCommandStep}>
+                                + 添加第一条命令
+                            </button>
+                        )}
+
                         <div style={styles.commandsList}>
-                            {script.steps.map((step, idx) => (
+                            {script.steps.map((step, idx) => {
+                                const usedVars = (step.command?.match(/\$\{([^}]+)\}/g) || [])
+                                    .map(m => m.slice(2, -1));
+
+                                return (
                                 <div key={idx} className="se-command-card" style={{
                                     ...styles.commandCard,
                                     opacity: step.enabled ? 1 : 0.5,
                                 }}>
-                                    {/* 序号 */}
-                                    <div style={styles.stepIndex}>{idx + 1}</div>
+                                    {/* 序号 + 启用开关 */}
+                                    <div style={styles.stepLeft}>
+                                        <div style={{
+                                            ...styles.stepIndex,
+                                            backgroundColor: step.enabled ? '#3e3e42' : '#2a2a2a',
+                                        }}>{idx + 1}</div>
+                                        <label style={styles.switchLabel} title={step.enabled ? '已启用：回放时执行' : '已禁用：回放时跳过'}>
+                                            <input type="checkbox" checked={step.enabled}
+                                                onChange={(e) => updateStep(idx, { enabled: e.target.checked })}
+                                                className="se-switch-checkbox" style={styles.switchCheckbox} />
+                                            <span className="se-switch-slider" style={styles.switchSlider}></span>
+                                        </label>
+                                    </div>
 
                                     <div style={styles.commandContent}>
-                                        <input className="se-input" style={styles.commandInput} type="text" value={step.command || ''}
-                                            onChange={(e) => updateStep(idx, { command: e.target.value })}
-                                            placeholder="输入命令，用 ${变量名} 引用变量" />
+                                        <div style={styles.commandInputRow}>
+                                            <input className="se-input" style={{
+                                                ...styles.commandInput,
+                                                paddingRight: usedVars.length > 0 ? `${usedVars.length * 60 + 16}px` : '14px',
+                                            }} type="text" value={step.command || ''}
+                                                onChange={(e) => updateStep(idx, { command: e.target.value })}
+                                                placeholder="输入命令，用 ${变量名} 引用变量" />
+                                            {usedVars.length > 0 && (
+                                                <div style={styles.varTags}>
+                                                    {usedVars.map((v, vi) => (
+                                                        <span key={vi} style={styles.varTag}>${'{' + v + '}'}</span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
                                         <div style={styles.commandMetadata}>
-                                            <input className="se-input se-meta-input" style={styles.metadataInput} type="text"
+                                            <input className="se-input se-meta-input" style={styles.commentInput} type="text"
                                                 value={step.comment || ''} onChange={(e) => updateStep(idx, { comment: e.target.value })}
-                                                placeholder="备注说明" />
+                                                placeholder="备注说明（可选）" />
                                             <div className="se-delay-group" style={styles.delayInputGroup}>
+                                                <span style={styles.delayLabel}>延迟</span>
                                                 <input className="se-input" style={styles.delayInput} type="number" value={step.delay || 0}
                                                     onChange={(e) => updateStep(idx, { delay: parseInt(e.target.value) || 0 })}
                                                     placeholder="0" min="0" step="100" />
                                                 <span style={styles.delayUnit}>ms</span>
                                             </div>
-                                            <label style={styles.switchLabel} title={step.enabled ? '已启用' : '已禁用'}>
-                                                <input type="checkbox" checked={step.enabled}
-                                                    onChange={(e) => updateStep(idx, { enabled: e.target.checked })}
-                                                    className="se-switch-checkbox" style={styles.switchCheckbox} />
-                                                <span className="se-switch-slider" style={styles.switchSlider}></span>
-                                            </label>
                                         </div>
                                     </div>
 
                                     <div style={styles.commandActions}>
-                                        <button className="se-btn se-btn-action" style={styles.moveButton}
-                                            onClick={() => insertStepAfter(idx)} title="在下方插入命令">
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <path d="M12 5v14M5 12h14"/>
-                                            </svg>
-                                        </button>
-                                        <button className="se-btn se-btn-action" style={styles.moveButton}
-                                            onClick={() => moveStep(idx, -1)} title="上移"
-                                            disabled={idx === 0}>
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <path d="M18 15l-6-6-6 6"/>
-                                            </svg>
-                                        </button>
-                                        <button className="se-btn se-btn-action" style={styles.moveButton}
-                                            onClick={() => moveStep(idx, 1)} title="下移"
-                                            disabled={idx === script.steps.length - 1}>
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <path d="M6 9l6 6 6-6"/>
-                                            </svg>
-                                        </button>
-                                        <button className="se-btn se-btn-action" style={styles.actionButton} onClick={() => deleteStep(idx)} title="删除命令">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-                                            </svg>
-                                        </button>
+                                        <div style={styles.actionRow}>
+                                            <button className="se-btn se-btn-action" style={styles.insertButton}
+                                                onClick={() => insertStepAfter(idx)} title="在下方插入">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                                    <path d="M12 5v14M5 12h14"/>
+                                                </svg>
+                                            </button>
+                                            <button className="se-btn se-btn-action" style={styles.moveButton}
+                                                onClick={() => moveStep(idx, -1)} title="上移"
+                                                disabled={idx === 0}>
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                    <path d="M18 15l-6-6-6 6"/>
+                                                </svg>
+                                            </button>
+                                            <button className="se-btn se-btn-action" style={styles.moveButton}
+                                                onClick={() => moveStep(idx, 1)} title="下移"
+                                                disabled={idx === script.steps.length - 1}>
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                    <path d="M6 9l6 6 6-6"/>
+                                                </svg>
+                                            </button>
+                                            <button className="se-btn se-btn-action" style={styles.actionButton} onClick={() => deleteStep(idx)} title="删除">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                    <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                                                </svg>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
-                            ))}
+                            );})}
                         </div>
                     </div>
                 </div>
@@ -442,6 +472,8 @@ const styles: Record<string, React.CSSProperties> = {
         borderRadius: '4px', color: '#ffffff', fontSize: '12px', minWidth: 0,
     },
     varEmpty: { textAlign: 'center' as const, color: '#757575', fontSize: '12px', padding: '12px 0' },
+    varHint: { fontSize: '12px', color: '#858585', lineHeight: '1.6', marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid #333' },
+    varHintCode: { backgroundColor: '#2d2d2d', padding: '1px 5px', borderRadius: '3px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: '#4ec9b0' },
     varDeleteBtn: {
         width: '24px', height: '24px', padding: 0, backgroundColor: 'transparent',
         border: 'none', color: '#858585', cursor: 'pointer', fontSize: '14px',
@@ -471,6 +503,18 @@ const styles: Record<string, React.CSSProperties> = {
         border: 'none', borderRadius: '6px', cursor: 'pointer',
         fontSize: '13px', fontWeight: 500,
     },
+    addFirstButton: {
+        width: '100%', padding: '24px', backgroundColor: '#252526',
+        color: '#007acc', border: '2px dashed #3e3e42', borderRadius: '8px',
+        cursor: 'pointer', fontSize: '14px', fontWeight: 500, marginBottom: '8px',
+    },
+    insertButton: {
+        width: '28px', height: '28px', padding: 0,
+        backgroundColor: '#007acc', color: '#ffffff',
+        border: 'none', borderRadius: '4px', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontWeight: 700,
+    },
     commandsList: { display: 'flex', flexDirection: 'column' as const, gap: '8px' },
 
     // 命令卡片
@@ -479,35 +523,52 @@ const styles: Record<string, React.CSSProperties> = {
         border: '1px solid #3e3e42', borderRadius: '8px', alignItems: 'flex-start',
         transition: 'all 0.15s ease',
     },
+    stepLeft: {
+        display: 'flex', flexDirection: 'column' as const, alignItems: 'center',
+        gap: '6px', paddingTop: '4px', minWidth: '36px',
+    },
     stepIndex: {
         width: '24px', height: '24px', minWidth: '24px',
         backgroundColor: '#3e3e42', borderRadius: '50%',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: '11px', fontWeight: 700, color: '#b0b0b0', marginTop: '8px',
+        fontSize: '11px', fontWeight: 700, color: '#b0b0b0',
     },
-    commandContent: { flex: 1, display: 'flex', flexDirection: 'column' as const, gap: '8px', minWidth: 0 },
+    commandContent: { flex: 1, display: 'flex', flexDirection: 'column' as const, gap: '6px', minWidth: 0 },
+    commandInputRow: { position: 'relative' as const, display: 'flex', flexDirection: 'column' as const },
     commandInput: {
         width: '100%', padding: '10px 14px', backgroundColor: '#1e1e1e',
         border: '1px solid #3e3e42', borderRadius: '6px', color: '#ffffff',
         fontSize: '14px', fontFamily: 'var(--font-mono)', boxSizing: 'border-box' as const,
     },
+    varTags: {
+        position: 'absolute' as const, right: '8px', top: '50%', transform: 'translateY(-50%)',
+        display: 'flex', gap: '3px', pointerEvents: 'none' as const,
+    },
+    varTag: {
+        padding: '1px 6px', backgroundColor: '#264f78', color: '#4ec9b0',
+        borderRadius: '3px', fontSize: '10px', fontFamily: 'var(--font-mono)',
+        whiteSpace: 'nowrap' as const,
+    },
     commandMetadata: { display: 'flex', gap: '10px', alignItems: 'center' },
-    metadataInput: {
-        width: '200px', padding: '6px 10px', backgroundColor: '#1e1e1e',
+    commentInput: {
+        flex: 1, padding: '6px 10px', backgroundColor: '#1e1e1e',
         border: '1px solid #3e3e42', borderRadius: '4px', color: '#cccccc',
         fontSize: '12px', boxSizing: 'border-box' as const,
     },
     delayInputGroup: {
         display: 'flex', alignItems: 'center', backgroundColor: '#1e1e1e',
         border: '1px solid #3e3e42', borderRadius: '4px', overflow: 'hidden',
+        flexShrink: 0,
     },
+    delayLabel: { padding: '0 6px', fontSize: '11px', color: '#666' },
     delayInput: {
-        width: '60px', padding: '6px 8px', backgroundColor: 'transparent',
+        width: '48px', padding: '6px 4px', backgroundColor: 'transparent',
         border: 'none', color: '#ffffff', fontSize: '12px', boxSizing: 'border-box' as const, outline: 'none',
     },
-    delayUnit: { padding: '0 8px', fontSize: '11px', color: '#858585', backgroundColor: '#2d2d2d', height: '100%', display: 'flex', alignItems: 'center' },
+    delayUnit: { padding: '0 6px', fontSize: '11px', color: '#858585', backgroundColor: '#2d2d2d', height: '100%', display: 'flex', alignItems: 'center' },
     metadataSpacer: { flex: 1 },
-    commandActions: { display: 'flex', gap: '2px', paddingTop: '6px' },
+    commandActions: { display: 'flex', flexDirection: 'column' as const, gap: '6px', paddingTop: '4px', alignItems: 'center' },
+    actionRow: { display: 'flex', gap: '2px' },
     moveButton: {
         width: '28px', height: '28px', padding: 0, backgroundColor: 'transparent',
         border: 'none', color: '#666', borderRadius: '4px', cursor: 'pointer',
