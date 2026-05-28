@@ -718,11 +718,6 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                 isOpen={isReviewModalOpen}
                 onClose={() => {
                     setIsReviewModalOpen(false);
-                    setIsStopping(false);
-                    setIsInvestigating(false);
-                    if (onStop) onStop();
-                    setRootCause('');
-                    setOriginalProblem('');
                 }}
                 rootCause={rootCause}
                 problem={originalProblem}
