@@ -141,7 +141,7 @@ func (m *Manager) UpdateScript(script *Script) error {
 	return m.saveScript(script)
 }
 
-// LoadScript 加载脚本
+// LoadScript 加载脚本（支持文件被改名的情况）
 func (m *Manager) LoadScript(scriptID string) (*Script, error) {
 	// 从录制引擎加载基础会话
 	session, err := m.recorder.Load(recorder.RecordingTypeScript, scriptID)
@@ -149,27 +149,29 @@ func (m *Manager) LoadScript(scriptID string) (*Script, error) {
 		return nil, fmt.Errorf("failed to load recording: %w", err)
 	}
 
-	// 加载扩展的脚本数据
+	// 先按标准文件名加载扩展脚本数据
 	script := &Script{}
 	filename := filepath.Join(m.storagePath, fmt.Sprintf("script_%s.json", scriptID))
 
 	data, err := os.ReadFile(filename)
-	if err != nil {
-		// 如果没有扩展数据，从基础会话创建脚本
-		script = NewScript(session, "", "")
-		return script, nil
+	if err == nil {
+		if err := json.Unmarshal(data, script); err == nil {
+			script.SyncFromRecordingSession(session)
+			script.MigrateCommandsToSteps()
+			return script, nil
+		}
 	}
 
-	if err := json.Unmarshal(data, script); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal script: %w", err)
+	// 文件被改名时，扫描匹配 ID
+	loaded, err := m.findScriptByID(scriptID)
+	if err == nil {
+		loaded.SyncFromRecordingSession(session)
+		loaded.MigrateCommandsToSteps()
+		return loaded, nil
 	}
 
-	// 同步基础会话数据
-	script.SyncFromRecordingSession(session)
-
-	// 向后兼容：自动将 Commands 迁移为 Steps
-	script.MigrateCommandsToSteps()
-
+	// 没有扩展数据，从基础会话创建脚本
+	script = NewScript(session, "", "")
 	return script, nil
 }
 
@@ -204,11 +206,33 @@ func (m *Manager) ListScripts() ([]*Script, error) {
 	return scripts, nil
 }
 
-// DeleteScript 删除脚本
+// DeleteScript 删除脚本（支持文件被改名的情况）
 func (m *Manager) DeleteScript(scriptID string) error {
-	// 删除扩展数据
-	filename := filepath.Join(m.storagePath, fmt.Sprintf("script_%s.json", scriptID))
-	os.Remove(filename)
+	// 删除扩展数据（先按标准文件名，再扫描）
+	standardFile := filepath.Join(m.storagePath, fmt.Sprintf("script_%s.json", scriptID))
+	if os.Remove(standardFile) != nil {
+		// 标准文件名不存在，扫描查找
+		entries, err := os.ReadDir(m.storagePath)
+		if err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+					continue
+				}
+				fileData, err := os.ReadFile(filepath.Join(m.storagePath, entry.Name()))
+				if err != nil {
+					continue
+				}
+				var s Script
+				if err := json.Unmarshal(fileData, &s); err != nil {
+					continue
+				}
+				if s.ID == scriptID {
+					os.Remove(filepath.Join(m.storagePath, entry.Name()))
+					break
+				}
+			}
+		}
+	}
 
 	// 删除录制数据
 	return m.recorder.Delete(recorder.RecordingTypeScript, scriptID)
@@ -400,4 +424,61 @@ func (m *Manager) saveScript(script *Script) error {
 	}
 
 	return nil
+}
+
+// CreateScript 手动创建一个空脚本
+func (m *Manager) CreateScript(name, description string) (*Script, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// 创建一个空的基础录制会话
+	session, err := m.recorder.CreateSession(recorder.RecordingTypeScript, "", "", "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create session: %w", err)
+	}
+
+	script := &Script{
+		Name:        name,
+		Description: description,
+		Commands:    []ScriptCommand{},
+		Steps:       []ScriptStep{},
+		Variables:   []ScriptVariable{},
+	}
+	script.SyncFromRecordingSession(session)
+
+	if err := m.saveScript(script); err != nil {
+		return nil, fmt.Errorf("failed to save script: %w", err)
+	}
+
+	return script, nil
+}
+
+// findScriptByID 在存储目录中扫描匹配 ID 的脚本
+func (m *Manager) findScriptByID(scriptID string) (*Script, error) {
+	entries, err := os.ReadDir(m.storagePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+
+		data, err := os.ReadFile(filepath.Join(m.storagePath, entry.Name()))
+		if err != nil {
+			continue
+		}
+
+		var script Script
+		if err := json.Unmarshal(data, &script); err != nil {
+			continue
+		}
+
+		if script.ID == scriptID {
+			return &script, nil
+		}
+	}
+
+	return nil, fmt.Errorf("script %s not found", scriptID)
 }

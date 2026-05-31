@@ -38,6 +38,10 @@ export function ConnectWithID(arg1, arg2) {
   return window['go']['main']['App']['ConnectWithID'](arg1, arg2);
 }
 
+export function CreateScript(arg1, arg2) {
+  return window['go']['main']['App']['CreateScript'](arg1, arg2);
+}
+
 export function DeleteSavedSession(arg1) {
   return window['go']['main']['App']['DeleteSavedSession'](arg1);
 }

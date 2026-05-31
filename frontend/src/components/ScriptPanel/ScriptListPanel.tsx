@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, forwardRef, useImperativeHandle } from 'react';
-import { TbRefresh, TbFileText, TbEdit, TbPlayerPlay, TbFileExport, TbTrash } from 'react-icons/tb';
+import { TbRefresh, TbFileText, TbEdit, TbPlayerPlay, TbFileExport, TbTrash, TbPlus } from 'react-icons/tb';
 import VariableInputDialog from './VariableInputDialog';
 import { useToast } from '../Toast/Toast';
 import { confirmDialog } from '../ConfirmDialog/ConfirmDialog';
@@ -42,6 +42,10 @@ const ScriptListPanel = forwardRef<{
     const [loading, setLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [varDialog, setVarDialog] = useState<{ scriptId: string; variables: ScriptVariable[] } | null>(null);
+    const [showCreate, setShowCreate] = useState(false);
+    const [newName, setNewName] = useState('');
+    const [newDesc, setNewDesc] = useState('');
+    const [creating, setCreating] = useState(false);
     const toast = useToast();
 
     useEffect(() => {
@@ -154,14 +158,72 @@ const ScriptListPanel = forwardRef<{
         }
     };
 
+    const handleCreate = async () => {
+        const name = newName.trim();
+        if (!name) return;
+        setCreating(true);
+        try {
+            // @ts-ignore
+            await window.go.main.App.CreateScript(name, newDesc.trim());
+            setShowCreate(false);
+            setNewName('');
+            setNewDesc('');
+            await loadScripts();
+        } catch (err: any) {
+            toast.error('创建失败: ' + (err?.message || err));
+        } finally {
+            setCreating(false);
+        }
+    };
+
     return (
         <div style={styles.container}>
             <div style={styles.header}>
                 <h3 style={styles.title}>我的脚本 ({scripts.length})</h3>
-                <button style={styles.refreshButton} onClick={loadScripts}>
-                    {TbRefresh({ size: 14 })}
-                </button>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                    <button style={styles.addButton} onClick={() => setShowCreate(!showCreate)} title="新建脚本">
+                        {TbPlus({ size: 14 })}
+                    </button>
+                    <button style={styles.refreshButton} onClick={loadScripts} title="刷新">
+                        {TbRefresh({ size: 14 })}
+                    </button>
+                </div>
             </div>
+
+            {/* 新建脚本表单 */}
+            {showCreate && (
+                <div style={styles.createForm}>
+                    <input
+                        type="text"
+                        placeholder="脚本名称（必填）"
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                        style={styles.createInput}
+                        autoFocus
+                    />
+                    <input
+                        type="text"
+                        placeholder="描述说明（可选）"
+                        value={newDesc}
+                        onChange={(e) => setNewDesc(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                        style={styles.createInput}
+                    />
+                    <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                        <button style={styles.createCancelBtn} onClick={() => { setShowCreate(false); setNewName(''); setNewDesc(''); }}>
+                            取消
+                        </button>
+                        <button style={{
+                            ...styles.createConfirmBtn,
+                            opacity: newName.trim() && !creating ? 1 : 0.5,
+                            cursor: newName.trim() && !creating ? 'pointer' : 'not-allowed',
+                        }} onClick={handleCreate} disabled={!newName.trim() || creating}>
+                            {creating ? '创建中...' : '创建'}
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* 搜索框 */}
             <input
@@ -179,8 +241,8 @@ const ScriptListPanel = forwardRef<{
                     {scripts.length === 0 ? (
                         <>
                             <div style={{ color: '#555', marginBottom: '12px' }}>{TbFileText({ size: 36 })}</div>
-                            <div style={styles.emptyText}>还没有录制的脚本</div>
-                            <div style={styles.emptyHint}>使用脚本录制功能记录您的操作</div>
+                            <div style={styles.emptyText}>还没有脚本</div>
+                            <div style={styles.emptyHint}>点击上方 + 按钮手动创建，或使用录制功能</div>
                         </>
                     ) : (
                         <div style={styles.emptyText}>没有找到匹配的脚本</div>
@@ -289,6 +351,54 @@ const styles: Record<string, React.CSSProperties> = {
         borderRadius: '4px',
         cursor: 'pointer',
         fontSize: '12px',
+    },
+    addButton: {
+        padding: '4px 8px',
+        backgroundColor: '#007acc',
+        color: '#ffffff',
+        border: '1px solid #007acc',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        fontSize: '12px',
+    },
+    createForm: {
+        padding: '10px',
+        backgroundColor: '#252526',
+        border: '1px solid #3c3c3c',
+        borderRadius: '4px',
+        marginBottom: '8px',
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '6px',
+    },
+    createInput: {
+        width: '100%',
+        padding: '6px 10px',
+        backgroundColor: '#1e1e1e',
+        border: '1px solid #3c3c3c',
+        borderRadius: '4px',
+        color: '#e0e0e0',
+        fontSize: '12px',
+        outline: 'none',
+        boxSizing: 'border-box' as const,
+    },
+    createCancelBtn: {
+        padding: '4px 10px',
+        backgroundColor: 'transparent',
+        color: '#b0b0b0',
+        border: '1px solid #555',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        fontSize: '11px',
+    },
+    createConfirmBtn: {
+        padding: '4px 10px',
+        backgroundColor: '#007acc',
+        color: '#ffffff',
+        border: 'none',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        fontSize: '11px',
     },
     searchInput: {
         width: '100%',

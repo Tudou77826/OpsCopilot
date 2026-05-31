@@ -124,6 +124,18 @@ export namespace config {
 	        this.group = source["group"];
 	    }
 	}
+	export class ScriptsConfig {
+	    dir: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ScriptsConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.dir = source["dir"];
+	    }
+	}
 	export class DocsConfig {
 	    dir: string;
 	
@@ -174,6 +186,7 @@ export namespace config {
 	    llm: LLMConfig;
 	    log: LogConfig;
 	    docs: DocsConfig;
+	    scripts: ScriptsConfig;
 	    quick_commands: QuickCommand[];
 	    completion_delay: number;
 	    command_query_shortcut: string;
@@ -192,6 +205,7 @@ export namespace config {
 	        this.llm = this.convertValues(source["llm"], LLMConfig);
 	        this.log = this.convertValues(source["log"], LogConfig);
 	        this.docs = this.convertValues(source["docs"], DocsConfig);
+	        this.scripts = this.convertValues(source["scripts"], ScriptsConfig);
 	        this.quick_commands = this.convertValues(source["quick_commands"], QuickCommand);
 	        this.completion_delay = source["completion_delay"];
 	        this.command_query_shortcut = source["command_query_shortcut"];
@@ -219,6 +233,7 @@ export namespace config {
 		    return a;
 		}
 	}
+	
 	
 	
 	

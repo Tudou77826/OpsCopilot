@@ -13,6 +13,7 @@ type AppConfig struct {
 	LLM                  LLMConfig          `json:"llm"`
 	Log                  LogConfig          `json:"log"`
 	Docs                 DocsConfig         `json:"docs"`
+	Scripts              ScriptsConfig      `json:"scripts"`
 	QuickCommands        []QuickCommand     `json:"quick_commands"`
 	CompletionDelay      int                `json:"completion_delay"`
 	CommandQueryShortcut string             `json:"command_query_shortcut"`
@@ -73,6 +74,10 @@ type DocsConfig struct {
 	Dir string `json:"dir"`
 }
 
+type ScriptsConfig struct {
+	Dir string `json:"dir"`
+}
+
 type Manager struct {
 	configPath         string
 	quickCommandsPath  string
@@ -118,6 +123,9 @@ func newManagerWithDir(dir string) *Manager {
 		},
 		Docs: DocsConfig{
 			Dir: "", // Default to empty, will be resolved dynamically if empty
+		},
+		Scripts: ScriptsConfig{
+			Dir: "", // Default to empty, resolved to {logDir}/../scripts at runtime
 		},
 		QuickCommands:        []QuickCommand{},
 		CompletionDelay:      150, // Default 150ms
@@ -295,6 +303,7 @@ func (m *Manager) Save() error {
 		LLM                  LLMConfig          `json:"llm"`
 		Log                  LogConfig          `json:"log"`
 		Docs                 DocsConfig         `json:"docs"`
+		Scripts              ScriptsConfig      `json:"scripts"`
 		CompletionDelay      int                `json:"completion_delay"`
 		CommandQueryShortcut string             `json:"command_query_shortcut"`
 		Experimental         ExperimentalConfig `json:"experimental"`
@@ -306,6 +315,7 @@ func (m *Manager) Save() error {
 		LLM:                  m.Config.LLM,
 		Log:                  m.Config.Log,
 		Docs:                 m.Config.Docs,
+		Scripts:              m.Config.Scripts,
 		CompletionDelay:      m.Config.CompletionDelay,
 		CommandQueryShortcut: m.Config.CommandQueryShortcut,
 		Experimental:         m.Config.Experimental,
