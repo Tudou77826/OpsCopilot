@@ -8,6 +8,7 @@ import {
     TbChevronRight,
     TbStarFilled,
     TbArrowLeft,
+    TbRefresh,
 } from 'react-icons/tb';
 import {
     GetKnowledgeTree,
@@ -419,6 +420,9 @@ const KnowledgeBrowser: React.FC = () => {
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                     />
+                    <button style={styles.searchClear} onClick={loadCatalog} title="刷新">
+                        {TbRefresh({ size: 14 })}
+                    </button>
                     {searchQuery && (
                         <button style={styles.searchClear} onClick={() => setSearchQuery('')}>{TbX({ size: 12 })}</button>
                     )}
