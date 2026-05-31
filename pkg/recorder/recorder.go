@@ -20,7 +20,6 @@ type Recorder struct {
 	current     *RecordingSession
 	lineBuffers map[string]*terminal.LineBuffer
 	storagePath string
-	typePaths   map[RecordingType]string // 按录制类型覆盖存储路径
 }
 
 // NewRecorder 创建录制器
@@ -28,21 +27,7 @@ func NewRecorder(storagePath string) *Recorder {
 	return &Recorder{
 		lineBuffers: make(map[string]*terminal.LineBuffer),
 		storagePath: storagePath,
-		typePaths:   make(map[RecordingType]string),
 	}
-}
-
-// SetTypePath 为指定录制类型设置独立的存储路径
-func (r *Recorder) SetTypePath(recType RecordingType, path string) {
-	r.typePaths[recType] = path
-}
-
-// pathForType 获取指定录制类型的存储路径
-func (r *Recorder) pathForType(recType RecordingType) string {
-	if p, ok := r.typePaths[recType]; ok {
-		return p
-	}
-	return r.storagePath
 }
 
 // Start 开始录制
@@ -479,7 +464,7 @@ func (r *Recorder) GetCurrentSession() *RecordingSession {
 
 // save 保存录制会话到文件
 func (r *Recorder) save(session *RecordingSession) error {
-	dir := filepath.Join(r.pathForType(session.Type), string(session.Type))
+	dir := filepath.Join(r.storagePath, string(session.Type))
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
@@ -497,35 +482,9 @@ func (r *Recorder) save(session *RecordingSession) error {
 	return nil
 }
 
-// CreateSession 创建并保存一个录制会话（不开始录制，用于手动创建脚本等场景）
-func (r *Recorder) CreateSession(recType RecordingType, sessionID, host, user string) (*RecordingSession, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	session := &RecordingSession{
-		ID:          uuid.New().String(),
-		Type:        recType,
-		StartTime:   time.Now(),
-		SessionID:   sessionID,
-		Host:        host,
-		User:        user,
-		Commands:    make([]RecordedCommand, 0),
-		Metadata:    make(map[string]interface{}),
-		Timeline:    make([]TimelineEvent, 0),
-		Context:     make([]string, 0),
-		Suggestions: make([]string, 0),
-	}
-
-	if err := r.save(session); err != nil {
-		return nil, err
-	}
-
-	return session, nil
-}
-
 // Load 加载录制会话（支持文件被改名的情况）
 func (r *Recorder) Load(recType RecordingType, id string) (*RecordingSession, error) {
-	dir := filepath.Join(r.pathForType(recType), string(recType))
+	dir := filepath.Join(r.storagePath, string(recType))
 
 	// 先按标准文件名查找
 	filename := filepath.Join(dir, fmt.Sprintf("recording_%s.json", id))
@@ -547,7 +506,7 @@ func (r *Recorder) Load(recType RecordingType, id string) (*RecordingSession, er
 
 // List 列出所有录制会话
 func (r *Recorder) List(recType RecordingType) ([]*RecordingSession, error) {
-	dir := filepath.Join(r.pathForType(recType), string(recType))
+	dir := filepath.Join(r.storagePath, string(recType))
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -581,7 +540,7 @@ func (r *Recorder) List(recType RecordingType) ([]*RecordingSession, error) {
 
 // Delete 删除录制会话（支持文件被改名的情况）
 func (r *Recorder) Delete(recType RecordingType, id string) error {
-	dir := filepath.Join(r.pathForType(recType), string(recType))
+	dir := filepath.Join(r.storagePath, string(recType))
 
 	// 先按标准文件名删除
 	filename := filepath.Join(dir, fmt.Sprintf("recording_%s.json", id))

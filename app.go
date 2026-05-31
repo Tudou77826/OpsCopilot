@@ -116,7 +116,6 @@ func NewApp() *App {
 	if scriptsDir == "" {
 		scriptsDir = filepath.Join(filepath.Dir(configMgr.Config.Log.Dir), "scripts")
 	}
-	coreRecorder.SetTypePath(recorder.RecordingTypeScript, scriptsDir)
 
 	// Initialize Session Manager (will be used in App)
 	sessionMgrInstance := session.NewManager()
@@ -127,8 +126,9 @@ func NewApp() *App {
 	// Initialize Script Manager (使用独立脚本目录)
 	scriptMgr := script.NewManager(coreRecorder, scriptsDir, nil)
 
-	// 迁移旧脚本：从 logs/recordings/script/ 迁移到 scripts/script/
+	// 迁移旧脚本数据并清理冗余的 recording 文件
 	migrateScriptsFromLegacyPath(recordingsPath, scriptsDir)
+	cleanupRedundantRecordingFiles(scriptsDir)
 
 	// Initialize Saved Session Manager
 	savedMgr := sessionmanager.NewManager()
@@ -3144,47 +3144,12 @@ func mergePatches(remotePatches []patchstore.Patch, pendingPatches []patchstore.
 	return merged
 }
 
-// migrateScriptsFromLegacyPath 将旧路径下的脚本数据迁移到新的独立目录
-// 旧路径: {legacyBase}/script/recording_*.json (录制数据) + {legacyBase}/script_*.json (扩展数据)
-// 新路径: {newBase}/script/recording_*.json + {newBase}/script_*.json
+// migrateScriptsFromLegacyPath 将旧路径下的脚本扩展数据迁移到新的独立目录
+// 旧路径: {legacyBase}/script_*.json (扩展数据)
+// 新路径: {newBase}/script_*.json
+// 注意：不再迁移 recording_*.json，脚本数据完全由 script_*.json 承载
 func migrateScriptsFromLegacyPath(legacyBase, newBase string) {
-	// 迁移录制数据: legacyBase/script/ → newBase/script/
-	oldRecDir := filepath.Join(legacyBase, "script")
-	newRecDir := filepath.Join(newBase, "script")
-	migrateJSONFiles(oldRecDir, newRecDir)
-
-	// 迁移扩展数据: legacyBase/script_*.json → newBase/script_*.json
 	migrateScriptExtFiles(legacyBase, newBase)
-}
-
-func migrateJSONFiles(srcDir, dstDir string) {
-	entries, err := os.ReadDir(srcDir)
-	if err != nil {
-		return // 源目录不存在，无需迁移
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
-			continue
-		}
-		src := filepath.Join(srcDir, entry.Name())
-		dst := filepath.Join(dstDir, entry.Name())
-
-		if _, err := os.Stat(dst); err == nil {
-			continue // 目标已存在，跳过
-		}
-
-		os.MkdirAll(dstDir, 0755)
-		if err := os.Rename(src, dst); err != nil {
-			// Rename 可能跨盘失败，尝试复制
-			data, err := os.ReadFile(src)
-			if err != nil {
-				continue
-			}
-			os.WriteFile(dst, data, 0644)
-			os.Remove(src)
-		}
-	}
 }
 
 func migrateScriptExtFiles(srcDir, dstDir string) {
@@ -3214,4 +3179,21 @@ func migrateScriptExtFiles(srcDir, dstDir string) {
 			os.Remove(src)
 		}
 	}
+}
+
+// cleanupRedundantRecordingFiles 清理脚本目录下冗余的 scripts/script/ 子目录
+// 这些 recording_*.json 已不再需要，所有数据已在 script_*.json 中
+func cleanupRedundantRecordingFiles(scriptsDir string) {
+	recDir := filepath.Join(scriptsDir, "script")
+	entries, err := os.ReadDir(recDir)
+	if err != nil {
+		return // 目录不存在，无需清理
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			os.Remove(filepath.Join(recDir, entry.Name()))
+		}
+	}
+	os.Remove(recDir) // 目录为空则删除
 }

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"opscopilot/pkg/recorder"
 )
 
@@ -143,64 +144,53 @@ func (m *Manager) UpdateScript(script *Script) error {
 
 // LoadScript 加载脚本（支持文件被改名的情况）
 func (m *Manager) LoadScript(scriptID string) (*Script, error) {
-	// 从录制引擎加载基础会话
-	session, err := m.recorder.Load(recorder.RecordingTypeScript, scriptID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load recording: %w", err)
-	}
-
-	// 先按标准文件名加载扩展脚本数据
-	script := &Script{}
+	// 先按标准文件名加载
 	filename := filepath.Join(m.storagePath, fmt.Sprintf("script_%s.json", scriptID))
-
 	data, err := os.ReadFile(filename)
 	if err == nil {
-		if err := json.Unmarshal(data, script); err == nil {
-			script.SyncFromRecordingSession(session)
+		var script Script
+		if err := json.Unmarshal(data, &script); err == nil {
 			script.MigrateCommandsToSteps()
-			return script, nil
+			return &script, nil
 		}
 	}
 
 	// 文件被改名时，扫描匹配 ID
 	loaded, err := m.findScriptByID(scriptID)
-	if err == nil {
-		loaded.SyncFromRecordingSession(session)
-		loaded.MigrateCommandsToSteps()
-		return loaded, nil
+	if err != nil {
+		return nil, fmt.Errorf("script %s not found: %w", scriptID, err)
 	}
-
-	// 没有扩展数据，从基础会话创建脚本
-	script = NewScript(session, "", "")
-	return script, nil
+	loaded.MigrateCommandsToSteps()
+	return loaded, nil
 }
 
 // ListScripts 列出所有脚本
 func (m *Manager) ListScripts() ([]*Script, error) {
-	sessions, err := m.recorder.List(recorder.RecordingTypeScript)
+	entries, err := os.ReadDir(m.storagePath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return []*Script{}, nil
+		}
 		return nil, err
 	}
 
-	scripts := make([]*Script, 0, len(sessions))
-	for _, session := range sessions {
-		script := &Script{}
-		script.SyncFromRecordingSession(session)
-
-		// 尝试加载扩展数据
-		filename := filepath.Join(m.storagePath, fmt.Sprintf("script_%s.json", session.ID))
-		if data, err := os.ReadFile(filename); err == nil {
-			if err := json.Unmarshal(data, script); err == nil {
-				script.SyncFromRecordingSession(session)
-				// 成功加载扩展数据，继续使用这个script对象
-				scripts = append(scripts, script)
-				continue
-			}
+	scripts := make([]*Script, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "script_") || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
 		}
 
-		// 如果没有扩展数据或加载失败，从基础会话创建脚本
-		script = NewScript(session, "", "")
-		scripts = append(scripts, script)
+		data, err := os.ReadFile(filepath.Join(m.storagePath, entry.Name()))
+		if err != nil {
+			continue
+		}
+
+		var script Script
+		if err := json.Unmarshal(data, &script); err != nil {
+			continue
+		}
+
+		scripts = append(scripts, &script)
 	}
 
 	return scripts, nil
@@ -208,17 +198,18 @@ func (m *Manager) ListScripts() ([]*Script, error) {
 
 // DeleteScript 删除脚本（支持文件被改名的情况）
 func (m *Manager) DeleteScript(scriptID string) error {
-	// 删除扩展数据（先按标准文件名，再扫描）
+	// 先按标准文件名删除
 	standardFile := filepath.Join(m.storagePath, fmt.Sprintf("script_%s.json", scriptID))
-	if os.Remove(standardFile) != nil {
-		path, _, err := recorder.ScanDirForID[Script](m.storagePath, scriptID)
-		if err == nil {
-			os.Remove(path)
-		}
+	if os.Remove(standardFile) == nil {
+		return nil
 	}
 
-	// 删除录制数据
-	return m.recorder.Delete(recorder.RecordingTypeScript, scriptID)
+	// 文件被改名时，扫描找到后删除
+	path, _, err := recorder.ScanDirForID[Script](m.storagePath, scriptID)
+	if err != nil {
+		return fmt.Errorf("script %s not found: %w", scriptID, err)
+	}
+	return os.Remove(path)
 }
 
 // ReplayScript 回放脚本
@@ -414,20 +405,18 @@ func (m *Manager) CreateScript(name, description string) (*Script, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// 创建一个空的基础录制会话
-	session, err := m.recorder.CreateSession(recorder.RecordingTypeScript, "", "", "")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create session: %w", err)
-	}
-
+	now := time.Now()
 	script := &Script{
+		ID:          uuid.New().String(),
+		Type:        recorder.RecordingTypeScript,
+		StartTime:   now,
+		UpdatedAt:   now,
 		Name:        name,
 		Description: description,
 		Commands:    []ScriptCommand{},
 		Steps:       []ScriptStep{},
 		Variables:   []ScriptVariable{},
 	}
-	script.SyncFromRecordingSession(session)
 
 	if err := m.saveScript(script); err != nil {
 		return nil, fmt.Errorf("failed to save script: %w", err)
