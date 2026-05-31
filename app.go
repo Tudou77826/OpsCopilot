@@ -3144,12 +3144,12 @@ func mergePatches(remotePatches []patchstore.Patch, pendingPatches []patchstore.
 	return merged
 }
 
-// migrateScriptsFromLegacyPath 将旧路径下的脚本扩展数据迁移到新的独立目录
-// 旧路径: {legacyBase}/script_*.json (扩展数据)
+// migrateScriptsFromLegacyPath 将旧路径下的脚本数据迁移到新的独立目录
+// 旧路径: {legacyBase}/script_*.json (脚本数据) + {legacyBase}/script/recording_*.json (冗余录制数据)
 // 新路径: {newBase}/script_*.json
-// 注意：不再迁移 recording_*.json，脚本数据完全由 script_*.json 承载
 func migrateScriptsFromLegacyPath(legacyBase, newBase string) {
 	migrateScriptExtFiles(legacyBase, newBase)
+	cleanupLegacyRecordingFiles(legacyBase)
 }
 
 func migrateScriptExtFiles(srcDir, dstDir string) {
@@ -3196,4 +3196,21 @@ func cleanupRedundantRecordingFiles(scriptsDir string) {
 		}
 	}
 	os.Remove(recDir) // 目录为空则删除
+}
+
+// cleanupLegacyRecordingFiles 清理旧路径下冗余的 recording_*.json
+// 旧路径: {legacyBase}/script/recording_*.json
+func cleanupLegacyRecordingFiles(legacyBase string) {
+	recDir := filepath.Join(legacyBase, "script")
+	entries, err := os.ReadDir(recDir)
+	if err != nil {
+		return
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			os.Remove(filepath.Join(recDir, entry.Name()))
+		}
+	}
+	os.Remove(recDir)
 }

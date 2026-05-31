@@ -98,17 +98,18 @@ func (m *Manager) StopRecording() (*Script, error) {
 		return nil, fmt.Errorf("failed to stop recording: %w", err)
 	}
 
-	// 更新基础录制会话
-	m.current.SyncFromRecordingSession(baseSession)
+	// 同步需要的字段
+	m.current.EndTime = baseSession.EndTime
+	m.current.UpdatedAt = baseSession.UpdatedAt
 
 	// 将基础命令转换为可编辑的脚本命令
 	m.current.Commands = make([]ScriptCommand, len(baseSession.Commands))
 	for i, cmd := range baseSession.Commands {
 		m.current.Commands[i] = ScriptCommand{
-			RecordedCommand: cmd,
-			Comment:         "",
-			Delay:           0,
-			Enabled:         true,
+			Content: cmd.Content,
+			Comment: "",
+			Delay:   0,
+			Enabled: true,
 		}
 	}
 
@@ -408,7 +409,6 @@ func (m *Manager) CreateScript(name, description string) (*Script, error) {
 	now := time.Now()
 	script := &Script{
 		ID:          uuid.New().String(),
-		Type:        recorder.RecordingTypeScript,
 		StartTime:   now,
 		UpdatedAt:   now,
 		Name:        name,

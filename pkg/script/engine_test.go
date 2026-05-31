@@ -1,7 +1,6 @@
 package script
 
 import (
-	"opscopilot/pkg/recorder"
 	"strings"
 	"testing"
 )
@@ -92,9 +91,9 @@ func TestSubstituteVariables_InvalidName(t *testing.T) {
 func TestMigrateCommandsToSteps(t *testing.T) {
 	s := &Script{
 		Commands: []ScriptCommand{
-			{RecordedCommand: recorderRecordedCommand(0, "ls -la"), Comment: "list files", Delay: 0, Enabled: true},
-			{RecordedCommand: recorderRecordedCommand(1, "pwd"), Comment: "", Delay: 100, Enabled: true},
-			{RecordedCommand: recorderRecordedCommand(2, "echo disabled"), Comment: "", Delay: 0, Enabled: false},
+			{Content: "ls -la", Comment: "list files", Delay: 0, Enabled: true},
+			{Content: "pwd", Comment: "", Delay: 100, Enabled: true},
+			{Content: "echo disabled", Comment: "", Delay: 0, Enabled: false},
 		},
 	}
 
@@ -121,7 +120,7 @@ func TestMigrateCommandsToSteps_SkipIfStepsExist(t *testing.T) {
 	s := &Script{
 		Steps: []ScriptStep{{Command: "existing", Enabled: true}},
 		Commands: []ScriptCommand{
-			{RecordedCommand: recorderRecordedCommand(0, "old command"), Enabled: true},
+			{Content: "old command", Enabled: true},
 		},
 	}
 
@@ -169,15 +168,6 @@ func TestSyncStepsToCommands(t *testing.T) {
 	}
 	if s.Commands[0].Comment != "list" {
 		t.Errorf("expected comment 'list', got '%s'", s.Commands[0].Comment)
-	}
-	if s.Commands[0].Index != 0 {
-		t.Errorf("expected index 0, got %d", s.Commands[0].Index)
-	}
-	if s.Commands[1].Index != 1 {
-		t.Errorf("expected index 1, got %d", s.Commands[1].Index)
-	}
-	if s.Commands[2].Index != 2 {
-		t.Errorf("expected index 2, got %d", s.Commands[2].Index)
 	}
 }
 
@@ -290,7 +280,3 @@ func TestExecuteSteps_VariableSubstitution(t *testing.T) {
 }
 
 // --- Helper ---
-
-func recorderRecordedCommand(index int, content string) recorder.RecordedCommand {
-	return recorder.RecordedCommand{Index: index, Content: content}
-}

@@ -1,83 +1,59 @@
 package script
 
 import (
-	"opscopilot/pkg/recorder"
 	"time"
+
+	"opscopilot/pkg/recorder"
 )
 
-// Script 命令脚本（基于RecordingSession）
+// Script 命令脚本
 type Script struct {
-	ID          string                 `json:"id"`
-	Type        recorder.RecordingType `json:"type"`
-	StartTime   time.Time              `json:"start_time"`
-	EndTime     time.Time              `json:"end_time,omitempty"`
-	UpdatedAt   time.Time              `json:"updated_at,omitempty"`
-	SessionID   string                 `json:"session_id"`
-	Host        string                 `json:"host"`
-	User        string                 `json:"user"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	Timeline    []recorder.TimelineEvent `json:"timeline,omitempty"`
-	Problem     string                 `json:"problem,omitempty"`
-	Context     []string               `json:"context,omitempty"`
-	RootCause   string                 `json:"root_cause,omitempty"`
-	Conclusion  string                 `json:"conclusion,omitempty"`
-	Suggestions []string               `json:"suggestions,omitempty"`
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Commands    []ScriptCommand        `json:"commands"`
+	ID          string    `json:"id"`
+	StartTime   time.Time `json:"start_time"`
+	EndTime     time.Time `json:"end_time,omitempty"`
+	UpdatedAt   time.Time `json:"updated_at,omitempty"`
+	Host        string    `json:"host"`
+	User        string    `json:"user"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Commands    []ScriptCommand `json:"commands"`
 
-	// 新增：变量和步骤树
+	// 变量和步骤树
 	Variables []ScriptVariable `json:"variables,omitempty"`
 	Steps     []ScriptStep     `json:"steps,omitempty"`
 }
 
 // ScriptCommand 可编辑的脚本命令
 type ScriptCommand struct {
-	recorder.RecordedCommand // 嵌入基础命令
-
-	Comment string `json:"comment"` // 备注说明
-	Delay   int    `json:"delay"`   // 执行前延迟（毫秒）
-	Enabled bool   `json:"enabled"` // 是否启用
+	Content string `json:"content"`
+	Comment string `json:"comment"`
+	Delay   int    `json:"delay"`
+	Enabled bool   `json:"enabled"`
 }
 
 // NewScript 从录制会话创建脚本
 func NewScript(base *recorder.RecordingSession, name, description string) *Script {
-	// 转换命令
 	commands := make([]ScriptCommand, len(base.Commands))
 	for i, cmd := range base.Commands {
 		commands[i] = ScriptCommand{
-			RecordedCommand: cmd,
-			Comment:         "",
-			Delay:           0,
-			Enabled:         true,
+			Content: cmd.Content,
+			Comment: "",
+			Delay:   0,
+			Enabled: true,
 		}
 	}
 
-	script := &Script{
+	return &Script{
+		ID:          base.ID,
+		StartTime:   base.StartTime,
+		EndTime:     base.EndTime,
+		UpdatedAt:   base.UpdatedAt,
+		Host:        base.Host,
+		User:        base.User,
 		Name:        name,
 		Description: description,
 		Commands:    commands,
 	}
-	script.SyncFromRecordingSession(base)
-	return script
-}
-
-func (s *Script) SyncFromRecordingSession(base *recorder.RecordingSession) {
-	s.ID = base.ID
-	s.Type = base.Type
-	s.StartTime = base.StartTime
-	s.EndTime = base.EndTime
-	s.UpdatedAt = base.UpdatedAt
-	s.SessionID = base.SessionID
-	s.Host = base.Host
-	s.User = base.User
-	s.Metadata = base.Metadata
-	s.Timeline = base.Timeline
-	s.Problem = base.Problem
-	s.Context = base.Context
-	s.RootCause = base.RootCause
-	s.Conclusion = base.Conclusion
-	s.Suggestions = base.Suggestions
 }
 
 // ScriptVariable 脚本变量定义
@@ -125,7 +101,7 @@ func (s *Script) MigrateCommandsToSteps() {
 			Comment:       cmd.Comment,
 			Delay:         cmd.Delay,
 			Enabled:       cmd.Enabled,
-			OriginalIndex: cmd.Index,
+			OriginalIndex: i,
 		}
 	}
 }
@@ -138,10 +114,7 @@ func (s *Script) SyncStepsToCommands() {
 	commands := make([]ScriptCommand, len(s.Steps))
 	for i, step := range s.Steps {
 		commands[i] = ScriptCommand{
-			RecordedCommand: recorder.RecordedCommand{
-				Index:   i,
-				Content: step.Command,
-			},
+			Content: step.Command,
 			Comment: step.Comment,
 			Delay:   step.Delay,
 			Enabled: step.Enabled,

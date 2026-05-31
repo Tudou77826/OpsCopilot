@@ -98,12 +98,12 @@ const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
             // @ts-ignore
             const result = await window.go.main.App.LoadScript(scriptId);
             if (!result.steps || result.steps.length === 0) {
-                result.steps = (result.commands || []).map((cmd: any) => ({
+                result.steps = (result.commands || []).map((cmd: any, idx: number) => ({
                     command: cmd.content,
                     comment: cmd.comment || '',
                     delay: cmd.delay || 0,
                     enabled: cmd.enabled !== false,
-                    original_index: cmd.index,
+                    original_index: idx,
                 }));
             }
             if (!result.variables) result.variables = [];
