@@ -587,6 +587,18 @@ const LayoutManager: React.FC<LayoutManagerProps> = ({ terminals, mode, onTermin
                                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                 {term.title}
                                             </span>
+                                            {term.status === SessionStatus.DISCONNECTED && (
+                                                <button
+                                                    style={styles.reconnectBtn}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onReconnect && onReconnect(term.id);
+                                                    }}
+                                                    title="重新连接"
+                                                >
+                                                    重连
+                                                </button>
+                                            )}
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0, marginLeft: '8px' }}>
                                             {!isCollapsed && (
