@@ -211,26 +211,9 @@ func (m *Manager) DeleteScript(scriptID string) error {
 	// 删除扩展数据（先按标准文件名，再扫描）
 	standardFile := filepath.Join(m.storagePath, fmt.Sprintf("script_%s.json", scriptID))
 	if os.Remove(standardFile) != nil {
-		// 标准文件名不存在，扫描查找
-		entries, err := os.ReadDir(m.storagePath)
+		path, _, err := recorder.ScanDirForID[Script](m.storagePath, scriptID)
 		if err == nil {
-			for _, entry := range entries {
-				if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
-					continue
-				}
-				fileData, err := os.ReadFile(filepath.Join(m.storagePath, entry.Name()))
-				if err != nil {
-					continue
-				}
-				var s Script
-				if err := json.Unmarshal(fileData, &s); err != nil {
-					continue
-				}
-				if s.ID == scriptID {
-					os.Remove(filepath.Join(m.storagePath, entry.Name()))
-					break
-				}
-			}
+			os.Remove(path)
 		}
 	}
 
@@ -455,30 +438,9 @@ func (m *Manager) CreateScript(name, description string) (*Script, error) {
 
 // findScriptByID 在存储目录中扫描匹配 ID 的脚本
 func (m *Manager) findScriptByID(scriptID string) (*Script, error) {
-	entries, err := os.ReadDir(m.storagePath)
+	_, script, err := recorder.ScanDirForID[Script](m.storagePath, scriptID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read directory: %w", err)
+		return nil, fmt.Errorf("script %s not found: %w", scriptID, err)
 	}
-
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
-			continue
-		}
-
-		data, err := os.ReadFile(filepath.Join(m.storagePath, entry.Name()))
-		if err != nil {
-			continue
-		}
-
-		var script Script
-		if err := json.Unmarshal(data, &script); err != nil {
-			continue
-		}
-
-		if script.ID == scriptID {
-			return &script, nil
-		}
-	}
-
-	return nil, fmt.Errorf("script %s not found", scriptID)
+	return script, nil
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -537,7 +538,7 @@ func (r *Recorder) Load(recType RecordingType, id string) (*RecordingSession, er
 	}
 
 	// 文件被改名时，扫描所有文件按 ID 匹配
-	session, err := r.findByID(dir, id)
+	_, session, err := ScanDirForID[RecordingSession](dir, id)
 	if err != nil {
 		return nil, fmt.Errorf("recording session %s not found: %w", id, err)
 	}
@@ -589,39 +590,19 @@ func (r *Recorder) Delete(recType RecordingType, id string) error {
 	}
 
 	// 文件被改名时，扫描找到后删除
-	entries, err := os.ReadDir(dir)
+	path, _, err := ScanDirForID[RecordingSession](dir, id)
 	if err != nil {
-		return fmt.Errorf("failed to read directory: %w", err)
+		return fmt.Errorf("recording session %s not found: %w", id, err)
 	}
-
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
-			continue
-		}
-
-		fileData, err := os.ReadFile(filepath.Join(dir, entry.Name()))
-		if err != nil {
-			continue
-		}
-
-		var session RecordingSession
-		if err := json.Unmarshal(fileData, &session); err != nil {
-			continue
-		}
-
-		if session.ID == id {
-			return os.Remove(filepath.Join(dir, entry.Name()))
-		}
-	}
-
-	return fmt.Errorf("recording session %s not found", id)
+	return os.Remove(path)
 }
 
-// findByID 在目录中扫描匹配 ID 的录制会话
-func (r *Recorder) findByID(dir string, id string) (*RecordingSession, error) {
+// ScanDirForID 扫描目录中的 .json 文件，按 ID 字段匹配
+// 返回匹配文件的完整路径和反序列化后的对象
+func ScanDirForID[T any](dir string, id string) (string, *T, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read directory: %w", err)
+		return "", nil, fmt.Errorf("failed to read directory: %w", err)
 	}
 
 	for _, entry := range entries {
@@ -629,20 +610,24 @@ func (r *Recorder) findByID(dir string, id string) (*RecordingSession, error) {
 			continue
 		}
 
-		data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+	 fullPath := filepath.Join(dir, entry.Name())
+		data, err := os.ReadFile(fullPath)
 		if err != nil {
 			continue
 		}
 
-		var session RecordingSession
-		if err := json.Unmarshal(data, &session); err != nil {
+		var obj T
+		if err := json.Unmarshal(data, &obj); err != nil {
 			continue
 		}
 
-		if session.ID == id {
-			return &session, nil
+		// 通过反射获取 ID 字段
+		v := reflect.ValueOf(&obj).Elem()
+		idField := v.FieldByName("ID")
+		if idField.IsValid() && idField.String() == id {
+			return fullPath, &obj, nil
 		}
 	}
 
-	return nil, fmt.Errorf("session with id %s not found", id)
+	return "", nil, fmt.Errorf("id %s not found in %s", id, dir)
 }
