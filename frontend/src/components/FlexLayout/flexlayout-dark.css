@@ -1,0 +1,110 @@
+/* FlexLayout dark theme overrides to match OpsCopilot's VS Code-like palette */
+
+.flexlayout__layout {
+    background: transparent;
+    height: 100%;
+}
+
+/* Tab strip */
+.flexlayout__tabset {
+    background: #252526 !important;
+}
+
+.flexlayout__tabset_tabbar_outer {
+    background: #252526 !important;
+    border-bottom: 1px solid #3c3c3c !important;
+}
+
+.flexlayout__tabset_header {
+    display: none !important;
+}
+
+/* Tab button - inactive */
+.flexlayout__tab_button {
+    background: transparent !important;
+    color: #969696 !important;
+    border-right: none !important;
+    padding: 2px 10px !important;
+    font-size: 12px !important;
+}
+
+/* Tab button - selected */
+.flexlayout__tab_button--selected {
+    background: #1e1e1e !important;
+    color: #fff !important;
+    border-top: 1px solid #007acc !important;
+}
+
+.flexlayout__tab_button:hover:not(.flexlayout__tab_button--selected) {
+    background: #2d2d2d !important;
+    color: #ccc !important;
+}
+
+/* Disconnected terminal tab */
+.flexlayout__tab_button--disconnected {
+    background: #3a2d2d !important;
+    color: #ff6b6b !important;
+}
+
+/* Tab content area */
+.flexlayout__tab {
+    background: #1e1e1e !important;
+}
+
+/* Splitter */
+.flexlayout__splitter {
+    background: #333 !important;
+}
+
+.flexlayout__splitter:hover {
+    background: #007acc !important;
+}
+
+/* Tab close button */
+.flexlayout__tab_button_trailing {
+    color: #ccc !important;
+}
+
+.flexlayout__tab_button_trailing:hover {
+    background: rgba(255, 255, 255, 0.2) !important;
+    color: #fff !important;
+}
+
+/* Tab toolbar buttons - hide maximize/restore */
+.flexlayout__tab_toolbar_button-float {
+    display: none !important;
+}
+.flexlayout__tab_toolbar_button-maximize {
+    display: none !important;
+}
+.flexlayout__tab_toolbar_button {
+    color: #999 !important;
+}
+
+.flexlayout__tab_toolbar_button:hover {
+    color: #fff !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Floating panel */
+.flexlayout__floating_window {
+    background: #1e1e1e !important;
+    border: 1px solid #3c3c3c !important;
+}
+
+/* Tabset content divider */
+.flexlayout__tabset_content {
+    background: #1e1e1e !important;
+    border-top: none !important;
+}
+
+/* Edge indicators for docking */
+.flexlayout__edge_rect {
+    background: rgba(0, 122, 204, 0.2) !important;
+    border: 1px solid #007acc !important;
+}
+
+/* Tabset overflow menu */
+.flexlayout__tabset_tab_divider {
+    background: #333 !important;
+}

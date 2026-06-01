@@ -4,7 +4,7 @@ import { useToast } from './components/Toast/Toast';
 import './App.css';
 import logo from './assets/images/logo-universal.png';
 import { TerminalRef } from './components/Terminal/Terminal';
-import LayoutManager from './components/LayoutManager/LayoutManager';
+import FlexLayoutAdapter from './components/FlexLayout/FlexLayoutAdapter';
 import QuickCommandPanel from './components/QuickCommandPanel/QuickCommandPanel';
 import BottomBar from './components/BottomBar/BottomBar';
 import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal';
@@ -34,7 +34,6 @@ function App() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [sidebarTab, setSidebarTab] = useState<'sessions' | 'troubleshoot' | 'chat' | 'script' | 'knowledge'>('sessions');
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
-    const [layoutMode, setLayoutMode] = useState<'tab' | 'grid'>('tab');
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
     const [isBroadcastMode, setIsBroadcastMode] = useState(false);
     const [broadcastIds, setBroadcastIds] = useState<string[]>([]);
@@ -68,14 +67,8 @@ function App() {
         broadcastIdsRef.current = broadcastIds;
     }, [broadcastIds]);
     const terminalRefs = useRef(new Map<string, TerminalRef>());
-    // Unified fit scheduler — ensures at most one pending fit timer at any time
-    const fitTimerRef = useRef<number | null>(null);
     const scheduleFitAll = useCallback((delay = 120) => {
-        if (fitTimerRef.current) {
-            window.clearTimeout(fitTimerRef.current);
-        }
-        fitTimerRef.current = window.setTimeout(() => {
-            fitTimerRef.current = null;
+        setTimeout(() => {
             terminalRefs.current.forEach(t => t.fit());
         }, delay);
     }, []);
@@ -505,13 +498,6 @@ function App() {
         ));
     };
 
-    const handleReorderTerminals = (reorderedIds: string[]) => {
-        setTerminals(prev => {
-            const map = new Map(prev.map(t => [t.id, t]));
-            return reorderedIds.map(id => map.get(id)).filter(Boolean) as TerminalSession[];
-        });
-    };
-
     const handleDuplicateTerminal = (id: string) => {
         const term = terminals.find(t => t.id === id);
         if (!term) return;
@@ -683,39 +669,13 @@ function App() {
                         </div>
                     )}
                 </div>
-
-                <div style={styles.toggleGroup}>
-                    <button
-                        style={layoutMode === 'tab' ? styles.activeToggle : styles.toggle}
-                        onClick={() => setLayoutMode('tab')}
-                        title="标签模式"
-                    >
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                            <rect x="1" y="2" width="14" height="2.5" rx="0.8" opacity="0.6"></rect>
-                            <rect x="1" y="6" width="14" height="8" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2"></rect>
-                        </svg>
-                    </button>
-                    <button
-                        style={layoutMode === 'grid' ? styles.activeToggle : styles.toggle}
-                        onClick={() => setLayoutMode('grid')}
-                        title="网格模式"
-                    >
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2">
-                            <rect x="1" y="1" width="6" height="6" rx="1"></rect>
-                            <rect x="9" y="1" width="6" height="6" rx="1"></rect>
-                            <rect x="1" y="9" width="6" height="6" rx="1"></rect>
-                            <rect x="9" y="9" width="6" height="6" rx="1"></rect>
-                        </svg>
-                    </button>
-                </div>
             </div>
 
             <div style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'row' }}>
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
                     <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-                        <LayoutManager
+                        <FlexLayoutAdapter
                             terminals={terminals}
-                            mode={layoutMode}
                             onTerminalData={handleTerminalData}
                             terminalRefs={terminalRefs}
                             onCloseTerminal={handleCloseTerminal}
@@ -723,15 +683,12 @@ function App() {
                             onDuplicateTerminal={handleDuplicateTerminal}
                             onActiveTerminalChange={setActiveTerminalId}
                             onReconnect={handleReconnect}
-                            onClose={() => { }}
                             isBroadcastMode={isBroadcastMode}
                             broadcastIds={broadcastIds}
                             onToggleTerminalBroadcast={handleToggleTerminalBroadcast}
                             completionDelay={completionDelay}
                             terminalConfig={terminalConfig}
                             highlightRules={highlightRules}
-                            onReorderTerminals={handleReorderTerminals}
-                            scheduleFitAll={scheduleFitAll}
                             onSelectionParsed={setParsedTimestamp}
                         />
                     </div>
@@ -902,37 +859,6 @@ const styles = {
         fontSize: '0.82rem',
         fontWeight: 500 as const,
         transition: 'background-color 0.15s',
-    },
-    toggleGroup: {
-        display: 'flex',
-        borderRadius: '4px',
-        background: '#1e1e1e',
-        border: '1px solid #3c3c3c',
-        overflow: 'hidden',
-    },
-    toggle: {
-        width: '32px',
-        height: '26px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'transparent',
-        color: '#666',
-        border: 'none',
-        cursor: 'pointer',
-        transition: 'all 0.15s',
-    },
-    activeToggle: {
-        width: '32px',
-        height: '26px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#3c3c3c',
-        color: '#fff',
-        border: 'none',
-        cursor: 'pointer',
-        transition: 'all 0.15s',
     },
     iconBtnUnified: {
         display: 'flex',
