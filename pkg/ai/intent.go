@@ -69,7 +69,13 @@ func (s *AIService) GenerateLinuxCommand(request string) (*CommandQueryResult, e
 		{Role: "user", Content: request},
 	}
 
-	resp, err := s.fastProvider.ChatCompletion(context.Background(), messages)
+	var resp string
+	var err error
+	if p, ok := s.fastProvider.(*llm.OpenAIProvider); ok {
+		resp, err = p.ChatCompletionNoThinking(context.Background(), messages)
+	} else {
+		resp, err = s.fastProvider.ChatCompletion(context.Background(), messages)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("AI provider error: %w", err)
 	}
@@ -99,7 +105,13 @@ func (s *AIService) ParseConnectIntent(input string) ([]sshclient.ConnectConfig,
 
 	slog.Debug("ai sending request to LLM", "input", logging.Truncate(input, 100))
 
-	resp, err := s.fastProvider.ChatCompletion(context.Background(), messages)
+	var resp string
+	var err error
+	if p, ok := s.fastProvider.(*llm.OpenAIProvider); ok {
+		resp, err = p.ChatCompletionNoThinking(context.Background(), messages)
+	} else {
+		resp, err = s.fastProvider.ChatCompletion(context.Background(), messages)
+	}
 	if err != nil {
 		slog.Error("ai provider error", "error", err)
 		return nil, fmt.Errorf("AI provider error: %w", err)
@@ -285,7 +297,13 @@ func (s *AIService) GenerateConclusion(timeline string, rootCause string) (strin
 
 	slog.Info("ai generating conclusion")
 
-	resp, err := s.fastProvider.ChatCompletion(context.Background(), messages)
+	var resp string
+	var err error
+	if p, ok := s.fastProvider.(*llm.OpenAIProvider); ok {
+		resp, err = p.ChatCompletionNoThinking(context.Background(), messages)
+	} else {
+		resp, err = s.fastProvider.ChatCompletion(context.Background(), messages)
+	}
 	if err != nil {
 		return "", fmt.Errorf("AI provider error: %w", err)
 	}
@@ -334,7 +352,13 @@ func (s *AIService) PolishContent(content string) (string, error) {
 
 	slog.Info("ai polishing content")
 
-	resp, err := s.fastProvider.ChatCompletion(context.Background(), messages)
+	var resp string
+	var err error
+	if p, ok := s.fastProvider.(*llm.OpenAIProvider); ok {
+		resp, err = p.ChatCompletionNoThinking(context.Background(), messages)
+	} else {
+		resp, err = s.fastProvider.ChatCompletion(context.Background(), messages)
+	}
 	if err != nil {
 		return "", fmt.Errorf("AI provider error: %w", err)
 	}

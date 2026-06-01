@@ -118,8 +118,16 @@ func NewOpenAIProvider(apiKey, baseURL, model string) *OpenAIProvider {
 }
 
 func (p *OpenAIProvider) ChatCompletion(ctx context.Context, messages []ChatMessage) (string, error) {
-	// Re-use ChatWithTools with empty tools
-	resp, err := p.ChatWithTools(ctx, messages, nil)
+	resp, err := p.chatCompletionInternal(ctx, messages, nil, false)
+	if err != nil {
+		return "", err
+	}
+	return resp.Content, nil
+}
+
+// ChatCompletionNoThinking 非流式调用并禁用思考模式，用于快速模型的简单任务。
+func (p *OpenAIProvider) ChatCompletionNoThinking(ctx context.Context, messages []ChatMessage) (string, error) {
+	resp, err := p.chatCompletionInternal(ctx, messages, nil, true)
 	if err != nil {
 		return "", err
 	}
@@ -127,6 +135,10 @@ func (p *OpenAIProvider) ChatCompletion(ctx context.Context, messages []ChatMess
 }
 
 func (p *OpenAIProvider) ChatWithTools(ctx context.Context, messages []ChatMessage, tools []Tool) (*ChatResponse, error) {
+	return p.chatCompletionInternal(ctx, messages, tools, false)
+}
+
+func (p *OpenAIProvider) chatCompletionInternal(ctx context.Context, messages []ChatMessage, tools []Tool, disableThinking bool) (*ChatResponse, error) {
 	if p.client == nil {
 		return nil, errors.New("client not initialized")
 	}
@@ -136,9 +148,9 @@ func (p *OpenAIProvider) ChatWithTools(ctx context.Context, messages []ChatMessa
 	reqMessages := make([]openai.ChatCompletionMessage, len(messages))
 	for i, m := range messages {
 		msg := openai.ChatCompletionMessage{
-			Role:       m.Role,
-			Content:    m.Content,
-			Name:       m.Name,
+			Role:             m.Role,
+			Content:          m.Content,
+			Name:             m.Name,
 			ToolCallID:       m.ToolCallID,
 			ReasoningContent: m.ReasoningContent,
 		}
@@ -174,15 +186,22 @@ func (p *OpenAIProvider) ChatWithTools(ctx context.Context, messages []ChatMessa
 		}
 	}
 
-	// Logging
-	slog.Debug("llm request", "model", p.model, "messages", len(reqMessages), "tools", len(reqTools))
-
 	// 3. Make Request
 	req := openai.ChatCompletionRequest{
 		Model:    p.model,
 		Messages: reqMessages,
 		Tools:    reqTools,
 	}
+
+	label := "completion"
+	if disableThinking {
+		req.ChatTemplateKwargs = map[string]any{
+			"enable_thinking": false,
+		}
+		label = "completion (no-thinking)"
+	}
+
+	slog.Debug("llm request", "label", label, "model", p.model, "messages", len(reqMessages), "tools", len(reqTools))
 
 	resp, err := p.client.CreateChatCompletion(ctx, req)
 	if err != nil {
@@ -217,8 +236,7 @@ func (p *OpenAIProvider) ChatWithTools(ctx context.Context, messages []ChatMessa
 		}
 	}
 
-	// Log concise response info
-	slog.Debug("llm response", "model", p.model, "cost", logging.Cost(time.Since(startAt)), "contentLen", len(result.Content), "toolCalls", len(result.ToolCalls))
+	slog.Debug("llm response", "label", label, "model", p.model, "cost", logging.Cost(time.Since(startAt)), "contentLen", len(result.Content), "toolCalls", len(result.ToolCalls))
 	if len(result.ToolCalls) > 0 {
 		for i, tc := range result.ToolCalls {
 			slog.Debug("llm toolcall", "index", i+1, "name", tc.Function.Name, "argsLen", len(tc.Function.Arguments))
