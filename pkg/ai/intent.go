@@ -173,7 +173,70 @@ func normalizeAgentResponse(resp string) string {
 		s = s[:lastIdx] + s[lastIdx+3:]
 	}
 
+	// 3. 剥离 markdown 代码块包裹（LLM 经常用 ```json 包裹 JSON 输出）
+	codeBlockRe := regexp.MustCompile("(?s)```(?:json)?\\s*\\n?(.*?)\\n?\\s*```")
+	if matches := codeBlockRe.FindStringSubmatch(s); len(matches) > 1 {
+		extracted := strings.TrimSpace(matches[1])
+		if strings.HasPrefix(extracted, "{") {
+			s = extracted
+		}
+	}
+
+	// 4. 从前后文字中提取 JSON（LLM 有时在 JSON 前后加解释性文字）
+	if !strings.HasPrefix(s, "{") {
+		firstBrace := strings.Index(s, "{")
+		if firstBrace >= 0 {
+			candidate := s[firstBrace:]
+			var test map[string]interface{}
+			if json.Unmarshal([]byte(candidate), &test) == nil {
+				s = candidate
+			} else {
+				lastBrace := strings.LastIndex(candidate, "}")
+				if lastBrace > 0 {
+					inner := candidate[:lastBrace+1]
+					if json.Unmarshal([]byte(inner), &test) == nil {
+						s = inner
+					}
+				}
+			}
+		}
+	}
+
+	// 5. 非 JSON 响应包装成结构化格式（确保前端始终能按 JSON 路径渲染）
+	if !isValidTroubleshootJSON(s) {
+		s = wrapAsTroubleshootJSON(s)
+	}
+
 	return strings.TrimSpace(s)
+}
+
+// isValidTroubleshootJSON 检查字符串是否为包含 steps/commands/summary 之一的合法 JSON
+func isValidTroubleshootJSON(s string) bool {
+	trimmed := strings.TrimSpace(s)
+	if !strings.HasPrefix(trimmed, "{") {
+		return false
+	}
+	var data map[string]interface{}
+	if err := json.Unmarshal([]byte(trimmed), &data); err != nil {
+		return false
+	}
+	_, hasSteps := data["steps"]
+	_, hasCommands := data["commands"]
+	_, hasSummary := data["summary"]
+	return hasSteps || hasCommands || hasSummary
+}
+
+// wrapAsTroubleshootJSON 将非 JSON 字符串包装成前端可渲染的结构
+func wrapAsTroubleshootJSON(s string) string {
+	summary := strings.TrimSpace(s)
+	if summary == "" {
+		return `{"steps":[],"commands":[]}`
+	}
+	escaped, err := json.Marshal(summary)
+	if err != nil {
+		return `{"steps":[],"commands":[]}`
+	}
+	return fmt.Sprintf(`{"summary":%s,"steps":[],"commands":[]}`, string(escaped))
 }
 
 func (s *AIService) AskWithContext(ctx context.Context, question string, knowledgeDir string) (string, error) {

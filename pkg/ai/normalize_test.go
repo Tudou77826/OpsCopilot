@@ -12,44 +12,59 @@ func TestNormalizeAgentResponse(t *testing.T) {
 		want  string
 	}{
 		{
-			name:  "正常 Markdown 直接返回",
-			input: "## 问题分析\n\n这是分析内容。",
-			want:  "## 问题分析\n\n这是分析内容。",
-		},
-		{
-			name:  "JSON 包装 summary",
-			input: `{"summary": "## 问题分析\n\n这是内容。"}`,
-			want:  "## 问题分析\n\n这是内容。",
-		},
-		{
-			name:  "JSON 包装 content",
-			input: `{"content": "直接内容"}`,
-			want:  "直接内容",
-		},
-		{
-			name:  "孤立的代码块标记-奇数",
-			input: "```\ncode\n```\n\n额外内容\n```",
-			want:  "```\ncode\n```\n\n额外内容",
-		},
-		{
-			name:  "偶数代码块标记不处理",
-			input: "```\ncode\n```",
-			want:  "```\ncode\n```",
-		},
-		{
-			name:  "前后空白被清理",
-			input: "  \n  内容  \n  ",
-			want:  "内容",
-		},
-		{
 			name:  "空输入",
 			input: "",
-			want:  "",
+			want:  `{"steps":[],"commands":[]}`,
 		},
 		{
-			name:  "JSON 但不是 summary/content",
+			name:  "纯文本被包装成JSON",
+			input: "知识库中暂无相关排障文档。建议检查基本网络连通性。",
+			want:  `{"summary":"知识库中暂无相关排障文档。建议检查基本网络连通性。","steps":[],"commands":[]}`,
+		},
+		{
+			name:  "纯Markdown被包装成JSON",
+			input: "## 问题分析\n\n这是分析内容。",
+			want:  `{"summary":"## 问题分析\n\n这是分析内容。","steps":[],"commands":[]}`,
+		},
+		{
+			name:  "JSON包装summary提取",
+			input: `{"summary": "## 问题分析\n\n这是内容。"}`,
+			want:  `{"summary":"## 问题分析\n\n这是内容。","steps":[],"commands":[]}`,
+		},
+		{
+			name:  "JSON包装content提取",
+			input: `{"content": "直接内容"}`,
+			want:  `{"summary":"直接内容","steps":[],"commands":[]}`,
+		},
+		{
+			name:  "有效troubleshoot JSON保持不变",
+			input: `{"steps":[{"step":1,"title":"检查服务状态"}],"commands":[{"command":"systemctl status nginx","description":"检查Nginx状态","risk":"Low"}]}`,
+			want:  `{"steps":[{"step":1,"title":"检查服务状态"}],"commands":[{"command":"systemctl status nginx","description":"检查Nginx状态","risk":"Low"}]}`,
+		},
+		{
+			name:  "JSON被markdown代码块包裹",
+			input: "下面是分析：\n```json\n{\"steps\":[],\"commands\":[]}\n```\n",
+			want:  `{"steps":[],"commands":[]}`,
+		},
+		{
+			name:  "JSON前后有额外文字",
+			input: "Based on analysis:\n{\"steps\":[{\"step\":1,\"title\":\"检查\"}],\"commands\":[]}\nHope this helps!",
+			want:  `{"steps":[{"step":1,"title":"检查"}],"commands":[]}`,
+		},
+		{
+			name:  "JSON但不含steps/commands/summary被包装",
 			input: `{"error": "something"}`,
-			want:  `{"error": "something"}`,
+			want:  `{"summary":"{\"error\": \"something\"}","steps":[],"commands":[]}`,
+		},
+		{
+			name:  "偶数代码块标记-非JSON内容被包装",
+			input: "```\ncode\n```",
+			want:  "{\"summary\":\"```\\ncode\\n```\",\"steps\":[],\"commands\":[]}",
+		},
+		{
+			name:  "前后空白被清理后包装",
+			input: "  \n  内容  \n  ",
+			want:  `{"summary":"内容","steps":[],"commands":[]}`,
 		},
 	}
 

@@ -121,13 +121,14 @@ JSON Structure:
 }
 
 Rules:
-1. Analyze the problem based on provided context (业务文档) and general DevOps knowledge.
-2. Provide logical, step-by-step troubleshooting instructions in the "steps" array (3-8 steps recommended).
+1. Analyze the problem PRIMARILY based on knowledge base documents you have read via tools. Only use general knowledge to supplement AFTER finding relevant docs.
+2. If you found relevant knowledge docs: provide 3-8 steps and 5-15 commands. If NO relevant docs found: provide at most 2 steps and 3 commands — keep it minimal.
 3. Provide executable Linux/Shell commands ONLY in the "commands" array. DO NOT include commands inside the "steps" objects.
 4. The "commands" array should list 5-15 most relevant commands for this specific problem.
 5. Use command templates with placeholders like <SERVICE_NAME>, <PORT>, <PID> when parameters vary.
 6. Prioritize non-destructive diagnostic commands first, then suggest fixes with proper risk labels.
 7. If the problem relates to specific business scenarios (支付系统, 数据库, 网络), tailor the steps accordingly.
+8. IMPORTANT: If no relevant knowledge base documents were found, output a minimal response with at most 2-3 basic diagnostic commands. Do NOT fabricate detailed troubleshooting plans.
 `
 
 	DefaultCommandQueryPrompt = `
