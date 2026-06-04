@@ -74,43 +74,7 @@ if %errorlevel% neq 0 (
 )
 echo [INFO]   - mcp-server.exe
 
-:: 构建 FTP 文件管理器
-echo [INFO] Building FTP File Manager...
-echo [INFO] Building FTP frontend assets...
-pushd frontend-ftp
-call npm install
-if %errorlevel% neq 0 (
-    echo [ERROR] FTP frontend dependencies install failed.
-    if not "%NOPAUSE%"=="true" pause
-    popd
-    exit /b 1
-)
-call npm run build
-if %errorlevel% neq 0 (
-    echo [ERROR] FTP frontend build failed.
-    if not "%NOPAUSE%"=="true" pause
-    popd
-    exit /b 1
-)
-popd
-if exist "cmd\ftpmanager\static" rmdir /S /Q "cmd\ftpmanager\static"
-mkdir "cmd\ftpmanager\static"
-xcopy /E /I /Y "frontend-ftp\dist\*" "cmd\ftpmanager\static\" >nul
-if %errorlevel% neq 0 (
-    echo [ERROR] Copy FTP frontend assets failed.
-    if not "%NOPAUSE%"=="true" pause
-    exit /b 1
-)
-go build -tags production -ldflags "-s -w" -o "build\bin\OpsFTP.exe" ./cmd/ftpmanager/
-if %errorlevel% neq 0 (
-    echo [ERROR] FTP File Manager build failed.
-    if not "%NOPAUSE%"=="true" pause
-    exit /b 1
-)
-echo [INFO]   - OpsFTP.exe
-
 echo [SUCCESS] Build complete. Executable is in build/bin/
 echo [INFO] Configuration files have been copied to build/bin/
 echo [INFO] MCP Server has been built for Claude Code integration.
-echo [INFO] FTP File Manager has been built for file management.
 endlocal

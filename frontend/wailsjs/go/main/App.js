@@ -230,10 +230,6 @@ export function LocalStat(arg1) {
   return window['go']['main']['App']['LocalStat'](arg1);
 }
 
-export function OpenFileManager(arg1) {
-  return window['go']['main']['App']['OpenFileManager'](arg1);
-}
-
 export function ParseIntent(arg1) {
   return window['go']['main']['App']['ParseIntent'](arg1);
 }

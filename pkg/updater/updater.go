@@ -82,8 +82,6 @@ var protectedFiles = map[string]bool{
 	"mcp.json":               true,
 	// Independent executables — updated separately
 	"mcp-server.exe":  true,
-	"OpsFTP.exe":      true,
-	"ftpmanager.exe":  true,
 }
 
 // CheckForUpdate queries the GitHub API for the latest release and compares

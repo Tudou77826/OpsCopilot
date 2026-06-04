@@ -30,6 +30,7 @@ interface FlexLayoutAdapterProps {
     terminalConfig?: TerminalConfig;
     highlightRules?: HighlightRule[];
     onSelectionParsed?: (result: TimestampResult | null) => void;
+    onOpenFileTransfer?: (terminalId: string) => void;
 }
 
 const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
@@ -48,6 +49,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
     terminalConfig,
     highlightRules,
     onSelectionParsed,
+    onOpenFileTransfer,
 }) => {
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
 
@@ -350,7 +352,11 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
     return (
         <div
             style={{ height: '100%', position: 'relative', overflow: 'hidden' }}
-            onPointerDown={() => setContextMenu(null)}
+            onPointerDown={(e) => {
+                const menuEl = document.querySelector('[data-tab-context-menu]');
+                if (menuEl && menuEl.contains(e.target as Node)) return;
+                setContextMenu(null);
+            }}
         >
             {terminals.length === 0 ? (
                 <div style={{
@@ -384,6 +390,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                     onCloseTerminal={(id) => { onCloseTerminal(id); setContextMenu(null); }}
                     onRename={(id, name) => { onRenameTerminal(id, name); setContextMenu(null); }}
                     onDuplicate={onDuplicateTerminal ? (id) => { onDuplicateTerminal(id); setContextMenu(null); } : undefined}
+                    onOpenFileTransfer={onOpenFileTransfer ? (id) => { onOpenFileTransfer(id); setContextMenu(null); } : undefined}
                     onClose={() => setContextMenu(null)}
                 />
             )}
@@ -506,10 +513,11 @@ interface ContextMenuProps {
     onCloseTerminal: (id: string) => void;
     onRename: (id: string, name: string) => void;
     onDuplicate?: (id: string) => void;
+    onOpenFileTransfer?: (id: string) => void;
     onClose: () => void;
 }
 
-const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, terminalId, terminals, onCloseTerminal, onRename, onDuplicate, onClose }) => {
+const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, terminalId, terminals, onCloseTerminal, onRename, onDuplicate, onOpenFileTransfer, onClose }) => {
     const term = terminals.find(t => t.id === terminalId);
     const idx = terminals.findIndex(t => t.id === terminalId);
 
@@ -586,6 +594,14 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, terminalId, terminals, 
             }}>
                 复制连接信息
             </div>
+            {onOpenFileTransfer && (
+                <div style={menuItemStyle} onClick={() => {
+                    onOpenFileTransfer(terminalId);
+                    onClose();
+                }}>
+                    文件传输
+                </div>
+            )}
         </div>
     );
 };

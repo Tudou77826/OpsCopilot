@@ -123,8 +123,6 @@ func TestProtectedFiles(t *testing.T) {
 		"file_access.json",
 		"mcp.json",
 		"mcp-server.exe",
-		"OpsFTP.exe",
-		"ftpmanager.exe",
 	}
 	for _, name := range protected {
 		if !protectedFiles[name] {

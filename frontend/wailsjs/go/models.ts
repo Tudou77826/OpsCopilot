@@ -679,12 +679,7 @@ export namespace script {
 	    }
 	}
 	export class ScriptCommand {
-	    index: number;
 	    content: string;
-	    output?: string;
-	    timestamp: number;
-	    duration?: number;
-	    corrected?: boolean;
 	    comment: string;
 	    delay: number;
 	    enabled: boolean;
@@ -695,12 +690,7 @@ export namespace script {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.index = source["index"];
 	        this.content = source["content"];
-	        this.output = source["output"];
-	        this.timestamp = source["timestamp"];
-	        this.duration = source["duration"];
-	        this.corrected = source["corrected"];
 	        this.comment = source["comment"];
 	        this.delay = source["delay"];
 	        this.enabled = source["enabled"];
@@ -708,23 +698,14 @@ export namespace script {
 	}
 	export class Script {
 	    id: string;
-	    type: string;
 	    // Go type: time
 	    start_time: any;
 	    // Go type: time
 	    end_time?: any;
 	    // Go type: time
 	    updated_at?: any;
-	    session_id: string;
 	    host: string;
 	    user: string;
-	    metadata?: Record<string, any>;
-	    timeline?: recorder.TimelineEvent[];
-	    problem?: string;
-	    context?: string[];
-	    root_cause?: string;
-	    conclusion?: string;
-	    suggestions?: string[];
 	    name: string;
 	    description: string;
 	    commands: ScriptCommand[];
@@ -738,20 +719,11 @@ export namespace script {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
-	        this.type = source["type"];
 	        this.start_time = this.convertValues(source["start_time"], null);
 	        this.end_time = this.convertValues(source["end_time"], null);
 	        this.updated_at = this.convertValues(source["updated_at"], null);
-	        this.session_id = source["session_id"];
 	        this.host = source["host"];
 	        this.user = source["user"];
-	        this.metadata = source["metadata"];
-	        this.timeline = this.convertValues(source["timeline"], recorder.TimelineEvent);
-	        this.problem = source["problem"];
-	        this.context = source["context"];
-	        this.root_cause = source["root_cause"];
-	        this.conclusion = source["conclusion"];
-	        this.suggestions = source["suggestions"];
 	        this.name = source["name"];
 	        this.description = source["description"];
 	        this.commands = this.convertValues(source["commands"], ScriptCommand);

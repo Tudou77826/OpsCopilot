@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { TbRobot, TbPalette, TbKeyboard, TbLayoutGrid, TbFolder, TbBooks, TbShieldCheck, TbLock, TbSettings, TbInfoCircle, TbSearch } from 'react-icons/tb';
+import { TbRobot, TbPalette, TbKeyboard, TbLayoutGrid, TbBooks, TbShieldCheck, TbLock, TbSettings, TbInfoCircle, TbSearch } from 'react-icons/tb';
 import KeysMap from './KeysMap';
 import HighlightRulesModal from './HighlightRulesModal';
 import CommandWhitelistPanel from './CommandWhitelist/CommandWhitelistPanel';
@@ -44,8 +44,6 @@ interface SettingsModalProps {
     isBroadcastMode?: boolean;
     onToggleBroadcast?: (enabled: boolean) => void;
     onCompletionDelayChange?: (delay: number) => void;
-    onOpenFileTransfer?: () => void;
-    onOpenStandaloneFileTransfer?: () => void;
     onHighlightRulesChange?: (rules: HighlightRule[]) => void;
 }
 
@@ -61,7 +59,7 @@ interface PatchSyncStatus {
     branch?: string;
 }
 
-type TabId = 'llm' | 'highlight' | 'shortcuts' | 'broadcast' | 'filetransfer' | 'knowledge' | 'whitelist' | 'fileaccess' | 'experimental' | 'about';
+type TabId = 'llm' | 'highlight' | 'shortcuts' | 'broadcast' | 'knowledge' | 'whitelist' | 'fileaccess' | 'experimental' | 'about';
 
 interface NavItem {
     id: TabId;
@@ -100,8 +98,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     isBroadcastMode,
     onToggleBroadcast,
     onCompletionDelayChange,
-    onOpenFileTransfer,
-    onOpenStandaloneFileTransfer,
     onHighlightRulesChange
 }) => {
     const [config, setConfig] = useState<AppConfig | null>(null);
@@ -123,7 +119,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         { id: 'highlight', label: '突出显示', icon: TbPalette({}), category: '终端' },
         { id: 'shortcuts', label: '快捷键', icon: TbKeyboard({}), category: '交互' },
         { id: 'broadcast', label: '多窗口', icon: TbLayoutGrid({}), category: '交互' },
-        { id: 'filetransfer', label: '文件传输', icon: TbFolder({}), category: '工具' },
         { id: 'knowledge', label: '知识共享', icon: TbBooks({}), category: '知识' },
         { id: 'whitelist', label: '命令白名单', icon: TbShieldCheck({}), category: '安全' },
         { id: 'fileaccess', label: '文件访问控制', icon: TbLock({}), category: '安全' },
@@ -511,43 +506,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             </div>
                             <div style={styles.settingDescription}>
                                 开启后，默认将当前所有打开的终端加入广播组。您可以在标签页上单独切换每个终端的广播状态。
-                            </div>
-                        </div>
-                    </div>
-                );
-
-            case 'filetransfer':
-                return (
-                    <div style={styles.settingsGroup}>
-                        <div style={styles.groupTitle}>文件传输</div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>内置文件传输窗口</label>
-                            <button
-                                onClick={() => {
-                                    if (onOpenFileTransfer) onOpenFileTransfer();
-                                    onClose();
-                                }}
-                                style={styles.secondaryButton}
-                            >
-                                打开文件传输
-                            </button>
-                            <div style={styles.settingDescription}>
-                                打开后可在终端旁边并行使用文件传输功能
-                            </div>
-                        </div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>独立文件管理器 (OpsFTP.exe)</label>
-                            <button
-                                onClick={() => {
-                                    if (onOpenStandaloneFileTransfer) onOpenStandaloneFileTransfer();
-                                    onClose();
-                                }}
-                                style={styles.secondaryButton}
-                            >
-                                打开独立窗口
-                            </button>
-                            <div style={styles.settingDescription}>
-                                通过 IPC 与主程序通信，使用独立文件管理进程
                             </div>
                         </div>
                     </div>
