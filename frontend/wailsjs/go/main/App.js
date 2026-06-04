@@ -38,6 +38,10 @@ export function ConnectWithID(arg1, arg2) {
   return window['go']['main']['App']['ConnectWithID'](arg1, arg2);
 }
 
+export function CreateSavedFolder(arg1) {
+  return window['go']['main']['App']['CreateSavedFolder'](arg1);
+}
+
 export function CreateScript(arg1, arg2) {
   return window['go']['main']['App']['CreateScript'](arg1, arg2);
 }

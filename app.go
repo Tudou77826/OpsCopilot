@@ -2738,6 +2738,13 @@ func (a *App) UpdateSavedSession(id string, config sshclient.ConnectConfig) stri
 	return ""
 }
 
+func (a *App) CreateSavedFolder(name string) string {
+	if err := a.savedSessionMgr.CreateFolder(name); err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	return ""
+}
+
 // HasActiveWork checks if there are active terminal sessions or ongoing troubleshooting session
 func (a *App) HasActiveWork() map[string]interface{} {
 	hasTerminals := len(a.sessionMgr.List()) > 0

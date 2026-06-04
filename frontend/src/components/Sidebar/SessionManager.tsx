@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { TbFolderOpen, TbFolder, TbTerminal2 } from 'react-icons/tb';
 import { ConnectionConfig } from '../../types';
 import EditSavedSessionModal from './EditSavedSessionModal';
@@ -14,6 +14,7 @@ declare global {
                     DeleteSavedSession: (id: string) => Promise<string>;
                     RenameSavedSession: (id: string, newName: string) => Promise<string>;
                     UpdateSavedSession: (id: string, config: ConnectionConfig) => Promise<string>;
+                    CreateSavedFolder: (name: string) => Promise<string>;
                 }
             }
         }
@@ -36,12 +37,15 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
     const [sessions, setSessions] = useState<SessionNode[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
-    const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: SessionNode } | null>(null);
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: SessionNode | null } | null>(null);
     const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
     const [editName, setEditName] = useState('');
     const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
     const [hoveredMenuItem, setHoveredMenuItem] = useState<string | null>(null);
     const [editingSession, setEditingSession] = useState<{ id: string; config: ConnectionConfig } | null>(null);
+    const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+    const dragNodeIdRef = useRef<string | null>(null);
+    const autoExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         loadSessions();
@@ -60,6 +64,99 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
         document.addEventListener('pointerdown', handler);
         return () => document.removeEventListener('pointerdown', handler);
     }, [contextMenu]);
+
+    // Cleanup drag timer on unmount
+    useEffect(() => {
+        return () => {
+            if (autoExpandTimerRef.current) clearTimeout(autoExpandTimerRef.current);
+        };
+    }, []);
+
+    // Find a session by ID anywhere in the tree
+    const findSessionById = (nodes: SessionNode[], id: string): SessionNode | undefined => {
+        for (const n of nodes) {
+            if (n.id === id) return n;
+            if (n.children) { const f = findSessionById(n.children, id); if (f) return f; }
+        }
+        return undefined;
+    };
+
+    // Drag a session into a folder
+    const handleDragStart = (e: React.DragEvent, node: SessionNode) => {
+        if (node.type !== 'session') return;
+        e.dataTransfer.setData('text/plain', node.id);
+        e.dataTransfer.effectAllowed = 'move';
+        dragNodeIdRef.current = node.id;
+    };
+
+    const handleDragOver = (e: React.DragEvent, node: SessionNode) => {
+        if (node.type !== 'folder') return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        setDragOverFolderId(node.id);
+
+        // Auto-expand after hovering 600ms
+        if (autoExpandTimerRef.current) clearTimeout(autoExpandTimerRef.current);
+        if (!expandedFolders.has(node.id)) {
+            autoExpandTimerRef.current = setTimeout(() => {
+                setExpandedFolders(prev => new Set(prev).add(node.id));
+            }, 600);
+        }
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        const related = e.relatedTarget as HTMLElement | null;
+        if (related && e.currentTarget.contains(related)) return;
+        if (autoExpandTimerRef.current) {
+            clearTimeout(autoExpandTimerRef.current);
+            autoExpandTimerRef.current = null;
+        }
+        setDragOverFolderId(null);
+    };
+
+    const handleDrop = async (e: React.DragEvent, folder: SessionNode) => {
+        e.preventDefault();
+        if (autoExpandTimerRef.current) {
+            clearTimeout(autoExpandTimerRef.current);
+            autoExpandTimerRef.current = null;
+        }
+        setDragOverFolderId(null);
+
+        const sessionId = e.dataTransfer.getData('text/plain');
+        if (!sessionId) return;
+
+        const session = findSessionById(sessions, sessionId);
+        if (!session?.config) return;
+        if (session.config.group === folder.name) return;
+
+        const updatedConfig = { ...session.config, group: folder.name };
+        const err = await window.go.main.App.UpdateSavedSession(session.id, updatedConfig);
+        if (err) console.error("Failed to move session:", err);
+        loadSessions();
+    };
+
+    const handleDragEnd = () => {
+        dragNodeIdRef.current = null;
+        setDragOverFolderId(null);
+        if (autoExpandTimerRef.current) {
+            clearTimeout(autoExpandTimerRef.current);
+            autoExpandTimerRef.current = null;
+        }
+    };
+
+    // Drop on tree container blank area = remove group (move to root)
+    const handleTreeDrop = async (e: React.DragEvent) => {
+        e.preventDefault();
+        const sessionId = e.dataTransfer.getData('text/plain');
+        if (!sessionId) return;
+        const session = findSessionById(sessions, sessionId);
+        if (!session?.config || !session.config.group) return;
+        const updatedConfig = { ...session.config };
+        delete (updatedConfig as any).group;
+        const err = await window.go.main.App.UpdateSavedSession(session.id, updatedConfig);
+        if (err) console.error("Failed to move session:", err);
+        loadSessions();
+    };
 
     const loadSessions = async () => {
         try {
@@ -124,10 +221,10 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
         setExpandedFolders(newSet);
     };
 
-    const handleContextMenu = (e: React.MouseEvent, node: SessionNode) => {
+    const handleContextMenu = (e: React.MouseEvent, node?: SessionNode | null) => {
         e.preventDefault();
         e.stopPropagation();
-        setContextMenu({ x: e.clientX, y: e.clientY, node });
+        setContextMenu({ x: e.clientX, y: e.clientY, node: node ?? null });
     };
 
     const handleRename = async (id: string, newName: string) => {
@@ -185,24 +282,34 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
             
             const paddingLeft = `${level * 20 + 10}px`;
 
+            const isDragOver = isFolder && dragOverFolderId === node.id;
+
             return (
                 <div key={node.id}>
-                    <div 
+                    <div
                         style={{
-                            ...styles.nodeRow, 
+                            ...styles.nodeRow,
                             paddingLeft,
-                            backgroundColor: isHovered ? '#2a2d2e' : 'transparent'
+                            backgroundColor: isDragOver ? '#094771' : (isHovered ? '#2a2d2e' : 'transparent'),
+                            outline: isDragOver ? '1px dashed #007acc' : 'none',
+                            outlineOffset: '-1px',
                         }}
+                        draggable={!isFolder}
+                        onDragStart={(e) => handleDragStart(e, node)}
+                        onDragOver={(e) => handleDragOver(e, node)}
+                        onDragLeave={isFolder ? handleDragLeave : undefined}
+                        onDrop={(e) => isFolder ? handleDrop(e, node) : undefined}
+                        onDragEnd={handleDragEnd}
                         onMouseEnter={() => setHoveredNodeId(node.id)}
                         onMouseLeave={() => setHoveredNodeId(null)}
                         onContextMenu={(e) => handleContextMenu(e, node)}
                         onClick={() => isFolder ? handleToggleFolder(node.id) : null}
                         onDoubleClick={() => !isFolder && node.config && onConnect(node.config)}
                     >
-                        <span style={{marginRight: '8px', userSelect: 'none', display: 'inline-flex', alignItems: 'center'}}>{isFolder ? (isExpanded ? TbFolderOpen({size: 16}) : TbFolder({size: 16})) : TbTerminal2({size: 16})}</span>
-                        
+                        <span style={{marginRight: '8px', userSelect: 'none', display: 'inline-flex', alignItems: 'center', color: isFolder ? '#dcb56a' : '#8f8f8f'}}>{isFolder ? (isExpanded ? TbFolderOpen({size: 16}) : TbFolder({size: 16})) : TbTerminal2({size: 16})}</span>
+
                         {isEditing ? (
-                            <input 
+                            <input
                                 autoFocus
                                 value={editName}
                                 onChange={e => setEditName(e.target.value)}
@@ -215,7 +322,11 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                                 style={styles.renameInput}
                             />
                         ) : (
-                            <span style={styles.nodeName}>{node.name}</span>
+                            <span style={{
+                                ...styles.nodeName,
+                                fontWeight: isFolder ? 600 : 400,
+                                color: isFolder ? '#e0e0e0' : '#bbb',
+                            }}>{node.name}</span>
                         )}
                     </div>
                     {isFolder && isExpanded && node.children && (
@@ -278,7 +389,12 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                 />
             </div>
             
-            <div style={styles.treeContainer}>
+            <div
+                style={styles.treeContainer}
+                onContextMenu={(e) => handleContextMenu(e)}
+                onDragOver={(e) => { if (dragNodeIdRef.current) e.preventDefault(); }}
+                onDrop={handleTreeDrop}
+            >
                 {renderTree(displayedSessions)}
                 {displayedSessions.length === 0 && (
                     <div style={styles.empty}>无会话</div>
@@ -288,22 +404,41 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
             {/* Context Menu */}
             {contextMenu && (
                 <div style={{...styles.contextMenu, top: contextMenu.y, left: contextMenu.x}} data-session-context-menu>
-                    {contextMenu.node.type === 'session' && (
-                        <div 
+                    <div
+                        style={{
+                            ...styles.menuItem,
+                            backgroundColor: hoveredMenuItem === 'newfolder' ? '#094771' : 'transparent',
+                            color: hoveredMenuItem === 'newfolder' ? '#fff' : '#ccc'
+                        }}
+                        onMouseEnter={() => setHoveredMenuItem('newfolder')}
+                        onMouseLeave={() => setHoveredMenuItem(null)}
+                        onClick={() => {
+                            const name = prompt('文件夹名称:');
+                            if (name?.trim()) {
+                                window.go.main.App.CreateSavedFolder(name.trim()).then((err) => {
+                                    if (err) alert(err);
+                                    loadSessions();
+                                });
+                            }
+                            setContextMenu(null);
+                        }}
+                    >新建文件夹</div>
+                    {contextMenu.node && contextMenu.node.type === 'session' && (
+                        <div
                             style={{
                                 ...styles.menuItem,
                                 backgroundColor: hoveredMenuItem === 'connect' ? '#094771' : 'transparent',
                                 color: hoveredMenuItem === 'connect' ? '#fff' : '#ccc'
-                            }} 
+                            }}
                             onMouseEnter={() => setHoveredMenuItem('connect')}
                             onMouseLeave={() => setHoveredMenuItem(null)}
                             onClick={() => {
-                                if (contextMenu.node.config) onConnect(contextMenu.node.config);
+                                if (contextMenu.node!.config) onConnect(contextMenu.node!.config);
                                 setContextMenu(null);
                             }}
                         >打开连接</div>
                     )}
-                    {contextMenu.node.type === 'session' && (
+                    {contextMenu.node && contextMenu.node.type === 'session' && (
                         <div
                             style={{
                                 ...styles.menuItem,
@@ -313,14 +448,14 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                             onMouseEnter={() => setHoveredMenuItem('edit')}
                             onMouseLeave={() => setHoveredMenuItem(null)}
                             onClick={() => {
-                                if (contextMenu.node.config) {
-                                    setEditingSession({ id: contextMenu.node.id, config: contextMenu.node.config });
+                                if (contextMenu.node!.config) {
+                                    setEditingSession({ id: contextMenu.node!.id, config: contextMenu.node!.config });
                                 }
                                 setContextMenu(null);
                             }}
                         >编辑连接</div>
                     )}
-                    {contextMenu.node.type === 'session' && !!contextMenu.node.config?.group && (
+                    {contextMenu.node && contextMenu.node.type === 'session' && !!contextMenu.node.config?.group && (
                         <div
                             style={{
                                 ...styles.menuItem,
@@ -330,12 +465,12 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                             onMouseEnter={() => setHoveredMenuItem('ungroup')}
                             onMouseLeave={() => setHoveredMenuItem(null)}
                             onClick={() => {
-                                handleUnGroup(contextMenu.node);
+                                handleUnGroup(contextMenu.node!);
                                 setContextMenu(null);
                             }}
                         >移出分组</div>
                     )}
-                    {contextMenu.node.type === 'folder' && contextMenu.node.children && contextMenu.node.children.length > 0 && (
+                    {contextMenu.node && contextMenu.node.type === 'folder' && contextMenu.node.children && contextMenu.node.children.length > 0 && (
                         <div
                             style={{
                                 ...styles.menuItem,
@@ -345,12 +480,13 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                             onMouseEnter={() => setHoveredMenuItem('connectall')}
                             onMouseLeave={() => setHoveredMenuItem(null)}
                             onClick={() => {
-                                handleConnectAll(contextMenu.node);
+                                handleConnectAll(contextMenu.node!);
                                 setContextMenu(null);
                             }}
                         >全部连接</div>
                     )}
-                    <div 
+                    {contextMenu.node && (
+                    <div
                         style={{
                             ...styles.menuItem,
                             backgroundColor: hoveredMenuItem === 'rename' ? '#094771' : 'transparent',
@@ -359,12 +495,14 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                         onMouseEnter={() => setHoveredMenuItem('rename')}
                         onMouseLeave={() => setHoveredMenuItem(null)}
                         onClick={() => {
-                            setEditingNodeId(contextMenu.node.id);
-                            setEditName(contextMenu.node.name);
+                            setEditingNodeId(contextMenu.node!.id);
+                            setEditName(contextMenu.node!.name);
                             setContextMenu(null);
                         }}
                     >重命名</div>
-                    <div 
+                    )}
+                    {contextMenu.node && (
+                    <div
                         style={{
                             ...styles.menuItem,
                             backgroundColor: hoveredMenuItem === 'delete' ? '#094771' : 'transparent',
@@ -373,10 +511,11 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                         onMouseEnter={() => setHoveredMenuItem('delete')}
                         onMouseLeave={() => setHoveredMenuItem(null)}
                         onClick={() => {
-                            handleDelete(contextMenu.node.id);
+                            handleDelete(contextMenu.node!.id);
                             setContextMenu(null);
                         }}
                     >删除</div>
+                    )}
                 </div>
             )}
 

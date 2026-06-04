@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"opscopilot/pkg/sshclient"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -295,5 +296,30 @@ func (m *Manager) UpdateSession(id string, config sshclient.ConnectConfig, group
 		m.Sessions = append(m.Sessions, newNode)
 	}
 
+	return m.Save()
+}
+
+// CreateFolder creates an empty folder at root level.
+func (m *Manager) CreateFolder(name string) error {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("folder name cannot be empty")
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, s := range m.Sessions {
+		if s.Type == TypeFolder && s.Name == name {
+			return fmt.Errorf("folder '%s' already exists", name)
+		}
+	}
+
+	folder := &Session{
+		ID:       uuid.New().String(),
+		Name:     name,
+		Type:     TypeFolder,
+		Children: []*Session{},
+	}
+	m.Sessions = append(m.Sessions, folder)
 	return m.Save()
 }

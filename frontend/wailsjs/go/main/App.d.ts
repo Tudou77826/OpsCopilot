@@ -26,6 +26,8 @@ export function Connect(arg1:main.ConnectConfig):Promise<main.ConnectResult>;
 
 export function ConnectWithID(arg1:main.ConnectConfig,arg2:string):Promise<main.ConnectResult>;
 
+export function CreateSavedFolder(arg1:string):Promise<string>;
+
 export function CreateScript(arg1:string,arg2:string):Promise<script.Script>;
 
 export function DeleteSavedSession(arg1:string):Promise<string>;
