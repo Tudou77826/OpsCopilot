@@ -1032,26 +1032,38 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         };
         terminalRef.current.addEventListener('paste', handlePaste);
 
-        // Middle click paste
+        // Middle click: paste selection directly if selected, otherwise paste from clipboard
         const handleAuxClick = (e: MouseEvent) => {
             if (e.button === 1) {
                 e.preventDefault();
-                navigator.clipboard.readText().then(text => {
-                    if (text) {
-                        currentInputRef.current += text;
-                        setCompletionVisible(false);
-                        completionVisibleRef.current = false;
-                        triggerCompletion();
-                        term.paste(text);
-                        schedulePostOutputScan();
-                    }
+                const selection = term.getSelection();
+                if (selection) {
+                    currentInputRef.current += selection;
+                    setCompletionVisible(false);
+                    completionVisibleRef.current = false;
+                    triggerCompletion();
+                    term.paste(selection);
+                    schedulePostOutputScan();
+                    term.clearSelection();
                     term.focus();
-                });
+                } else {
+                    navigator.clipboard.readText().then(text => {
+                        if (text) {
+                            currentInputRef.current += text;
+                            setCompletionVisible(false);
+                            completionVisibleRef.current = false;
+                            triggerCompletion();
+                            term.paste(text);
+                            schedulePostOutputScan();
+                        }
+                        term.focus();
+                    });
+                }
             }
         };
         terminalRef.current.addEventListener('auxclick', handleAuxClick);
 
-        // Right click context menu
+        // Right click: copy selection to clipboard, or paste from clipboard
         const handleContextMenu = (e: MouseEvent) => {
             e.preventDefault();
             e.stopPropagation();
