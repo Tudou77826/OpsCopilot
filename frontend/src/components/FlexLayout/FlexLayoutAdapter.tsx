@@ -284,24 +284,45 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
 
     // --- Track active terminal ---
     const handleModelChange = useCallback((_model: Model, action: any) => {
-        if (action.type === Actions.SELECT_TAB || action.type === Actions.MOVE_NODE || action.type === Actions.ADD_TAB) {
-            // Find the currently selected tab
+        const trackActions = [Actions.SELECT_TAB, Actions.SET_ACTIVE_TABSET, Actions.MOVE_NODE, Actions.ADD_TAB];
+        if (trackActions.includes(action.type)) {
             let activeId: string | null = null;
+
+            // getActiveTabset() returns the tabset the user last interacted with
+            const activeTabset = _model.getActiveTabset();
+            if (activeTabset) {
+                const selected = activeTabset.getSelectedNode();
+                if (selected) {
+                    activeId = selected.getId();
+                }
+            }
+
+            // Fallback: scan all tabsets (needed for MOVE_NODE / ADD_TAB
+            // where getActiveTabset may not be updated yet)
+            if (!activeId) {
+                _model.visitNodes((node: any) => {
+                    if (node.getType() === 'tabset') {
+                        const selected = node.getSelectedNode();
+                        if (selected) {
+                            activeId = selected.getId();
+                        }
+                    }
+                });
+            }
+
+            onActiveTerminalChange?.(activeId);
+        }
+
+        // Fit only visible (selected) terminals after layout changes
+        setTimeout(() => {
             _model.visitNodes((node: any) => {
                 if (node.getType() === 'tabset') {
                     const selected = node.getSelectedNode();
                     if (selected) {
-                        activeId = selected.getId();
+                        const ref = terminalRefs.current.get(selected.getId());
+                        try { ref?.fit(); } catch { /* ignore */ }
                     }
                 }
-            });
-            onActiveTerminalChange?.(activeId);
-        }
-
-        // Fit all terminals after layout changes
-        setTimeout(() => {
-            terminalRefs.current.forEach(ref => {
-                try { ref.fit(); } catch { /* ignore */ }
             });
         }, 100);
     }, [onActiveTerminalChange, terminalRefs]);
@@ -400,7 +421,8 @@ const TerminalWrapper: React.FC<TerminalWrapperProps> = ({
 
     // Focus terminal when this tab becomes visible
     useEffect(() => {
-        node.setEventListener('visibility', () => {
+        node.setEventListener('visibility', (event: { visible: boolean }) => {
+            if (!event.visible) return;
             setTimeout(() => {
                 const ref = terminalRefs.current.get(terminalId);
                 try { ref?.fit(); ref?.focus(); } catch { /* ignore */ }

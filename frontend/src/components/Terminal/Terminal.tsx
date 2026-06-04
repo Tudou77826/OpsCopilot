@@ -655,6 +655,9 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         const cols = xtermRef.current.cols;
         const rows = xtermRef.current.rows;
 
+        // Guard: skip unreasonably small sizes (e.g. 2x1 from a hidden terminal)
+        if (cols < 5 || rows < 2) return;
+
         // @ts-ignore
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.ResizeTerminal) {
             // @ts-ignore
@@ -776,6 +779,8 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             }
         },
         fit: () => {
+            const container = terminalRef.current;
+            if (container && window.getComputedStyle(container).display === 'none') return;
             fitAddonRef.current?.fit();
             setTimeout(() => syncSizeToBackend(), 10);
         },

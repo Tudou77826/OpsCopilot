@@ -277,7 +277,7 @@ function App() {
         handleQuickCommand(cmd);
     };
 
-    const removeTerminal = (id: string) => {
+    const removeTerminal = useCallback((id: string) => {
         setTerminals(prev => prev.filter(t => t.id !== id));
         setBroadcastIds(prev => prev.filter(bid => bid !== id));
         // Remove listener
@@ -286,7 +286,7 @@ function App() {
             unlisteners.current.delete(id);
         }
         terminalRefs.current.delete(id);
-    };
+    }, []);
 
     const handleConnect = async (config: any) => {
         setStatus("正在连接...");
@@ -395,7 +395,7 @@ function App() {
         throw new Error("Wails 运行时未就绪");
     };
 
-    const handleTerminalData = (id: string, data: string) => {
+    const handleTerminalData = useCallback((id: string, data: string) => {
         // Use Refs to get latest state inside callback closure
         const currentBroadcastMode = isBroadcastModeRef.current;
         const currentBroadcastIds = broadcastIdsRef.current;
@@ -418,7 +418,7 @@ function App() {
                 window.go.main.App.Write(id, data);
             }
         }
-    };
+    }, []);
 
     const handleToggleBroadcast = (enabled: boolean) => {
         setIsBroadcastMode(enabled);
@@ -481,7 +481,7 @@ function App() {
         }
     };
 
-    const handleCloseTerminal = (id: string) => {
+    const handleCloseTerminal = useCallback((id: string) => {
         // Close session in backend
         // @ts-ignore
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.CloseSession) {
@@ -490,13 +490,13 @@ function App() {
         }
         // Remove from UI
         removeTerminal(id);
-    };
+    }, [removeTerminal]);
 
-    const handleRenameTerminal = (id: string, newTitle: string) => {
+    const handleRenameTerminal = useCallback((id: string, newTitle: string) => {
         setTerminals(prev => prev.map(t =>
             t.id === id ? { ...t, title: newTitle } : t
         ));
-    };
+    }, []);
 
     const handleDuplicateTerminal = (id: string) => {
         const term = terminals.find(t => t.id === id);
