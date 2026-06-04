@@ -49,6 +49,18 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
         return () => clearInterval(interval);
     }, []);
 
+    // Close context menu on any outside pointer event (including xterm.js terminals)
+    useEffect(() => {
+        if (!contextMenu) return;
+        const handler = (e: PointerEvent) => {
+            const menuEl = document.querySelector('[data-session-context-menu]');
+            if (menuEl && menuEl.contains(e.target as Node)) return;
+            setContextMenu(null);
+        };
+        document.addEventListener('pointerdown', handler);
+        return () => document.removeEventListener('pointerdown', handler);
+    }, [contextMenu]);
+
     const loadSessions = async () => {
         try {
             const data = await window.go.main.App.GetSavedSessions();
@@ -275,7 +287,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
 
             {/* Context Menu */}
             {contextMenu && (
-                <div style={{...styles.contextMenu, top: contextMenu.y, left: contextMenu.x}}>
+                <div style={{...styles.contextMenu, top: contextMenu.y, left: contextMenu.x}} data-session-context-menu>
                     {contextMenu.node.type === 'session' && (
                         <div 
                             style={{

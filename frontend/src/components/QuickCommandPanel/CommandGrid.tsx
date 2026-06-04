@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { QuickCommand } from './types';
 
 interface CommandGridProps {
@@ -12,6 +12,18 @@ interface CommandGridProps {
 const CommandGrid: React.FC<CommandGridProps> = ({ commands, onExecute, onEdit, onDelete, onAdd }) => {
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; cmdId: string } | null>(null);
     const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+    // Close context menu on any outside pointer event (including xterm.js terminals)
+    useEffect(() => {
+        if (!contextMenu) return;
+        const handler = (e: PointerEvent) => {
+            const menuEl = document.querySelector('[data-testid="command-context-menu"]');
+            if (menuEl && menuEl.contains(e.target as Node)) return;
+            setContextMenu(null);
+        };
+        document.addEventListener('pointerdown', handler);
+        return () => document.removeEventListener('pointerdown', handler);
+    }, [contextMenu]);
 
     return (
         <>

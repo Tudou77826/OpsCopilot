@@ -51,6 +51,18 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
 }) => {
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
 
+    // Close context menu on any outside pointer event (including sidebar, other components)
+    useEffect(() => {
+        if (!contextMenu) return;
+        const handler = (e: PointerEvent) => {
+            const menuEl = document.querySelector('[data-tab-context-menu]');
+            if (menuEl && menuEl.contains(e.target as Node)) return;
+            setContextMenu(null);
+        };
+        document.addEventListener('pointerdown', handler);
+        return () => document.removeEventListener('pointerdown', handler);
+    }, [contextMenu]);
+
     // Fast-lookup map for terminals (updated synchronously, no re-render)
     const terminalsMapRef = useRef(new Map<string, TerminalSession>());
     terminalsMapRef.current = new Map(terminals.map(t => [t.id, t]));
@@ -338,7 +350,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
     return (
         <div
             style={{ height: '100%', position: 'relative', overflow: 'hidden' }}
-            onClick={() => setContextMenu(null)}
+            onPointerDown={() => setContextMenu(null)}
         >
             {terminals.length === 0 ? (
                 <div style={{
@@ -503,6 +515,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, terminalId, terminals, 
 
     return (
         <div
+            data-tab-context-menu
             style={{
                 position: 'fixed',
                 top: y,
