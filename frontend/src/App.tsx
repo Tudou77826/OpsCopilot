@@ -11,7 +11,6 @@ import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal'
 import Sidebar from './components/Sidebar/Sidebar';
 import SettingsModal from './components/SettingsModal/SettingsModal';
 import ConfirmCloseModal from './components/ConfirmCloseModal/ConfirmCloseModal';
-import FileTransferWindow from './components/FileTransferWindow/FileTransferWindow';
 import CommandQueryOverlay, { CommandQueryResult } from './components/CommandQueryOverlay/CommandQueryOverlay';
 import ConnectErrorModal from './components/ConnectErrorModal/ConnectErrorModal';
 import { ConnectionConfig, SessionStatus, SessionDisconnectedEvent } from './types';
@@ -40,7 +39,6 @@ function App() {
     const [isConfirmCloseOpen, setIsConfirmCloseOpen] = useState(false);
     const [confirmCloseMessage, setConfirmCloseMessage] = useState("");
     const [completionDelay, setCompletionDelay] = useState(150);
-    const [isFileTransferOpen, setIsFileTransferOpen] = useState(false);
     const [terminalConfig, setTerminalConfig] = useState<TerminalConfig>({ scrollback: 5000, search_enabled: true, highlight_enabled: true });
     const [highlightRules, setHighlightRules] = useState<HighlightRule[]>([]);
     const [isCommandQueryOpen, setIsCommandQueryOpen] = useState(false);
@@ -661,6 +659,7 @@ function App() {
                             onCloseTerminal={handleCloseTerminal}
                             onRenameTerminal={handleRenameTerminal}
                             onDuplicateTerminal={handleDuplicateTerminal}
+                            activeTerminalId={activeTerminalId}
                             onActiveTerminalChange={setActiveTerminalId}
                             onReconnect={handleReconnect}
                             isBroadcastMode={isBroadcastMode}
@@ -670,7 +669,6 @@ function App() {
                             terminalConfig={terminalConfig}
                             highlightRules={highlightRules}
                             onSelectionParsed={setParsedTimestamp}
-                            onOpenFileTransfer={(id) => { setActiveTerminalId(id); setIsFileTransferOpen(true); }}
                         />
                     </div>
 
@@ -778,13 +776,6 @@ function App() {
                 onToggleBroadcast={handleToggleBroadcast}
                 onCompletionDelayChange={setCompletionDelay}
                 onHighlightRulesChange={setHighlightRules}
-            />
-
-            <FileTransferWindow
-                isOpen={isFileTransferOpen}
-                onClose={() => setIsFileTransferOpen(false)}
-                activeTerminalId={activeTerminalId}
-                terminals={terminals}
             />
 
             <ConfirmCloseModal

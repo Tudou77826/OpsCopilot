@@ -1,10 +1,13 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { Layout, Model, TabNode, TabSetNode, BorderNode, Actions, DockLocation, ITabRenderValues } from 'flexlayout-react';
 import TerminalComponent, { TerminalRef } from '../Terminal/Terminal';
+import FilesPanel from '../Sidebar/FilesPanel';
 import { HighlightRule, TerminalConfig } from '../Terminal/highlightTypes';
 import { SessionStatus } from '../../types';
 import { TimestampResult } from '../../utils/timestampParser';
 import { createInitialLayout } from './layoutConfig';
+
+const FILE_TRANSFER_TAB_ID = 'file-transfer';
 
 interface TerminalSession {
     id: string;
@@ -22,6 +25,7 @@ interface FlexLayoutAdapterProps {
     onRenameTerminal: (id: string, newTitle: string) => void;
     onDuplicateTerminal?: (id: string) => void;
     onReconnect?: (id: string) => void;
+    activeTerminalId?: string | null;
     onActiveTerminalChange?: (id: string | null) => void;
     isBroadcastMode?: boolean;
     broadcastIds?: string[];
@@ -30,7 +34,6 @@ interface FlexLayoutAdapterProps {
     terminalConfig?: TerminalConfig;
     highlightRules?: HighlightRule[];
     onSelectionParsed?: (result: TimestampResult | null) => void;
-    onOpenFileTransfer?: (terminalId: string) => void;
 }
 
 const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
@@ -41,6 +44,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
     onRenameTerminal,
     onDuplicateTerminal,
     onReconnect,
+    activeTerminalId,
     onActiveTerminalChange,
     isBroadcastMode,
     broadcastIds,
@@ -49,7 +53,6 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
     terminalConfig,
     highlightRules,
     onSelectionParsed,
-    onOpenFileTransfer,
 }) => {
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
 
@@ -74,6 +77,42 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
 
     // Track previous terminal IDs to compute diffs
     const prevTerminalIdsRef = useRef<Set<string>>(new Set());
+
+    const findFirstTabsetId = useCallback((): string | null => {
+        let targetId: string | null = null;
+        model.visitNodes((node: any) => {
+            if (node.getType() === 'tabset' && !targetId) {
+                targetId = node.getId();
+            }
+        });
+        return targetId;
+    }, [model]);
+
+    const openFileTransferTab = useCallback((terminalId?: string | null) => {
+        if (terminalId) {
+            onActiveTerminalChange?.(terminalId);
+        }
+
+        if (model.getNodeById(FILE_TRANSFER_TAB_ID)) {
+            model.doAction(Actions.selectTab(FILE_TRANSFER_TAB_ID));
+            return;
+        }
+
+        const targetId = findFirstTabsetId();
+        model.doAction(Actions.addTab(
+            {
+                type: 'tab',
+                id: FILE_TRANSFER_TAB_ID,
+                name: '文件传输',
+                component: 'fileTransfer',
+                enableRename: false,
+            },
+            targetId || model.getRootRow().getId(),
+            DockLocation.CENTER,
+            targetId ? -1 : 0,
+            true,
+        ));
+    }, [findFirstTabsetId, model, onActiveTerminalChange]);
 
     // --- Sync terminals[] → flexlayout Model ---
     useEffect(() => {
@@ -147,11 +186,17 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
     const handleAction = useCallback((action: any): any => {
         if (action.type === Actions.DELETE_TAB) {
             const tabId = action.data.node;
+            if (tabId === FILE_TRANSFER_TAB_ID) {
+                return action;
+            }
             onCloseTerminal(tabId);
             return undefined; // block flexlayout's own delete; our sync effect handles removal
         }
         if (action.type === Actions.RENAME_TAB) {
             const tabId = action.data.node;
+            if (tabId === FILE_TRANSFER_TAB_ID) {
+                return undefined;
+            }
             const newName = action.data.text;
             if (newName && newName.trim()) {
                 onRenameTerminal(tabId, newName.trim());
@@ -163,6 +208,15 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
 
     // --- Factory: render Terminal in each tab ---
     const factory = useCallback((node: TabNode) => {
+        if (node.getComponent() === 'fileTransfer') {
+            return (
+                <FilesPanel
+                    activeTerminalId={activeTerminalId || null}
+                    terminals={terminals}
+                />
+            );
+        }
+
         const terminalId = node.getId();
 
         return (
@@ -181,10 +235,29 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                 onToggleTerminalBroadcast={onToggleTerminalBroadcast}
             />
         );
-    }, [onTerminalData, terminalRefs, completionDelay, terminalConfig, highlightRules, onSelectionParsed, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast]);
+    }, [activeTerminalId, terminals, onTerminalData, terminalRefs, completionDelay, terminalConfig, highlightRules, onSelectionParsed, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast]);
 
     // --- Custom tab rendering ---
     const handleRenderTab = useCallback((node: TabNode, renderValues: ITabRenderValues) => {
+        if (node.getComponent() === 'fileTransfer') {
+            renderValues.leading = (
+                <span style={{
+                    color: '#58a6ff',
+                    fontSize: '12px',
+                    marginRight: '6px',
+                    flexShrink: 0,
+                }}>
+                    ⇄
+                </span>
+            );
+            renderValues.content = (
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    文件传输
+                </span>
+            );
+            return;
+        }
+
         const terminalId = node.getId();
         const term = terminalsMapRef.current.get(terminalId);
         if (!term) return;
@@ -324,7 +397,11 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                 });
             }
 
-            onActiveTerminalChange?.(activeId);
+            if (activeId && terminalsMapRef.current.has(activeId)) {
+                onActiveTerminalChange?.(activeId);
+            } else if (!activeId) {
+                onActiveTerminalChange?.(null);
+            }
         }
 
         // Fit only visible (selected) terminals after layout changes
@@ -343,7 +420,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
 
     // --- Context menu handler from right-click on tabs ---
     const handleContextMenu = useCallback((node: TabNode | TabSetNode | BorderNode, event: React.MouseEvent<HTMLElement>) => {
-        if (node instanceof TabNode) {
+        if (node instanceof TabNode && node.getId() !== FILE_TRANSFER_TAB_ID) {
             event.preventDefault();
             setContextMenu({ x: event.clientX, y: event.clientY, id: node.getId() });
         }
@@ -390,7 +467,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                     onCloseTerminal={(id) => { onCloseTerminal(id); setContextMenu(null); }}
                     onRename={(id, name) => { onRenameTerminal(id, name); setContextMenu(null); }}
                     onDuplicate={onDuplicateTerminal ? (id) => { onDuplicateTerminal(id); setContextMenu(null); } : undefined}
-                    onOpenFileTransfer={onOpenFileTransfer ? (id) => { onOpenFileTransfer(id); setContextMenu(null); } : undefined}
+                    onOpenFileTransfer={(id) => { openFileTransferTab(id); setContextMenu(null); }}
                     onClose={() => setContextMenu(null)}
                 />
             )}

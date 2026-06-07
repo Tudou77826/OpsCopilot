@@ -54,7 +54,7 @@ interface FileTransferBackend {
     LocalRename: (oldPath: string, newPath: string) => Promise<string>;
 }
 
-const appBackend = window.go.main.App as any;
+const appBackend = window.go?.main?.App as any;
 const defaultBackend: FileTransferBackend = {
     FTCheck: (sessionId: string) => appBackend.FTCheck(sessionId),
     FTList: (sessionId: string, remotePath: string) => appBackend.FTList(sessionId, remotePath),
@@ -84,9 +84,38 @@ type TaskState = {
     step?: string;
 };
 
+type LayoutMode = 'wide' | 'medium' | 'narrow';
+type NarrowPane = 'local' | 'remote' | 'queue';
+
+const NARROW_LAYOUT_WIDTH = 640;
+const WIDE_LAYOUT_WIDTH = 920;
+const LAYOUT_HYSTERESIS = 16;
+
+export const getFileTransferLayoutMode = (width: number): LayoutMode => {
+    if (width < NARROW_LAYOUT_WIDTH) return 'narrow';
+    if (width < WIDE_LAYOUT_WIDTH) return 'medium';
+    return 'wide';
+};
+
+export const getStableFileTransferLayoutMode = (width: number, currentMode: LayoutMode): LayoutMode => {
+    if (currentMode === 'narrow') {
+        if (width < NARROW_LAYOUT_WIDTH + LAYOUT_HYSTERESIS) return 'narrow';
+        return getFileTransferLayoutMode(width);
+    }
+    if (currentMode === 'wide') {
+        if (width >= WIDE_LAYOUT_WIDTH - LAYOUT_HYSTERESIS) return 'wide';
+        return getFileTransferLayoutMode(width);
+    }
+
+    if (width < NARROW_LAYOUT_WIDTH - LAYOUT_HYSTERESIS) return 'narrow';
+    if (width >= WIDE_LAYOUT_WIDTH + LAYOUT_HYSTERESIS) return 'wide';
+    return 'medium';
+};
+
 type FilePaneProps = {
     title: string;
     badge?: string;
+    owner: string;
     path: string;
     pathInput: string;
     onPathInputChange: (p: string) => void;
@@ -100,17 +129,96 @@ type FilePaneProps = {
     onOpenFile?: (p: string) => void;
     disabled?: boolean;
     toolbar?: React.ReactNode;
+    layoutMode: LayoutMode;
 };
 
-function FilePane({ title, badge, path, pathInput, onPathInputChange, onGo, onUp, onRefresh, entries, selected, onSelect, onOpenDir, onOpenFile, disabled, toolbar }: FilePaneProps) {
+type FileColumnKey = 'name' | 'owner' | 'size' | 'time';
+
+const formatFileSize = (size: number) => {
+    if (!Number.isFinite(size) || size < 0) return '-';
+    if (size < 1024) return `${size} B`;
+    const units = ['KB', 'MB', 'GB', 'TB'];
+    let value = size / 1024;
+    let unit = units[0];
+    for (let i = 1; i < units.length && value >= 1024; i += 1) {
+        value /= 1024;
+        unit = units[i];
+    }
+    return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${unit}`;
+};
+
+function FilePane({ title, badge, owner, path, pathInput, onPathInputChange, onGo, onUp, onRefresh, entries, selected, onSelect, onOpenDir, onOpenFile, disabled, toolbar, layoutMode }: FilePaneProps) {
+    const [columnWidths, setColumnWidths] = useState<Record<FileColumnKey, number>>({
+        name: 280,
+        owner: 74,
+        size: 92,
+        time: 152,
+    });
+    const resizeRef = useRef<{ key: FileColumnKey; startX: number; startWidth: number } | null>(null);
+
+    useEffect(() => {
+        const onMove = (event: MouseEvent) => {
+            const state = resizeRef.current;
+            if (!state) return;
+            const minWidth: Record<FileColumnKey, number> = {
+                name: 160,
+                owner: 58,
+                size: 72,
+                time: 116,
+            };
+            const nextWidth = Math.max(minWidth[state.key], state.startWidth + event.clientX - state.startX);
+            setColumnWidths(prev => ({ ...prev, [state.key]: nextWidth }));
+        };
+        const onUp = () => {
+            resizeRef.current = null;
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+        return () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+    }, []);
+
+    const visibleColumns: FileColumnKey[] = layoutMode === 'wide'
+        ? ['name', 'owner', 'size', 'time']
+        : layoutMode === 'medium'
+            ? ['name', 'size', 'time']
+            : ['name'];
+    const isColumnVisible = (key: FileColumnKey) => visibleColumns.includes(key);
+
+    const renderHeaderCell = (label: string, key: FileColumnKey, extraStyle?: React.CSSProperties) => (
+        <th style={{ ...styles.th, ...extraStyle }}>
+            <span>{label}</span>
+            {layoutMode !== 'narrow' ? (
+                <span
+                    style={styles.colResizeHandle}
+                    onMouseDown={(event) => {
+                        event.preventDefault();
+                        resizeRef.current = { key, startX: event.clientX, startWidth: columnWidths[key] };
+                    }}
+                />
+            ) : null}
+        </th>
+    );
+
+    const openEntry = (entry: FileEntry) => {
+        if (disabled) return;
+        if (entry.isDir) {
+            onOpenDir(entry.path);
+        } else if (onOpenFile) {
+            onOpenFile(entry.path);
+        }
+    };
+
     return (
-        <div style={{ ...styles.pane, opacity: disabled ? 0.6 : 1 }}>
+        <div style={{ ...styles.pane, opacity: disabled ? 0.6 : 1 }} data-testid={`file-pane-${title}`} data-layout-mode={layoutMode}>
             <div style={styles.paneHeader}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={styles.paneTitleGroup}>
                     <div style={{ color: '#fff', fontSize: '12px', fontWeight: 600 }}>{title}</div>
                     {badge ? <div style={styles.badge}>{badge}</div> : null}
                 </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={styles.paneToolbar}>
                     {toolbar}
                 </div>
             </div>
@@ -129,14 +237,44 @@ function FilePane({ title, badge, path, pathInput, onPathInputChange, onGo, onUp
                 <button style={styles.btn} onClick={onGo} disabled={disabled}>进入</button>
             </div>
             <div style={styles.paneBody}>
+                {layoutMode === 'narrow' ? (
+                    <div style={styles.compactList} data-testid={`file-list-${title}`}>
+                        {entries.map(e => {
+                            const size = e.isDir ? '-' : formatFileSize(e.size);
+                            const time = e.modTime ? new Date(e.modTime).toLocaleString() : '';
+                            return (
+                                <div
+                                    key={e.path}
+                                    style={{ ...styles.compactRow, background: selected === e.path ? '#2a2a2a' : 'transparent', cursor: disabled ? 'not-allowed' : 'pointer' }}
+                                    onClick={() => !disabled && onSelect(e.path)}
+                                    onDoubleClick={() => openEntry(e)}
+                                    title={e.name}
+                                >
+                                    <div style={styles.compactMain}>
+                                        <span style={e.isDir ? styles.kindDir : styles.kindFile}>{e.isDir ? 'DIR' : 'FILE'}</span>
+                                        <span style={styles.compactName}>{e.name}</span>
+                                    </div>
+                                    <div style={styles.compactMeta}>{owner} · {size}{time ? ` · ${time}` : ''}</div>
+                                </div>
+                            );
+                        })}
+                        {entries.length === 0 ? <div style={styles.emptyState}>暂无数据</div> : null}
+                    </div>
+                ) : (
                 <div style={styles.fileTableWrap}>
                     <table style={styles.table}>
+                        <colgroup>
+                            {isColumnVisible('name') ? <col style={{ width: columnWidths.name }} /> : null}
+                            {isColumnVisible('owner') ? <col style={{ width: columnWidths.owner }} /> : null}
+                            {isColumnVisible('size') ? <col style={{ width: columnWidths.size }} /> : null}
+                            {isColumnVisible('time') ? <col style={{ width: columnWidths.time }} /> : null}
+                        </colgroup>
                         <thead>
                             <tr style={{ background: '#1e1e1e' }}>
-                                <th style={styles.th}>名称</th>
-                                <th style={styles.th}>类型</th>
-                                <th style={styles.th}>大小</th>
-                                <th style={styles.th}>更新时间</th>
+                                {isColumnVisible('name') ? renderHeaderCell('名称', 'name') : null}
+                                {isColumnVisible('owner') ? renderHeaderCell('所属', 'owner', styles.cellOwner) : null}
+                                {isColumnVisible('size') ? renderHeaderCell('大小', 'size', styles.cellSize) : null}
+                                {isColumnVisible('time') ? renderHeaderCell('更新时间', 'time', styles.cellTime) : null}
                             </tr>
                         </thead>
                         <tbody>
@@ -146,28 +284,27 @@ function FilePane({ title, badge, path, pathInput, onPathInputChange, onGo, onUp
                                     style={{ borderTop: '1px solid #333', background: selected === e.path ? '#2a2a2a' : 'transparent', cursor: disabled ? 'not-allowed' : 'pointer' }}
                                     onClick={() => !disabled && onSelect(e.path)}
                                     onDoubleClick={() => {
-                                        if (disabled) return;
-                                        if (e.isDir) {
-                                            onOpenDir(e.path);
-                                        } else if (onOpenFile) {
-                                            onOpenFile(e.path);
-                                        }
+                                        openEntry(e);
                                     }}
                                 >
-                                    <td style={{ ...styles.td, ...styles.cellName }} title={e.name}>{e.name}</td>
-                                    <td style={{ ...styles.td, ...styles.cellType }}>{e.isDir ? '目录' : '文件'}</td>
-                                    <td style={{ ...styles.td, ...styles.cellSize }}>{e.isDir ? '-' : e.size}</td>
-                                    <td style={{ ...styles.td, ...styles.cellTime }}>{e.modTime ? new Date(e.modTime).toLocaleString() : ''}</td>
+                                    <td style={{ ...styles.td, ...styles.cellName }} title={e.name}>
+                                        <span style={e.isDir ? styles.kindDir : styles.kindFile}>{e.isDir ? 'DIR' : 'FILE'}</span>
+                                        <span>{e.name}</span>
+                                    </td>
+                                    {isColumnVisible('owner') ? <td style={{ ...styles.td, ...styles.cellOwner }}>{owner}</td> : null}
+                                    {isColumnVisible('size') ? <td style={{ ...styles.td, ...styles.cellSize }}>{e.isDir ? '-' : formatFileSize(e.size)}</td> : null}
+                                    {isColumnVisible('time') ? <td style={{ ...styles.td, ...styles.cellTime }}>{e.modTime ? new Date(e.modTime).toLocaleString() : ''}</td> : null}
                                 </tr>
                             ))}
                             {entries.length === 0 ? (
                                 <tr>
-                                    <td style={styles.td} colSpan={4}>暂无数据</td>
+                                    <td style={styles.td} colSpan={visibleColumns.length}>暂无数据</td>
                                 </tr>
                             ) : null}
                         </tbody>
                     </table>
                 </div>
+                )}
             </div>
         </div>
     );
@@ -202,12 +339,45 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
     const [drawerOpen, setDrawerOpen] = useState(false);
     const refreshTimerRef = useRef<number | null>(null);
     const refreshRetryTimerRef = useRef<number | null>(null);
+    const containerRef = useRef<HTMLDivElement | null>(null);
     const sessionIdRef = useRef<string>(sessionId);
     const protocolRef = useRef<string>(protocol);
     const localPathRef = useRef<string>(localPath);
     const remotePathRef = useRef<string>(remotePath);
     const localEntriesRef = useRef<FileEntry[]>(localEntries);
     const remoteEntriesRef = useRef<FileEntry[]>(remoteEntries);
+    const [layoutMode, setLayoutMode] = useState<LayoutMode>('wide');
+    const [narrowPane, setNarrowPane] = useState<NarrowPane>('local');
+
+    useEffect(() => {
+        const getObservedWidth = (entry?: ResizeObserverEntry) => {
+            const borderBoxSize = entry?.borderBoxSize;
+            const borderBox = Array.isArray(borderBoxSize) ? borderBoxSize[0] : borderBoxSize;
+            if (borderBox?.inlineSize) return Math.round(borderBox.inlineSize);
+            return Math.round(containerRef.current?.offsetWidth || containerRef.current?.clientWidth || window.innerWidth);
+        };
+
+        const updateLayoutMode = (width = getObservedWidth()) => {
+            setLayoutMode(prev => {
+                const next = getStableFileTransferLayoutMode(width, prev);
+                return next === prev ? prev : next;
+            });
+        };
+
+        updateLayoutMode();
+
+        if (typeof ResizeObserver !== 'undefined' && containerRef.current) {
+            const observer = new ResizeObserver((entries) => {
+                updateLayoutMode(getObservedWidth(entries[0]));
+            });
+            observer.observe(containerRef.current);
+            return () => observer.disconnect();
+        }
+
+        const onWindowResize = () => updateLayoutMode();
+        window.addEventListener('resize', onWindowResize);
+        return () => window.removeEventListener('resize', onWindowResize);
+    }, []);
 
     useEffect(() => {
         sessionIdRef.current = sessionId;
@@ -327,22 +497,29 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
 
     const refreshProtocol = async (sid?: string) => {
         const targetSessionId = sid || sessionIdRef.current;
-        if (!targetSessionId) return;
+        if (!targetSessionId) return '';
         try {
             const raw = await api.FTCheck(targetSessionId);
             const resp = parseResp(raw);
             if (!resp) {
+                protocolRef.current = '';
                 setProtocol('');
-                return;
+                return '';
             }
             if (!resp.ok) {
+                protocolRef.current = '';
                 setProtocol('');
                 setMsg(formatError(resp));
-                return;
+                return '';
             }
-            setProtocol(resp.message || '');
+            const nextProtocol = resp.message || '';
+            protocolRef.current = nextProtocol;
+            setProtocol(nextProtocol);
+            return nextProtocol;
         } catch {
+            protocolRef.current = '';
             setProtocol('');
+            return '';
         }
     };
 
@@ -1026,10 +1203,20 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
         .filter(t => !sessionId || t.sessionId === sessionId)
         .slice()
         .sort((a, b) => a.taskId.localeCompare(b.taskId));
+    const currentSession = terminals.find(t => t.id === sessionId);
+    const sessionTitle = currentSession?.title || sessionId || '-';
+    const isNarrow = layoutMode === 'narrow';
+    const panelRootStyle = isNarrow ? { ...styles.root, ...styles.rootNarrow } : styles.root;
+    const splitStyle = layoutMode === 'narrow'
+        ? { ...styles.split, ...styles.splitNarrow }
+        : layoutMode === 'medium'
+            ? { ...styles.split, ...styles.splitMedium }
+            : styles.split;
+    const showQueue = drawerOpen || (isNarrow && narrowPane === 'queue');
 
     return (
-        <div style={{ padding: '12px', color: '#ddd', display: 'flex', flexDirection: 'column', gap: '10px', height: '100%', minHeight: 0, overflow: 'auto' }}>
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' as const }}>
+        <div ref={containerRef} style={panelRootStyle} data-testid="files-panel" data-layout-mode={layoutMode}>
+            <div style={styles.topBar}>
                 <div style={styles.infoGrid}>
                     <div style={styles.infoField}>
                         <span style={styles.infoLabel}>当前会话</span>
@@ -1055,10 +1242,24 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                     </div>
                 </div>
                 <div style={{ flex: 1 }} />
-                <button style={styles.btnSecondary} onClick={() => setDrawerOpen(v => !v)}>
-                    {drawerOpen ? '隐藏队列' : '显示队列'}
+                <button style={styles.btnSecondary} onClick={() => {
+                    if (isNarrow) {
+                        setNarrowPane(v => v === 'queue' ? 'local' : 'queue');
+                        return;
+                    }
+                    setDrawerOpen(v => !v);
+                }}>
+                    {showQueue ? '隐藏队列' : '显示队列'}
                 </button>
             </div>
+
+            {isNarrow ? (
+                <div style={styles.segmented} role="tablist" aria-label="文件传输视图">
+                    <button style={narrowPane === 'local' ? styles.segmentedActive : styles.segmentedButton} onClick={() => setNarrowPane('local')}>本地</button>
+                    <button style={narrowPane === 'remote' ? styles.segmentedActive : styles.segmentedButton} onClick={() => setNarrowPane('remote')}>远端</button>
+                    <button style={narrowPane === 'queue' ? styles.segmentedActive : styles.segmentedButton} onClick={() => setNarrowPane('queue')}>队列</button>
+                </div>
+            ) : null}
 
             {msg ? <div style={{ color: '#aaa', fontSize: '12px' }}>{msg}</div> : null}
 
@@ -1074,41 +1275,46 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                 </div>
             ) : null}
 
-            <div style={styles.split}>
-                <FilePane
-                    title="本地"
-                    badge={localPath ? localPath : ''}
-                    path={localPath}
-                    pathInput={localPathInput}
-                    onPathInputChange={setLocalPathInput}
-                    onGo={() => refreshLocal(localPathInput)}
-                    onUp={() => {
-                        const p = localParent(localPath);
-                        refreshLocal(p);
-                    }}
-                    onRefresh={() => refreshLocal(localPath)}
-                    entries={localEntries}
-                    selected={localSelected}
-                    onSelect={setLocalSelected}
-                    onOpenDir={(p) => {
-                        setLocalSelected('');
-                        refreshLocal(p);
-                    }}
-                    onOpenFile={(p) => {
-                        const entry = localEntries.find(e => e.path === p);
-                        if (!entry || entry.isDir) return;
-                        startUploadFile(entry);
-                    }}
-                    toolbar={
-                        <>
-                            <button style={styles.btnSecondary} onClick={createLocalFolder} disabled={loading}>新建</button>
-                            <button style={styles.btnSecondary} onClick={renameLocalSelected} disabled={loading || !localSelected}>重命名</button>
-                            <button style={styles.btnDanger} onClick={deleteLocalSelected} disabled={loading || !localSelected}>删除</button>
-                        </>
-                    }
-                />
+            {(!isNarrow || narrowPane !== 'queue') ? (
+            <div style={splitStyle} data-testid="file-transfer-split">
+                {(!isNarrow || narrowPane === 'local') ? (
+                    <FilePane
+                        title="本地"
+                        badge={localPath ? localPath : ''}
+                        owner="本地"
+                        path={localPath}
+                        pathInput={localPathInput}
+                        onPathInputChange={setLocalPathInput}
+                        onGo={() => refreshLocal(localPathInput)}
+                        onUp={() => {
+                            const p = localParent(localPath);
+                            refreshLocal(p);
+                        }}
+                        onRefresh={() => refreshLocal(localPath)}
+                        entries={localEntries}
+                        selected={localSelected}
+                        onSelect={setLocalSelected}
+                        onOpenDir={(p) => {
+                            setLocalSelected('');
+                            refreshLocal(p);
+                        }}
+                        onOpenFile={(p) => {
+                            const entry = localEntries.find(e => e.path === p);
+                            if (!entry || entry.isDir) return;
+                            startUploadFile(entry);
+                        }}
+                        layoutMode={layoutMode}
+                        toolbar={
+                            <>
+                                <button style={styles.btnSecondary} onClick={createLocalFolder} disabled={loading}>新建</button>
+                                <button style={styles.btnSecondary} onClick={renameLocalSelected} disabled={loading || !localSelected}>重命名</button>
+                                <button style={styles.btnDanger} onClick={deleteLocalSelected} disabled={loading || !localSelected}>删除</button>
+                            </>
+                        }
+                    />
+                ) : null}
 
-                {isSCPMode() ? (
+                {(!isNarrow || narrowPane === 'remote') ? (isSCPMode() ? (
                     <div style={styles.scpPane}>
                         <div style={styles.paneHeader}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1135,6 +1341,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                     <FilePane
                         title="远端"
                         badge={remotePath}
+                        owner={sessionTitle}
                         path={remotePath}
                         pathInput={remotePathInput}
                         onPathInputChange={setRemotePathInput}
@@ -1155,6 +1362,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                             startDownloadFile(entry);
                         }}
                         disabled={!isSFTPSupported()}
+                        layoutMode={layoutMode}
                         toolbar={
                             <>
                                 <button style={styles.btnSecondary} onClick={createRemoteFolder} disabled={loading || !isSFTPSupported()}>新建</button>
@@ -1164,15 +1372,19 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                             </>
                         }
                     />
-                )}
+                )) : null}
             </div>
+            ) : null}
 
-            {drawerOpen ? (
+            {showQueue ? (
                 <div style={styles.drawer}>
                     <div style={styles.drawerHeader}>
                         <div style={{ color: '#fff', fontSize: '13px', fontWeight: 600 }}>传输队列</div>
                         <div style={{ flex: 1 }} />
-                        <button style={styles.btnSecondary} onClick={() => setDrawerOpen(false)}>收起</button>
+                        <button style={styles.btnSecondary} onClick={() => {
+                            setDrawerOpen(false);
+                            if (isNarrow) setNarrowPane('local');
+                        }}>收起</button>
                     </div>
                     <div style={styles.drawerBody}>
                         {taskList.length === 0 ? (
@@ -1237,6 +1449,55 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
 };
 
 const styles: Record<string, React.CSSProperties> = {
+    root: {
+        padding: '12px',
+        color: '#ddd',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+        height: '100%',
+        minHeight: 0,
+        overflow: 'hidden'
+    },
+    rootNarrow: {
+        padding: '8px',
+        gap: '8px'
+    },
+    topBar: {
+        display: 'flex',
+        gap: '10px',
+        alignItems: 'center',
+        flexWrap: 'wrap' as const,
+        flexShrink: 0
+    },
+    segmented: {
+        display: 'flex',
+        border: '1px solid #333',
+        borderRadius: '6px',
+        overflow: 'hidden',
+        flexShrink: 0
+    },
+    segmentedButton: {
+        flex: 1,
+        padding: '6px 8px',
+        border: 'none',
+        borderRight: '1px solid #333',
+        backgroundColor: '#1e1e1e',
+        color: '#aaa',
+        cursor: 'pointer',
+        fontSize: '12px'
+    },
+    segmentedActive: {
+        flex: 1,
+        padding: '6px 8px',
+        border: 'none',
+        borderRight: '1px solid #333',
+        backgroundColor: '#094771',
+        color: '#fff',
+        cursor: 'pointer',
+        fontSize: '12px',
+        fontWeight: 600
+    },
     select: {
         padding: '6px 8px',
         borderRadius: '4px',
@@ -1244,15 +1505,20 @@ const styles: Record<string, React.CSSProperties> = {
         backgroundColor: '#1e1e1e',
         color: '#fff',
         outline: 'none',
-        minWidth: '220px'
+        minWidth: '180px',
+        maxWidth: '100%'
     },
     badge: {
-        padding: '4px 8px',
+        padding: '2px 6px',
         borderRadius: '999px',
         border: '1px solid #3c3c3c',
         backgroundColor: '#1e1e1e',
         color: '#ddd',
-        fontSize: '12px'
+        fontSize: '11px',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        maxWidth: '260px'
     },
     badgeMuted: {
         padding: '4px 8px',
@@ -1263,84 +1529,109 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: '12px'
     },
     btn: {
-        padding: '6px 10px',
+        padding: '4px 8px',
         borderRadius: '4px',
         border: 'none',
         backgroundColor: '#007acc',
         color: '#fff',
         cursor: 'pointer',
-        fontSize: '12px',
-        minWidth: '78px'
+        fontSize: '11px',
+        minWidth: '58px'
     },
     btnSecondary: {
-        padding: '6px 10px',
+        padding: '4px 8px',
         borderRadius: '4px',
         border: '1px solid #3c3c3c',
         backgroundColor: '#1e1e1e',
         color: '#ddd',
         cursor: 'pointer',
-        fontSize: '12px'
+        fontSize: '11px'
     },
     btnDanger: {
-        padding: '6px 10px',
+        padding: '4px 8px',
         borderRadius: '4px',
         border: '1px solid #7a2e2e',
         backgroundColor: '#2a1a1a',
         color: '#f2b8b5',
         cursor: 'pointer',
-        fontSize: '12px'
+        fontSize: '11px'
     },
     iconBtn: {
-        padding: '6px 8px',
+        padding: '4px 7px',
         borderRadius: '4px',
         border: '1px solid #3c3c3c',
         backgroundColor: '#1e1e1e',
         color: '#ddd',
         cursor: 'pointer',
-        fontSize: '12px'
+        fontSize: '11px',
+        minWidth: '30px'
     },
     split: {
         flex: 1,
         display: 'flex',
-        gap: '10px',
+        gap: '8px',
         overflow: 'hidden',
         minHeight: 0
+    },
+    splitMedium: {
+        gap: '6px'
+    },
+    splitNarrow: {
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '8px'
     },
     pane: {
         flex: 1,
         border: '1px solid #333',
-        borderRadius: '8px',
+        borderRadius: '6px',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
-        minHeight: 0
+        minHeight: 0,
+        minWidth: 0
+    },
+    paneTitleGroup: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        minWidth: 0,
+        overflow: 'hidden'
+    },
+    paneToolbar: {
+        display: 'flex',
+        gap: '6px',
+        flexWrap: 'wrap' as const,
+        justifyContent: 'flex-end',
+        flexShrink: 0
     },
     paneHeader: {
-        padding: '10px 10px',
+        padding: '7px 8px',
         borderBottom: '1px solid #333',
         backgroundColor: '#252526',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: '8px'
+        gap: '6px'
     },
     pathBar: {
-        padding: '8px 10px',
+        padding: '6px 8px',
         borderBottom: '1px solid #333',
         display: 'flex',
-        gap: '8px',
+        gap: '6px',
         alignItems: 'center',
-        backgroundColor: '#1e1e1e'
+        backgroundColor: '#1e1e1e',
+        flexWrap: 'wrap' as const
     },
     pathInput: {
         flex: 1,
-        padding: '6px 8px',
+        padding: '4px 7px',
         borderRadius: '4px',
         border: '1px solid #3c3c3c',
         backgroundColor: '#1e1e1e',
         color: '#fff',
         outline: 'none',
-        fontSize: '12px'
+        fontSize: '11px'
     },
     paneBody: {
         flex: 1,
@@ -1354,42 +1645,109 @@ const styles: Record<string, React.CSSProperties> = {
     table: {
         width: '100%',
         borderCollapse: 'collapse',
-        tableLayout: 'fixed'
+        tableLayout: 'fixed',
+        minWidth: '598px'
     },
     th: {
         textAlign: 'left',
         fontWeight: 600,
-        fontSize: '12px',
+        fontSize: '11px',
         color: '#bbb',
-        padding: '8px 10px',
+        padding: '5px 8px',
         position: 'sticky' as const,
         top: 0,
         whiteSpace: 'nowrap',
         overflow: 'hidden',
-        textOverflow: 'ellipsis'
+        textOverflow: 'ellipsis',
+        userSelect: 'none' as const
     },
     td: {
-        fontSize: '12px',
+        fontSize: '11px',
         color: '#ddd',
-        padding: '8px 10px',
+        padding: '4px 8px',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
-        textOverflow: 'ellipsis'
+        textOverflow: 'ellipsis',
+        height: '24px'
     },
     cellName: {
-        width: '50%'
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        minWidth: 0
     },
-    cellType: {
-        width: '70px',
-        minWidth: '70px'
+    cellOwner: {
+        color: '#9fb3c8'
     },
     cellSize: {
-        width: '90px',
-        minWidth: '90px'
+        textAlign: 'right' as const,
+        color: '#c8d1dc'
     },
     cellTime: {
-        width: '180px',
-        minWidth: '180px'
+        color: '#9aa4af'
+    },
+    colResizeHandle: {
+        position: 'absolute' as const,
+        top: 0,
+        right: 0,
+        width: '7px',
+        height: '100%',
+        cursor: 'col-resize',
+        borderRight: '1px solid transparent'
+    },
+    compactList: {
+        flex: 1,
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        minHeight: 0
+    },
+    compactRow: {
+        borderTop: '1px solid #333',
+        padding: '7px 8px',
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '3px'
+    },
+    compactMain: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '7px',
+        minWidth: 0
+    },
+    compactName: {
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        minWidth: 0,
+        color: '#ddd',
+        fontSize: '12px'
+    },
+    compactMeta: {
+        color: '#8f9aaa',
+        fontSize: '10px',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        paddingLeft: '33px'
+    },
+    emptyState: {
+        color: '#888',
+        fontSize: '12px',
+        padding: '10px 8px'
+    },
+    kindDir: {
+        flexShrink: 0,
+        color: '#8cc8ff',
+        fontSize: '9px',
+        fontWeight: 700,
+        minWidth: '26px'
+    },
+    kindFile: {
+        flexShrink: 0,
+        color: '#9aa4af',
+        fontSize: '9px',
+        fontWeight: 700,
+        minWidth: '26px'
     },
     scpPane: {
         flex: 1,

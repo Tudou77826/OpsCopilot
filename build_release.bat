@@ -1,16 +1,15 @@
 @echo off
-setlocal
+setlocal EnableExtensions
 
-:: ==============================
-:: OpsCopilot 构建脚本 (Release)
-:: ==============================
+rem ==============================
+rem OpsCopilot Release Build Script
+rem ==============================
 
-:: CI 环境下跳过 pause
-if "%CI%"=="true" set NOPAUSE=true
+rem Skip pause in CI.
+if "%CI%"=="true" set "NOPAUSE=true"
 
 echo [INFO] Building OpsCopilot for Production...
 
-:: 检查 wails 是否安装
 where wails >nul 2>nul
 if %errorlevel% neq 0 (
     echo [ERROR] Wails CLI not found. Please install it first.
@@ -18,7 +17,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-:: 提取版本号（优先使用环境变量，回退到 git tag）
+rem Extract version: prefer CI tag, fallback to git describe.
 if defined GITHUB_REF_NAME (
     set "TAG_VERSION=%GITHUB_REF_NAME%"
 ) else (
@@ -27,17 +26,14 @@ if defined GITHUB_REF_NAME (
 if "%TAG_VERSION%"=="" set "TAG_VERSION=dev"
 echo [INFO] Building version: %TAG_VERSION%
 
-:: 执行构建
-:: 注意：这里不设置 OPSCOPILOT_DEV_MODE，确保日志只输出到文件
+rem Build the Wails app. Do not set OPSCOPILOT_DEV_MODE for release builds.
 wails build -ldflags "-X main.Version=%TAG_VERSION%"
-
 if %errorlevel% neq 0 (
     echo [ERROR] Build failed.
     if not "%NOPAUSE%"=="true" pause
     exit /b 1
 )
 
-:: 复制配置文件到输出目录
 echo [INFO] Copying configuration files to build/bin/...
 if exist "config.json" (
     copy /Y "config.json" "build\bin\" >nul
@@ -64,7 +60,6 @@ if exist "mcp-config.example.json" (
     echo [INFO]   - mcp-config.example.json
 )
 
-:: 构建 MCP Server
 echo [INFO] Building MCP Server...
 go build -o "build\bin\mcp-server.exe" ./cmd/mcp-server/
 if %errorlevel% neq 0 (
