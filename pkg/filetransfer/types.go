@@ -40,6 +40,8 @@ type Entry struct {
 	Size    int64     `json:"size"`
 	Mode    uint32    `json:"mode"`
 	ModTime time.Time `json:"modTime"`
+	Owner   string    `json:"owner,omitempty"`
+	Group   string    `json:"group,omitempty"`
 }
 
 type Progress struct {

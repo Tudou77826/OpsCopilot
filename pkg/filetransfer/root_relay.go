@@ -655,7 +655,7 @@ func (t *RootRelayTransport) List(ctx context.Context, remotePath string) ([]Ent
 	// Try find -printf first (more reliable), fall back to ls
 	// Note: %T@ is modification time as seconds.nanoseconds since epoch (NOT %Y which is link type)
 	cmd := fmt.Sprintf(
-		`find %s -maxdepth 1 -printf '%%F\t%%s\t%%T@\t%%f\n' 2>/dev/null`,
+		`find %s -maxdepth 1 -printf '%%F\t%%s\t%%T@\t%%u\t%%g\t%%f\n' 2>/dev/null`,
 		shellSingleQuote(p),
 	)
 	output, err := t.runAsRoot(ctx, cmd)
@@ -669,6 +669,9 @@ func (t *RootRelayTransport) List(ctx context.Context, remotePath string) ([]Ent
 		filtered := make([]Entry, 0, len(entries))
 		for _, e := range entries {
 			if e.Name != "" {
+				if e.Path == "" {
+					e.Path = joinRemote(p, e.Name)
+				}
 				filtered = append(filtered, e)
 			}
 		}
@@ -688,7 +691,7 @@ func (t *RootRelayTransport) List(ctx context.Context, remotePath string) ([]Ent
 func (t *RootRelayTransport) Stat(ctx context.Context, remotePath string) (Entry, error) {
 	p := normalizeRemotePath(remotePath)
 
-	cmd := fmt.Sprintf("stat -c '%%F\t%%s\t%%Y' %s", shellSingleQuote(p))
+	cmd := fmt.Sprintf("stat -c '%%F\t%%s\t%%Y\t%%U\t%%G' %s", shellSingleQuote(p))
 	output, err := t.runAsRoot(ctx, cmd)
 	if err != nil {
 		return Entry{}, err
@@ -877,13 +880,17 @@ func parseFindOutput(output string) []Entry {
 		if line == "" {
 			continue
 		}
-		parts := strings.SplitN(line, "\t", 4)
-		if len(parts) != 4 {
+		parts := strings.SplitN(line, "\t", 6)
+		if len(parts) != 6 && len(parts) != 4 {
 			// Not find output format, return nil to trigger ls fallback
 			return nil
 		}
 
-		name := parts[3]
+		nameIndex := 3
+		if len(parts) == 6 {
+			nameIndex = 5
+		}
+		name := parts[nameIndex]
 		if name == "" || name == "." || name == ".." {
 			continue
 		}
@@ -905,14 +912,19 @@ func parseFindOutput(output string) []Entry {
 			mode = 0100644
 		}
 
-		hasValid = true
-		entries = append(entries, Entry{
+		entry := Entry{
 			Name:    name,
 			IsDir:   isDir,
 			Size:    size,
 			Mode:    mode,
 			ModTime: time.Unix(modTimeSec, 0),
-		})
+		}
+		if len(parts) == 6 {
+			entry.Owner = parts[3]
+			entry.Group = parts[4]
+		}
+		hasValid = true
+		entries = append(entries, entry)
 	}
 
 	if !hasValid {
@@ -970,6 +982,8 @@ func parseLsOutput(output, parentPath string) ([]Entry, error) {
 			Size:    size,
 			Mode:    mode,
 			ModTime: modTime,
+			Owner:   fields[2],
+			Group:   fields[3],
 		})
 	}
 
@@ -978,8 +992,8 @@ func parseLsOutput(output, parentPath string) ([]Entry, error) {
 
 // parseStatOutput parses stat -c '%F\t%s\t%Y' output.
 func parseStatOutput(output, filePath string) (Entry, error) {
-	parts := strings.SplitN(strings.TrimSpace(output), "\t", 3)
-	if len(parts) != 3 {
+	parts := strings.SplitN(strings.TrimSpace(output), "\t", 5)
+	if len(parts) != 5 && len(parts) != 3 {
 		return Entry{}, &TransferError{Code: ErrorCodeNotFound, Message: "stat 解析失败: " + output}
 	}
 
@@ -994,12 +1008,17 @@ func parseStatOutput(output, filePath string) (Entry, error) {
 		mode = 0100644
 	}
 
-	return Entry{
+	entry := Entry{
 		Path:    filePath,
 		Name:    path.Base(filePath),
 		IsDir:   isDir,
 		Size:    size,
 		Mode:    mode,
 		ModTime: time.Unix(modTimeSec, 0),
-	}, nil
+	}
+	if len(parts) == 5 {
+		entry.Owner = parts[3]
+		entry.Group = parts[4]
+	}
+	return entry, nil
 }

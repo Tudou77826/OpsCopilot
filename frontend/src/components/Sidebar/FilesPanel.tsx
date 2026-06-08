@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { FiArchive, FiCode, FiFile, FiFileText, FiFolder } from 'react-icons/fi';
 import { confirmDialog } from '../ConfirmDialog/ConfirmDialog';
 
 interface TerminalSessionLite {
@@ -13,6 +14,8 @@ interface FileEntry {
     size: number;
     modTime: string;
     mode: number;
+    owner?: string;
+    group?: string;
 }
 
 interface TransferError {
@@ -86,6 +89,12 @@ type TaskState = {
 
 type LayoutMode = 'wide' | 'medium' | 'narrow';
 type NarrowPane = 'local' | 'remote' | 'queue';
+type DropOverlayState = {
+    visible: boolean;
+    blocked: boolean;
+    title: string;
+    detail: string;
+};
 
 const NARROW_LAYOUT_WIDTH = 640;
 const WIDE_LAYOUT_WIDTH = 920;
@@ -130,6 +139,12 @@ type FilePaneProps = {
     disabled?: boolean;
     toolbar?: React.ReactNode;
     layoutMode: LayoutMode;
+    draggableEntries?: boolean;
+    onEntryDragStart?: (entry: FileEntry, event: React.DragEvent) => void;
+    dropOverlay?: DropOverlayState | null;
+    onPaneDragOver?: (event: React.DragEvent<HTMLDivElement>) => void;
+    onPaneDragLeave?: (event: React.DragEvent<HTMLDivElement>) => void;
+    onPaneDrop?: (event: React.DragEvent<HTMLDivElement>) => void;
 };
 
 type FileColumnKey = 'name' | 'owner' | 'size' | 'time';
@@ -147,14 +162,80 @@ const formatFileSize = (size: number) => {
     return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${unit}`;
 };
 
-function FilePane({ title, badge, owner, path, pathInput, onPathInputChange, onGo, onUp, onRefresh, entries, selected, onSelect, onOpenDir, onOpenFile, disabled, toolbar, layoutMode }: FilePaneProps) {
+const getFileKind = (entry: FileEntry) => {
+    if (entry.isDir) return '目录';
+    const ext = entry.name.toLowerCase().split('.').pop() || '';
+    if (['log', 'txt', 'md', 'conf', 'ini', 'yaml', 'yml'].includes(ext)) return '文本文件';
+    if (['sh', 'bash', 'ps1', 'bat', 'go', 'ts', 'tsx', 'js', 'jsx', 'json', 'py'].includes(ext)) return '脚本文件';
+    if (['zip', 'tar', 'gz', 'tgz', 'rar', '7z'].includes(ext)) return '压缩包';
+    return '文件';
+};
+
+const getEntryOwnerLabel = (entry: FileEntry, fallback: string) => {
+    if (entry.owner && entry.group) return `${entry.owner}:${entry.group}`;
+    if (entry.owner) return entry.owner;
+    if (entry.group) return entry.group;
+    return fallback || '-';
+};
+
+const FileKindIcon = ({ entry }: { entry: FileEntry }) => {
+    const kind = getFileKind(entry);
+    const style = entry.isDir
+        ? styles.fileIconFolder
+        : kind === '脚本文件'
+            ? styles.fileIconCode
+            : kind === '压缩包'
+                ? styles.fileIconArchive
+                : styles.fileIconFile;
+    const Icon = entry.isDir
+        ? FiFolder
+        : kind === '脚本文件'
+            ? FiCode
+            : kind === '压缩包'
+                ? FiArchive
+                : kind === '文本文件'
+                    ? FiFileText
+                    : FiFile;
+
+    return (
+        <span style={{ ...styles.fileIcon, ...style }} title={kind} aria-label={kind} data-testid={entry.isDir ? 'file-kind-directory' : 'file-kind-file'}>
+            {React.createElement(Icon as React.ComponentType<{ size?: number; 'aria-hidden'?: string }>, { size: 15, 'aria-hidden': 'true' })}
+        </span>
+    );
+};
+
+function FilePane({
+    title,
+    badge,
+    owner,
+    path,
+    pathInput,
+    onPathInputChange,
+    onGo,
+    onUp,
+    onRefresh,
+    entries,
+    selected,
+    onSelect,
+    onOpenDir,
+    onOpenFile,
+    disabled,
+    toolbar,
+    layoutMode,
+    draggableEntries,
+    onEntryDragStart,
+    dropOverlay,
+    onPaneDragOver,
+    onPaneDragLeave,
+    onPaneDrop,
+}: FilePaneProps) {
     const [columnWidths, setColumnWidths] = useState<Record<FileColumnKey, number>>({
         name: 280,
-        owner: 74,
+        owner: 64,
         size: 92,
         time: 152,
     });
-    const resizeRef = useRef<{ key: FileColumnKey; startX: number; startWidth: number } | null>(null);
+    const resizeRef = useRef<{ key: FileColumnKey; startX: number; startWidth: number; previousCursor: string } | null>(null);
 
     useEffect(() => {
         const onMove = (event: MouseEvent) => {
@@ -162,7 +243,7 @@ function FilePane({ title, badge, owner, path, pathInput, onPathInputChange, onG
             if (!state) return;
             const minWidth: Record<FileColumnKey, number> = {
                 name: 160,
-                owner: 58,
+                owner: 48,
                 size: 72,
                 time: 116,
             };
@@ -170,7 +251,10 @@ function FilePane({ title, badge, owner, path, pathInput, onPathInputChange, onG
             setColumnWidths(prev => ({ ...prev, [state.key]: nextWidth }));
         };
         const onUp = () => {
-            resizeRef.current = null;
+            if (resizeRef.current) {
+                document.body.style.cursor = resizeRef.current.previousCursor;
+                resizeRef.current = null;
+            }
         };
         window.addEventListener('mousemove', onMove);
         window.addEventListener('mouseup', onUp);
@@ -189,13 +273,15 @@ function FilePane({ title, badge, owner, path, pathInput, onPathInputChange, onG
 
     const renderHeaderCell = (label: string, key: FileColumnKey, extraStyle?: React.CSSProperties) => (
         <th style={{ ...styles.th, ...extraStyle }}>
-            <span>{label}</span>
+            <span style={styles.thLabel}>{label}</span>
             {layoutMode !== 'narrow' ? (
                 <span
                     style={styles.colResizeHandle}
+                    data-testid={`column-resize-${key}`}
                     onMouseDown={(event) => {
                         event.preventDefault();
-                        resizeRef.current = { key, startX: event.clientX, startWidth: columnWidths[key] };
+                        resizeRef.current = { key, startX: event.clientX, startWidth: columnWidths[key], previousCursor: document.body.style.cursor };
+                        document.body.style.cursor = 'col-resize';
                     }}
                 />
             ) : null}
@@ -212,10 +298,17 @@ function FilePane({ title, badge, owner, path, pathInput, onPathInputChange, onG
     };
 
     return (
-        <div style={{ ...styles.pane, opacity: disabled ? 0.6 : 1 }} data-testid={`file-pane-${title}`} data-layout-mode={layoutMode}>
+        <div
+            style={{ ...styles.pane, opacity: disabled ? 0.6 : 1 }}
+            data-testid={`file-pane-${title}`}
+            data-layout-mode={layoutMode}
+            onDragOver={onPaneDragOver}
+            onDragLeave={onPaneDragLeave}
+            onDrop={onPaneDrop}
+        >
             <div style={styles.paneHeader}>
                 <div style={styles.paneTitleGroup}>
-                    <div style={{ color: '#fff', fontSize: '12px', fontWeight: 600 }}>{title}</div>
+                    <div style={styles.paneTitle}>{title}</div>
                     {badge ? <div style={styles.badge}>{badge}</div> : null}
                 </div>
                 <div style={styles.paneToolbar}>
@@ -237,24 +330,44 @@ function FilePane({ title, badge, owner, path, pathInput, onPathInputChange, onG
                 <button style={styles.btn} onClick={onGo} disabled={disabled}>进入</button>
             </div>
             <div style={styles.paneBody}>
+                {dropOverlay?.visible ? (
+                    <div
+                        style={{
+                            ...styles.dropOverlay,
+                            ...(dropOverlay.blocked ? styles.dropOverlayBlocked : styles.dropOverlayReady),
+                        }}
+                        data-testid="file-drop-overlay"
+                    >
+                        <div style={styles.dropOverlayTitle}>{dropOverlay.title}</div>
+                        <div style={styles.dropOverlayDetail}>{dropOverlay.detail}</div>
+                    </div>
+                ) : null}
                 {layoutMode === 'narrow' ? (
                     <div style={styles.compactList} data-testid={`file-list-${title}`}>
-                        {entries.map(e => {
+                        {entries.map((e, index) => {
                             const size = e.isDir ? '-' : formatFileSize(e.size);
                             const time = e.modTime ? new Date(e.modTime).toLocaleString() : '';
+                            const entryKey = e.path || `${title}:${e.name}:${index}`;
+                            const ownerText = getEntryOwnerLabel(e, owner);
                             return (
                                 <div
-                                    key={e.path}
-                                    style={{ ...styles.compactRow, background: selected === e.path ? '#2a2a2a' : 'transparent', cursor: disabled ? 'not-allowed' : 'pointer' }}
+                                    key={entryKey}
+                                    style={{
+                                        ...styles.compactRow,
+                                        ...(selected && selected === e.path ? styles.compactRowSelected : null),
+                                        cursor: disabled ? 'not-allowed' : 'pointer',
+                                    }}
                                     onClick={() => !disabled && onSelect(e.path)}
                                     onDoubleClick={() => openEntry(e)}
+                                    draggable={!!draggableEntries && !e.isDir && !disabled}
+                                    onDragStart={(event) => onEntryDragStart?.(e, event)}
                                     title={e.name}
                                 >
                                     <div style={styles.compactMain}>
-                                        <span style={e.isDir ? styles.kindDir : styles.kindFile}>{e.isDir ? 'DIR' : 'FILE'}</span>
+                                        <FileKindIcon entry={e} />
                                         <span style={styles.compactName}>{e.name}</span>
                                     </div>
-                                    <div style={styles.compactMeta}>{owner} · {size}{time ? ` · ${time}` : ''}</div>
+                                    <div style={styles.compactMeta}>{ownerText} · {size}{time ? ` · ${time}` : ''}</div>
                                 </div>
                             );
                         })}
@@ -270,7 +383,7 @@ function FilePane({ title, badge, owner, path, pathInput, onPathInputChange, onG
                             {isColumnVisible('time') ? <col style={{ width: columnWidths.time }} /> : null}
                         </colgroup>
                         <thead>
-                            <tr style={{ background: '#1e1e1e' }}>
+                            <tr>
                                 {isColumnVisible('name') ? renderHeaderCell('名称', 'name') : null}
                                 {isColumnVisible('owner') ? renderHeaderCell('所属', 'owner', styles.cellOwner) : null}
                                 {isColumnVisible('size') ? renderHeaderCell('大小', 'size', styles.cellSize) : null}
@@ -278,20 +391,26 @@ function FilePane({ title, badge, owner, path, pathInput, onPathInputChange, onG
                             </tr>
                         </thead>
                         <tbody>
-                            {entries.map(e => (
+                            {entries.map((e, index) => (
                                 <tr
-                                    key={e.path}
-                                    style={{ borderTop: '1px solid #333', background: selected === e.path ? '#2a2a2a' : 'transparent', cursor: disabled ? 'not-allowed' : 'pointer' }}
+                                    key={e.path || `${title}:${e.name}:${index}`}
+                                    style={{
+                                        ...styles.fileRow,
+                                        ...(selected && selected === e.path ? styles.fileRowSelected : null),
+                                        cursor: disabled ? 'not-allowed' : 'pointer',
+                                    }}
                                     onClick={() => !disabled && onSelect(e.path)}
                                     onDoubleClick={() => {
                                         openEntry(e);
                                     }}
+                                    draggable={!!draggableEntries && !e.isDir && !disabled}
+                                    onDragStart={(event) => onEntryDragStart?.(e, event)}
                                 >
                                     <td style={{ ...styles.td, ...styles.cellName }} title={e.name}>
-                                        <span style={e.isDir ? styles.kindDir : styles.kindFile}>{e.isDir ? 'DIR' : 'FILE'}</span>
+                                        <FileKindIcon entry={e} />
                                         <span>{e.name}</span>
                                     </td>
-                                    {isColumnVisible('owner') ? <td style={{ ...styles.td, ...styles.cellOwner }}>{owner}</td> : null}
+                                    {isColumnVisible('owner') ? <td style={{ ...styles.td, ...styles.cellOwner }}>{getEntryOwnerLabel(e, owner)}</td> : null}
                                     {isColumnVisible('size') ? <td style={{ ...styles.td, ...styles.cellSize }}>{e.isDir ? '-' : formatFileSize(e.size)}</td> : null}
                                     {isColumnVisible('time') ? <td style={{ ...styles.td, ...styles.cellTime }}>{e.modTime ? new Date(e.modTime).toLocaleString() : ''}</td> : null}
                                 </tr>
@@ -348,6 +467,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
     const remoteEntriesRef = useRef<FileEntry[]>(remoteEntries);
     const [layoutMode, setLayoutMode] = useState<LayoutMode>('wide');
     const [narrowPane, setNarrowPane] = useState<NarrowPane>('local');
+    const [remoteDropOverlay, setRemoteDropOverlay] = useState<DropOverlayState | null>(null);
 
     useEffect(() => {
         const getObservedWidth = (entry?: ResizeObserverEntry) => {
@@ -818,6 +938,101 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
         }
     };
 
+    const handleLocalEntryDragStart = (entry: FileEntry, event: React.DragEvent) => {
+        if (entry.isDir) return;
+        event.dataTransfer.effectAllowed = 'copy';
+        event.dataTransfer.setData('application/x-opscopilot-local-file', JSON.stringify(entry));
+        event.dataTransfer.setData('text/plain', entry.path);
+    };
+
+    const getRemoteDropOverlay = (event: React.DragEvent): DropOverlayState => {
+        const hasLocalEntry = event.dataTransfer.types.includes('application/x-opscopilot-local-file');
+        const hasExternalFile = event.dataTransfer.types.includes('Files');
+        if (!hasLocalEntry && !hasExternalFile) {
+            return {
+                visible: true,
+                blocked: true,
+                title: '无法识别拖入内容',
+                detail: '请从左侧本地文件列表拖入单个文件',
+            };
+        }
+        if (!sessionId) {
+            return {
+                visible: true,
+                blocked: true,
+                title: '无法上传',
+                detail: '请先选择一个已连接的会话',
+            };
+        }
+        if (!isTransferSupported()) {
+            return {
+                visible: true,
+                blocked: true,
+                title: '当前连接不支持文件上传',
+                detail: getProtocolLabel(protocol),
+            };
+        }
+        return {
+            visible: true,
+            blocked: false,
+            title: '上传到远端目录',
+            detail: remotePath || remotePathInput || '/',
+        };
+    };
+
+    const handleRemoteDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+        const overlay = getRemoteDropOverlay(event);
+        event.preventDefault();
+        event.dataTransfer.dropEffect = overlay.blocked ? 'none' : 'copy';
+        setRemoteDropOverlay(overlay);
+    };
+
+    const handleRemoteDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+        setRemoteDropOverlay(null);
+    };
+
+    const extractDroppedLocalEntry = (event: React.DragEvent): FileEntry | null => {
+        const payload = event.dataTransfer.getData('application/x-opscopilot-local-file');
+        if (payload) {
+            try {
+                const entry = JSON.parse(payload) as FileEntry;
+                return entry.path && entry.name ? entry : null;
+            } catch {
+                return null;
+            }
+        }
+
+        const file = event.dataTransfer.files?.[0] as (File & { path?: string; webkitRelativePath?: string }) | undefined;
+        const path = file?.path || file?.webkitRelativePath || '';
+        if (!file || !path) return null;
+        return {
+            path,
+            name: file.name,
+            isDir: false,
+            size: file.size,
+            modTime: '',
+            mode: 0,
+        };
+    };
+
+    const handleRemoteDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        const overlay = getRemoteDropOverlay(event);
+        setRemoteDropOverlay(null);
+        if (overlay.blocked) {
+            setMsg(overlay.detail);
+            return;
+        }
+
+        const entry = extractDroppedLocalEntry(event);
+        if (!entry) {
+            setMsg('未能读取拖入文件路径，请从左侧本地文件列表拖拽文件上传');
+            return;
+        }
+        await startUploadFile(entry);
+    };
+
     const startDownloadSelected = async () => {
         if (!sessionId) {
             setMsg('请先选择会话');
@@ -1203,8 +1418,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
         .filter(t => !sessionId || t.sessionId === sessionId)
         .slice()
         .sort((a, b) => a.taskId.localeCompare(b.taskId));
-    const currentSession = terminals.find(t => t.id === sessionId);
-    const sessionTitle = currentSession?.title || sessionId || '-';
     const isNarrow = layoutMode === 'narrow';
     const panelRootStyle = isNarrow ? { ...styles.root, ...styles.rootNarrow } : styles.root;
     const splitStyle = layoutMode === 'narrow'
@@ -1218,7 +1431,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
         <div ref={containerRef} style={panelRootStyle} data-testid="files-panel" data-layout-mode={layoutMode}>
             <div style={styles.topBar}>
                 <div style={styles.infoGrid}>
-                    <div style={styles.infoField}>
+                    <div style={{ ...styles.infoField, ...styles.infoFieldPrimary }}>
                         <span style={styles.infoLabel}>当前会话</span>
                         <select style={styles.select} value={sessionId} onChange={(e) => setSessionId(e.target.value)}>
                             {terminals.map(t => (
@@ -1228,13 +1441,13 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                             ))}
                         </select>
                     </div>
-                    <div style={styles.infoField}>
+                    <div style={styles.infoChip}>
                         <span style={styles.infoLabel}>连接方式</span>
                         <span style={protocol ? styles.infoValue : styles.infoValueMuted}>
                             {getProtocolLabel(protocol)}
                         </span>
                     </div>
-                    <div style={styles.infoField}>
+                    <div style={styles.infoChip}>
                         <span style={styles.infoLabel}>工作方式</span>
                         <span style={protocol ? styles.infoValue : styles.infoValueMuted}>
                             {getWorkModeLabel(protocol)}
@@ -1304,6 +1517,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                             startUploadFile(entry);
                         }}
                         layoutMode={layoutMode}
+                        draggableEntries
+                        onEntryDragStart={handleLocalEntryDragStart}
                         toolbar={
                             <>
                                 <button style={styles.btnSecondary} onClick={createLocalFolder} disabled={loading}>新建</button>
@@ -1341,7 +1556,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                     <FilePane
                         title="远端"
                         badge={remotePath}
-                        owner={sessionTitle}
+                        owner="-"
                         path={remotePath}
                         pathInput={remotePathInput}
                         onPathInputChange={setRemotePathInput}
@@ -1363,6 +1578,10 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                         }}
                         disabled={!isSFTPSupported()}
                         layoutMode={layoutMode}
+                        dropOverlay={remoteDropOverlay}
+                        onPaneDragOver={handleRemoteDragOver}
+                        onPaneDragLeave={handleRemoteDragLeave}
+                        onPaneDrop={handleRemoteDrop}
                         toolbar={
                             <>
                                 <button style={styles.btnSecondary} onClick={createRemoteFolder} disabled={loading || !isSFTPSupported()}>新建</button>
@@ -1450,14 +1669,15 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
 
 const styles: Record<string, React.CSSProperties> = {
     root: {
-        padding: '12px',
+        padding: '10px',
         color: '#ddd',
         display: 'flex',
         flexDirection: 'column',
-        gap: '10px',
+        gap: '8px',
         height: '100%',
         minHeight: 0,
-        overflow: 'hidden'
+        overflow: 'hidden',
+        backgroundColor: '#15181c'
     },
     rootNarrow: {
         padding: '8px',
@@ -1465,10 +1685,15 @@ const styles: Record<string, React.CSSProperties> = {
     },
     topBar: {
         display: 'flex',
-        gap: '10px',
+        gap: '8px',
         alignItems: 'center',
         flexWrap: 'wrap' as const,
-        flexShrink: 0
+        flexShrink: 0,
+        padding: '7px 8px',
+        border: '1px solid #303844',
+        borderRadius: '6px',
+        backgroundColor: '#1a1e23',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)'
     },
     segmented: {
         display: 'flex',
@@ -1499,21 +1724,23 @@ const styles: Record<string, React.CSSProperties> = {
         fontWeight: 600
     },
     select: {
-        padding: '6px 8px',
+        padding: '5px 8px',
         borderRadius: '4px',
-        border: '1px solid #3c3c3c',
-        backgroundColor: '#1e1e1e',
+        border: '1px solid #3b4652',
+        backgroundColor: '#111419',
         color: '#fff',
         outline: 'none',
         minWidth: '180px',
-        maxWidth: '100%'
+        maxWidth: '100%',
+        height: '28px',
+        fontSize: '12px'
     },
     badge: {
-        padding: '2px 6px',
+        padding: '2px 7px',
         borderRadius: '999px',
-        border: '1px solid #3c3c3c',
-        backgroundColor: '#1e1e1e',
-        color: '#ddd',
+        border: '1px solid #35404c',
+        backgroundColor: '#161b20',
+        color: '#b9c6d3',
         fontSize: '11px',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
@@ -1529,47 +1756,52 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: '12px'
     },
     btn: {
-        padding: '4px 8px',
+        padding: '5px 10px',
         borderRadius: '4px',
-        border: 'none',
-        backgroundColor: '#007acc',
+        border: '1px solid #1f6ea5',
+        backgroundColor: '#0b74b8',
         color: '#fff',
         cursor: 'pointer',
         fontSize: '11px',
-        minWidth: '58px'
+        minWidth: '58px',
+        height: '28px',
+        fontWeight: 600
     },
     btnSecondary: {
-        padding: '4px 8px',
+        padding: '5px 9px',
         borderRadius: '4px',
-        border: '1px solid #3c3c3c',
-        backgroundColor: '#1e1e1e',
-        color: '#ddd',
+        border: '1px solid #343d47',
+        backgroundColor: '#171c21',
+        color: '#cbd5df',
         cursor: 'pointer',
-        fontSize: '11px'
+        fontSize: '11px',
+        height: '28px'
     },
     btnDanger: {
-        padding: '4px 8px',
+        padding: '5px 9px',
         borderRadius: '4px',
-        border: '1px solid #7a2e2e',
-        backgroundColor: '#2a1a1a',
-        color: '#f2b8b5',
+        border: '1px solid #663337',
+        backgroundColor: '#2a171a',
+        color: '#f4b8bd',
         cursor: 'pointer',
-        fontSize: '11px'
+        fontSize: '11px',
+        height: '28px'
     },
     iconBtn: {
         padding: '4px 7px',
         borderRadius: '4px',
-        border: '1px solid #3c3c3c',
-        backgroundColor: '#1e1e1e',
-        color: '#ddd',
+        border: '1px solid #343d47',
+        backgroundColor: '#151a1f',
+        color: '#cbd5df',
         cursor: 'pointer',
         fontSize: '11px',
-        minWidth: '30px'
+        minWidth: '30px',
+        height: '28px'
     },
     split: {
         flex: 1,
         display: 'flex',
-        gap: '8px',
+        gap: '10px',
         overflow: 'hidden',
         minHeight: 0
     },
@@ -1583,13 +1815,15 @@ const styles: Record<string, React.CSSProperties> = {
     },
     pane: {
         flex: 1,
-        border: '1px solid #333',
+        border: '1px solid #2f3842',
         borderRadius: '6px',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
         minHeight: 0,
-        minWidth: 0
+        minWidth: 0,
+        backgroundColor: '#11161c',
+        boxShadow: '0 1px 0 rgba(255,255,255,0.03)'
     },
     paneTitleGroup: {
         display: 'flex',
@@ -1598,17 +1832,23 @@ const styles: Record<string, React.CSSProperties> = {
         minWidth: 0,
         overflow: 'hidden'
     },
+    paneTitle: {
+        color: '#f4f7fb',
+        fontSize: '12px',
+        fontWeight: 700,
+        letterSpacing: 0
+    },
     paneToolbar: {
         display: 'flex',
-        gap: '6px',
+        gap: '5px',
         flexWrap: 'wrap' as const,
         justifyContent: 'flex-end',
         flexShrink: 0
     },
     paneHeader: {
         padding: '7px 8px',
-        borderBottom: '1px solid #333',
-        backgroundColor: '#252526',
+        borderBottom: '1px solid #2d3540',
+        backgroundColor: '#1d232a',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -1616,31 +1856,35 @@ const styles: Record<string, React.CSSProperties> = {
     },
     pathBar: {
         padding: '6px 8px',
-        borderBottom: '1px solid #333',
+        borderBottom: '1px solid #2b333d',
         display: 'flex',
         gap: '6px',
         alignItems: 'center',
-        backgroundColor: '#1e1e1e',
+        backgroundColor: '#161b21',
         flexWrap: 'wrap' as const
     },
     pathInput: {
         flex: 1,
-        padding: '4px 7px',
+        padding: '4px 8px',
         borderRadius: '4px',
-        border: '1px solid #3c3c3c',
-        backgroundColor: '#1e1e1e',
-        color: '#fff',
+        border: '1px solid #323c47',
+        backgroundColor: '#0f1318',
+        color: '#f4f7fb',
         outline: 'none',
-        fontSize: '11px'
+        fontSize: '11px',
+        height: '28px',
+        boxSizing: 'border-box' as const
     },
     paneBody: {
         flex: 1,
         display: 'flex',
-        minHeight: 0
+        minHeight: 0,
+        position: 'relative' as const
     },
     fileTableWrap: {
         flex: 1,
-        overflow: 'auto'
+        overflow: 'auto',
+        backgroundColor: '#11161c'
     },
     table: {
         width: '100%',
@@ -1650,30 +1894,51 @@ const styles: Record<string, React.CSSProperties> = {
     },
     th: {
         textAlign: 'left',
-        fontWeight: 600,
-        fontSize: '11px',
-        color: '#bbb',
-        padding: '5px 8px',
+        fontWeight: 700,
+        fontSize: '10px',
+        color: '#8794a3',
+        padding: '0 8px',
         position: 'sticky' as const,
         top: 0,
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
-        userSelect: 'none' as const
+        userSelect: 'none' as const,
+        backgroundColor: '#1b222a',
+        borderBottom: '1px solid #2d3540',
+        boxSizing: 'border-box' as const,
+        height: '28px',
+        zIndex: 2
+    },
+    thLabel: {
+        display: 'block',
+        paddingRight: '14px',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
     },
     td: {
         fontSize: '11px',
-        color: '#ddd',
-        padding: '4px 8px',
+        color: '#d8dee6',
+        padding: '5px 8px',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
-        height: '24px'
+        height: '28px',
+        borderBottom: '1px solid #202831',
+        boxSizing: 'border-box' as const
+    },
+    fileRow: {
+        backgroundColor: 'transparent'
+    },
+    fileRowSelected: {
+        backgroundColor: '#213244',
+        boxShadow: 'inset 3px 0 0 #2f9bf4'
     },
     cellName: {
         display: 'flex',
         alignItems: 'center',
-        gap: '6px',
+        gap: '8px',
         minWidth: 0
     },
     cellOwner: {
@@ -1690,10 +1955,12 @@ const styles: Record<string, React.CSSProperties> = {
         position: 'absolute' as const,
         top: 0,
         right: 0,
-        width: '7px',
+        width: '10px',
         height: '100%',
         cursor: 'col-resize',
-        borderRight: '1px solid transparent'
+        borderRight: '1px solid #344150',
+        opacity: 0.75,
+        boxSizing: 'border-box' as const
     },
     compactList: {
         flex: 1,
@@ -1702,11 +1969,16 @@ const styles: Record<string, React.CSSProperties> = {
         minHeight: 0
     },
     compactRow: {
-        borderTop: '1px solid #333',
+        borderBottom: '1px solid #202831',
         padding: '7px 8px',
         display: 'flex',
         flexDirection: 'column' as const,
-        gap: '3px'
+        gap: '3px',
+        backgroundColor: 'transparent'
+    },
+    compactRowSelected: {
+        backgroundColor: '#213244',
+        boxShadow: 'inset 3px 0 0 #2f9bf4'
     },
     compactMain: {
         display: 'flex',
@@ -1728,26 +2000,77 @@ const styles: Record<string, React.CSSProperties> = {
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap',
-        paddingLeft: '33px'
+        paddingLeft: '30px'
     },
     emptyState: {
         color: '#888',
         fontSize: '12px',
         padding: '10px 8px'
     },
-    kindDir: {
+    fileIcon: {
         flexShrink: 0,
-        color: '#8cc8ff',
-        fontSize: '9px',
-        fontWeight: 700,
-        minWidth: '26px'
+        width: '21px',
+        height: '21px',
+        borderRadius: '4px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        border: '1px solid #313b45',
+        backgroundColor: '#171d24'
     },
-    kindFile: {
-        flexShrink: 0,
-        color: '#9aa4af',
-        fontSize: '9px',
-        fontWeight: 700,
-        minWidth: '26px'
+    fileIconFolder: {
+        color: '#f0c04f',
+        backgroundColor: '#282315',
+        borderColor: '#594820'
+    },
+    fileIconFile: {
+        color: '#a6b3c2'
+    },
+    fileIconCode: {
+        color: '#7dd3fc',
+        backgroundColor: '#122633',
+        borderColor: '#21475f'
+    },
+    fileIconArchive: {
+        color: '#c4b5fd',
+        backgroundColor: '#251f36',
+        borderColor: '#40345e'
+    },
+    dropOverlay: {
+        position: 'absolute' as const,
+        zIndex: 5,
+        inset: '10px',
+        borderRadius: '8px',
+        display: 'flex',
+        flexDirection: 'column' as const,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+        pointerEvents: 'none' as const,
+        backdropFilter: 'blur(2px)',
+        textAlign: 'center' as const,
+        padding: '18px'
+    },
+    dropOverlayReady: {
+        border: '1px dashed #5fb3ff',
+        backgroundColor: 'rgba(17, 48, 73, 0.86)'
+    },
+    dropOverlayBlocked: {
+        border: '1px dashed #ef8c8c',
+        backgroundColor: 'rgba(73, 24, 24, 0.88)'
+    },
+    dropOverlayTitle: {
+        color: '#fff',
+        fontSize: '14px',
+        fontWeight: 700
+    },
+    dropOverlayDetail: {
+        color: '#c8d1dc',
+        fontSize: '12px',
+        maxWidth: '80%',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
     },
     scpPane: {
         flex: 1,
@@ -1902,8 +2225,9 @@ const styles: Record<string, React.CSSProperties> = {
     infoGrid: {
         display: 'flex',
         flexWrap: 'wrap' as const,
-        gap: '12px 20px',
-        alignItems: 'center'
+        gap: '8px',
+        alignItems: 'center',
+        minWidth: 0
     },
     infoField: {
         display: 'flex',
@@ -1911,13 +2235,29 @@ const styles: Record<string, React.CSSProperties> = {
         gap: '6px',
         fontSize: '12px'
     },
+    infoFieldPrimary: {
+        minWidth: 0
+    },
+    infoChip: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '4px 8px',
+        border: '1px solid #303844',
+        borderRadius: '999px',
+        backgroundColor: '#15181c',
+        fontSize: '11px',
+        maxWidth: '260px'
+    },
     infoLabel: {
-        color: '#888',
+        color: '#7d8794',
         whiteSpace: 'nowrap' as const
     },
     infoValue: {
         color: '#ddd',
-        whiteSpace: 'nowrap' as const
+        whiteSpace: 'nowrap' as const,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis'
     },
     infoValueMuted: {
         color: '#666',

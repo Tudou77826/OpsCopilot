@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import FilesPanel, { getFileTransferLayoutMode, getStableFileTransferLayoutMode } from './FilesPanel';
 
@@ -10,8 +10,8 @@ const makeBackend = () => ({
     FTList: vi.fn((_sessionId: string, remotePath: string) => json({
         ok: true,
         entries: [
-            { path: `${remotePath}/remote.log`, name: 'remote.log', isDir: false, size: 2048, modTime: '2026-06-08T00:00:00Z', mode: 0 },
-            { path: `${remotePath}/tmpdir`, name: 'tmpdir', isDir: true, size: 0, modTime: '2026-06-08T00:00:00Z', mode: 0 },
+            { path: `${remotePath}/remote.log`, name: 'remote.log', isDir: false, size: 2048, modTime: '2026-06-08T00:00:00Z', mode: 0, owner: 'root', group: 'root' },
+            { path: `${remotePath}/tmpdir`, name: 'tmpdir', isDir: true, size: 0, modTime: '2026-06-08T00:00:00Z', mode: 0, owner: 'root', group: 'root' },
         ],
     })),
     FTStat: vi.fn(() => json({ ok: true })),
@@ -35,9 +35,8 @@ const makeBackend = () => ({
     LocalRename: vi.fn(() => json({ ok: true })),
 });
 
-const renderPanel = (width: number) => {
+const renderPanel = (width: number, backend = makeBackend()) => {
     Object.defineProperty(window, 'innerWidth', { value: width, configurable: true });
-    const backend = makeBackend();
     render(
         <FilesPanel
             activeTerminalId="session-1"
@@ -86,7 +85,36 @@ describe('FilesPanel responsive layout', () => {
         expect(screen.getByTestId('file-pane-远端')).toBeInTheDocument();
         expect(screen.getAllByText('所属').length).toBeGreaterThanOrEqual(2);
         expect(screen.getByText('1.5 KB')).toBeInTheDocument();
-        expect(screen.getAllByText('prod-01').length).toBeGreaterThanOrEqual(2);
+        expect(screen.getAllByText('root:root').length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('uses icons instead of raw DIR and FILE markers', async () => {
+        renderPanel(1200);
+
+        await waitFor(() => expect(screen.getByText('local.txt')).toBeInTheDocument());
+
+        expect(screen.queryByText('DIR')).not.toBeInTheDocument();
+        expect(screen.queryByText('FILE')).not.toBeInTheDocument();
+        expect(screen.getAllByTestId('file-kind-file').length).toBeGreaterThanOrEqual(2);
+        expect(screen.getAllByTestId('file-kind-directory').length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('does not mark every row selected when backend entries have empty paths', async () => {
+        const backend = makeBackend();
+        backend.FTList = vi.fn((_sessionId: string, _remotePath: string) => json({
+            ok: true,
+            entries: [
+                { path: '', name: '.bash_history', isDir: false, size: 2048, modTime: '2026-06-08T00:00:00Z', mode: 0 },
+                { path: '', name: '.bashrc', isDir: false, size: 176, modTime: '2026-06-08T00:00:00Z', mode: 0 },
+            ],
+        }));
+        renderPanel(1200, backend);
+
+        await waitFor(() => expect(screen.getByText('.bash_history')).toBeInTheDocument());
+
+        const row = screen.getByText('.bash_history').closest('tr') as HTMLTableRowElement;
+        expect(row.getAttribute('style') || '').not.toContain('rgb(33, 50, 68)');
+        expect(row.getAttribute('style') || '').not.toContain('box-shadow');
     });
 
     it('uses single-pane segmented navigation in narrow mode', async () => {
@@ -104,7 +132,7 @@ describe('FilesPanel responsive layout', () => {
         await waitFor(() => expect(screen.getByTestId('file-pane-远端')).toBeInTheDocument());
         expect(screen.queryByTestId('file-pane-本地')).not.toBeInTheDocument();
         await waitFor(() => expect(screen.getByText('remote.log')).toBeInTheDocument());
-        expect(screen.getByText(/prod-01 · 2.0 KB/)).toBeInTheDocument();
+        expect(screen.getByText(/root:root · 2.0 KB/)).toBeInTheDocument();
     });
 
     it('keeps column resize behavior available outside narrow mode', async () => {
@@ -115,12 +143,51 @@ describe('FilesPanel responsive layout', () => {
         const firstCol = localPane.querySelector('col') as HTMLTableColElement;
         expect(firstCol.getAttribute('style')).toContain('280px');
 
-        const handle = localPane.querySelector('th span[style*="col-resize"]') as HTMLElement;
+        const handle = screen.getAllByTestId('column-resize-name')[0];
         fireEvent.mouseDown(handle, { clientX: 100 });
         fireEvent.mouseMove(window, { clientX: 145 });
         fireEvent.mouseUp(window);
 
         expect(firstCol.getAttribute('style')).toContain('325px');
+    });
+
+    it('shows a clear remote upload overlay when dragging a local file', async () => {
+        renderPanel(1200);
+
+        await waitFor(() => expect(screen.getByText('remote.log')).toBeInTheDocument());
+        const remotePane = screen.getByTestId('file-pane-远端');
+
+        fireEvent.dragOver(remotePane, {
+            dataTransfer: {
+                types: ['application/x-opscopilot-local-file'],
+                dropEffect: 'copy',
+            },
+        });
+
+        const overlay = screen.getByTestId('file-drop-overlay');
+        expect(overlay).toBeInTheDocument();
+        expect(screen.getByText('上传到远端目录')).toBeInTheDocument();
+        expect(within(overlay).getByText('/root')).toBeInTheDocument();
+    });
+
+    it('explains why drag upload is blocked when transfer is unsupported', async () => {
+        const backend = makeBackend();
+        backend.FTCheck = vi.fn(() => json({ ok: true, message: 'unsupported' }));
+        renderPanel(1200, backend);
+
+        await waitFor(() => expect(screen.getByText('unsupported')).toBeInTheDocument());
+        const remotePane = screen.getByTestId('file-pane-远端');
+
+        fireEvent.dragOver(remotePane, {
+            dataTransfer: {
+                types: ['application/x-opscopilot-local-file'],
+                dropEffect: 'copy',
+            },
+        });
+
+        const overlay = screen.getByTestId('file-drop-overlay');
+        expect(within(overlay).getByText('当前连接不支持文件上传')).toBeInTheDocument();
+        expect(within(overlay).getByText('unsupported')).toBeInTheDocument();
     });
 
     it('uses border-box width so padding changes do not oscillate near breakpoints', async () => {

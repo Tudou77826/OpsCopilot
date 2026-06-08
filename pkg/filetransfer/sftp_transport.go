@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/sftp"
@@ -92,6 +93,7 @@ func (t *SFTPTransport) List(ctx context.Context, remotePath string) ([]Entry, e
 
 	out := make([]Entry, 0, len(infos))
 	for _, fi := range infos {
+		owner, group := sftpOwnerGroup(fi)
 		out = append(out, Entry{
 			Path:    joinRemote(p, fi.Name()),
 			Name:    fi.Name(),
@@ -99,6 +101,8 @@ func (t *SFTPTransport) List(ctx context.Context, remotePath string) ([]Entry, e
 			Size:    fi.Size(),
 			Mode:    uint32(fi.Mode()),
 			ModTime: fi.ModTime(),
+			Owner:   owner,
+			Group:   group,
 		})
 	}
 	return out, nil
@@ -116,6 +120,7 @@ func (t *SFTPTransport) Stat(ctx context.Context, remotePath string) (Entry, err
 	if err != nil {
 		return Entry{}, toTransferError(err)
 	}
+	owner, group := sftpOwnerGroup(fi)
 	return Entry{
 		Path:    p,
 		Name:    filepath.Base(p),
@@ -123,7 +128,16 @@ func (t *SFTPTransport) Stat(ctx context.Context, remotePath string) (Entry, err
 		Size:    fi.Size(),
 		Mode:    uint32(fi.Mode()),
 		ModTime: fi.ModTime(),
+		Owner:   owner,
+		Group:   group,
 	}, nil
+}
+
+func sftpOwnerGroup(fi os.FileInfo) (string, string) {
+	if ext, ok := fi.(sftp.FileInfoUidGid); ok {
+		return strconv.FormatUint(uint64(ext.Uid()), 10), strconv.FormatUint(uint64(ext.Gid()), 10)
+	}
+	return "", ""
 }
 
 func (t *SFTPTransport) Upload(ctx context.Context, localPath, remotePath string, progress func(Progress)) (TransferResult, error) {
