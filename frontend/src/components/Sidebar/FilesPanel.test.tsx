@@ -33,6 +33,7 @@ const makeBackend = () => ({
     LocalMkdir: vi.fn(() => json({ ok: true })),
     LocalRemove: vi.fn(() => json({ ok: true })),
     LocalRename: vi.fn(() => json({ ok: true })),
+    LocalCopy: vi.fn(() => json({ ok: true })),
 });
 
 const renderPanel = (width: number, backend = makeBackend()) => {

@@ -55,6 +55,7 @@ interface FileTransferBackend {
     LocalMkdir: (localPath: string) => Promise<string>;
     LocalRemove: (localPath: string) => Promise<string>;
     LocalRename: (oldPath: string, newPath: string) => Promise<string>;
+    LocalCopy: (src: string, dst: string) => Promise<string>;
 }
 
 const appBackend = window.go?.main?.App as any;
@@ -74,6 +75,7 @@ const defaultBackend: FileTransferBackend = {
     LocalMkdir: (localPath: string) => appBackend.LocalMkdir(localPath),
     LocalRemove: (localPath: string) => appBackend.LocalRemove(localPath),
     LocalRename: (oldPath: string, newPath: string) => appBackend.LocalRename(oldPath, newPath),
+    LocalCopy: (src: string, dst: string) => appBackend.LocalCopy(src, dst),
 };
 
 type TaskState = {
@@ -145,6 +147,7 @@ type FilePaneProps = {
     onPaneDragOver?: (event: React.DragEvent<HTMLDivElement>) => void;
     onPaneDragLeave?: (event: React.DragEvent<HTMLDivElement>) => void;
     onPaneDrop?: (event: React.DragEvent<HTMLDivElement>) => void;
+    paneRef?: React.Ref<HTMLDivElement>;
 };
 
 type FileColumnKey = 'name' | 'owner' | 'size' | 'time';
@@ -228,6 +231,7 @@ function FilePane({
     onPaneDragOver,
     onPaneDragLeave,
     onPaneDrop,
+    paneRef,
 }: FilePaneProps) {
     const [columnWidths, setColumnWidths] = useState<Record<FileColumnKey, number>>({
         name: 280,
@@ -299,6 +303,7 @@ function FilePane({
 
     return (
         <div
+            ref={paneRef}
             style={{ ...styles.pane, opacity: disabled ? 0.6 : 1 }}
             data-testid={`file-pane-${title}`}
             data-layout-mode={layoutMode}
@@ -468,6 +473,118 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
     const [layoutMode, setLayoutMode] = useState<LayoutMode>('wide');
     const [narrowPane, setNarrowPane] = useState<NarrowPane>('local');
     const [remoteDropOverlay, setRemoteDropOverlay] = useState<DropOverlayState | null>(null);
+    const [localDropOverlay, setLocalDropOverlay] = useState<DropOverlayState | null>(null);
+    const draggedLocalEntryRef = useRef<FileEntry | null>(null);
+    const remotePaneRef = useRef<HTMLDivElement>(null);
+    const localPaneRef = useRef<HTMLDivElement>(null);
+    const startUploadFileRef = useRef<(entry: FileEntry) => Promise<void>>();
+
+    // Wails OnFileDrop: receive real file paths from OS-level drag-and-drop.
+    // useDropTarget=false so the callback fires on ANY drop — we do our own hit-test.
+    useEffect(() => {
+        // @ts-ignore
+        if (!window.runtime?.OnFileDrop) return;
+
+        const handleFileDrop = async (x: number, y: number, paths: string[]) => {
+            if (!paths || paths.length === 0) return;
+
+            // Hit-test: remote pane
+            const remotePane = remotePaneRef.current;
+            if (remotePane) {
+                const rect = remotePane.getBoundingClientRect();
+                if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                    setRemoteDropOverlay(null);
+                    if (!sessionIdRef.current) {
+                        setMsg('请先选择一个已连接的会话');
+                        return;
+                    }
+                    const proto = protocolRef.current;
+                    const supported = proto.startsWith('sftp') || proto.startsWith('scp') || proto.includes('root-relay');
+                    if (!supported) {
+                        setMsg('当前连接不支持文件上传');
+                        return;
+                    }
+                    for (const filePath of paths) {
+                        const name = filePath.replace(/^.*[\\/]/, '');
+                        const entry: FileEntry = {
+                            path: filePath, name, isDir: false,
+                            size: 0, modTime: '', mode: 0,
+                        };
+                        if (startUploadFileRef.current) {
+                            await startUploadFileRef.current(entry);
+                        }
+                    }
+                    return;
+                }
+            }
+
+            // Hit-test: local pane
+            const localPane = localPaneRef.current;
+            if (localPane) {
+                const rect = localPane.getBoundingClientRect();
+                if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                    setLocalDropOverlay(null);
+                    const dir = localPathRef.current;
+                    if (!dir) {
+                        setMsg('请先进入一个本地目录');
+                        return;
+                    }
+                    setLoading(true);
+                    try {
+                        for (const filePath of paths) {
+                            const name = filePath.replace(/^.*[\\/]/, '');
+                            const dst = dir + (dir.endsWith('\\') || dir.endsWith('/') ? '' : '\\') + name;
+                            await api.LocalCopy(filePath, dst);
+                        }
+                        refreshLocalAuto();
+                    } catch (e: any) {
+                        setMsg('复制失败: ' + e.toString());
+                    } finally {
+                        setLoading(false);
+                    }
+                    return;
+                }
+            }
+        };
+
+        // @ts-ignore
+        window.runtime.OnFileDrop(handleFileDrop, false);
+
+        return () => {
+            // @ts-ignore
+            if (window.runtime.OnFileDropOff) {
+                // @ts-ignore
+                window.runtime.OnFileDropOff();
+            }
+        };
+    }, []);
+
+    // Global drag/drop interception: prevent browser defaults for file drags
+    useEffect(() => {
+        const hasFiles = (e: DragEvent) => e.dataTransfer?.types?.includes('Files');
+        const onDragOver = (e: DragEvent) => {
+            if (hasFiles(e)) e.preventDefault();
+        };
+        const onDrop = (e: DragEvent) => {
+            if (!hasFiles(e)) return;
+            e.preventDefault();
+            // Allow to bubble if it lands on a managed pane (React handler or Wails OnFileDrop)
+            const remote = remotePaneRef.current;
+            const local = localPaneRef.current;
+            const target = e.target;
+            if (target instanceof Node) {
+                if (remote && remote.contains(target)) return;
+                if (local && local.contains(target)) return;
+            }
+            e.stopPropagation();
+        };
+        document.addEventListener('dragover', onDragOver, true);
+        document.addEventListener('drop', onDrop, true);
+        return () => {
+            document.removeEventListener('dragover', onDragOver, true);
+            document.removeEventListener('drop', onDrop, true);
+        };
+    }, []);
 
     useEffect(() => {
         const getObservedWidth = (entry?: ResizeObserverEntry) => {
@@ -937,9 +1054,11 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
             setLoading(false);
         }
     };
+    startUploadFileRef.current = startUploadFile;
 
     const handleLocalEntryDragStart = (entry: FileEntry, event: React.DragEvent) => {
         if (entry.isDir) return;
+        draggedLocalEntryRef.current = entry;
         event.dataTransfer.effectAllowed = 'copy';
         event.dataTransfer.setData('application/x-opscopilot-local-file', JSON.stringify(entry));
         event.dataTransfer.setData('text/plain', entry.path);
@@ -948,12 +1067,23 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
     const getRemoteDropOverlay = (event: React.DragEvent): DropOverlayState => {
         const hasLocalEntry = event.dataTransfer.types.includes('application/x-opscopilot-local-file');
         const hasExternalFile = event.dataTransfer.types.includes('Files');
+        const hasWailsDrop = !!(window as any).runtime?.OnFileDrop;
+
         if (!hasLocalEntry && !hasExternalFile) {
             return {
                 visible: true,
                 blocked: true,
                 title: '无法识别拖入内容',
-                detail: '请从左侧本地文件列表拖入单个文件',
+                detail: '请从左侧本地文件列表拖入文件',
+            };
+        }
+        // External files from OS file manager: only Wails OnFileDrop can resolve real paths
+        if (!hasLocalEntry && hasExternalFile && !hasWailsDrop) {
+            return {
+                visible: true,
+                blocked: true,
+                title: '当前环境无法读取系统文件路径',
+                detail: '请从左侧本地文件列表拖入文件',
             };
         }
         if (!sessionId) {
@@ -997,23 +1127,22 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
         if (payload) {
             try {
                 const entry = JSON.parse(payload) as FileEntry;
-                return entry.path && entry.name ? entry : null;
+                if (entry.path && entry.name) {
+                    draggedLocalEntryRef.current = null;
+                    return entry;
+                }
             } catch {
-                return null;
             }
         }
 
-        const file = event.dataTransfer.files?.[0] as (File & { path?: string; webkitRelativePath?: string }) | undefined;
-        const path = file?.path || file?.webkitRelativePath || '';
-        if (!file || !path) return null;
-        return {
-            path,
-            name: file.name,
-            isDir: false,
-            size: file.size,
-            modTime: '',
-            mode: 0,
-        };
+        // Fallback to ref when dataTransfer payload is lost (Wails WebView)
+        const refEntry = draggedLocalEntryRef.current;
+        if (refEntry) {
+            draggedLocalEntryRef.current = null;
+            return refEntry;
+        }
+
+        return null;
     };
 
     const handleRemoteDrop = async (event: React.DragEvent<HTMLDivElement>) => {
@@ -1025,12 +1154,64 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
             return;
         }
 
-        const entry = extractDroppedLocalEntry(event);
-        if (!entry) {
-            setMsg('未能读取拖入文件路径，请从左侧本地文件列表拖拽文件上传');
-            return;
+        // Internal drags: handle here via dataTransfer / ref
+        const hasLocalEntry = event.dataTransfer.types.includes('application/x-opscopilot-local-file');
+        if (hasLocalEntry) {
+            const entry = extractDroppedLocalEntry(event);
+            if (!entry) {
+                setMsg('未能读取拖入文件路径，请从左侧本地文件列表拖拽文件上传');
+                return;
+            }
+            await startUploadFile(entry);
         }
-        await startUploadFile(entry);
+        // External OS file drops: Wails OnFileDrop callback handles the upload.
+        // Do NOT stopPropagation — the event must bubble for Wails to detect it.
+    };
+
+    // ── Local pane drop: copy external files into the current local directory ──
+    const getLocalDropOverlay = (event: React.DragEvent): DropOverlayState => {
+        const hasFiles = event.dataTransfer.types.includes('Files');
+        if (!hasFiles) {
+            return {
+                visible: true,
+                blocked: true,
+                title: '无法识别拖入内容',
+                detail: '请拖入系统文件',
+            };
+        }
+        if (!localPath) {
+            return {
+                visible: true,
+                blocked: true,
+                title: '无法复制',
+                detail: '请先进入一个本地目录',
+            };
+        }
+        return {
+            visible: true,
+            blocked: false,
+            title: '复制到本地目录',
+            detail: localPath,
+        };
+    };
+
+    const handleLocalDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+        const overlay = getLocalDropOverlay(event);
+        event.preventDefault();
+        event.dataTransfer.dropEffect = overlay.blocked ? 'none' : 'copy';
+        setLocalDropOverlay(overlay);
+    };
+
+    const handleLocalDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+        setLocalDropOverlay(null);
+    };
+
+    const handleLocalDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        setLocalDropOverlay(null);
+        // External OS file copies are handled by Wails OnFileDrop callback.
+        // Do NOT stopPropagation — the event must bubble for Wails to detect it.
     };
 
     const startDownloadSelected = async () => {
@@ -1519,6 +1700,11 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                         layoutMode={layoutMode}
                         draggableEntries
                         onEntryDragStart={handleLocalEntryDragStart}
+                        dropOverlay={localDropOverlay}
+                        onPaneDragOver={handleLocalDragOver}
+                        onPaneDragLeave={handleLocalDragLeave}
+                        onPaneDrop={handleLocalDrop}
+                        paneRef={localPaneRef}
                         toolbar={
                             <>
                                 <button style={styles.btnSecondary} onClick={createLocalFolder} disabled={loading}>新建</button>
@@ -1582,6 +1768,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                         onPaneDragOver={handleRemoteDragOver}
                         onPaneDragLeave={handleRemoteDragLeave}
                         onPaneDrop={handleRemoteDrop}
+                        paneRef={remotePaneRef}
                         toolbar={
                             <>
                                 <button style={styles.btnSecondary} onClick={createRemoteFolder} disabled={loading || !isSFTPSupported()}>新建</button>

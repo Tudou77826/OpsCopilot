@@ -112,6 +112,8 @@ export function LoadQuickCommands():Promise<Array<config.QuickCommand>>;
 
 export function LoadScript(arg1:string):Promise<script.Script>;
 
+export function LocalCopy(arg1:string,arg2:string):Promise<string>;
+
 export function LocalList(arg1:string):Promise<string>;
 
 export function LocalMkdir(arg1:string):Promise<string>;

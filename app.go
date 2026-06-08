@@ -1732,6 +1732,41 @@ func (a *App) LocalRename(oldPath, newPath string) string {
 	return mustJSON(localFSResponse{OK: true})
 }
 
+func (a *App) LocalCopy(src, dst string) string {
+	srcP := filepath.Clean(strings.TrimSpace(src))
+	dstP := filepath.Clean(strings.TrimSpace(dst))
+	if srcP == "" || dstP == "" {
+		return mustJSON(localFSResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotFound, Message: "路径为空"}})
+	}
+
+	srcFile, err := os.Open(srcP)
+	if err != nil {
+		return mustJSON(localFSResponse{OK: false, Error: toTransferErr(err)})
+	}
+	defer srcFile.Close()
+
+	fi, err := srcFile.Stat()
+	if err != nil {
+		return mustJSON(localFSResponse{OK: false, Error: toTransferErr(err)})
+	}
+	if fi.IsDir() {
+		return mustJSON(localFSResponse{OK: false, Error: &filetransfer.TransferError{Code: "IS_DIR", Message: "不支持复制目录"}})
+	}
+
+	dstFile, err := os.Create(dstP)
+	if err != nil {
+		return mustJSON(localFSResponse{OK: false, Error: toTransferErr(err)})
+	}
+	defer dstFile.Close()
+
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		os.Remove(dstP)
+		return mustJSON(localFSResponse{OK: false, Error: toTransferErr(err)})
+	}
+
+	return mustJSON(localFSResponse{OK: true})
+}
+
 func (a *App) FTRemoteMkdir(sessionID, remotePath string) string {
 	info, err := a.getTransferClientWithRelay(sessionID)
 	if err != nil {

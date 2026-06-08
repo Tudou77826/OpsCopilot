@@ -210,6 +210,10 @@ export function LoadScript(arg1) {
   return window['go']['main']['App']['LoadScript'](arg1);
 }
 
+export function LocalCopy(arg1, arg2) {
+  return window['go']['main']['App']['LocalCopy'](arg1, arg2);
+}
+
 export function LocalList(arg1) {
   return window['go']['main']['App']['LocalList'](arg1);
 }
