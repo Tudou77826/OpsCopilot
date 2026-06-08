@@ -527,6 +527,19 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
 
     return (
         <div style={styles.container}>
+            {isReviewModalOpen ? (
+                <SessionReviewModal
+                    isOpen={isReviewModalOpen}
+                    onClose={() => {
+                        setIsReviewModalOpen(false);
+                    }}
+                    rootCause={rootCause}
+                    problem={originalProblem}
+                    onArchive={handleArchive}
+                    inline
+                />
+            ) : (
+            <>
             {!isInvestigating ? (
                 <div style={styles.emptyState}>
                     <div style={styles.icon}>🩺</div>
@@ -667,16 +680,16 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                     {isStopping ? (
                         <div style={styles.stopContainer}>
                             <div style={styles.inputWrapper}>
-                                <input 
-                                    type="text" 
+                                <input
+                                    type="text"
                                     value={rootCause}
                                     onChange={(e) => setRootCause(e.target.value)}
                                     placeholder="请输入根本原因 (Root Cause)..."
                                     style={styles.rootCauseInput}
                                     autoFocus
                                 />
-                                <button 
-                                    onClick={handlePolishRootCause} 
+                                <button
+                                    onClick={handlePolishRootCause}
                                     style={styles.magicButton}
                                     title="AI 润色"
                                     disabled={isPolishing}
@@ -718,16 +731,8 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
                     )}
                 </div>
             )}
-
-            <SessionReviewModal
-                isOpen={isReviewModalOpen}
-                onClose={() => {
-                    setIsReviewModalOpen(false);
-                }}
-                rootCause={rootCause}
-                problem={originalProblem}
-                onArchive={handleArchive}
-            />
+            </>
+            )}
         </div>
     );
 };

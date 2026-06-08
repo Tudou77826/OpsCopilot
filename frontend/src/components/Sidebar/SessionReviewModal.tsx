@@ -26,6 +26,7 @@ interface SessionReviewModalProps {
     rootCause: string;
     problem: string;
     onArchive: (params: ArchiveParams) => Promise<{ success: boolean; message: string }>;
+    inline?: boolean;
 }
 
 // 归档选择状态（合并相关状态）
@@ -243,7 +244,7 @@ const ArchiveSection: React.FC<{
 };
 
 // Main Component
-const SessionReviewModal: React.FC<SessionReviewModalProps> = ({ isOpen, onClose, rootCause, problem, onArchive }) => {
+const SessionReviewModal: React.FC<SessionReviewModalProps> = ({ isOpen, onClose, rootCause, problem, onArchive, inline }) => {
     // View state
     const [view, setView] = useState<'timeline' | 'conclusion'>('timeline');
     const [conclusion, setConclusion] = useState('');
@@ -470,103 +471,115 @@ const SessionReviewModal: React.FC<SessionReviewModalProps> = ({ isOpen, onClose
 
     if (!isOpen) return null;
 
-    return ReactDOM.createPortal(
+    const modalContent = (
         <>
             <style>{SPINNER_ANIMATION}</style>
-            <div style={styles.overlay}>
-                <div style={styles.modal}>
-                    <div style={styles.header}>
-                        <h3 style={styles.title}>
-                            {view === 'timeline' ? '编辑排查记录' : '确认排查总结'}
-                        </h3>
-                        <button onClick={onClose} style={styles.closeButton}>&times;</button>
-                    </div>
-
-                    <div style={styles.body}>
-                        {view === 'timeline' ? (
-                            <textarea
-                                value={markdownContent}
-                                onChange={(e) => setMarkdownContent(e.target.value)}
-                                style={styles.textarea}
-                                placeholder="正在生成排查记录..."
-                            />
-                        ) : (
-                            <>
-                                <div style={styles.textareaWrapper}>
-                                    <textarea
-                                        value={conclusion}
-                                        onChange={(e) => setConclusion(e.target.value)}
-                                        style={styles.textareaInWrapper}
-                                        placeholder="AI 正在生成总结..."
-                                    />
-                                </div>
-                                <div style={styles.bottomSection}>
-                                    {conclusion && <IndexPreview conclusion={conclusion} />}
-                                    <ArchiveSection
-                                        selection={selection}
-                                        onServiceChange={handleServiceChange}
-                                        onModuleChange={handleModuleChange}
-                                        onNewServiceNameChange={(v) => setSelection(prev => ({ ...prev, newServiceName: v }))}
-                                        onNewModuleNameChange={(v) => setSelection(prev => ({ ...prev, newModuleName: v }))}
-                                        onCancelNewService={() => setSelection(prev => ({ ...prev, isNewService: false, newServiceName: '' }))}
-                                        onCancelNewModule={() => setSelection(prev => ({ ...prev, isNewModule: false, newModuleName: '' }))}
-                                        getEffectiveService={getEffectiveService}
-                                        getEffectiveModule={getEffectiveModule}
-                                    />
-                                </div>
-                            </>
-                        )}
-                    </div>
-
-                    <div style={styles.footer}>
-                        {view === 'timeline' ? (
-                            <button onClick={handleAnalyze} style={styles.primaryButton} disabled={isLoading}>
-                                AI 解析
-                            </button>
-                        ) : isLoading ? (
-                            <div style={styles.streamingHint}>
-                                <div style={styles.loadingSpinner} />
-                                <span>AI 正在生成总结...</span>
-                            </div>
-                        ) : archiveSuccess ? (
-                            <div style={styles.successHint}>
-                                <span style={styles.successIcon}>✓</span>
-                                <span>归档成功</span>
-                            </div>
-                        ) : (
-                            <>
-                                {archiveError && <div style={styles.errorHint}>{archiveError}</div>}
-                                <button
-                                    onClick={() => setView('timeline')}
-                                    style={styles.secondaryButton}
-                                    disabled={isArchiving}
-                                >
-                                    上一步
-                                </button>
-                                <button
-                                    onClick={handleArchive}
-                                    style={{
-                                        ...styles.primaryButton,
-                                        opacity: canArchive() && !isArchiving ? 1 : 0.5,
-                                        cursor: canArchive() && !isArchiving ? 'pointer' : 'not-allowed',
-                                    }}
-                                    disabled={!canArchive() || isArchiving}
-                                >
-                                    {isArchiving ? (
-                                        <span style={styles.archiveLoadingText}>
-                                            <div style={styles.loadingSpinner} />
-                                            归档中...
-                                        </span>
-                                    ) : '归档'}
-                                </button>
-                            </>
-                        )}
-                    </div>
-
-                    {archiveSuccess && <CelebrationOverlay />}
-                </div>
+            <div style={styles.header}>
+                <h3 style={styles.title}>
+                    {view === 'timeline' ? '编辑排查记录' : '确认排查总结'}
+                </h3>
+                <button onClick={onClose} style={styles.closeButton}>&times;</button>
             </div>
-        </>,
+
+            <div style={inline ? { ...styles.body, flex: 1 } : styles.body}>
+                {view === 'timeline' ? (
+                    <textarea
+                        value={markdownContent}
+                        onChange={(e) => setMarkdownContent(e.target.value)}
+                        style={styles.textarea}
+                        placeholder="正在生成排查记录..."
+                    />
+                ) : (
+                    <>
+                        <div style={styles.textareaWrapper}>
+                            <textarea
+                                value={conclusion}
+                                onChange={(e) => setConclusion(e.target.value)}
+                                style={styles.textareaInWrapper}
+                                placeholder="AI 正在生成总结..."
+                            />
+                        </div>
+                        <div style={styles.bottomSection}>
+                            {conclusion && <IndexPreview conclusion={conclusion} />}
+                            <ArchiveSection
+                                selection={selection}
+                                onServiceChange={handleServiceChange}
+                                onModuleChange={handleModuleChange}
+                                onNewServiceNameChange={(v) => setSelection(prev => ({ ...prev, newServiceName: v }))}
+                                onNewModuleNameChange={(v) => setSelection(prev => ({ ...prev, newModuleName: v }))}
+                                onCancelNewService={() => setSelection(prev => ({ ...prev, isNewService: false, newServiceName: '' }))}
+                                onCancelNewModule={() => setSelection(prev => ({ ...prev, isNewModule: false, newModuleName: '' }))}
+                                getEffectiveService={getEffectiveService}
+                                getEffectiveModule={getEffectiveModule}
+                            />
+                        </div>
+                    </>
+                )}
+            </div>
+
+            <div style={styles.footer}>
+                {view === 'timeline' ? (
+                    <button onClick={handleAnalyze} style={styles.primaryButton} disabled={isLoading}>
+                        AI 解析
+                    </button>
+                ) : isLoading ? (
+                    <div style={styles.streamingHint}>
+                        <div style={styles.loadingSpinner} />
+                        <span>AI 正在生成总结...</span>
+                    </div>
+                ) : archiveSuccess ? (
+                    <div style={styles.successHint}>
+                        <span style={styles.successIcon}>✓</span>
+                        <span>归档成功</span>
+                    </div>
+                ) : (
+                    <>
+                        {archiveError && <div style={styles.errorHint}>{archiveError}</div>}
+                        <button
+                            onClick={() => setView('timeline')}
+                            style={styles.secondaryButton}
+                            disabled={isArchiving}
+                        >
+                            上一步
+                        </button>
+                        <button
+                            onClick={handleArchive}
+                            style={{
+                                ...styles.primaryButton,
+                                opacity: canArchive() && !isArchiving ? 1 : 0.5,
+                                cursor: canArchive() && !isArchiving ? 'pointer' : 'not-allowed',
+                            }}
+                            disabled={!canArchive() || isArchiving}
+                        >
+                            {isArchiving ? (
+                                <span style={styles.archiveLoadingText}>
+                                    <div style={styles.loadingSpinner} />
+                                    归档中...
+                                </span>
+                            ) : '归档'}
+                        </button>
+                    </>
+                )}
+            </div>
+
+            {archiveSuccess && <CelebrationOverlay />}
+        </>
+    );
+
+    if (inline) {
+        return (
+            <div style={styles.inlineContainer}>
+                {modalContent}
+            </div>
+        );
+    }
+
+    return ReactDOM.createPortal(
+        <div style={styles.overlay}>
+            <div style={styles.modal}>
+                {modalContent}
+            </div>
+        </div>,
         document.body
     );
 };
@@ -591,6 +604,13 @@ const CELEBRATION_ANIMATIONS = `
 
 // Styles
 const styles = {
+    inlineContainer: {
+        display: 'flex',
+        flexDirection: 'column' as const,
+        height: '100%',
+        backgroundColor: '#252526',
+        position: 'relative' as const,
+    },
     overlay: {
         position: 'fixed' as const,
         top: 0, left: 0, right: 0, bottom: 0,
