@@ -559,14 +559,17 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
         };
     }, []);
 
-    // Global drag/drop interception: prevent browser defaults for file drags
+    // Global drag/drop interception: prevent browser defaults for managed file drags.
     useEffect(() => {
-        const hasFiles = (e: DragEvent) => e.dataTransfer?.types?.includes('Files');
+        const hasManagedFileDrag = (e: DragEvent) => {
+            const types = e.dataTransfer?.types ? Array.from(e.dataTransfer.types) : [];
+            return types.includes('Files') || types.includes('application/x-opscopilot-local-file') || !!draggedLocalEntryRef.current;
+        };
         const onDragOver = (e: DragEvent) => {
-            if (hasFiles(e)) e.preventDefault();
+            if (hasManagedFileDrag(e)) e.preventDefault();
         };
         const onDrop = (e: DragEvent) => {
-            if (!hasFiles(e)) return;
+            if (!hasManagedFileDrag(e)) return;
             e.preventDefault();
             // Allow to bubble if it lands on a managed pane (React handler or Wails OnFileDrop)
             const remote = remotePaneRef.current;
@@ -1716,7 +1719,25 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                 ) : null}
 
                 {(!isNarrow || narrowPane === 'remote') ? (isSCPMode() ? (
-                    <div style={styles.scpPane}>
+                    <div
+                        style={styles.scpPane}
+                        ref={remotePaneRef}
+                        onDragOver={handleRemoteDragOver}
+                        onDragLeave={handleRemoteDragLeave}
+                        onDrop={handleRemoteDrop}
+                    >
+                        {remoteDropOverlay?.visible ? (
+                            <div
+                                style={{
+                                    ...styles.dropOverlay,
+                                    ...(remoteDropOverlay.blocked ? styles.dropOverlayBlocked : styles.dropOverlayReady),
+                                }}
+                                data-testid="file-drop-overlay"
+                            >
+                                <div style={styles.dropOverlayTitle}>{remoteDropOverlay.title}</div>
+                                <div style={styles.dropOverlayDetail}>{remoteDropOverlay.detail}</div>
+                            </div>
+                        ) : null}
                         <div style={styles.paneHeader}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <div style={{ color: '#fff', fontSize: '12px', fontWeight: 600 }}>远端（SCP）</div>
@@ -2266,7 +2287,8 @@ const styles: Record<string, React.CSSProperties> = {
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column' as const,
-        minHeight: 0
+        minHeight: 0,
+        position: 'relative' as const
     },
     scpBody: {
         flex: 1,

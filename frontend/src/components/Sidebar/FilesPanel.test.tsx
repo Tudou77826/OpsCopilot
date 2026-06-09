@@ -48,6 +48,13 @@ const renderPanel = (width: number, backend = makeBackend()) => {
     return backend;
 };
 
+const getPaneContainingText = (text: string) => {
+    const node = screen.getByText(text);
+    const pane = node.closest('[data-testid^="file-pane-"]');
+    if (!pane) throw new Error(`No file pane found for ${text}`);
+    return pane as HTMLElement;
+};
+
 describe('FilesPanel responsive layout', () => {
     beforeEach(() => {
         vi.stubGlobal('runtime', undefined);
@@ -189,6 +196,94 @@ describe('FilesPanel responsive layout', () => {
         const overlay = screen.getByTestId('file-drop-overlay');
         expect(within(overlay).getByText('当前连接不支持文件上传')).toBeInTheDocument();
         expect(within(overlay).getByText('unsupported')).toBeInTheDocument();
+    });
+
+    it('uploads an internal local-list drag when the drop payload is lost', async () => {
+        const backend = makeBackend();
+        backend.FTStat = vi.fn(() => json({ ok: false }));
+        renderPanel(1200, backend);
+
+        await waitFor(() => expect(screen.getByText('local.txt')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('remote.log')).toBeInTheDocument());
+
+        const localRow = screen.getByText('local.txt').closest('tr') as HTMLTableRowElement;
+        const remotePane = getPaneContainingText('remote.log');
+        const dragData = {
+            types: ['application/x-opscopilot-local-file'],
+            dropEffect: 'copy',
+            effectAllowed: 'copy',
+            setData: vi.fn(),
+            getData: vi.fn(() => ''),
+        };
+
+        fireEvent.dragStart(localRow, { dataTransfer: dragData });
+        fireEvent.drop(remotePane, {
+            dataTransfer: {
+                types: ['application/x-opscopilot-local-file'],
+                dropEffect: 'copy',
+                getData: vi.fn(() => ''),
+            },
+        });
+
+        await waitFor(() => expect(backend.FTUpload).toHaveBeenCalledWith('session-1', 'C:\\Users\\tester\\local.txt', '/root/local.txt'));
+    });
+
+    it('prevents browser defaults for internal file drags outside managed panes', async () => {
+        renderPanel(1200);
+
+        await waitFor(() => expect(screen.getByText('local.txt')).toBeInTheDocument());
+        const localRow = screen.getByText('local.txt').closest('tr') as HTMLTableRowElement;
+        fireEvent.dragStart(localRow, {
+            dataTransfer: {
+                types: ['application/x-opscopilot-local-file'],
+                dropEffect: 'copy',
+                effectAllowed: 'copy',
+                setData: vi.fn(),
+            },
+        });
+
+        const dropEvent = new Event('drop', { bubbles: true, cancelable: true });
+        Object.defineProperty(dropEvent, 'dataTransfer', {
+            value: { types: ['application/x-opscopilot-local-file'] },
+        });
+        document.dispatchEvent(dropEvent);
+
+        expect(dropEvent.defaultPrevented).toBe(true);
+    });
+
+    it('uses Wails file-drop paths for external files dropped on the remote pane', async () => {
+        const backend = makeBackend();
+        backend.FTStat = vi.fn(() => json({ ok: false }));
+        let onFileDrop: ((x: number, y: number, paths: string[]) => void) | undefined;
+        const runtime = {
+            OnFileDrop: vi.fn((callback: typeof onFileDrop, useDropTarget: boolean) => {
+                onFileDrop = callback;
+                expect(useDropTarget).toBe(false);
+            }),
+            OnFileDropOff: vi.fn(),
+        };
+        vi.stubGlobal('runtime', runtime);
+
+        renderPanel(1200, backend);
+        await waitFor(() => expect(screen.getByText('remote.log')).toBeInTheDocument());
+        const remotePane = getPaneContainingText('remote.log');
+        remotePane.getBoundingClientRect = vi.fn(() => ({
+            left: 10,
+            top: 20,
+            right: 510,
+            bottom: 420,
+            width: 500,
+            height: 400,
+            x: 10,
+            y: 20,
+            toJSON: () => ({}),
+        }));
+
+        await act(async () => {
+            onFileDrop?.(100, 100, ['C:\\Users\\tester\\Desktop\\outside.log']);
+        });
+
+        await waitFor(() => expect(backend.FTUpload).toHaveBeenCalledWith('session-1', 'C:\\Users\\tester\\Desktop\\outside.log', '/root/outside.log'));
     });
 
     it('uses border-box width so padding changes do not oscillate near breakpoints', async () => {
