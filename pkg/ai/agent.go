@@ -74,6 +74,62 @@ type AgentRunOptions struct {
 	Catalog      *knowledge.Catalog // 知识库目录（注入 Agent 系统提示）
 }
 
+// RetrievedContent tracks what documents and lines were fetched during the agent loop.
+type RetrievedContent struct {
+	Lines     map[string]string // "file.md:42" → raw line content
+	FilesRead map[string]bool   // which files had at least one line read
+}
+
+func NewRetrievedContent() *RetrievedContent {
+	return &RetrievedContent{
+		Lines:     make(map[string]string),
+		FilesRead: make(map[string]bool),
+	}
+}
+
+// HasContent returns true if any content was retrieved.
+func (rc *RetrievedContent) HasContent() bool {
+	return len(rc.Lines) > 0 || len(rc.FilesRead) > 0
+}
+
+// RecordFromGrep parses grep tool output (format: "file:lineNum: content") and records it.
+func (rc *RetrievedContent) RecordFromGrep(toolResult string) {
+	for _, line := range strings.Split(toolResult, "\n") {
+		// Skip non-result lines like "No matches found for pattern: ..."
+		if strings.HasPrefix(line, "No matches found") || strings.HasPrefix(line, "... ") {
+			continue
+		}
+		idx := strings.Index(line, ": ")
+		if idx < 0 {
+			continue
+		}
+		prefix := line[:idx] // e.g. "payment_sop.md:42"
+		content := line[idx+2:]
+		rc.Lines[prefix] = content
+		fileOnly := strings.SplitN(prefix, ":", 2)[0]
+		rc.FilesRead[fileOnly] = true
+	}
+}
+
+// RecordFromRead parses read_knowledge_file output (format: "  N | content") and records it.
+func (rc *RetrievedContent) RecordFromRead(toolResult string, filePath string) {
+	rc.FilesRead[filePath] = true
+	for _, line := range strings.Split(toolResult, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || trimmed == "...(truncated)..." {
+			continue
+		}
+		idx := strings.Index(trimmed, " | ")
+		if idx < 0 {
+			continue
+		}
+		lineNum := strings.TrimSpace(trimmed[:idx])
+		content := trimmed[idx+3:]
+		key := filePath + ":" + lineNum
+		rc.Lines[key] = content
+	}
+}
+
 const agentBasePrompt = "你是 OpsCopilot 运维诊断助手。你可以查阅本地知识库来辅助诊断。\n\n" +
 	"## 可用工具\n" +
 	"1. read_knowledge_file: 读取知识库文档，返回带行号的内容。支持 start_line/end_line 按行号截断读取。\n" +
@@ -91,15 +147,14 @@ const agentBasePrompt = "你是 OpsCopilot 运维诊断助手。你可以查阅�
 	"一次可以读取多个相关场景（多次调用 read_knowledge_file），然后综合分析给出推断。\n" +
 	"不必要求「完全相同的问题」才检索，症状相似、组件相关、根因相近的场景都值得参考。\n\n" +
 	"## 规则\n" +
-	"- 【严格】如果工具搜索后知识库中没有与用户问题相关的场景，回答必须极简：1-2句话说明未找到相关文档，最多附加2-3条最基础的通用诊断命令，禁止长篇推测\n" +
-	"- 如果知识库中有相关文档，基于文档内容给出详细、准确的排查建议\n" +
-	"- 回答长度必须与知识库匹配度成正比：无匹配=极简，弱匹配=简短，强匹配=详细\n" +
-	"- 输出 Markdown 格式，用 ## 分节，命令用 ```bash 代码块\n" +
+	"- 【严格】如果工具搜索后知识库中没有与用户问题相关的场景，必须返回空结果（空steps、空commands），禁止编造任何命令\n" +
+	"- 如果知识库中有相关文档，基于文档内容给出详细、准确的排查建议，所有命令必须来自知识库文档\n" +
+	"- 回答长度必须与知识库匹配度成正比：无匹配=空结果，弱匹配=简短，强匹配=详细\n" +
 	"- 用中文回答\n" +
-	"- Always follow additional system instructions about output format."
+	"- 输出格式由后续追加的系统指令决定，严格遵循追加指令中的格式要求。"
 
 // RunAgent executes the ReAct loop
-func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string, error) {
+func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string, *RetrievedContent, error) {
 	runID := uuid.NewString()
 	startAt := time.Now()
 
@@ -151,6 +206,7 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 	slog.Info("agent start", "runId", runID, "questionLen", len(opts.Question), "knowledgeDir", opts.KnowledgeDir, "knowledgeExists", knowledgeExists, "tools", len(llmTools))
 
 	var prevToolCalls []llm.ToolCall
+	retrieved := NewRetrievedContent()
 
 	for i := 0; i < maxSteps; i++ {
 		if i == 0 {
@@ -166,7 +222,7 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 		llmCost := time.Since(stepAt)
 		if err != nil {
 			slog.Error("agent llm error", "runId", runID, "step", i+1, "cost", logging.Cost(llmCost), "error", err)
-			return "", err
+			return "", retrieved, err
 		}
 
 		slog.Debug("agent llm response", "runId", runID, "step", i+1, "cost", logging.Cost(llmCost), "contentLen", len(resp.Content), "toolCalls", len(resp.ToolCalls))
@@ -192,7 +248,7 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 				emitStatus(ctx, runID, "answering", "正在生成回答...")
 			}
 			slog.Info("agent done", "runId", runID, "cost", logging.Cost(time.Since(startAt)))
-			return resp.Content, nil
+			return resp.Content, retrieved, nil
 		}
 
 		for _, tc := range resp.ToolCalls {
@@ -234,6 +290,21 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 				Name:       tc.Function.Name,
 				Content:    toolResult,
 			})
+
+			// Track retrieved content for post-processing validation
+			if toolResult != "" && !strings.HasPrefix(toolResult, "Error") {
+				switch tc.Function.Name {
+				case "grep_knowledge":
+					retrieved.RecordFromGrep(toolResult)
+				case "read_knowledge_file":
+					var readArgs map[string]interface{}
+					if json.Unmarshal([]byte(tc.Function.Arguments), &readArgs) == nil {
+						if path, ok := readArgs["path"].(string); ok {
+							retrieved.RecordFromRead(toolResult, path)
+						}
+					}
+				}
+			}
 		}
 
 		slog.Debug("agent step outputs appended", "runId", runID, "step", i+1, "outputs", len(resp.ToolCalls), "messageCount", len(messages))
@@ -249,7 +320,7 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 	}
 
 	slog.Error("agent exceeded max steps", "runId", runID, "totalCost", time.Since(startAt), "maxSteps", maxSteps)
-	return "", fmt.Errorf("agent exceeded maximum steps (%d) without reaching a conclusion", maxSteps)
+	return "", retrieved, fmt.Errorf("agent exceeded maximum steps (%d) without reaching a conclusion", maxSteps)
 }
 
 func safeEmit(ctx context.Context, eventName string, data interface{}) {

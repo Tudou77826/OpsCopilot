@@ -163,7 +163,7 @@ Check ping and traceroute.
 	svc := NewAIService(mockProvider, mockProvider, cfgMgr)
 
 	// 4. Run Agent
-	answer, err := svc.RunAgent(context.Background(), AgentRunOptions{
+	answer, _, err := svc.RunAgent(context.Background(), AgentRunOptions{
 		Question:     "network slow",
 		KnowledgeDir: tmpDir,
 		SystemPrompt: "",
@@ -238,7 +238,7 @@ func TestAgentCatalogInjection(t *testing.T) {
 	cfgMgr := config.NewManager()
 	svc := NewAIService(mockProvider, mockProvider, cfgMgr)
 
-	answer, err := svc.RunAgent(context.Background(), AgentRunOptions{
+	answer, _, err := svc.RunAgent(context.Background(), AgentRunOptions{
 		Question:     "支付超时怎么办",
 		KnowledgeDir: "",
 		RetryMax:     5,
@@ -303,7 +303,7 @@ func TestAgentWithoutCatalog(t *testing.T) {
 	cfgMgr := config.NewManager()
 	svc := NewAIService(mockProvider, mockProvider, cfgMgr)
 
-	answer, err := svc.RunAgent(context.Background(), AgentRunOptions{
+	answer, _, err := svc.RunAgent(context.Background(), AgentRunOptions{
 		Question:     "test question",
 		KnowledgeDir: tmpDir,
 		RetryMax:     5,

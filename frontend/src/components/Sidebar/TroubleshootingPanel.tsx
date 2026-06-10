@@ -402,11 +402,15 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         if (!content) return '';
         let text = content;
 
-        // 1. 尝试从 JSON 包装中提取文本
+        // 1. 尝试从 JSON 包装中提取文本（仅在无 steps/commands 时拆包）
         try {
             const trimmed = text.trim();
             if (trimmed.startsWith('{')) {
                 const data = JSON.parse(trimmed);
+                // 如果是完整的 troubleshoot JSON（含 steps 或 commands），不要拆包
+                if (Array.isArray(data.steps) || Array.isArray(data.commands)) {
+                    return text; // 直接返回，交给下方 renderMessageContent 解析渲染
+                }
                 for (const key of ['summary', 'content', 'answer', 'text']) {
                     if (data[key] && typeof data[key] === 'string') {
                         text = data[key];

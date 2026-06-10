@@ -168,10 +168,16 @@ func normalizeAgentResponse(resp string) string {
 	if strings.HasPrefix(s, "{") {
 		var wrapper map[string]interface{}
 		if err := json.Unmarshal([]byte(s), &wrapper); err == nil {
-			for _, key := range []string{"summary", "content", "answer", "text"} {
-				if val, ok := wrapper[key].(string); ok && val != "" {
-					s = val
-					break
+			// 只在 JSON 是单字段包装时拆包（如 {"summary": "..."}）
+			// 如果同时包含 steps/commands，说明是完整的 troubleshoot JSON，不要拆
+			_, hasSteps := wrapper["steps"]
+			_, hasCommands := wrapper["commands"]
+			if !hasSteps && !hasCommands {
+				for _, key := range []string{"summary", "content", "answer", "text"} {
+					if val, ok := wrapper[key].(string); ok && val != "" {
+						s = val
+						break
+					}
 				}
 			}
 		}
@@ -251,10 +257,109 @@ func wrapAsTroubleshootJSON(s string) string {
 	return fmt.Sprintf(`{"summary":%s,"steps":[],"commands":[]}`, string(escaped))
 }
 
+
+// TroubleshootCommand represents a single command in the troubleshooting response.
+type TroubleshootCommand struct {
+	Command     string `json:"command"`
+	Description string `json:"description"`
+	Risk        string `json:"risk,omitempty"`
+	Source      string `json:"source,omitempty"`
+}
+
+// validateTroubleshootResponse checks that commands are grounded in retrieved content.
+// If commands cannot be traced to source documents, they are stripped.
+func validateTroubleshootResponse(normalized string, retrieved *RetrievedContent) string {
+	if retrieved == nil || !retrieved.HasContent() {
+		// No content was retrieved. Strip all commands and steps.
+		var resp map[string]interface{}
+		if err := json.Unmarshal([]byte(normalized), &resp); err != nil {
+			return `{"summary":"知识库中未找到相关文档。","steps":[],"commands":[]}`
+		}
+		delete(resp, "commands")
+		delete(resp, "steps")
+		resp["commands"] = []interface{}{}
+		resp["steps"] = []interface{}{}
+		if summary, ok := resp["summary"].(string); !ok || summary == "" {
+			resp["summary"] = "知识库中未找到相关文档。"
+		}
+		cleaned, _ := json.Marshal(resp)
+		return string(cleaned)
+	}
+
+	// Content was retrieved. Validate commands have sources or match retrieved content.
+	var resp map[string]interface{}
+	if err := json.Unmarshal([]byte(normalized), &resp); err != nil {
+		return normalized
+	}
+
+	commandsRaw, ok := resp["commands"].([]interface{})
+	if !ok {
+		return normalized
+	}
+
+	var validated []interface{}
+	for _, cmdRaw := range commandsRaw {
+		cmd, ok := cmdRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if isCommandGrounded(cmd, retrieved) {
+			validated = append(validated, cmd)
+		} else {
+			cmdStr, _ := cmd["command"].(string)
+			slog.Warn("stripping ungrounded command", "command", cmdStr)
+		}
+	}
+	resp["commands"] = validated
+	cleaned, _ := json.Marshal(resp)
+	return string(cleaned)
+}
+
+// isCommandGrounded checks if a command has a valid source or its text appears in retrieved content.
+func isCommandGrounded(cmd map[string]interface{}, rc *RetrievedContent) bool {
+	// Check source field
+	if source, ok := cmd["source"].(string); ok && source != "" {
+		filePart := source
+		if idx := strings.Index(source, "#L"); idx >= 0 {
+			filePart = source[:idx]
+		}
+		if rc.FilesRead[filePart] {
+			return true
+		}
+	}
+
+	// Check if command text appears in retrieved lines
+	cmdStr, _ := cmd["command"].(string)
+	if cmdStr == "" {
+		return false
+	}
+	return commandInRetrieved(cmdStr, rc)
+}
+
+// commandInRetrieved checks if a command appears in any retrieved line.
+// Uses the first two tokens (e.g., "systemctl status") to reduce false positives
+// from single-word matches like "cat" or "rm".
+func commandInRetrieved(cmd string, rc *RetrievedContent) bool {
+	parts := strings.Fields(cmd)
+	if len(parts) == 0 {
+		return false
+	}
+	key := parts[0]
+	if len(parts) >= 2 {
+		key = parts[0] + " " + parts[1]
+	}
+	for _, content := range rc.Lines {
+		if strings.Contains(content, key) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *AIService) AskWithContext(ctx context.Context, question string, knowledgeDir string) (string, error) {
 	prompt := config.DefaultQAPrompt
 
-	resp, err := s.RunAgent(ctx, AgentRunOptions{
+	resp, _, err := s.RunAgent(ctx, AgentRunOptions{
 		Question:     question,
 		KnowledgeDir: knowledgeDir,
 		SystemPrompt: prompt,
@@ -270,7 +375,7 @@ func (s *AIService) AskWithContext(ctx context.Context, question string, knowled
 func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowledgeDir string) (string, error) {
 	prompt := config.DefaultTroubleshootPrompt
 
-	resp, err := s.RunAgent(ctx, AgentRunOptions{
+	resp, retrieved, err := s.RunAgent(ctx, AgentRunOptions{
 		Question:     problem,
 		KnowledgeDir: knowledgeDir,
 		SystemPrompt: prompt,
@@ -281,7 +386,9 @@ func (s *AIService) AskTroubleshoot(ctx context.Context, problem string, knowled
 		return "", fmt.Errorf("故障排查失败: %w", err)
 	}
 
-	return normalizeAgentResponse(resp), nil
+	normalized := normalizeAgentResponse(resp)
+	validated := validateTroubleshootResponse(normalized, retrieved)
+	return validated, nil
 }
 
 func (s *AIService) GenerateConclusion(timeline string, rootCause string) (string, error) {
