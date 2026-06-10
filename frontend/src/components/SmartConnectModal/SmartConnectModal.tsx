@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { TbChevronDown, TbEdit, TbPlugConnected, TbPlus, TbServer, TbSparkles, TbTrash } from 'react-icons/tb';
 import { ConnectionConfig } from '../../types';
 import ConnectionConfigForm from '../ConnectionConfigForm/ConnectionConfigForm';
 
@@ -8,6 +9,20 @@ interface SmartConnectModalProps {
     onConnect: (configs: ConnectionConfig[]) => void;
     onParse: (input: string) => Promise<ConnectionConfig[]>;
 }
+
+const quickInputExamples = [
+    {
+        label: '跳板机',
+        template: [
+            '跳板机：<BastionIp>',
+            'sopuser / changeme_123',
+            '',
+            '目标：<TargetIp1~4>',
+            'sopuser / changeme_123',
+            'root / changeme_123'
+        ].join('\n')
+    }
+];
 
 const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, onConnect, onParse }) => {
     const [input, setInput] = useState('');
@@ -192,26 +207,60 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
     return (
         <div style={styles.overlay}>
             <div style={styles.modal}>
-                <h2 style={styles.title}>新建连接</h2>
+                <div style={styles.modalHeader}>
+                    <div>
+                        <h2 style={styles.title}>新建连接</h2>
+                        <p style={styles.description}>粘贴连接说明、IP、账号或跳板机信息，自动拆成可连接配置。</p>
+                    </div>
+                </div>
                 
-                {/* AI Input Section - Always visible but compact */}
                 <div style={styles.inputSection}>
-                    <div style={{display: 'flex', gap: '8px'}}>
+                    <div style={styles.inputHeader}>
+                        <div style={styles.inputTitleGroup}>
+                            <div style={styles.inputTitle}>连接描述</div>
+                            <div style={styles.inputHint}>写 IP、用户、密码、端口或跳板机信息，AI 会解析为连接配置。</div>
+                        </div>
+                        <div style={styles.inputActions}>
+                            <button
+                                type="button"
+                                onClick={() => setInput(quickInputExamples[0].template)}
+                                style={styles.templateButton}
+                                title={quickInputExamples[0].template}
+                            >
+                                填入跳板机模板
+                            </button>
+                            <button
+                                onClick={handleParse}
+                                style={{
+                                    ...styles.aiButton,
+                                    ...((isLoading || !input.trim()) ? styles.aiButtonDisabled : {})
+                                }}
+                                disabled={isLoading || !input.trim()}
+                            >
+                                {TbSparkles({ size: 15 })}
+                                {isLoading ? '分析中...' : '智能分析'}
+                            </button>
+                        </div>
+                    </div>
+                    {parsedConfigs.length === 0 ? (
                         <textarea
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            placeholder="你可以使用自然输入连接要求，如 '连接到 192.168.1.10 使用 root 用户， 密码是：xxx'..."
+                            placeholder={'例如：\n主机：192.168.1.10:22\n用户：root\n密码：<密码>'}
                             style={styles.textarea}
-                            rows={2}
+                            rows={3}
+                            spellCheck={false}
                         />
-                        <button 
-                            onClick={handleParse} 
-                            style={styles.aiButton}
-                            disabled={isLoading || !input.trim()}
-                        >
-                            {isLoading ? '分析中...' : '智能分析'}
-                        </button>
-                    </div>
+                    ) : (
+                        <textarea
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            placeholder="继续输入连接描述，可追加分析..."
+                            style={{ ...styles.textarea, ...styles.textareaCompact }}
+                            rows={1}
+                            spellCheck={false}
+                        />
+                    )}
                     {error && (
                         <div style={styles.errorContainer}>
                             <div style={styles.errorMessage}>
@@ -238,20 +287,40 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
                 <div style={styles.resultSection}>
                     <div style={styles.resultHeader}>
                         <h3 style={styles.subtitle}>连接列表 ({parsedConfigs.length})</h3>
+                        <span style={styles.selectedMeta}>已选 {selectedIndices.size}</span>
                         {/* "New Search" removed as requested */}
                     </div>
                     
-                    <div style={styles.list}>
+                    <div style={{
+                        ...styles.list,
+                        ...(parsedConfigs.length === 0 ? styles.listEmpty : styles.listWithResults)
+                    }}>
                         {parsedConfigs.length === 0 && (
-                            <div style={{textAlign: 'center', padding: '20px', color: '#666', border: '1px dashed #444', borderRadius: '4px'}}>
-                                暂无连接信息。请使用上方 AI 分析或手动添加。
+                            <div style={styles.emptyState}>
+                                <div style={styles.emptyIcon}>
+                                    {TbServer({ size: 22 })}
+                                </div>
+                                <div style={styles.emptyContent}>
+                                    <div style={styles.emptyTitle}>暂无连接信息</div>
+                                    <div style={styles.emptyText}>使用上方 AI 分析，或先手动添加一条空连接。</div>
+                                </div>
+                                <button onClick={handleAddManual} style={styles.emptyAction}>
+                                    手动添加连接
+                                </button>
                             </div>
                         )}
                         {parsedConfigs.map((config, i) => {
                             const isExpanded = expandedIndices.has(i);
                             const isSelected = selectedIndices.has(i);
                             return (
-                                <div key={i} style={{...styles.card, borderLeft: isSelected ? '4px solid #007acc' : '4px solid #444'}}>
+                                <div
+                                    key={i}
+                                    style={{
+                                        ...styles.card,
+                                        borderColor: isSelected ? '#007acc' : '#444',
+                                        boxShadow: isSelected ? '0 0 0 1px rgba(0, 122, 204, 0.18)' : 'none'
+                                    }}
+                                >
                                     {/* Card Header */}
                                     <div style={styles.cardHeader}>
                                         <input
@@ -268,14 +337,17 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
                                                 placeholder="连接名称"
                                                 onClick={(e) => e.stopPropagation()}
                                             />
-                                            <span style={styles.headerHost}>{config.host}</span>
+                                            <span style={styles.headerHost}>
+                                                {TbServer({ size: 14 })}
+                                                {config.host || '未填写主机'}
+                                            </span>
                                         </div>
-                                        <div style={{display: 'flex', gap: '8px'}}>
-                                            <button onClick={() => toggleExpand(i)} style={styles.iconButton} title="编辑">
-                                                {isExpanded ? '🔽' : '✏️'}
+                                        <div style={styles.cardActions}>
+                                            <button onClick={() => toggleExpand(i)} style={styles.iconButton} title={isExpanded ? '收起' : '编辑'} aria-label={isExpanded ? '收起' : '编辑'}>
+                                                {isExpanded ? TbChevronDown({ size: 17 }) : TbEdit({ size: 17 })}
                                             </button>
-                                            <button onClick={() => handleRemoveConfig(i)} style={styles.iconButton} title="移除">
-                                                🗑️
+                                            <button onClick={() => handleRemoveConfig(i)} style={styles.iconButton} title="移除" aria-label="移除">
+                                                {TbTrash({ size: 17 })}
                                             </button>
                                         </div>
                                     </div>
@@ -298,14 +370,21 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
                     </div>
                     
                     <div style={styles.buttonGroup}>
-                        <button onClick={handleAddManual} style={styles.secondaryButton}>+ 手动添加</button>
+                        <button onClick={handleAddManual} style={styles.secondaryButton}>
+                            {TbPlus({ size: 16 })}
+                            手动添加
+                        </button>
                         <div style={{flex: 1}}></div>
                         <button onClick={onClose} style={styles.cancelButton}>取消</button>
                         <button 
                             onClick={handleConnect} 
-                            style={styles.submitButton}
+                            style={{
+                                ...styles.submitButton,
+                                ...(selectedIndices.size === 0 ? styles.submitButtonDisabled : {})
+                            }}
                             disabled={selectedIndices.size === 0}
                         >
+                            {TbPlugConnected({ size: 16 })}
                             连接选中项 ({selectedIndices.size})
                         </button>
                     </div>
@@ -319,67 +398,162 @@ const styles = {
     overlay: {
         position: 'fixed' as const,
         top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        backgroundColor: 'rgba(0, 0, 0, 0.68)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 1000,
+        padding: '28px',
+        boxSizing: 'border-box' as const,
     },
     modal: {
         backgroundColor: '#2d2d2d',
-        padding: '24px',
+        border: '1px solid #444',
+        padding: '0',
         borderRadius: '8px',
-        width: '700px',
-        maxHeight: '90vh',
+        width: 'min(720px, 100%)',
+        maxHeight: '86vh',
         display: 'flex',
         flexDirection: 'column' as const,
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+        boxShadow: '0 16px 40px rgba(0, 0, 0, 0.42)',
         color: '#fff',
+        overflow: 'hidden',
+    },
+    modalHeader: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: '24px',
+        padding: '16px 22px 10px',
+        borderBottom: '1px solid #404040',
     },
     title: {
-        marginTop: 0,
-        marginBottom: '16px',
-        fontSize: '1.5rem',
+        margin: 0,
+        fontSize: '1.18rem',
+        lineHeight: 1.25,
+        fontWeight: 700,
+        letterSpacing: 0,
+    },
+    description: {
+        margin: '5px 0 0',
+        color: '#aaa',
+        fontSize: '0.82rem',
+        lineHeight: 1.45,
+    },
+    headerBadge: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '5px 9px',
+        borderRadius: '999px',
+        backgroundColor: '#333',
+        border: '1px solid #4a4a4a',
+        color: '#aaa',
+        fontSize: '0.78rem',
+        whiteSpace: 'nowrap' as const,
     },
     subtitle: {
         margin: 0,
         fontSize: '1rem',
-        color: '#ccc',
+        color: '#ddd',
+        fontWeight: 650,
     },
     inputSection: {
         display: 'flex',
         flexDirection: 'column' as const,
+        gap: '9px',
+        padding: '12px 22px',
+        borderBottom: '1px solid #404040',
+        backgroundColor: '#2d2d2d',
+    },
+    inputHeader: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: '16px',
+        minWidth: 0,
+    },
+    inputTitleGroup: {
+        minWidth: 0,
+        flex: 1,
+    },
+    inputTitle: {
+        color: '#ddd',
+        fontSize: '0.92rem',
+        fontWeight: 650,
+        lineHeight: 1.3,
+    },
+    inputHint: {
+        color: '#888',
+        fontSize: '0.76rem',
+        lineHeight: 1.35,
+        marginTop: '2px',
+    },
+    inputActions: {
+        display: 'flex',
+        alignItems: 'center',
         gap: '8px',
-        marginBottom: '16px',
-        borderBottom: '1px solid #444',
-        paddingBottom: '16px',
+        flex: '0 0 auto',
     },
     textarea: {
         flex: 1,
-        padding: '8px',
-        borderRadius: '4px',
+        width: '100%',
+        minHeight: '136px',
+        padding: '8px 10px',
+        borderRadius: '6px',
         border: '1px solid #444',
         backgroundColor: '#1e1e1e',
         color: '#fff',
-        fontSize: '0.9rem',
+        fontSize: '0.84rem',
+        lineHeight: 1.45,
         resize: 'vertical' as const,
         boxSizing: 'border-box' as const,
         fontFamily: 'inherit',
+        outline: 'none',
+    },
+    textareaCompact: {
+        minHeight: '34px',
+        height: '34px',
+        resize: 'none' as const,
+        overflow: 'hidden',
+        lineHeight: 1.3,
     },
     aiButton: {
-        padding: '0 16px',
-        borderRadius: '4px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '7px',
+        height: '34px',
+        minWidth: '96px',
+        padding: '0 12px',
+        borderRadius: '6px',
         border: 'none',
-        backgroundColor: '#8e44ad',
+        backgroundColor: '#007acc',
         color: '#fff',
         cursor: 'pointer',
         fontWeight: 'bold' as const,
+        fontSize: '0.84rem',
+    },
+    templateButton: {
+        height: '34px',
+        padding: '0 10px',
+        borderRadius: '6px',
+        border: '1px solid #555',
+        backgroundColor: '#333',
+        color: '#ccc',
+        cursor: 'pointer',
+        fontSize: '0.82rem',
+        whiteSpace: 'nowrap' as const,
+    },
+    aiButtonDisabled: {
+        opacity: 0.48,
+        cursor: 'not-allowed',
     },
     errorContainer: {
         backgroundColor: 'rgba(255, 107, 107, 0.1)',
         border: '1px solid #ff6b6b',
-        borderRadius: '4px',
-        padding: '8px',
+        borderRadius: '6px',
+        padding: '9px 10px',
     },
     errorMessage: {
         color: '#ff6b6b',
@@ -411,14 +585,23 @@ const styles = {
     resultSection: {
         display: 'flex',
         flexDirection: 'column' as const,
-        gap: '16px',
+        gap: '12px',
         overflow: 'hidden',
-        flex: 1,
+        flex: '1 1 auto',
+        minHeight: 0,
     },
     resultHeader: {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
+        padding: '11px 22px 0',
+    },
+    selectedMeta: {
+        color: '#aaa',
+        fontSize: '0.8rem',
+        padding: '3px 8px',
+        border: '1px solid #444',
+        borderRadius: '999px',
     },
     resetButton: {
         background: 'none',
@@ -430,22 +613,76 @@ const styles = {
     },
     list: {
         overflowY: 'auto' as const,
-        paddingRight: '4px',
+        padding: '0 22px 4px',
         display: 'flex',
         flexDirection: 'column' as const,
-        gap: '12px',
-        minHeight: '200px',
+        gap: '8px',
+        minHeight: 0,
+    },
+    listEmpty: {
+        flex: '0 0 auto',
+        maxHeight: 'none',
+    },
+    listWithResults: {
+        flex: '1 1 auto',
+        maxHeight: '50vh',
+    },
+    emptyState: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '14px',
+        padding: '10px 12px',
+        color: '#aaa',
+        border: '1px dashed #444',
+        borderRadius: '8px',
+        backgroundColor: '#333',
+    },
+    emptyIcon: {
+        width: '34px',
+        height: '34px',
+        borderRadius: '8px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#2a2a2a',
+        color: '#8ab4d6',
+        flex: '0 0 auto',
+    },
+    emptyContent: {
+        flex: 1,
+        minWidth: 0,
+    },
+    emptyTitle: {
+        color: '#ddd',
+        fontSize: '0.95rem',
+        fontWeight: 650,
+        marginBottom: '4px',
+    },
+    emptyText: {
+        color: '#aaa',
+        fontSize: '0.84rem',
+    },
+    emptyAction: {
+        padding: '7px 10px',
+        borderRadius: '6px',
+        border: '1px solid #555',
+        backgroundColor: '#333',
+        color: '#fff',
+        cursor: 'pointer',
+        whiteSpace: 'nowrap' as const,
     },
     card: {
-        backgroundColor: '#383838',
-        borderRadius: '4px',
+        backgroundColor: '#333',
+        border: '1px solid #444',
+        borderRadius: '7px',
         overflow: 'hidden',
+        flex: '0 0 auto',
     },
     cardHeader: {
         display: 'flex',
         alignItems: 'center',
-        padding: '10px 12px',
-        backgroundColor: '#444',
+        padding: '8px 10px',
+        backgroundColor: '#3a3a3a',
         cursor: 'pointer',
     },
     checkbox: {
@@ -459,29 +696,48 @@ const styles = {
         display: 'flex',
         alignItems: 'center',
         gap: '12px',
+        minWidth: 0,
     },
     headerNameInput: {
         backgroundColor: 'transparent',
         border: 'none',
-        borderBottom: '1px solid #666',
+        borderBottom: '1px solid transparent',
         color: '#fff',
         fontSize: '1rem',
         fontWeight: 'bold' as const,
-        width: '150px',
+        width: '160px',
+        maxWidth: '42%',
         padding: '2px 0',
+        outline: 'none',
     },
     headerHost: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '5px',
         color: '#aaa',
         fontSize: '0.9rem',
+        minWidth: 0,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap' as const,
+    },
+    cardActions: {
+        display: 'flex',
+        gap: '4px',
+        flex: '0 0 auto',
     },
     iconButton: {
-        background: 'none',
-        border: 'none',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '28px',
+        height: '28px',
+        background: 'transparent',
+        border: '1px solid transparent',
+        borderRadius: '5px',
         color: '#ccc',
-        padding: '4px',
-        fontSize: '1rem',
+        padding: 0,
         cursor: 'pointer',
-        marginLeft: '4px',
     },
     expandButton: {
         background: 'none',
@@ -493,11 +749,14 @@ const styles = {
         cursor: 'pointer',
     },
     cardBody: {
-        padding: '16px',
-        backgroundColor: '#333',
+        padding: '12px 18px 12px 12px',
+        backgroundColor: '#2f2f2f',
         display: 'flex',
         flexDirection: 'column' as const,
         gap: '12px',
+        maxHeight: '42vh',
+        minHeight: '260px',
+        overflowY: 'auto' as const,
     },
     row: {
         display: 'flex',
@@ -543,33 +802,47 @@ const styles = {
     buttonGroup: {
         display: 'flex',
         justifyContent: 'flex-end',
+        alignItems: 'center',
         gap: '12px',
-        marginTop: '8px',
+        padding: '11px 22px 13px',
+        borderTop: '1px solid #404040',
+        backgroundColor: '#2d2d2d',
     },
     secondaryButton: {
-        padding: '8px 16px',
-        borderRadius: '4px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '7px 11px',
+        borderRadius: '6px',
         border: '1px solid #555',
         backgroundColor: '#333',
         color: '#fff',
         cursor: 'pointer',
     },
     cancelButton: {
-        padding: '8px 16px',
-        borderRadius: '4px',
+        padding: '7px 13px',
+        borderRadius: '6px',
         border: '1px solid #444',
         backgroundColor: 'transparent',
         color: '#fff',
         cursor: 'pointer',
     },
     submitButton: {
-        padding: '8px 16px',
-        borderRadius: '4px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '7px',
+        padding: '7px 13px',
+        borderRadius: '6px',
         border: 'none',
         backgroundColor: '#007acc',
         color: '#fff',
         cursor: 'pointer',
         fontWeight: 'bold' as const,
+    },
+    submitButtonDisabled: {
+        opacity: 0.48,
+        cursor: 'not-allowed',
     },
 };
 

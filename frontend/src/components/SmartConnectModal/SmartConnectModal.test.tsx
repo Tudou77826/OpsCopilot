@@ -18,6 +18,8 @@ describe('SmartConnectModal', () => {
         vi.clearAllMocks();
     });
 
+    const getConnectInput = () => screen.getByPlaceholderText(/例如：/);
+
     it('renders nothing when not open', () => {
         render(<SmartConnectModal {...defaultProps} isOpen={false} />);
         expect(screen.queryByText('新建连接')).not.toBeInTheDocument();
@@ -26,8 +28,25 @@ describe('SmartConnectModal', () => {
     it('renders input area when open and no results', () => {
         render(<SmartConnectModal {...defaultProps} />);
         expect(screen.getByText('新建连接')).toBeInTheDocument();
-        expect(screen.getByPlaceholderText(/你可以使用自然输入连接要求/i)).toBeInTheDocument();
+        expect(getConnectInput()).toBeInTheDocument();
         expect(screen.getByText('智能分析')).toBeInTheDocument();
+    });
+
+    it('fills the input from a quick example', () => {
+        render(<SmartConnectModal {...defaultProps} />);
+
+        fireEvent.click(screen.getByText('填入跳板机模板'));
+
+        expect(getConnectInput()).toHaveValue(
+            [
+                '跳板机：<BastionIp>',
+                'sopuser / changeme_123',
+                '',
+                '目标：<TargetIp1~4>',
+                'sopuser / changeme_123',
+                'root / changeme_123'
+            ].join('\n')
+        );
     });
 
     it('calls onParse when Analyze is clicked', async () => {
@@ -36,7 +55,7 @@ describe('SmartConnectModal', () => {
 
         render(<SmartConnectModal {...defaultProps} />);
         
-        const input = screen.getByPlaceholderText(/你可以使用自然输入连接要求/i);
+        const input = getConnectInput();
         fireEvent.change(input, { target: { value: 'Connect to web server' } });
         
         const analyzeBtn = screen.getByText('智能分析');
@@ -60,7 +79,7 @@ describe('SmartConnectModal', () => {
         render(<SmartConnectModal {...defaultProps} />);
         
         // Trigger parse flow
-        const input = screen.getByPlaceholderText(/你可以使用自然输入连接要求/i);
+        const input = getConnectInput();
         fireEvent.change(input, { target: { value: 'Connect' } });
         fireEvent.click(screen.getByText('智能分析'));
 
@@ -88,7 +107,7 @@ describe('SmartConnectModal', () => {
         render(<SmartConnectModal {...defaultProps} />);
         
         // Trigger parse flow
-        fireEvent.change(screen.getByPlaceholderText(/你可以使用自然输入连接要求/i), { target: { value: 'Connect' } });
+        fireEvent.change(getConnectInput(), { target: { value: 'Connect' } });
         fireEvent.click(screen.getByText('智能分析'));
         await waitFor(() => screen.getByText('连接列表 (1)'));
 
@@ -113,7 +132,7 @@ describe('SmartConnectModal', () => {
 
         render(<SmartConnectModal {...defaultProps} />);
         
-        fireEvent.change(screen.getByPlaceholderText(/你可以使用自然输入连接要求/i), { target: { value: 'Connect' } });
+        fireEvent.change(getConnectInput(), { target: { value: 'Connect' } });
         fireEvent.click(screen.getByText('智能分析'));
         await waitFor(() => screen.getByText('连接列表 (1)'));
 
@@ -135,7 +154,7 @@ describe('SmartConnectModal', () => {
     it('allows adding manual connection', async () => {
         render(<SmartConnectModal {...defaultProps} />);
         
-        const addBtn = screen.getByText('+ 手动添加');
+        const addBtn = screen.getByText('手动添加');
         fireEvent.click(addBtn);
 
         // Should now have 1 item
@@ -160,7 +179,7 @@ describe('SmartConnectModal', () => {
 
         render(<SmartConnectModal {...defaultProps} />);
         
-        const input = screen.getByPlaceholderText(/你可以使用自然输入连接要求/i);
+        const input = getConnectInput();
         fireEvent.change(input, { target: { value: 'Connect to nowhere' } });
         
         const analyzeBtn = screen.getByText('智能分析');
@@ -180,7 +199,7 @@ describe('SmartConnectModal', () => {
 
         render(<SmartConnectModal {...defaultProps} />);
         
-        const input = screen.getByPlaceholderText(/你可以使用自然输入连接要求/i);
+        const input = getConnectInput();
         fireEvent.change(input, { target: { value: 'Connect to somewhere' } });
         fireEvent.click(screen.getByText('智能分析'));
 
