@@ -1567,6 +1567,15 @@ func (a *App) SaveCommandWhitelist(config mcpserver.WhitelistConfig) error {
 	return a.whitelistMgr.UpdateConfig(&config)
 }
 
+// GetPoliciesForIP 查询指定 IP 命中的所有白名单策略
+// 用于 UI 反向查询:输入服务器 IP,看它适用哪些策略
+func (a *App) GetPoliciesForIP(ip string) ([]mcpserver.Policy, error) {
+	if a.whitelistMgr == nil {
+		return nil, fmt.Errorf("白名单管理器未初始化")
+	}
+	return a.whitelistMgr.GetPoliciesForIP(ip), nil
+}
+
 // GetFileAccessConfig 获取文件访问控制配置
 func (a *App) GetFileAccessConfig() (*mcpserver.FileAccessConfig, error) {
 	if a.fileAccessMgr == nil {

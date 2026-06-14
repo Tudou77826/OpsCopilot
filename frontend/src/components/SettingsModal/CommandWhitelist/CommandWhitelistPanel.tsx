@@ -13,12 +13,18 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [expandedPolicy, setExpandedPolicy] = useState<string | null>(null);
   const [editingPolicy, setEditingPolicy] = useState<Policy | null>(null);
+  // IP 查询相关状态
+  const [ipQuery, setIpQuery] = useState('');
+  const [ipQueryResult, setIpQueryResult] = useState<Policy[] | null>(null);
+  const [ipQueryError, setIpQueryError] = useState('');
   // 用于防抖保存
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // 追踪初始加载是否完成
   const initialLoadCompleteRef = useRef(false);
   // 保存上一次的配置，用于比较是否有变化
   const prevConfigRef = useRef<string>('');
+  // IP 查询防抖
+  const ipQueryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     loadConfig();
@@ -84,6 +90,44 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
     }
   };
 
+  // IP 查询:输入合法 IP 时 debounce 300ms 后调用后端
+  useEffect(() => {
+    if (ipQueryTimeoutRef.current) {
+      clearTimeout(ipQueryTimeoutRef.current);
+    }
+    const trimmed = ipQuery.trim();
+    if (!trimmed) {
+      setIpQueryResult(null);
+      setIpQueryError('');
+      return;
+    }
+    // 简单 IPv4 校验
+    const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (!ipv4Regex.test(trimmed) || trimmed.split('.').some(p => Number(p) > 255)) {
+      setIpQueryResult(null);
+      setIpQueryError('IP 格式不正确,请输入合法 IPv4 地址');
+      return;
+    }
+    ipQueryTimeoutRef.current = setTimeout(async () => {
+      try {
+        // @ts-ignore
+        const policies = await window.go.main.App.GetPoliciesForIP(trimmed);
+        setIpQueryResult(policies || []);
+        setIpQueryError('');
+      } catch (err) {
+        console.error('IP 查询失败:', err);
+        setIpQueryResult(null);
+        setIpQueryError('查询失败: ' + err);
+      }
+    }, 300);
+
+    return () => {
+      if (ipQueryTimeoutRef.current) {
+        clearTimeout(ipQueryTimeoutRef.current);
+      }
+    };
+  }, [ipQuery]);
+
   const handleAddPolicy = () => {
     if (!config) return;
     const newPolicy: Policy = {
@@ -146,6 +190,54 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
 
   return (
     <div style={styles.container}>
+      {/* IP 查询 */}
+      <div style={styles.section}>
+        <div style={styles.toolbar}>
+          <span style={styles.sectionTitle}>按 IP 查询匹配策略</span>
+        </div>
+        <div style={styles.ipQueryDesc}>输入服务器 IP,实时展示该 IP 命中的所有策略</div>
+        <div style={styles.ipQueryRow}>
+          <input
+            style={styles.input}
+            placeholder="例如:38.1.2.3"
+            value={ipQuery}
+            onChange={e => setIpQuery(e.target.value)}
+          />
+          {ipQuery && (
+            <button style={styles.ipQueryClear} onClick={() => setIpQuery('')}>×</button>
+          )}
+        </div>
+        {ipQueryError && (
+          <div style={styles.ipQueryError}>{ipQueryError}</div>
+        )}
+        {ipQueryResult && (
+          <div style={styles.ipQueryResultBox}>
+            {ipQueryResult.length === 0 ? (
+              <div style={styles.ipQueryEmpty}>
+                该 IP 未匹配任何策略,执行命令将被拒绝
+              </div>
+            ) : (
+              <>
+                <div style={styles.ipQueryCount}>
+                  共匹配 {ipQueryResult.length} 个策略
+                </div>
+                {ipQueryResult.map(p => {
+                  const enabledCount = p.commands.filter(c => c.enabled).length;
+                  return (
+                    <div key={p.id} style={styles.ipQueryPolicyItem}>
+                      <span style={styles.ipQueryPolicyName}>{p.name}</span>
+                      <span style={styles.ipQueryPolicyMeta}>
+                        {enabledCount} / {p.commands.length} 条命令
+                      </span>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* 策略列表 */}
       <div style={styles.section}>
         <div style={styles.toolbar}>
@@ -545,6 +637,62 @@ const styles: Record<string, React.CSSProperties> = {
     color: colors.textPrimary,
     outline: 'none',
     fontSize: font.base,
+  },
+  // IP 查询相关样式
+  ipQueryDesc: {
+    color: colors.textTertiary,
+    fontSize: font.sm,
+    margin: '8px 0 12px',
+  },
+  ipQueryRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  ipQueryClear: {
+    background: 'transparent',
+    border: 'none',
+    color: colors.textTertiary,
+    cursor: 'pointer',
+    fontSize: font.lg,
+    padding: '0 8px',
+  },
+  ipQueryError: {
+    color: colors.danger,
+    fontSize: font.sm,
+    marginTop: '8px',
+  },
+  ipQueryResultBox: {
+    marginTop: '12px',
+    padding: '12px',
+    backgroundColor: colors.bgSecondary,
+    borderRadius: radius.sm,
+    border: `1px solid ${colors.borderPrimary}`,
+  },
+  ipQueryCount: {
+    color: colors.textTertiary,
+    fontSize: font.sm,
+    marginBottom: '8px',
+  },
+  ipQueryEmpty: {
+    color: colors.danger,
+    fontSize: font.sm,
+  },
+  ipQueryPolicyItem: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '6px 0',
+    borderBottom: `1px solid ${colors.borderPrimary}`,
+    fontSize: font.base,
+  },
+  ipQueryPolicyName: {
+    color: colors.textPrimary,
+    fontWeight: 500,
+  },
+  ipQueryPolicyMeta: {
+    color: colors.textTertiary,
+    fontSize: font.sm,
   },
   editBtn: {
     padding: '4px 10px',

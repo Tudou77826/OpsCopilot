@@ -90,6 +90,8 @@ export function GetPatchFeedback(arg1:string):Promise<string>;
 
 export function GetPatchSyncStatus():Promise<string>;
 
+export function GetPoliciesForIP(arg1:string):Promise<Array<mcpserver.Policy>>;
+
 export function GetQuickCommandGroups():Promise<Array<string>>;
 
 export function GetSavedSessions():Promise<Array<sessionmanager.Session>>;

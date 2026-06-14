@@ -166,6 +166,10 @@ export function GetPatchSyncStatus() {
   return window['go']['main']['App']['GetPatchSyncStatus']();
 }
 
+export function GetPoliciesForIP(arg1) {
+  return window['go']['main']['App']['GetPoliciesForIP'](arg1);
+}
+
 export function GetQuickCommandGroups() {
   return window['go']['main']['App']['GetQuickCommandGroups']();
 }
