@@ -338,21 +338,24 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
     };
 
     // Filter Logic
+    // 文件夹名命中搜索词时,展示该文件夹下全部子节点;
+    // 文件夹名未命中但子节点命中时,仅保留命中的子节点。
     const filterNodes = (nodes: SessionNode[], term: string): SessionNode[] => {
         if (!term) return nodes;
         const lowerTerm = term.toLowerCase();
-        
+
         return nodes.reduce<SessionNode[]>((acc, node) => {
-            const matches = node.name.toLowerCase().includes(lowerTerm) || 
+            const matches = node.name.toLowerCase().includes(lowerTerm) ||
                            (node.config && node.config.host.includes(lowerTerm));
-            
+
             if (node.type === 'folder') {
-                const filteredChildren = filterNodes(node.children || [], term);
-                if (matches || filteredChildren.length > 0) {
-                    acc.push({
-                        ...node,
-                        children: filteredChildren
-                    });
+                if (matches) {
+                    acc.push({ ...node });
+                } else {
+                    const filteredChildren = filterNodes(node.children || [], term);
+                    if (filteredChildren.length > 0) {
+                        acc.push({ ...node, children: filteredChildren });
+                    }
                 }
             } else {
                 if (matches) acc.push(node);
