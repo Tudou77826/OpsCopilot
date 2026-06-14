@@ -8,13 +8,15 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 )
 
 // WhitelistManager 白名单管理器
 type WhitelistManager struct {
-	config     *WhitelistConfig
-	configPath string
-	mu         sync.RWMutex
+	config      *WhitelistConfig
+	configPath  string
+	lastModTime time.Time // 上次成功加载时的文件 mtime,用于跳过无变化的 Reload
+	mu          sync.RWMutex
 }
 
 // NewWhitelistManager 创建白名单管理器
@@ -29,12 +31,15 @@ func NewWhitelistManager(configPath string) (*WhitelistManager, error) {
 		mgr.config = DefaultWhitelistConfig()
 		// 尝试保存默认配置
 		_ = mgr.Save()
+	} else if info, statErr := os.Stat(configPath); statErr == nil {
+		// 记录初始 mtime,避免首次 ReloadIfChanged 又读一遍
+		mgr.lastModTime = info.ModTime()
 	}
 
 	return mgr, nil
 }
 
-// load 从文件加载配置
+// load 从文件加载配置(无锁版本,调用方需自行加锁)
 func (m *WhitelistManager) load() error {
 	data, err := os.ReadFile(m.configPath)
 	if err != nil {
@@ -53,20 +58,34 @@ func (m *WhitelistManager) load() error {
 	return nil
 }
 
-// Save 保存配置到文件
+// Save 保存配置到文件（原子写:写临时文件 + rename）
 func (m *WhitelistManager) Save() error {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.writeAtomicLocked()
+}
 
+// writeAtomicLocked 在已持有读锁或写锁时执行原子写
+// 流程:写 .tmp → rename 到正式文件 → 刷新 mtime 缓存
+func (m *WhitelistManager) writeAtomicLocked() error {
 	data, err := json.MarshalIndent(m.config, "", "  ")
 	if err != nil {
 		return fmt.Errorf("序列化配置失败: %w", err)
 	}
 
-	if err := os.WriteFile(m.configPath, data, 0644); err != nil {
-		return fmt.Errorf("写入配置文件失败: %w", err)
+	tmpPath := m.configPath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		return fmt.Errorf("写入临时文件失败: %w", err)
+	}
+	if err := os.Rename(tmpPath, m.configPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("重命名配置文件失败: %w", err)
 	}
 
+	// 刷新 mtime 缓存,避免本进程下次 ReloadIfChanged 又读一遍
+	if info, statErr := os.Stat(m.configPath); statErr == nil {
+		m.lastModTime = info.ModTime()
+	}
 	return nil
 }
 
@@ -77,30 +96,48 @@ func (m *WhitelistManager) GetConfig() *WhitelistConfig {
 	return m.config
 }
 
-// Reload 重新从文件加载配置
-// 用于在运行时获取最新的白名单配置（如 UI 修改后）
+// Reload 强制重新从文件加载配置
 func (m *WhitelistManager) Reload() error {
-	return m.load()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.reloadLocked()
 }
 
-// UpdateConfig 更新配置
+// reloadLocked 在已持有写锁时强制重载
+func (m *WhitelistManager) reloadLocked() error {
+	if err := m.load(); err != nil {
+		return err
+	}
+	if info, statErr := os.Stat(m.configPath); statErr == nil {
+		m.lastModTime = info.ModTime()
+	}
+	return nil
+}
+
+// ReloadIfChanged 仅当文件 mtime 变化时才重新加载
+// 用于热路径(ssh_exec)避免每次都做磁盘 IO
+func (m *WhitelistManager) ReloadIfChanged() error {
+	info, err := os.Stat(m.configPath)
+	if err != nil {
+		return fmt.Errorf("stat 配置文件失败: %w", err)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if info.ModTime().Equal(m.lastModTime) {
+		return nil
+	}
+	return m.reloadLocked()
+}
+
+// UpdateConfig 更新配置(原子写)
 func (m *WhitelistManager) UpdateConfig(config *WhitelistConfig) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.config = config
-
-	// 在持有锁时保存，避免竞态条件
-	data, err := json.MarshalIndent(m.config, "", "  ")
-	if err != nil {
-		return fmt.Errorf("序列化配置失败: %w", err)
-	}
-
-	if err := os.WriteFile(m.configPath, data, 0644); err != nil {
-		return fmt.Errorf("写入配置文件失败: %w", err)
-	}
-
-	return nil
+	return m.writeAtomicLocked()
 }
 
 // Check 检查命令是否允许执行

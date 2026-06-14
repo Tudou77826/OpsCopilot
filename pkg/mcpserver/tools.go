@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"encoding/base64"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -293,8 +294,11 @@ func (s *Server) toolSSHExec(args map[string]interface{}) (interface{}, error) {
 	// 检查命令是否允许（使用白名单管理器）
 	var checkResult CheckResult
 	if s.whitelistManager != nil {
-		// 重新加载配置，确保使用最新的白名单（如 UI 刚修改过）
-		_ = s.whitelistManager.Reload()
+		// 仅当配置文件 mtime 变化时才重新加载,失败时降级用已缓存的旧配置
+		if err := s.whitelistManager.ReloadIfChanged(); err != nil {
+			slog.Warn("whitelist reload skipped, using cached config",
+				"server", serverName, "error", err)
+		}
 		checkResult = s.whitelistManager.Check(command, conn.Host)
 	} else {
 		// 回退到简单检查器
