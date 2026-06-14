@@ -19,14 +19,12 @@ interface SidebarProps {
     isOpen: boolean;
     activeTab: 'sessions' | 'troubleshoot' | 'chat' | 'script' | 'knowledge';
     onToggle: () => void;
-    onStart?: () => void;
-    onStop?: () => void;
     onConnect: (config: ConnectionConfig) => void;
     activeTerminalId: string | null;
     terminals: TerminalSessionLite[];
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart, onStop, onConnect, activeTerminalId, terminals }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onConnect, activeTerminalId, terminals }) => {
     const defaultWidth = 300;
     const [width, setWidth] = useState(defaultWidth);
     const [editingScriptId, setEditingScriptId] = useState<string | null>(null);
@@ -171,7 +169,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onStart,
 
                         {/* Always mounted, toggled visibility */}
                         <div style={{ display: activeTab === 'troubleshoot' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-                            <TroubleshootingPanel onStart={onStart} onStop={onStop} />
+                            <TroubleshootingPanel />
                         </div>
 
                         <div style={{ display: activeTab === 'chat' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>

@@ -24,11 +24,6 @@ interface AgentStatusEvent {
     ts: number;
 }
 
-interface TroubleshootingPanelProps {
-    onStart?: () => void;
-    onStop?: () => void;
-}
-
 // Stage display configuration: maps backend stage names to user-friendly labels, icons, and colors
 const STAGE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
     thinking:       { label: '分析中',   icon: TbBrain({size: 14}), color: '#8b9cf7' },
@@ -44,7 +39,7 @@ function getStageConfig(stage: string) {
     return STAGE_CONFIG[stage] || { label: stage, icon: TbSettings({size: 14}), color: '#888' };
 }
 
-const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, onStop }) => {
+const TroubleshootingPanel: React.FC = () => {
     const [isInvestigating, setIsInvestigating] = useState(false);
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
@@ -88,7 +83,6 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         }
 
         setIsInvestigating(true);
-        if (onStart) onStart();
 
         const problem = input;
         setOriginalProblem(problem);
@@ -232,7 +226,6 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ onStart, on
         setIsStopping(false);
         setRootCause('');
         setOriginalProblem('');
-        if (onStart) onStart();
     };
 
     const handleArchive = async (params: ArchiveParams): Promise<{ success: boolean; message: string }> => {

@@ -39,22 +39,20 @@ describe('TroubleshootingPanel', () => {
     });
 
     it('renders initial empty state correctly', () => {
-        render(<TroubleshootingPanel onStart={vi.fn()} onStop={vi.fn()} />);
+        render(<TroubleshootingPanel />);
         expect(screen.getByText('开始排查')).toBeInTheDocument();
         expect(screen.getByPlaceholderText(/例如：/i)).toBeInTheDocument();
     });
 
     it('starts investigation when clicking start button', async () => {
-        const onStartMock = vi.fn();
-        render(<TroubleshootingPanel onStart={onStartMock} onStop={vi.fn()} />);
+        render(<TroubleshootingPanel />);
 
         const input = screen.getByPlaceholderText(/例如：/i);
         fireEvent.change(input, { target: { value: 'CPU high' } });
-        
+
         const startBtn = screen.getByText('开始排查');
         fireEvent.click(startBtn);
 
-        expect(onStartMock).toHaveBeenCalled();
         expect(mockStartSession).toHaveBeenCalledWith('CPU high');
         // Should show stop button
         expect(screen.getByText('结束排查')).toBeInTheDocument();
@@ -67,8 +65,8 @@ describe('TroubleshootingPanel', () => {
             commands: [{ command: 'top', description: 'Show processes' }]
         }));
 
-        render(<TroubleshootingPanel onStart={vi.fn()} onStop={vi.fn()} />);
-        
+        render(<TroubleshootingPanel />);
+
         // Start
         fireEvent.change(screen.getByPlaceholderText(/例如：/i), { target: { value: 'Issue' } });
         fireEvent.click(screen.getByText('开始排查'));
@@ -80,20 +78,19 @@ describe('TroubleshootingPanel', () => {
     });
 
     it('handles stop and archive flow', async () => {
-        const onStopMock = vi.fn();
-        render(<TroubleshootingPanel onStart={vi.fn()} onStop={onStopMock} />);
-        
+        render(<TroubleshootingPanel />);
+
         // Start first
         fireEvent.change(screen.getByPlaceholderText(/例如：/i), { target: { value: 'Issue' } });
         fireEvent.click(screen.getByText('开始排查'));
 
         // Click stop
         fireEvent.click(screen.getByText('结束排查'));
-        
+
         // Input root cause (simulating the stop UI flow)
         const rootCauseInput = screen.getByPlaceholderText(/请输入根本原因/i);
         fireEvent.change(rootCauseInput, { target: { value: 'Bug in code' } });
-        
+
         // Confirm stop
         fireEvent.click(screen.getByText('确认结束'));
 
@@ -102,6 +99,5 @@ describe('TroubleshootingPanel', () => {
         fireEvent.click(archiveBtn);
 
         expect(mockArchiveSession).toHaveBeenCalled();
-        expect(onStopMock).toHaveBeenCalled();
     });
 });
