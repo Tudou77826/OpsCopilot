@@ -52,6 +52,13 @@ logs/
 
 # Media
 promo-video/video.mp4
+# 临时 UI 截图 / 测试截图（根目录散落的）
+*-ui.png
+current-state.png
+final-ui.png
+improved-ui.png
+v2-ui.png
+test-results/
 
 # Local Config
 config.json
@@ -62,6 +69,12 @@ logs/opscopilot.log
 # Development artifacts
 .trae/
 .doc/
+
+# Runtime data (generated at runtime, not source-controlled)
+patchstore/
+scripts/
+file_access.json
+docs/.catalog.json
 
 # Backup files
 *.backup
@@ -75,3 +88,7 @@ thread_dump*.txt
 CLAUDE.md
 recordings/
 mcp-server.exe~
+
+# Local-only docs (keep on disk, not source-controlled)
+AGENTS.md
+.sdd/
