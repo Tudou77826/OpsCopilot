@@ -55,21 +55,12 @@ if exist "command_whitelist.json" (
     copy /Y "command_whitelist.json" "build\bin\" >nul
     echo [INFO]   - command_whitelist.json
 )
-if exist "mcp-config.example.json" (
-    copy /Y "mcp-config.example.json" "build\bin\" >nul
-    echo [INFO]   - mcp-config.example.json
+if exist "file_access.json" (
+    copy /Y "file_access.json" "build\bin\" >nul
+    echo [INFO]   - file_access.json
 )
-
-echo [INFO] Building MCP Server...
-go build -o "build\bin\mcp-server.exe" ./cmd/mcp-server/
-if %errorlevel% neq 0 (
-    echo [ERROR] MCP Server build failed.
-    if not "%NOPAUSE%"=="true" pause
-    exit /b 1
-)
-echo [INFO]   - mcp-server.exe
 
 echo [SUCCESS] Build complete. Executable is in build/bin/
 echo [INFO] Configuration files have been copied to build/bin/
-echo [INFO] MCP Server has been built for Claude Code integration.
+echo [INFO] CLI mode available: opscopilot.exe exec/diagnose/file
 endlocal
