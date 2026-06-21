@@ -69,7 +69,7 @@ func cmdFile(args []string) int {
 	switch args[0] {
 	case "download":
 		fs := flag.NewFlagSet("file download", flag.ExitOnError)
-		server := fs.String("server", "", "服务器名称（必填）")
+		server := fs.String("server", "", "服务器 IP（必填，需已在 OpsCopilot 中登记）")
 		remote := fs.String("remote", "", "远程文件路径（必填）")
 		local := fs.String("local", "", "本地落地路径（必填）")
 		maxBytes := fs.Int("max-bytes", 10485760, "最大下载字节数")
@@ -90,7 +90,7 @@ func cmdFile(args []string) int {
 
 	case "upload":
 		fs := flag.NewFlagSet("file upload", flag.ExitOnError)
-		server := fs.String("server", "", "服务器名称（必填）")
+		server := fs.String("server", "", "服务器 IP（必填，需已在 OpsCopilot 中登记）")
 		local := fs.String("local", "", "本地源文件路径（必填）")
 		remote := fs.String("remote", "", "远程目标路径（必填）")
 		backup := fs.Bool("backup", true, "覆盖前备份远程文件")

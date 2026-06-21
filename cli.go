@@ -136,7 +136,7 @@ func printCLIUsage() {
 // cmdExec: opscopilot exec --server X --command Y
 func cmdExec(args []string) int {
 	fs := flag.NewFlagSet("exec", flag.ExitOnError)
-	server := fs.String("server", "", "服务器名称（必填）")
+	server := fs.String("server", "", "服务器 IP（必填，需已在 OpsCopilot 中登记）")
 	command := fs.String("command", "", "要执行的命令（必填）")
 	maxLineLen := fs.Int("max-line-length", 500, "单行最大长度")
 	timeoutSec := fs.Int("timeout-sec", 120, "单条命令超时秒数")

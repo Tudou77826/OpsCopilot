@@ -297,14 +297,17 @@ func (m *Manager) Exec(ctx context.Context, serverName, command string, opts Exe
 	}, nil
 }
 
-// findSessionConfig 递归从会话树中查找指定名称的服务器配置
-func findSessionConfig(nodes []*sessionmanager.Session, name string) *sshclient.ConnectConfig {
+// findSessionConfig 递归从会话树中按 Host(IP) 查找服务器配置。
+// 以 IP 为唯一主键：用户在 OpsCopilot 中登记服务器时 Host 字段即 IP，
+// 且 UpdateSession 保证同 Host 唯一，因此 IP → session 是 1:1 映射，
+// 避免了 Name 可被改成别名导致 CLI 无法定位的问题。
+func findSessionConfig(nodes []*sessionmanager.Session, host string) *sshclient.ConnectConfig {
 	for _, node := range nodes {
-		if node.Type == sessionmanager.TypeSession && node.Name == name && node.Config != nil {
+		if node.Type == sessionmanager.TypeSession && node.Config != nil && node.Config.Host == host {
 			return node.Config
 		}
 		if node.Type == sessionmanager.TypeFolder {
-			if found := findSessionConfig(node.Children, name); found != nil {
+			if found := findSessionConfig(node.Children, host); found != nil {
 				return found
 			}
 		}
