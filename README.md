@@ -147,7 +147,12 @@ opscopilot file download --server web-01 --remote /var/log/nginx/error.log --loc
 
 **让 AI Agent 学会调用**：
 
-将仓库内的 `skills/opscopilot-ops/SKILL.md` 提供给 AI Agent（Claude 的 skills 目录、Cursor 的规则、Codex 的 AGENTS.md 等），AI 读取后即可在合适的场景调用上述子命令。
+两种方式任选其一：
+
+1. **GUI 一键安装（推荐）**：打开 `设置 → 高级选项 → AI 接入`，输入 AI Agent 的 skill 目录（如 `C:\Users\xxx\.claude\skills`），点「检测状态」查看是否已安装，再点「安装」即可。安装时命令路径会自动替换为本机 `opscopilot.exe` 的绝对路径，无需手动配置 PATH。后续 OpsCopilot 升级后，同一界面可一键更新到最新版 skill。
+2. **手动复制**：将仓库内的 `skills/opscopilot-ops/SKILL.md` 复制到 AI Agent 的 skill 目录，并把其中命令路径改成实际 exe 路径。
+
+AI Agent 读取该 skill 后即可在合适的场景调用上述子命令。
 
 **实际使用效果** — AI Agent 自主排查：
 
@@ -513,8 +518,11 @@ opscopilot file upload   --server <名称> --local <本地路径> --remote <远�
 
 ### 让 AI Agent 学会调用
 
-将 `skills/opscopilot-ops/SKILL.md` 提供给 AI Agent：
-- **Claude Code / Cursor**：放入 skills 目录或规则文件
+**GUI 一键安装（推荐）**：`设置 → 高级选项 → AI 接入`，输入 skill 目录（如 `~/.claude/skills`），点「安装」。命令路径会自动替换为绝对路径，升级后可一键更新。
+
+**手动复制**：将 `skills/opscopilot-ops/SKILL.md` 复制到 AI Agent 的 skill 目录：
+- **Claude Code**：放入 `~/.claude/skills/` 下的子目录
+- **Cursor**：放入规则文件
 - **Codex / 通用 Agent**：内容追加到 AGENTS.md
 
 AI 读取后会根据用户问题自主选择合适的子命令。

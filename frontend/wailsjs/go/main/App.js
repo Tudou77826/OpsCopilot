@@ -22,6 +22,10 @@ export function CancelSession() {
   return window['go']['main']['App']['CancelSession']();
 }
 
+export function CheckSkillStatus(arg1) {
+  return window['go']['main']['App']['CheckSkillStatus'](arg1);
+}
+
 export function CheckUpdate() {
   return window['go']['main']['App']['CheckUpdate']();
 }
@@ -200,6 +204,10 @@ export function HasActiveWork() {
 
 export function ImportConfigFromDirectory(arg1) {
   return window['go']['main']['App']['ImportConfigFromDirectory'](arg1);
+}
+
+export function InstallSkill(arg1) {
+  return window['go']['main']['App']['InstallSkill'](arg1);
 }
 
 export function LoadQuickCommands() {

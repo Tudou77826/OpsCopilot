@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { TbRobot, TbPalette, TbKeyboard, TbLayoutGrid, TbBooks, TbShieldCheck, TbLock, TbSettings, TbInfoCircle, TbSearch } from 'react-icons/tb';
+import { TbRobot, TbPalette, TbKeyboard, TbLayoutGrid, TbBooks, TbShieldCheck, TbLock, TbSettings, TbInfoCircle, TbSearch, TbPlugConnected } from 'react-icons/tb';
 import KeysMap from './KeysMap';
 import HighlightRulesModal from './HighlightRulesModal';
 import CommandWhitelistPanel from './CommandWhitelist/CommandWhitelistPanel';
@@ -59,7 +59,7 @@ interface PatchSyncStatus {
     branch?: string;
 }
 
-type TabId = 'llm' | 'highlight' | 'shortcuts' | 'broadcast' | 'knowledge' | 'whitelist' | 'fileaccess' | 'experimental' | 'about';
+type TabId = 'llm' | 'highlight' | 'shortcuts' | 'broadcast' | 'knowledge' | 'aiagent' | 'whitelist' | 'fileaccess' | 'experimental' | 'about';
 
 interface NavItem {
     id: TabId;
@@ -108,6 +108,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const [importDir, setImportDir] = useState('');
     const [importLoading, setImportLoading] = useState(false);
     const [importMsg, setImportMsg] = useState('');
+    // AI 接入：skill 安装/更新
+    const [skillDir, setSkillDir] = useState('');
+    const [skillLoading, setSkillLoading] = useState(false);
+    const [skillMsg, setSkillMsg] = useState('');
+    const [skillState, setSkillState] = useState<'unknown' | 'not_installed' | 'up_to_date' | 'outdated'>('unknown');
+    const [skillInstalledVer, setSkillInstalledVer] = useState('');
+    const [skillBuiltinVer, setSkillBuiltinVer] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [patchSyncStatus, setPatchSyncStatus] = useState<PatchSyncStatus>(defaultPatchSyncStatus);
     const [patchSyncLoading, setPatchSyncLoading] = useState(false);
@@ -120,8 +127,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         { id: 'shortcuts', label: '快捷键', icon: TbKeyboard({}), category: '交互' },
         { id: 'broadcast', label: '多窗口', icon: TbLayoutGrid({}), category: '交互' },
         { id: 'knowledge', label: '知识共享', icon: TbBooks({}), category: '知识' },
-        { id: 'whitelist', label: '命令白名单', icon: TbShieldCheck({}), category: '安全' },
-        { id: 'fileaccess', label: '文件访问控制', icon: TbLock({}), category: '安全' },
+        { id: 'aiagent', label: 'AI 接入', icon: TbPlugConnected({}), category: 'AI 接入' },
+        { id: 'whitelist', label: '命令白名单', icon: TbShieldCheck({}), category: 'AI 接入' },
+        { id: 'fileaccess', label: '文件访问控制', icon: TbLock({}), category: 'AI 接入' },
         { id: 'experimental', label: '高级选项', icon: TbSettings({}), category: '系统' },
         { id: 'about', label: '关于', icon: TbInfoCircle({}), category: '系统' },
     ];
@@ -146,6 +154,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             setMsg('');
             setImportDir('');
             setImportMsg('');
+            setSkillDir('');
+            setSkillMsg('');
+            setSkillState('unknown');
+            setSkillInstalledVer('');
+            setSkillBuiltinVer('');
             setSearchQuery('');
             setActiveTab('llm');
         }
@@ -393,6 +406,72 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         }
     };
 
+    // 检测指定目录下是否已安装 skill，以及版本是否最新
+    const handleCheckSkill = async () => {
+        const dir = (skillDir || '').trim();
+        if (!dir) {
+            setSkillMsg('请输入 skill 安装目录');
+            setSkillState('unknown');
+            return;
+        }
+        setSkillLoading(true);
+        setSkillMsg('正在检测...');
+        try {
+            // @ts-ignore
+            const raw = await window.go.main.App.CheckSkillStatus(dir);
+            const r = raw ? JSON.parse(raw) : {};
+            if (r.success === false) {
+                setSkillMsg(r.error || '检测失败');
+                setSkillState('unknown');
+            } else {
+                setSkillInstalledVer(r.installed || '');
+                setSkillBuiltinVer(r.builtin || '');
+                setSkillState(r.state || 'unknown');
+                if (r.state === 'not_installed') {
+                    setSkillMsg('该目录下尚未安装 OpsCopilot skill');
+                } else if (r.state === 'up_to_date') {
+                    setSkillMsg(`已是最新版本（v${r.installed}）`);
+                } else if (r.state === 'outdated') {
+                    setSkillMsg(`已安装 v${r.installed}，可更新至 v${r.builtin}`);
+                } else {
+                    setSkillMsg('检测完成');
+                }
+            }
+        } catch (e: any) {
+            setSkillMsg('检测失败: ' + e.toString());
+            setSkillState('unknown');
+        } finally {
+            setSkillLoading(false);
+        }
+    };
+
+    // 安装（或更新）skill 到指定目录下的 opscopilot-ops/ 子目录
+    const handleInstallSkill = async () => {
+        const dir = (skillDir || '').trim();
+        if (!dir) {
+            setSkillMsg('请输入 skill 安装目录');
+            return;
+        }
+        setSkillLoading(true);
+        setSkillMsg('正在安装...');
+        try {
+            // @ts-ignore
+            const raw = await window.go.main.App.InstallSkill(dir);
+            const r = raw ? JSON.parse(raw) : {};
+            if (r.success === false) {
+                setSkillMsg(r.error || '安装失败');
+            } else {
+                setSkillMsg(`已安装到 ${r.path}（v${r.version}）`);
+                // 安装后刷新状态
+                await handleCheckSkill();
+            }
+        } catch (e: any) {
+            setSkillMsg('安装失败: ' + e.toString());
+        } finally {
+            setSkillLoading(false);
+        }
+    };
+
     if (!isOpen || !config) return null;
 
     // Render tab content
@@ -589,6 +668,85 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             </div>
                             <div style={styles.settingDescription}>
                                 {patchSyncStatus.lastSyncMessage || '保存配置后会自动刷新运行中的补丁同步实例'}
+                            </div>
+                        </div>
+                    </div>
+                );
+
+            case 'aiagent':
+                return (
+                    <div style={styles.settingsGroup}>
+                        <div style={styles.groupTitle}>Skill 安装</div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>安装 Skill 到 AI Agent</label>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' as const }}>
+                                <input
+                                    style={{ ...styles.input, flex: 1, minWidth: '320px' }}
+                                    value={skillDir}
+                                    onChange={(e) => {
+                                        setSkillDir(e.target.value);
+                                        // 改动目录后重置状态，避免显示陈旧的版本对比
+                                        setSkillState('unknown');
+                                        setSkillMsg('');
+                                    }}
+                                    placeholder="例如：C:\\Users\\xxx\\.claude\\skills"
+                                />
+                                <button
+                                    onClick={handleCheckSkill}
+                                    style={styles.secondaryButton}
+                                    disabled={skillLoading}
+                                >
+                                    {skillLoading ? '检测中...' : '检测状态'}
+                                </button>
+                                <button
+                                    onClick={handleInstallSkill}
+                                    style={styles.secondaryButton}
+                                    disabled={skillLoading}
+                                >
+                                    {skillState === 'not_installed' ? '安装'
+                                        : skillState === 'outdated' ? '更新'
+                                        : skillState === 'up_to_date' ? '重新安装'
+                                        : '安装/更新'}
+                                </button>
+                            </div>
+                            {skillMsg ? (
+                                <div style={{
+                                    ...styles.settingDescription,
+                                    color: skillState === 'up_to_date' ? colors.success : colors.textSecondary
+                                }}>
+                                    {skillMsg}
+                                </div>
+                            ) : (
+                                <div style={styles.settingDescription}>
+                                    将 OpsCopilot 的 CLI 能力以 Claude Code skill 格式安装到指定目录下的 opscopilot-ops/ 子目录。
+                                    安装后，AI Agent（如 Claude Code）即可通过该 skill 调用 OpsCopilot 执行运维操作和故障诊断。
+                                    命令路径会自动替换为本机 opscopilot.exe 的绝对路径。
+                                </div>
+                            )}
+                        </div>
+                        <div style={styles.groupTitle}>安全闸门</div>
+                        <div style={styles.settingItem}>
+                            <div style={styles.settingDescription}>
+                                AI Agent 通过 skill 调用 OpsCopilot 时，所有非交互式访问（CLI 等）都会强制经过以下两道安全闸门。
+                                请在下方对应页签中为 AI Agent 配置允许的操作范围——这两项是「AI 接入」能力的配套约束，缺一不可。
+                            </div>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' as const, marginTop: '8px' }}>
+                                <button
+                                    onClick={() => setActiveTab('whitelist')}
+                                    style={styles.secondaryButton}
+                                >
+                                    {TbShieldCheck({})} 命令白名单 →
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('fileaccess')}
+                                    style={styles.secondaryButton}
+                                >
+                                    {TbLock({})} 文件访问控制 →
+                                </button>
+                            </div>
+                            <div style={styles.settingDescription}>
+                                <strong>命令白名单</strong>：按服务器 IP 粒度限制 AI 可执行的命令；
+                                <strong>文件访问控制</strong>：限制 AI 可读写的远程路径和本地落地目录。
                             </div>
                         </div>
                     </div>

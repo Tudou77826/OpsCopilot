@@ -18,6 +18,8 @@ export function Broadcast(arg1:Array<string>,arg2:string):Promise<void>;
 
 export function CancelSession():Promise<string>;
 
+export function CheckSkillStatus(arg1:string):Promise<string>;
+
 export function CheckUpdate():Promise<string>;
 
 export function CloseSession(arg1:string):Promise<void>;
@@ -107,6 +109,8 @@ export function GetVersion():Promise<string>;
 export function HasActiveWork():Promise<Record<string, any>>;
 
 export function ImportConfigFromDirectory(arg1:string):Promise<string>;
+
+export function InstallSkill(arg1:string):Promise<string>;
 
 export function LoadQuickCommands():Promise<Array<config.QuickCommand>>;
 

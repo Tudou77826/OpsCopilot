@@ -3,9 +3,13 @@ name: opscopilot-ops
 description: 运维故障诊断与服务器操作。当用户报告服务器故障（连接超时、服务异常、性能问题、容器/进程异常等）或需要在远程 Linux 服务器上执行运维操作时，调用 opscopilot CLI。它连接用户已配置的服务器，在命令白名单约束下安全执行，并基于 OpsCopilot 积累的运维知识库给出诊断。
 ---
 
+<!-- OpsCopilot Skill 文件
+     由 OpsCopilot 安装生成，命令路径已替换为本机 opscopilot.exe 的绝对路径。
+     请勿手动编辑；如需更新，请在 OpsCopilot GUI 设置 → 高级选项 → AI 接入 中重新安装。 -->
+
 # OpsCopilot 运维助手
 
-通过 `opscopilot` 命令行连接用户配置的远程服务器，执行运维操作或进行 AI 故障诊断。所有操作受命令白名单和文件访问控制约束（用户在 OpsCopilot GUI 中配置），非交互式访问一律过安全闸门。
+通过 `"{{OPSCOPILOT_BIN}}"` 命令行连接用户配置的远程服务器，执行运维操作或进行 AI 故障诊断。所有操作受命令白名单和文件访问控制约束（用户在 OpsCopilot GUI 中配置），非交互式访问一律过安全闸门。
 
 ## 前置条件
 
@@ -23,7 +27,7 @@ description: 运维故障诊断与服务器操作。当用户报告服务器故�
 在已连接的服务器上执行命令。命令受白名单约束，非法命令会被拒绝并返回该服务器允许的命令列表。
 
 ```
-opscopilot exec --server <服务器名> --command "<命令>" [--max-line-length <N>]
+"{{OPSCOPILOT_BIN}}" exec --server <服务器名> --command "<命令>" [--max-line-length <N>] [--timeout-sec <N>]
 ```
 
 **输出**（JSON）：
@@ -48,7 +52,7 @@ opscopilot exec --server <服务器名> --command "<命令>" [--max-line-length 
 基于 OpsCopilot 知识库对故障问题进行 AI 诊断。纯知识检索 + 推理，**不连接任何服务器**。输出建议的排查命令和步骤，由你（AI）决定是否调 exec 去验证。
 
 ```
-opscopilot diagnose --problem "<故障现象描述>"
+"{{OPSCOPILOT_BIN}}" diagnose --problem "<故障现象描述>"
 ```
 
 **输出**（JSON）：
@@ -71,10 +75,10 @@ opscopilot diagnose --problem "<故障现象描述>"
 
 ```
 # 下载（远程 → 本地）
-opscopilot file download --server <服务器名> --remote <远程路径> --local <本地路径> [--max-bytes <N>]
+"{{OPSCOPILOT_BIN}}" file download --server <服务器名> --remote <远程路径> --local <本地路径> [--max-bytes <N>]
 
 # 上传（本地 → 远程）
-opscopilot file upload --server <服务器名> --local <本地路径> --remote <远程路径> [--backup] [--mkdir]
+"{{OPSCOPILOT_BIN}}" file upload --server <服务器名> --local <本地路径> --remote <远程路径> [--backup] [--mkdir]
 ```
 
 受文件访问控制约束：可读/可写路径、大小上限、本地落地目录均需在 GUI 配置中放行。默认写入路径为空（禁止上传），需用户显式配置。
