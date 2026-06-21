@@ -1,4 +1,4 @@
-package mcpserver
+package security
 
 import (
 	"encoding/json"
@@ -74,9 +74,9 @@ func TestIntegration_CommandWhitelistFlow(t *testing.T) {
 	}
 
 	for _, tc := range ipRangeTests {
-		result := matchesIPRange(tc.ip, tc.ranges)
+		result := MatchesIPRange(tc.ip, tc.ranges)
 		if result != tc.expected {
-			t.Errorf("matchesIPRange(%q, %v) = %v, expected %v",
+			t.Errorf("MatchesIPRange(%q, %v) = %v, expected %v",
 				tc.ip, tc.ranges, result, tc.expected)
 		}
 	}

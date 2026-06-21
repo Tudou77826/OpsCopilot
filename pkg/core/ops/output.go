@@ -1,4 +1,4 @@
-package mcpserver
+package ops
 
 import (
 	"fmt"
@@ -7,9 +7,9 @@ import (
 
 // OutputController 输出控制器
 type OutputController struct {
-	MaxTotalBytes  int
-	MaxLineLength  int
-	HeadLines      int
+	MaxTotalBytes int
+	MaxLineLength int
+	HeadLines     int
 }
 
 // OutputMeta 输出元信息
@@ -31,9 +31,9 @@ type OutputResult struct {
 // NewOutputController 创建输出控制器
 func NewOutputController(maxTotalBytes, maxLineLength, headLines int) *OutputController {
 	return &OutputController{
-		MaxTotalBytes:  maxTotalBytes,
+		MaxTotalBytes: maxTotalBytes,
 		MaxLineLength: maxLineLength,
-		HeadLines:      headLines,
+		HeadLines:     headLines,
 	}
 }
 
@@ -49,14 +49,14 @@ func (c *OutputController) Process(output string) *OutputResult {
 
 	for _, line := range lines {
 		if len(line) > c.MaxLineLength {
-		// 截断长行：前200字 + 标记 + 后200字
-		truncated := line[:200] +
-			fmt.Sprintf("...[截断:原长度%d字]...", len(line)) +
-			line[len(line)-200:]
-		processedLines = append(processedLines, truncated)
-		meta.LongLinesTruncated++
-	} else {
-		processedLines = append(processedLines, line)
+			// 截断长行：前200字 + 标记 + 后200字
+			truncated := line[:200] +
+				fmt.Sprintf("...[截断:原长度%d字]...", len(line)) +
+				line[len(line)-200:]
+			processedLines = append(processedLines, truncated)
+			meta.LongLinesTruncated++
+		} else {
+			processedLines = append(processedLines, line)
 		}
 	}
 	meta.TotalLines = len(processedLines)
@@ -73,50 +73,50 @@ func (c *OutputController) Process(output string) *OutputResult {
 	}
 
 	// 需要截断
-		var resultLines []string
-		var usedBytes int
+	var resultLines []string
+	var usedBytes int
 
-		// 保留头部
-		for i := 0; i < c.HeadLines && i < len(processedLines); i++ {
+	// 保留头部
+	for i := 0; i < c.HeadLines && i < len(processedLines); i++ {
 		line := processedLines[i]
 		if usedBytes+len(line)+1 > c.MaxTotalBytes {
 			break
 		}
 		resultLines = append(resultLines, line)
 		usedBytes += len(line) + 1
+	}
+	headCount := len(resultLines)
+
+	// 添加省略标记
+	omitCount := len(processedLines) - headCount
+	omitMarker := fmt.Sprintf("\n...[省略 %d 行]...\n", omitCount)
+	if usedBytes+len(omitMarker) < c.MaxTotalBytes {
+		resultLines = append(resultLines, omitMarker)
+		usedBytes += len(omitMarker)
+	}
+
+	// 从尾部添加行
+	tailLines := make([]string, 0)
+	remainingBytes := c.MaxTotalBytes - usedBytes
+
+	for i := len(processedLines) - 1; i >= headCount && remainingBytes > 0; i-- {
+		line := processedLines[i]
+		if len(line)+1 > remainingBytes {
+			break
 		}
-		headCount := len(resultLines)
+		tailLines = append([]string{line}, tailLines...)
+		remainingBytes -= len(line) + 1
+	}
 
-		// 添加省略标记
-		omitCount := len(processedLines) - headCount
-		omitMarker := fmt.Sprintf("\n...[省略 %d 行]...\n", omitCount)
-		if usedBytes+len(omitMarker) < c.MaxTotalBytes {
-			resultLines = append(resultLines, omitMarker)
-			usedBytes += len(omitMarker)
-		}
+	resultLines = append(resultLines, tailLines...)
 
-		// 从尾部添加行
-		tailLines := make([]string, 0)
-		remainingBytes := c.MaxTotalBytes - usedBytes
+	finalOutput := strings.Join(resultLines, "\n")
+	meta.ReturnedBytes = len(finalOutput)
+	meta.ReturnedLines = len(resultLines)
+	meta.TruncatedLines = meta.TotalLines - meta.ReturnedLines
 
-		for i := len(processedLines) - 1; i >= headCount && remainingBytes > 0; i-- {
-			line := processedLines[i]
-			if len(line)+1 > remainingBytes {
-				break
-			}
-			tailLines = append([]string{line}, tailLines...)
-			remainingBytes -= len(line) + 1
-		}
-
-		resultLines = append(resultLines, tailLines...)
-
-		finalOutput := strings.Join(resultLines, "\n")
-		meta.ReturnedBytes = len(finalOutput)
-		meta.ReturnedLines = len(resultLines)
-		meta.TruncatedLines = meta.TotalLines - meta.ReturnedLines
-
-		return &OutputResult{
-			Output: finalOutput,
-			Meta:   meta,
-		}
+	return &OutputResult{
+		Output: finalOutput,
+		Meta:   meta,
+	}
 }

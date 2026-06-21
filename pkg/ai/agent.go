@@ -18,7 +18,6 @@ import (
 
 	"github.com/google/uuid"
 	openai "github.com/sashabaranov/go-openai"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 const (
@@ -335,7 +334,10 @@ func safeEmit(ctx context.Context, eventName string, data interface{}) {
 	}
 }
 
-var eventEmitter = runtime.EventsEmit
+// eventEmitter 用于向 UI 推送 agent 运行状态。
+// 默认 nil（CLI 模式不推送）；GUI 启动时通过 SetEventEmitter 注入实现。
+// 这样 pkg/ai 不直接依赖 Wails，可被 CLI 复用。
+var eventEmitter func(ctx context.Context, optionalData string, optionalData2 ...interface{})
 
 func SetEventEmitter(f func(ctx context.Context, optionalData string, optionalData2 ...interface{})) {
 	eventEmitter = f

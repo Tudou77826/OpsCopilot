@@ -1,4 +1,4 @@
-package mcpserver
+package security
 
 import (
 	"encoding/json"
@@ -23,7 +23,7 @@ type FileAccessPolicy struct {
 
 // FileAccessConfig 文件访问控制配置
 type FileAccessConfig struct {
-	Version  string            `json:"version"`
+	Version  string             `json:"version"`
 	Policies []FileAccessPolicy `json:"policies"`
 }
 
@@ -140,7 +140,7 @@ func (c *FileAccessChecker) checkAccess(remotePath string, localPath string, ser
 	var matchedPolicy *FileAccessPolicy
 	for i := range c.config.Policies {
 		policy := &c.config.Policies[i]
-		if matchesIPRange(serverIP, policy.IPRanges) {
+		if MatchesIPRange(serverIP, policy.IPRanges) {
 			matchedPolicy = policy
 			break
 		}
@@ -358,7 +358,7 @@ func (c *FileAccessChecker) CheckLocalPath(localPath string, serverIP string) Fi
 
 	for i := range c.config.Policies {
 		policy := &c.config.Policies[i]
-		if matchesIPRange(serverIP, policy.IPRanges) {
+		if MatchesIPRange(serverIP, policy.IPRanges) {
 			if isPathAllowed(localPath, policy.AllowedLocalDirs) {
 				return FileAccessCheckResult{Allowed: true, PolicyName: policy.Name}
 			}
@@ -395,8 +395,8 @@ func DefaultFileAccessConfig() *FileAccessConfig {
 				WritePaths:       []string{},
 				DeniedPaths:      []string{"/etc/shadow", "/etc/ssh/", "/root/.ssh/", "/home/*/.ssh/id_*"},
 				AllowedLocalDirs: []string{"/tmp/opscopilot-mcp/"},
-				MaxReadBytes:     10 * 1024 * 1024,  // 10MB
-				MaxWriteBytes:    5 * 1024 * 1024,   // 5MB
+				MaxReadBytes:     10 * 1024 * 1024, // 10MB
+				MaxWriteBytes:    5 * 1024 * 1024,  // 5MB
 			},
 		},
 	}
@@ -410,4 +410,3 @@ func EnsureLocalStagingDir(dir string) error {
 	}
 	return os.MkdirAll(dir, 0755)
 }
-

@@ -1,4 +1,4 @@
-package mcpserver
+package ops
 
 import (
 	"fmt"
@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"github.com/pkg/sftp"
+	"opscopilot/pkg/core/security"
 )
 
 // ensureSFTP 确保连接有可用的 SFTP 客户端
 // 首次调用时尝试创建，成功则缓存，失败则标记不可用
-// 调用方持有的 conn.sftpMu 锁会在本函数返回后继续持有
-func (s *Server) ensureSFTP(conn *Connection) (*sftp.Client, error) {
+func (m *Manager) ensureSFTP(conn *Connection) (*sftp.Client, error) {
 	conn.sftpMu.Lock()
 	defer conn.sftpMu.Unlock()
 
@@ -25,7 +25,6 @@ func (s *Server) ensureSFTP(conn *Connection) (*sftp.Client, error) {
 		return nil, fmt.Errorf("该服务器不支持 SFTP 文件传输")
 	}
 
-	// 首次尝试创建 SFTP 客户端
 	sshClient := conn.Client.SSHClient()
 	if sshClient == nil {
 		conn.sftpTested = true
@@ -37,94 +36,104 @@ func (s *Server) ensureSFTP(conn *Connection) (*sftp.Client, error) {
 	if err != nil {
 		conn.sftpTested = true
 		conn.sftpAvailable = false
-		slog.Warn("mcp sftp not available", "name", conn.Name, "error", err)
+		slog.Warn("sftp not available", "name", conn.Name, "error", err)
 		return nil, fmt.Errorf("该服务器不支持 SFTP 文件传输: %w", err)
 	}
 
 	conn.sftpClient = client
 	conn.sftpTested = true
 	conn.sftpAvailable = true
-	slog.Debug("mcp SFTP client established for", "detail", conn.Name)
+	slog.Debug("SFTP client established", "name", conn.Name)
 	return client, nil
 }
 
-// toolFileTransfer 文件传输入口（根据 action 分发）
-func (s *Server) toolFileTransfer(args map[string]interface{}) (interface{}, error) {
-	action, _ := args["action"].(string)
-	switch action {
-	case "download":
-		return s.toolFileDownload(args)
-	case "upload":
-		return s.toolFileUpload(args)
-	default:
-		return nil, fmt.Errorf("未知 action: %s，可选: download, upload", action)
+// closeSFTP 关闭连接的 SFTP 客户端（线程安全）
+func closeSFTP(conn *Connection) {
+	conn.sftpMu.Lock()
+	defer conn.sftpMu.Unlock()
+
+	if conn.sftpClient != nil {
+		conn.sftpClient.Close()
+		conn.sftpClient = nil
 	}
 }
 
-// toolFileDownload 从远程服务器下载文件到本地
-func (s *Server) toolFileDownload(args map[string]interface{}) (interface{}, error) {
-	serverName, _ := args["server"].(string)
+// DownloadOptions 下载选项
+type DownloadOptions struct {
+	LocalPath string // 本地落地路径
+	MaxBytes  int    // 最大下载字节数，默认 10MB
+}
+
+// DownloadResult 下载结果
+type DownloadResult struct {
+	Success bool           `json:"success"`
+	Meta    map[string]any `json:"meta"`
+}
+
+// Download 从远程服务器下载文件到本地
+// 安全闸门内置：文件路径和大小必须通过 file_access 校验。
+func (m *Manager) Download(serverName, remotePath string, opts DownloadOptions) (*DownloadResult, error) {
 	if serverName == "" {
 		return nil, fmt.Errorf("缺少 server 参数")
 	}
-	remotePath, _ := args["remote_path"].(string)
 	if remotePath == "" {
 		return nil, fmt.Errorf("缺少 remote_path 参数")
 	}
-	localPath, _ := args["local_path"].(string)
+	localPath := opts.LocalPath
 	if localPath == "" {
 		return nil, fmt.Errorf("缺少 local_path 参数")
 	}
 	maxBytes := 10 * 1024 * 1024 // 默认 10MB
-	if v, ok := args["max_bytes"].(float64); ok && int(v) > 0 {
-		maxBytes = int(v)
+	if opts.MaxBytes > 0 {
+		maxBytes = opts.MaxBytes
 	}
 
-	// 获取连接
-	s.mu.RLock()
-	conn, exists := s.connections[serverName]
-	s.mu.RUnlock()
+	m.mu.RLock()
+	conn, exists := m.connections[serverName]
+	m.mu.RUnlock()
 
+	// 若尚未连接，则自动连接（惰性）
 	if !exists {
-		return nil, fmt.Errorf("服务器 '%s' 未连接，请先使用 server_connect 连接", serverName)
+		if _, err := m.Connect(serverName); err != nil {
+			return nil, err
+		}
+		m.mu.RLock()
+		conn, exists = m.connections[serverName]
+		m.mu.RUnlock()
+		if !exists {
+			return nil, fmt.Errorf("服务器 '%s' 连接后仍不可用", serverName)
+		}
 	}
 
-	// 获取 SFTP 客户端
-	sftpClient, err := s.ensureSFTP(conn)
+	sftpClient, err := m.ensureSFTP(conn)
 	if err != nil {
 		return nil, err
 	}
 
-	// Stat 远程文件
 	stat, err := sftpClient.Stat(remotePath)
 	if err != nil {
 		return nil, fmt.Errorf("无法获取远程文件信息: %w", err)
 	}
-
 	if stat.IsDir() {
 		return nil, fmt.Errorf("远程路径 %s 是目录，不支持下载目录", remotePath)
 	}
 
 	fileSize := stat.Size()
 
-	// 完整的权限检查（包含大小）
-	if s.fileChecker != nil {
-		checkResult := s.fileChecker.CheckRead(remotePath, localPath, conn.Host, fileSize)
-		if !checkResult.Allowed {
-			return nil, fmt.Errorf("%s", checkResult.Reason)
-		}
+	// === 安全闸门：文件访问校验（不可绕过）===
+	checkResult := m.fileChecker.CheckRead(remotePath, localPath, conn.Host, fileSize)
+	if !checkResult.Allowed {
+		return nil, fmt.Errorf("%s", checkResult.Reason)
 	}
 
 	// 覆盖 maxBytes（如果配置中更小）
-	if s.fileChecker != nil {
-		cfg := s.fileChecker.GetConfig()
-		for _, policy := range cfg.Policies {
-			if matchesIPRange(conn.Host, policy.IPRanges) {
-				if policy.MaxReadBytes > 0 && policy.MaxReadBytes < maxBytes {
-					maxBytes = policy.MaxReadBytes
-				}
-				break
+	cfg := m.fileChecker.GetConfig()
+	for _, policy := range cfg.Policies {
+		if security.MatchesIPRange(conn.Host, policy.IPRanges) {
+			if policy.MaxReadBytes > 0 && policy.MaxReadBytes < maxBytes {
+				maxBytes = policy.MaxReadBytes
 			}
+			break
 		}
 	}
 
@@ -143,7 +152,6 @@ func (s *Server) toolFileDownload(args map[string]interface{}) (interface{}, err
 		return nil, fmt.Errorf("创建本地目录失败: %w", err)
 	}
 
-	// 下载文件
 	remoteFile, err := sftpClient.Open(remotePath)
 	if err != nil {
 		return nil, fmt.Errorf("打开远程文件失败: %w", err)
@@ -158,62 +166,73 @@ func (s *Server) toolFileDownload(args map[string]interface{}) (interface{}, err
 
 	written, err := io.Copy(localFile, io.LimitReader(remoteFile, int64(maxBytes)))
 	if err != nil {
-		// 清理不完整的文件
 		os.Remove(localPath)
 		return nil, fmt.Errorf("下载文件失败: %w", err)
 	}
 
-	// 更新连接活跃时间
 	conn.LastActive.Store(time.Now().UnixNano())
 
-	slog.Info("mcp file downloaded", "server", serverName, "remote", remotePath, "local", localPath, "bytes", written)
+	slog.Info("file downloaded", "server", serverName, "remote", remotePath, "local", localPath, "bytes", written)
 
-	return map[string]interface{}{
-		"success": true,
-		"meta": map[string]interface{}{
-			"server":           serverName,
-			"remote_path":      remotePath,
-			"local_path":       localPath,
-			"size":             written,
-			"remote_mode":      fmt.Sprintf("%04o", stat.Mode().Perm()),
-			"remote_mod_time":  stat.ModTime().Format(time.RFC3339),
+	return &DownloadResult{
+		Success: true,
+		Meta: map[string]any{
+			"server":          serverName,
+			"remote_path":     remotePath,
+			"local_path":      localPath,
+			"size":            written,
+			"remote_mode":     fmt.Sprintf("%04o", stat.Mode().Perm()),
+			"remote_mod_time": stat.ModTime().Format(time.RFC3339),
 		},
 	}, nil
 }
 
-// toolFileUpload 从本地上传文件到远程服务器
-func (s *Server) toolFileUpload(args map[string]interface{}) (interface{}, error) {
-	serverName, _ := args["server"].(string)
+// UploadOptions 上传选项
+type UploadOptions struct {
+	LocalPath string // 本地源文件路径
+	Backup    bool   // 覆盖前自动备份远程文件，默认 true
+	Mkdir     bool   // 自动创建远程目标目录，默认 false
+}
+
+// UploadResult 上传结果
+type UploadResult struct {
+	Success bool           `json:"success"`
+	Meta    map[string]any `json:"meta"`
+}
+
+// Upload 从本地上传文件到远程服务器
+// 安全闸门内置：文件路径和大小必须通过 file_access 校验。
+func (m *Manager) Upload(serverName, remotePath string, opts UploadOptions) (*UploadResult, error) {
 	if serverName == "" {
 		return nil, fmt.Errorf("缺少 server 参数")
 	}
-	localPath, _ := args["local_path"].(string)
+	localPath := opts.LocalPath
 	if localPath == "" {
 		return nil, fmt.Errorf("缺少 local_path 参数")
 	}
-	remotePath, _ := args["remote_path"].(string)
 	if remotePath == "" {
 		return nil, fmt.Errorf("缺少 remote_path 参数")
 	}
-	backup := true
-	if v, ok := args["backup"].(bool); ok {
-		backup = v
-	}
-	makeDir := false
-	if v, ok := args["mkdir"].(bool); ok {
-		makeDir = v
-	}
+	// 备份开关：由调用方显式控制（CLI flag 默认 true）
+	backup := opts.Backup
 
-	// 获取连接
-	s.mu.RLock()
-	conn, exists := s.connections[serverName]
-	s.mu.RUnlock()
+	m.mu.RLock()
+	conn, exists := m.connections[serverName]
+	m.mu.RUnlock()
 
+	// 若尚未连接，则自动连接（惰性）
 	if !exists {
-		return nil, fmt.Errorf("服务器 '%s' 未连接，请先使用 server_connect 连接", serverName)
+		if _, err := m.Connect(serverName); err != nil {
+			return nil, err
+		}
+		m.mu.RLock()
+		conn, exists = m.connections[serverName]
+		m.mu.RUnlock()
+		if !exists {
+			return nil, fmt.Errorf("服务器 '%s' 连接后仍不可用", serverName)
+		}
 	}
 
-	// 检查本地文件存在
 	localInfo, err := os.Stat(localPath)
 	if err != nil {
 		return nil, fmt.Errorf("本地文件不存在: %w", err)
@@ -223,17 +242,14 @@ func (s *Server) toolFileUpload(args map[string]interface{}) (interface{}, error
 	}
 	fileSize := localInfo.Size()
 
-	// 权限检查
-	if s.fileChecker != nil {
-		_ = s.fileChecker.Reload()
-		checkResult := s.fileChecker.CheckWrite(remotePath, localPath, conn.Host, fileSize)
-		if !checkResult.Allowed {
-			return nil, fmt.Errorf("%s", checkResult.Reason)
-		}
+	// === 安全闸门：文件访问校验（不可绕过）===
+	_ = m.fileChecker.Reload()
+	checkResult := m.fileChecker.CheckWrite(remotePath, localPath, conn.Host, fileSize)
+	if !checkResult.Allowed {
+		return nil, fmt.Errorf("%s", checkResult.Reason)
 	}
 
-	// 获取 SFTP 客户端
-	sftpClient, err := s.ensureSFTP(conn)
+	sftpClient, err := m.ensureSFTP(conn)
 	if err != nil {
 		return nil, err
 	}
@@ -248,12 +264,12 @@ func (s *Server) toolFileUpload(args map[string]interface{}) (interface{}, error
 				return nil, fmt.Errorf("备份远程文件失败: %w", err)
 			}
 			backupCreated = true
-			slog.Debug("mcp remote file backed up", "src", remotePath, "dst", backupPath)
+			slog.Debug("remote file backed up", "src", remotePath, "dst", backupPath)
 		}
 	}
 
 	// 创建远程目录
-	if makeDir {
+	if opts.Mkdir {
 		remoteDir := remotePath
 		if idx := strings.LastIndex(remotePath, "/"); idx > 0 {
 			remoteDir = remotePath[:idx]
@@ -263,14 +279,12 @@ func (s *Server) toolFileUpload(args map[string]interface{}) (interface{}, error
 		}
 	}
 
-	// 打开本地文件
 	localFile, err := os.Open(localPath)
 	if err != nil {
 		return nil, fmt.Errorf("打开本地文件失败: %w", err)
 	}
 	defer localFile.Close()
 
-	// 创建远程文件
 	remoteFile, err := sftpClient.Create(remotePath)
 	if err != nil {
 		return nil, fmt.Errorf("创建远程文件失败: %w", err)
@@ -282,14 +296,13 @@ func (s *Server) toolFileUpload(args map[string]interface{}) (interface{}, error
 		return nil, fmt.Errorf("上传文件失败: %w", err)
 	}
 
-	// 更新连接活跃时间
 	conn.LastActive.Store(time.Now().UnixNano())
 
-	slog.Info("mcp file uploaded", "local", localPath, "server", serverName, "remote", remotePath, "bytes", written)
+	slog.Info("file uploaded", "local", localPath, "server", serverName, "remote", remotePath, "bytes", written)
 
-	return map[string]interface{}{
-		"success": true,
-		"meta": map[string]interface{}{
+	return &UploadResult{
+		Success: true,
+		Meta: map[string]any{
 			"server":         serverName,
 			"local_path":     localPath,
 			"remote_path":    remotePath,
@@ -316,15 +329,4 @@ func sftpBackupFile(client *sftp.Client, src string, dst string) error {
 
 	_, err = io.Copy(dstFile, srcFile)
 	return err
-}
-
-// closeSFTP 关闭连接的 SFTP 客户端（线程安全）
-func closeSFTP(conn *Connection) {
-	conn.sftpMu.Lock()
-	defer conn.sftpMu.Unlock()
-
-	if conn.sftpClient != nil {
-		conn.sftpClient.Close()
-		conn.sftpClient = nil
-	}
 }

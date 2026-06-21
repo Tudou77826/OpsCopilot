@@ -24,13 +24,12 @@ import (
 	"opscopilot/pkg/ai"
 	"opscopilot/pkg/completion"
 	"opscopilot/pkg/config"
+	"opscopilot/pkg/core/security"
 	"opscopilot/pkg/filetransfer"
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/knowledge/patchstore"
 	"opscopilot/pkg/llm"
 	"opscopilot/pkg/logging"
-	"opscopilot/pkg/mcp"
-	"opscopilot/pkg/mcpserver"
 	"opscopilot/pkg/recorder"
 	"opscopilot/pkg/script"
 	"opscopilot/pkg/secretstore"
@@ -57,9 +56,8 @@ type App struct {
 	troubleMgr        *troubleshoot.Manager            // 故障排查管理器
 	scriptMgr         *script.Manager                  // 脚本管理器
 	completionService *completion.Service
-	mcpManager        *mcp.Manager                     // MCP 服务器管理器
-	whitelistMgr      *mcpserver.WhitelistManager      // 命令白名单管理器
-	fileAccessMgr     *mcpserver.FileAccessChecker      // 文件访问控制管理器
+	whitelistMgr      *security.WhitelistManager       // 命令白名单管理器
+	fileAccessMgr     *security.FileAccessChecker      // 文件访问控制管理器
 	activeConfigs     map[string]ConnectConfig
 	activeConfigsMu   sync.RWMutex                     // protects activeConfigs
 	isForceQuitting   bool                             // Flag to skip confirmation on force quit
@@ -104,6 +102,8 @@ func NewApp() *App {
 	fastProvider := llm.NewOpenAIProvider(llmConfig.APIKey, llmConfig.BaseURL, fastModel)
 	complexProvider := llm.NewOpenAIProvider(llmConfig.APIKey, llmConfig.BaseURL, complexModel)
 	aiService := ai.NewAIService(fastProvider, complexProvider, configMgr)
+	// 注入 Wails 事件发射器，使 agent 运行状态可推送到前端
+	ai.SetEventEmitter(runtime.EventsEmit)
 
 	// Initialize Core Recorder Engine (统一录制器)
 	recordingsPath := filepath.Join(configMgr.Config.Log.Dir, "recordings")
@@ -161,7 +161,7 @@ func NewApp() *App {
 
 	// 初始化白名单管理器
 	whitelistPath := "command_whitelist.json"
-	if whitelistMgr, err := mcpserver.NewWhitelistManager(whitelistPath); err != nil {
+	if whitelistMgr, err := security.NewWhitelistManager(whitelistPath); err != nil {
 		fmt.Fprintf(os.Stderr, "[WARN] Failed to initialize whitelist manager: %v\n", err)
 	} else {
 		app.whitelistMgr = whitelistMgr
@@ -169,7 +169,7 @@ func NewApp() *App {
 
 	// 初始化文件访问控制管理器
 	fileAccessPath := "file_access.json"
-	if fileAccessMgr, err := mcpserver.NewFileAccessChecker(fileAccessPath); err != nil {
+	if fileAccessMgr, err := security.NewFileAccessChecker(fileAccessPath); err != nil {
 		fmt.Fprintf(os.Stderr, "[WARN] Failed to initialize file access checker: %v\n", err)
 	} else {
 		app.fileAccessMgr = fileAccessMgr
@@ -469,27 +469,6 @@ func (a *App) startup(ctx context.Context) {
 	// 初始化反馈存储（复用同一 Git 仓库）
 	a.initFeedbackStore()
 
-	// 初始化 MCP 管理器
-	// MCP 配置文件放在可执行文件所在目录（根目录）
-	var mcpConfigPath string
-	if execPath, err := os.Executable(); err == nil {
-		mcpConfigPath = filepath.Join(filepath.Dir(execPath), "mcp.json")
-	} else {
-		mcpConfigPath = filepath.Join(a.configMgr.Config.Log.Dir, "mcp.json") // 回退到 log 目录
-	}
-	slog.Info("mcp config path", "path", mcpConfigPath)
-	a.mcpManager = mcp.NewManager(mcpConfigPath)
-	if err := a.mcpManager.Load(); err != nil {
-		slog.Error("mcp failed to load config", "error", err)
-	} else {
-		// 启动所有配置的 MCP 服务器
-		if err := a.mcpManager.StartAll(); err != nil {
-			slog.Error("mcp failed to start servers", "error", err)
-		} else {
-			slog.Info("mcp servers initialized successfully")
-		}
-	}
-
 	// 清理自更新残留文件，并显示更新结果
 	if execPath, err := os.Executable(); err == nil {
 		appDir := filepath.Dir(execPath)
@@ -508,7 +487,6 @@ func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 	// If this is a forced quit, skip confirmation and allow close
 	if a.isForceQuitting {
 		slog.Info("beforeClose force quitting, allowing close")
-		a.cleanupMCPClient()
 		return false
 	}
 
@@ -545,42 +523,8 @@ func (a *App) beforeClose(ctx context.Context) (prevent bool) {
 	}
 
 	slog.Info("beforeClose no active work, allowing close")
-	a.cleanupMCPClient()
 	// No active work, allow close
 	return false
-}
-
-// cleanupMCPClient 清理 MCP 客户端资源
-func (a *App) cleanupMCPClient() {
-	if a.mcpManager != nil {
-		slog.Info("mcp stopping servers")
-		if err := a.mcpManager.StopAll(); err != nil {
-			slog.Error("mcp error stopping servers", "error", err)
-		}
-	}
-}
-
-// GetMCPStatus 获取 MCP 服务器状态（供前端调用）
-func (a *App) GetMCPStatus() string {
-	if a.mcpManager == nil {
-		slog.Debug("getMCPStatus manager is nil")
-		return `{"servers": {}}`
-	}
-
-	status := a.mcpManager.GetStatus()
-	slog.Debug("getMCPStatus returning status", "status", status)
-	result := map[string]interface{}{
-		"servers": status,
-	}
-
-	jsonBytes, err := json.Marshal(result)
-	if err != nil {
-		slog.Error("getMCPStatus failed to marshal", "error", err)
-		return fmt.Sprintf(`{"error": "Failed to marshal status: %v"}`, err)
-	}
-
-	slog.Debug("getMCPStatus returning JSON", "json", string(jsonBytes))
-	return string(jsonBytes)
 }
 
 // ForceQuit forces the application to quit without confirmation
@@ -1552,15 +1496,15 @@ func (a *App) SaveSettings(cfg config.AppConfig) string {
 	return ""
 }
 // GetCommandWhitelist 获取命令白名单配置
-func (a *App) GetCommandWhitelist() (*mcpserver.WhitelistConfig, error) {
+func (a *App) GetCommandWhitelist() (*security.WhitelistConfig, error) {
 	if a.whitelistMgr == nil {
 		return nil, fmt.Errorf("白名单管理器未初始化")
 	}
 	return a.whitelistMgr.GetConfig(), nil
 }
 
-// SaveCommandWhitelist 保存命令白名单配置
-func (a *App) SaveCommandWhitelist(config mcpserver.WhitelistConfig) error {
+// SaveCommandWhitelist 保存白名单配置
+func (a *App) SaveCommandWhitelist(config security.WhitelistConfig) error {
 	if a.whitelistMgr == nil {
 		return fmt.Errorf("白名单管理器未初始化")
 	}
@@ -1569,7 +1513,7 @@ func (a *App) SaveCommandWhitelist(config mcpserver.WhitelistConfig) error {
 
 // GetPoliciesForIP 查询指定 IP 命中的所有白名单策略
 // 用于 UI 反向查询:输入服务器 IP,看它适用哪些策略
-func (a *App) GetPoliciesForIP(ip string) ([]mcpserver.Policy, error) {
+func (a *App) GetPoliciesForIP(ip string) ([]security.Policy, error) {
 	if a.whitelistMgr == nil {
 		return nil, fmt.Errorf("白名单管理器未初始化")
 	}
@@ -1577,7 +1521,7 @@ func (a *App) GetPoliciesForIP(ip string) ([]mcpserver.Policy, error) {
 }
 
 // GetFileAccessConfig 获取文件访问控制配置
-func (a *App) GetFileAccessConfig() (*mcpserver.FileAccessConfig, error) {
+func (a *App) GetFileAccessConfig() (*security.FileAccessConfig, error) {
 	if a.fileAccessMgr == nil {
 		return nil, fmt.Errorf("文件访问控制管理器未初始化")
 	}
@@ -1585,7 +1529,7 @@ func (a *App) GetFileAccessConfig() (*mcpserver.FileAccessConfig, error) {
 }
 
 // SaveFileAccessConfig 保存文件访问控制配置
-func (a *App) SaveFileAccessConfig(config mcpserver.FileAccessConfig) error {
+func (a *App) SaveFileAccessConfig(config security.FileAccessConfig) error {
 	if a.fileAccessMgr == nil {
 		return fmt.Errorf("文件访问控制管理器未初始化")
 	}

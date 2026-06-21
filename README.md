@@ -5,14 +5,14 @@
 
 ![Uploading image.png…](./build/windows/icon.ico)
 
-**AI 驱动的智能运维助手 / AI Agent 远程执行工具**
+**AI 驱动的智能运维助手 / 单 exe 双模：GUI + CLI**
 
 [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![Wails](https://img.shields.io/badge/Wails-v2-DF0000?style=flat)](https://wails.io/)
 [![React](https://img.shields.io/badge/React-18.x-61DAFB?style=flat&logo=react)](https://reactjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat&logo=typescript)](https://www.typescriptlang.org/)
 
-*让运维经验沉淀为知识，让 AI Agent 拥有远程执行能力*
+*让运维经验沉淀为知识，单 exe 同时服务人与 AI Agent*
 
 </div>
 
@@ -34,7 +34,7 @@ OpsCopilot 是一款兼具**人机交互**与**AI Agent 工具**双重属性的�
 |------|------|---------|
 | **运维助手** | 运维工程师 | AI 连接解析、知识库搜索、故障定位 Agent、会话录制 |
 | **知识引擎** | 团队 | 排查经验自动沉淀、SOP 文档管理、知识复用、团队共享 |
-| **MCP Server** | AI Agent | SSH 远程执行、文件管理、支持命令、路径安全白名单 |
+| **CLI 工具** | AI Agent | 单 exe 子命令入口，SSH 远程执行、文件传输、AI 诊断，安全白名单统一管控 |
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -43,17 +43,15 @@ OpsCopilot 是一款兼具**人机交互**与**AI Agent 工具**双重属性的�
 │                                                                          │
 │  👨‍💻 人类模式                        🤖 Agent 模式                        │
 │  ──────────────────────              ──────────────────────               │
-│  终端操作 ◀──▶ SSH 连接             Claude / Cursor / ...                │
-│  AI 对话  ◀──▶ 知识库搜索              │                                  │
-│  故障定位 ◀──▶ Agent 推理             MCP Protocol                       │
-│  过程录制 ◀──▶ 知识沉淀                │                                   │
-│  自动归档 ◀──▶ 团队共享                ▼                                  │
-│                                    OpsCopilot MCP Server                 │
-│                                     ├─ ssh_exec     (远程命令执行)       │
-│                                     ├─ server_connect/disconnect        │
-│                                     ├─ file_upload/download              │
-│                                     ├─ session_end    (知识归档)         │
+│  终端操作 ◀──▶ SSH 连接             Claude / Cursor / Codex ...           │
+│  AI 对话  ◀──▶ 知识库搜索              │  (读取 skill 学会调用)            │
+│  故障定位 ◀──▶ Agent 推理              ▼                                  │
+│  过程录制 ◀──▶ 知识沉淀            opscopilot.exe <子命令>               │
+│  自动归档 ◀──▶ 团队共享              ├─ exec        (远程命令执行)        │
+│                                     ├─ diagnose   (AI 故障诊断)          │
+│                                     └─ file        (文件上传/下载)        │
 │                                                                          │
+│                统一安全闸门 core/security（白名单+文件访问控制）          │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -117,59 +115,65 @@ AI 策略：
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 4. 🔌 MCP Server（面向 AI Agent）
+### 4. 💻 CLI 工具（面向 AI Agent）
 
-OpsCopilot 可作为 **MCP Server** 运行，让 Claude、Cursor 等 AI Agent 直接获得 SSH 远程操作能力：
+OpsCopilot 本体即 CLI：同一个 `opscopilot.exe`，带子命令时进入命令行模式，不带则启动图形界面。外部 AI Agent（Claude、Cursor、Codex 等）通过配套的 skill 学会调用，直接获得 SSH 远程操作和 AI 诊断能力。
 
-将 `mcp-server.exe` 与 `sessions.json`、`command_whitelist.json`、`docs/` 放在同一目录，然后配置：
+**优势**：
+- **单 exe、单发布、单更新**：不再需要单独的 mcp-server.exe，自动更新只更新一个文件，能力与本体永远同步
+- **安全闸门统一**：所有非交互式访问强制过 `core/security` 白名单和文件访问控制，调用方无法绕过
+- **AI 诊断可复用**：CLI 直接复用本体的 agent 诊断循环和知识库，外部 AI 拿到的是基于实战经验的诊断
 
-```json
-{
-  "mcpServers": {
-    "opscopilot": {
-      "type": "local",
-      "command": ["path/to/mcp-server.exe"]
-    }
-  }
-}
+**子命令一览**：
+
+| 子命令 | 功能 | 是否碰服务器 |
+|--------|------|------------|
+| `exec` | 在远程服务器执行命令（白名单管控、命令级超时） | 是 |
+| `diagnose` | 基于知识库的 AI 故障诊断，输出建议命令和排查步骤 | 否（纯知识检索） |
+| `file download/upload` | 文件传输（SFTP，文件访问控制管控） | 是 |
+
+**用法示例**：
+
+```bash
+# 执行命令（自动连接、白名单优先校验、超时保护）
+opscopilot exec --server web-01 --command "df -h" --timeout-sec 30
+
+# AI 诊断（只查知识库给建议，不碰服务器）
+opscopilot diagnose --problem "mysql 连接超时"
+
+# 下载日志到本地分析
+opscopilot file download --server web-01 --remote /var/log/nginx/error.log --local /tmp/error.log
 ```
 
-**可用 MCP 工具**：
+**让 AI Agent 学会调用**：
 
-| 工具 | 功能 |
-|------|------|
-| `server_list` | 列出所有可用服务器及连接状态 |
-| `server_connect` | 连接到指定服务器（支持跳板机） |
-| `server_disconnect` | 断开服务器连接 |
-| `ssh_exec` | 在远程服务器执行命令（白名单管控） |
+将仓库内的 `skills/opscopilot-ops/SKILL.md` 提供给 AI Agent（Claude 的 skills 目录、Cursor 的规则、Codex 的 AGENTS.md 等），AI 读取后即可在合适的场景调用上述子命令。
 
-
-**实际使用效果** — 在 Claude Code 中直接操作远程服务器：
+**实际使用效果** — AI Agent 自主排查：
 
 ```text
 👤 你: 帮我看看生产环境 web-01 的磁盘使用情况
 
-🤖 Claude: 我来连接服务器查看。
-  → 调用 server_connect("web-01")
-  → 调用 ssh_exec("web-01", "df -h")
+🤖 AI: （读取 skill，学会调用 opscopilot exec）
+  → opscopilot exec --server web-01 --command "df -h"
 
   Filesystem      Size  Used Avail Use% Mounted on
   /dev/sda1       100G   78G   22G  78% /
   /dev/sdb1       500G  490G   10G  98% /data   ⚠️
 
-  /data 分区使用率已达 98%，建议清理旧日志。
-  → 调用 ssh_exec("web-01", "du -sh /data/log/* | sort -rh | head -5")
+  /data 分区使用率已达 98%，我来定位大文件。
+  → opscopilot exec --server web-01 --command "du -sh /data/log/* | sort -rh | head -5"
 
   4.2G   /data/log/app/access.log.2025-03-*
   2.8G   /data/log/app/error.log.2025-03-*
-  ...
 ```
 
 **安全机制**：
-- 命令白名单：按服务器 IP 粒度配置允许执行的命令
-- LLM 风险检测：对不在白名单中的命令进行 AI 风险评估
+- 命令白名单：按服务器 IP 粒度配置允许执行的命令（在 GUI 中配置，CLI/MCP 等所有非交互入口统一生效）
+- 文件访问控制：可读/可写路径、大小上限、本地落地目录均按 IP 策略管控
+- 命令级超时：单条命令超时自动 SIGKILL，避免慢命令拖死连接
+- 连接自愈：连接失效自动重建，单条故障不影响后续
 - 空闲超时：自动断开长时间无操作的连接
-- 审计录制：所有 MCP 操作均记录到排查会话
 
 ### 5. 📝 排查过程录制与知识沉淀
 
@@ -330,9 +334,9 @@ graph TB
         FileMgr[文件管理器]
     end
 
-    subgraph "MCP Server"
-        MCPServer[MCP Protocol Server]
-        MCPTools[SSH / Session / Hints 工具]
+    subgraph "core 内核（GUI 与 CLI 共享）"
+        Ops[core/ops 运维操作<br/>连接/执行/传输]
+        Security[core/security 安全闸门<br/>白名单/文件访问控制]
     end
 
     subgraph "Bridge - Wails Runtime"
@@ -357,7 +361,6 @@ graph TB
         subgraph "AI 服务层"
             LLM[LLM Provider]
             Knowledge[知识库加载器]
-            TermExtractor[关键词提取器]
         end
 
         subgraph "SSH 服务层"
@@ -382,15 +385,14 @@ graph TB
     UI --> Terminal
     UI --> AI_Panel
     UI --> FileMgr
-    Agent -->|MCP Protocol| MCPServer
+    Agent -->|opscopilot.exe 子命令| Ops
 
     Terminal --> Events
     AI_Panel --> Binding
-    MCPServer --> MCPTools
 
     Binding --> App
     Events --> App
-    MCPTools --> App
+    App --> Ops
 
     App --> AgentService
     AgentService --> ToolRegistry
@@ -403,9 +405,10 @@ graph TB
     App --> FileTransfer
     App --> Config
 
+    Ops --> Security
+    Ops --> SSHClient
     LLM --> LLM_API
     Knowledge --> LLM
-    TermExtractor --> LLM
 
     SessionMgr --> SSHClient
     SSHClient --> Bastion
@@ -417,12 +420,12 @@ graph TB
 
 | 模块 | 路径 | 职责 |
 |------|------|------|
-| **MCP Server** | `pkg/mcpserver/` | MCP 协议服务端，暴露工具给外部 AI Agent |
+| **core/security** | `pkg/core/security/` | 安全闸门：命令白名单、文件访问控制（GUI 与 CLI 共享） |
+| **core/ops** | `pkg/core/ops/` | 运维内核：连接管理、命令执行、文件传输、输出限流 |
 | **Agent Service** | `pkg/ai/agent.go` | ReAct 循环，协调 LLM 和工具 |
 | **Tool Registry** | `pkg/tools/registry.go` | 工具注册和管理 |
 | **Knowledge Tools** | `pkg/tools/knowledge/` | 知识库搜索、列表、读取 |
-| **Term Extractor** | `pkg/ai/agent.go` | LLM 增强的关键词提取 |
-| **SSH Client** | `pkg/sshclient/` | SSH 连接、跳板机穿透、自动提权 |
+| **SSH Client** | `pkg/sshclient/` | SSH 连接、跳板机穿透、自动提权、命令级超时 |
 | **File Transfer** | `pkg/filetransfer/` | SFTP / SCP / Base64 文件传输 |
 | **Recorder** | `pkg/recorder/` | 终端会话录制与知识沉淀 |
 
@@ -484,43 +487,41 @@ wails build
 
 ---
 
-## 🔌 MCP Server 配置
+## 💻 CLI 与 AI Agent 接入
 
-OpsCopilot 启动后自动监听 MCP 连接。在 AI Agent 的配置文件中添加：
+OpsCopilot 本体即 CLI。外部 AI Agent 通过读取 `skills/opscopilot-ops/SKILL.md` 学会调用，无需额外的 server 进程或端口。
 
-### Claude Desktop
+### 子命令
 
-编辑 `claude_desktop_config.json`：
+```bash
+# 执行远程命令（自动连接、白名单优先、超时保护）
+opscopilot exec --server <名称> --command "<命令>" [--timeout-sec N]
 
-```json
-{
-  "mcpServers": {
-    "opscopilot": {
-      "command": "C:\\path\\to\\OpsCopilot.exe",
-      "args": ["--mcp"]
-    }
-  }
-}
+# AI 诊断（纯知识库检索，不碰服务器）
+opscopilot diagnose --problem "<故障现象>"
+
+# 文件传输
+opscopilot file download --server <名称> --remote <远程路径> --local <本地路径>
+opscopilot file upload   --server <名称> --local <本地路径> --remote <远程路径>
 ```
 
-### Cursor / Claude Code
+不带子命令启动则进入图形界面。环境变量（可选，默认从 exe 所在目录读取）：
+- `OPSCOPILOT_SESSIONS_FILE` — sessions.json 路径
+- `OPSCOPILOT_WHITELIST_PATH` — 命令白名单配置
+- `OPSCOPILOT_FILE_ACCESS_PATH` — 文件访问控制配置
+- `OPSCOPILOT_KNOWLEDGE_DIR` — 知识库目录
 
-在项目或全局的 `.mcp.json` 中添加：
+### 让 AI Agent 学会调用
 
-```json
-{
-  "mcpServers": {
-    "opscopilot": {
-      "command": "/path/to/OpsCopilot",
-      "args": ["--mcp"]
-    }
-  }
-}
-```
+将 `skills/opscopilot-ops/SKILL.md` 提供给 AI Agent：
+- **Claude Code / Cursor**：放入 skills 目录或规则文件
+- **Codex / 通用 Agent**：内容追加到 AGENTS.md
+
+AI 读取后会根据用户问题自主选择合适的子命令。
 
 ### 服务器配置
 
-在 OpsCopilot 的 `sessions.json` 中预配置服务器：
+在 OpsCopilot 的 `sessions.json` 中预配置服务器（通过 GUI 的侧边栏管理，或直接编辑）：
 
 ```json
 [
@@ -536,22 +537,29 @@ OpsCopilot 启动后自动监听 MCP 连接。在 AI Agent 的配置文件中添
 ]
 ```
 
-### 命令白名单
+CLI 复用同一份 sessions.json 和系统凭据库（密码在 GUI 中首次连接时存入 Keyring）。**前提：服务器需先在 GUI 中连接过一次**（用于存入凭据）。
 
-在 `config.json` 中配置允许 AI Agent 执行的命令：
+### 命令白名单与文件访问控制
+
+在 GUI 的设置中配置（`command_whitelist.json` / `file_access.json`），按服务器 IP 粒度管控：
 
 ```json
 {
-  "mcpWhitelist": {
-    "10.1.1.*": [
-      "ps", "top", "df", "du", "free", "uptime",
-      "cat", "head", "tail", "grep", "ls", "find",
-      "systemctl status *", "journalctl *", "docker ps",
-      "docker logs *", "netstat", "ss", "ping", "curl"
-    ]
-  }
+  "version": "1.0",
+  "policies": [
+    {
+      "id": "default",
+      "ip_ranges": ["*"],
+      "commands": [
+        { "pattern": "^ps\\s", "category": "read_only", "enabled": true },
+        { "pattern": "^df\\s", "category": "read_only", "enabled": true }
+      ]
+    }
+  ]
 }
 ```
+
+这套配置对**所有非交互式入口统一生效**（CLI、未来的其他协议）——只要不是用户在 GUI 终端里亲手敲的命令，都必须过这道闸门。
 
 ---
 
@@ -585,7 +593,7 @@ OpsCopilot 内置知识库管理能力，无需手动操作：
 团队成员 B Git pull → 启动 OpsCopilot → 自动索引 → 检索到 A 的经验
 ```
 
-应用启动时会自动加载文档，作为 AI 问答和 MCP `get_hints` 的上下文来源。
+应用启动时会自动加载文档，作为 AI 问答和 CLI `diagnose` 诊断的上下文来源。
 
 **目录结构说明**：
 
@@ -599,15 +607,16 @@ OpsCopilot 内置知识库管理能力，无需手动操作：
 
 ```
 OpsCopilot/
-├── main.go                    # 应用入口
+├── main.go                    # 应用入口（GUI / CLI 分流）
+├── cli.go / cli_diagnose.go   # CLI 子命令实现（exec/diagnose/file）
 ├── app.go                     # Wails App 控制器
 ├── pkg/                       # Go 后端核心逻辑
-│   ├── ai/                    # AI 服务
-│   │   ├── agent.go           # Agent 循环 + 关键词提取
+│   ├── core/                  # 内核（GUI 与 CLI 共享）
+│   │   ├── security/          # 安全闸门：白名单、文件访问控制
+│   │   └── ops/               # 运维操作：连接、执行、传输、输出限流
+│   ├── ai/                    # AI 服务（已解耦 Wails）
+│   │   ├── agent.go           # Agent ReAct 循环
 │   │   └── intent.go          # 意图识别
-│   ├── mcpserver/             # MCP Server（面向 AI Agent）
-│   │   ├── server.go          # MCP 协议服务端
-│   │   └── tools.go           # MCP 工具实现
 │   ├── tools/                 # 工具系统
 │   │   ├── interface.go       # Tool 接口定义
 │   │   ├── registry.go        # 工具注册器
@@ -616,9 +625,11 @@ OpsCopilot/
 │   ├── filetransfer/          # 文件传输（SFTP/SCP/Base64）
 │   ├── recorder/              # 会话录制
 │   ├── script/                # 脚本管理
-│   ├── sshclient/             # SSH 客户端
+│   ├── sshclient/             # SSH 客户端（含命令级超时）
 │   ├── terminal/              # 终端解析
 │   └── config/                # 配置管理
+├── skills/                    # AI Agent 调用指南
+│   └── opscopilot-ops/        # SKILL.md（教 AI 调用 CLI）
 ├── frontend/                  # React 前端
 │   └── src/
 │       ├── components/        # UI 组件
@@ -643,8 +654,10 @@ OpsCopilot/
 - [x] 多节点终端管理
 - [x] 智能命令补全（自定义延迟 + 常用组合）
 - [x] LLM 指令快查（Ctrl+K 自然语言生成命令）
-- [x] MCP Server（面向 AI Agent 的 SSH 远程执行）
-- [x] MCP 知识归档工具（session_end）
+- [x] **CLI 工具**（单 exe 子命令，面向 AI Agent）
+- [x] **运维能力内核化**（core/security + core/ops，GUI 与 CLI 共享）
+- [x] **AI 诊断对外暴露**（diagnose 子命令，复用 agent 循环）
+- [x] **命令级超时保护**（慢命令不拖死连接）
 - [x] 文件传输（SFTP / SCP / Base64 拖拽上传下载）
 - [x] 跳板机穿透与自动提权
 - [x] 时间戳实时解析（选中数字自动显示可读时间）
@@ -669,8 +682,9 @@ OpsCopilot/
 - **密码存储**：使用操作系统级密钥链（Windows Credential Manager / macOS Keychain）
 - **日志脱敏**：自动过滤日志中的密码字段
 - **传输加密**：SSH 协议原生加密，无明文传输
-- **命令白名单**：MCP 模式下按服务器粒度限制可执行命令
-- **LLM 风险检测**：对白名单外的命令进行 AI 安全评估
+- **命令白名单**：所有非交互式入口（CLI 等）按服务器 IP 粒度限制可执行命令，GUI 终端不受限（用户亲手操作）
+- **文件访问控制**：CLI 文件传输受路径前缀、大小上限、本地落地目录约束
+- **命令级超时**：单条命令超时自动终止，避免慢命令拖死共享连接
 - **空闲超时**：自动断开长时间无操作的连接
 
 ---

@@ -154,10 +154,6 @@ export function GetKnowledgeTree() {
   return window['go']['main']['App']['GetKnowledgeTree']();
 }
 
-export function GetMCPStatus() {
-  return window['go']['main']['App']['GetMCPStatus']();
-}
-
 export function GetPatchFeedback(arg1) {
   return window['go']['main']['App']['GetPatchFeedback'](arg1);
 }

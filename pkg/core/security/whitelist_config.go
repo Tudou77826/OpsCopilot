@@ -1,4 +1,4 @@
-package mcpserver
+package security
 
 // CommandCategory 命令分类
 type CommandCategory string
@@ -55,7 +55,7 @@ func DefaultWhitelistConfig() *WhitelistConfig {
 	}
 }
 
-// getDefaultCommands 返回默认命令列表（从现有的 allowedCommands 迁移）
+// getDefaultCommands 返回默认命令列表
 func getDefaultCommands() []Command {
 	return []Command{
 		// === 文件查看 ===

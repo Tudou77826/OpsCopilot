@@ -1,4 +1,4 @@
-package mcpserver
+package security
 
 import (
 	"encoding/json"
@@ -159,7 +159,7 @@ func (m *WhitelistManager) Check(command string, serverIP string) CheckResult {
 	// 收集匹配该 IP 的所有策略
 	var matchedPolicies []Policy
 	for _, policy := range m.config.Policies {
-		if matchesIPRange(serverIP, policy.IPRanges) {
+		if MatchesIPRange(serverIP, policy.IPRanges) {
 			matchedPolicies = append(matchedPolicies, policy)
 		}
 	}
@@ -196,8 +196,9 @@ func (m *WhitelistManager) Check(command string, serverIP string) CheckResult {
 	}
 }
 
-// matchesIPRange 检查 IP 是否匹配任意一个范围
-func matchesIPRange(ip string, ranges []string) bool {
+// MatchesIPRange 检查 IP 是否匹配任意一个范围
+// 导出供其他层（execution/transfer）使用，是跨层共享的安全判定原语
+func MatchesIPRange(ip string, ranges []string) bool {
 	for _, r := range ranges {
 		if r == "*" {
 			return true
@@ -260,7 +261,7 @@ func (m *WhitelistManager) GetPoliciesForIP(ip string) []Policy {
 
 	var result []Policy
 	for _, policy := range m.config.Policies {
-		if matchesIPRange(ip, policy.IPRanges) {
+		if MatchesIPRange(ip, policy.IPRanges) {
 			result = append(result, policy)
 		}
 	}

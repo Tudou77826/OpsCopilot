@@ -28,6 +28,15 @@ func main() {
 	}
 
 	// Normal application startup.
+	// CLI 模式：带子命令时进入命令行入口，不启动 GUI
+	// 子命令包括 exec / diagnose / file；不带子命令则正常启动图形界面
+	if len(os.Args) >= 2 {
+		switch os.Args[1] {
+		case "exec", "diagnose", "file", "-h", "--help", "help":
+			os.Exit(runCLI(os.Args[1:]))
+		}
+	}
+
 	app := NewApp()
 
 	err := wails.Run(&options.App{

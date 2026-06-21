@@ -2,6 +2,7 @@ package sshclient
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -134,6 +135,64 @@ func (c *Client) Run(cmd string) (string, error) {
 	}
 
 	return stdoutBuf.String(), nil
+}
+
+// RunWithContext 执行命令，支持 context 取消。
+// 当 ctx 被取消（含超时）时，向远端进程发送 SIGKILL 并立即返回，
+// 避免慢命令无限期阻塞、拖死共享的 SSH 连接。
+// 返回的 error 在 ctx 取消时包含 context.Cause 信息，便于上层区分超时与正常失败。
+func (c *Client) RunWithContext(ctx context.Context, cmd string) (string, error) {
+	if c.client == nil {
+		return "", fmt.Errorf("client is not connected")
+	}
+
+	session, err := c.client.NewSession()
+	if err != nil {
+		return "", fmt.Errorf("failed to create session: %w", err)
+	}
+	defer session.Close()
+
+	var stdoutBuf bytes.Buffer
+	session.Stdout = &stdoutBuf
+
+	// Start 是非阻塞的，Wait 才阻塞等待命令结束
+	if err := session.Start(cmd); err != nil {
+		return "", fmt.Errorf("failed to start command: %w", err)
+	}
+
+	// 用一个 channel 接收 Wait 的结果
+	waitErr := make(chan error, 1)
+	go func() {
+		waitErr <- session.Wait()
+	}()
+
+	select {
+	case err := <-waitErr:
+		// 命令正常结束（成功或命令自身失败）
+		if err != nil {
+			return stdoutBuf.String(), fmt.Errorf("failed to run command: %w", err)
+		}
+		return stdoutBuf.String(), nil
+	case <-ctx.Done():
+		// ctx 超时/取消：杀掉远端进程，释放 session
+		// Signal 失败也不能阻塞返回，尽力清理
+		_ = session.Signal(ssh.SIGKILL)
+		// 等待 Wait goroutine 退出，避免泄漏（给一个短超时）
+		select {
+		case <-waitErr:
+		case <-time.After(3 * time.Second):
+		}
+		return stdoutBuf.String(), fmt.Errorf("command timed out: %w", ctx.Err())
+	}
+}
+
+// NewSession 暴露创建 session 的能力，供上层做连接健康检查。
+// 如果 client 内部连接已失效，NewSession 会返回错误。
+func (c *Client) NewSession() (*ssh.Session, error) {
+	if c.client == nil {
+		return nil, fmt.Errorf("client is not connected")
+	}
+	return c.client.NewSession()
 }
 
 func (c *Client) StartShell(cols, rows int) (*ssh.Session, io.WriteCloser, io.Reader, error) {

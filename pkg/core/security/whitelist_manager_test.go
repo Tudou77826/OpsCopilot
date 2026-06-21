@@ -1,4 +1,4 @@
-package mcpserver
+package security
 
 import (
 	"os"
@@ -51,9 +51,9 @@ func TestWhitelistManager_CheckCommand(t *testing.T) {
 		{"ls -la", "192.168.1.100", true},
 		{"cat /etc/passwd", "10.0.0.1", true},
 		{"ps aux", "172.16.0.1", true},
-		{"rm -rf /", "192.168.1.100", false}, // 危险命令不允许
-		{"systemctl restart nginx", "10.0.0.1", false}, // 写入命令默认不允许
-		{"", "192.168.1.100", false}, // 空命令
+		{"rm -rf /", "192.168.1.100", false},                  // 危险命令不允许
+		{"systemctl restart nginx", "10.0.0.1", false},        // 写入命令默认不允许
+		{"", "192.168.1.100", false},                          // 空命令
 	}
 
 	for _, tt := range tests {
@@ -81,9 +81,9 @@ func TestWhitelistManager_MatchesIPRange(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		result := matchesIPRange(tt.ip, tt.ranges)
+		result := MatchesIPRange(tt.ip, tt.ranges)
 		if result != tt.expected {
-			t.Errorf("matchesIPRange(%q, %v) = %v, expected %v",
+			t.Errorf("MatchesIPRange(%q, %v) = %v, expected %v",
 				tt.ip, tt.ranges, result, tt.expected)
 		}
 	}
