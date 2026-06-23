@@ -210,13 +210,24 @@ func TestFileAccessChecker_CheckRead(t *testing.T) {
 			wantReason: "拒绝列表",
 		},
 		{
-			name:       "local path outside staging dir denied",
+			// 本地路径默认可信：调用方显式传入本地路径即代表用户意图，
+			// 不再做前缀校验（Windows 用户的本地路径不可能匹配 /tmp 这类 Unix 前缀）。
+			// 此用例验证即使本地路径在 allowed_local_dirs 之外，远程读取仍能放行。
+			name:       "local path outside staging dir still allowed (CLI trust model)",
 			remotePath: "/var/log/test.log",
 			localPath:  "/home/user/test.log",
 			serverIP:   "192.168.1.100",
 			fileSize:   1024,
-			wantAllow:  false,
-			wantReason: "不在允许的目录中",
+			wantAllow:  true,
+		},
+		{
+			// Windows 路径也应放行（回归保护：防止有人改回前缀校验）
+			name:       "windows local path allowed",
+			remotePath: "/var/log/test.log",
+			localPath:  `D:\Users\someone\Downloads\test.log`,
+			serverIP:   "192.168.1.100",
+			fileSize:   1024,
+			wantAllow:  true,
 		},
 		{
 			name:       "file too large denied",

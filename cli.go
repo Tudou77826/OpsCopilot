@@ -58,10 +58,12 @@ func newOpsManager(env cliEnv) (*ops.Manager, error) {
 	})
 }
 
-// newAIService 构造 AI 诊断服务，复用 GUI 的 LLM 配置
+// newAIService 构造 AI 诊断服务，复用 GUI 的 LLM 配置。
+// configPath 从 env.binDir 推导（与 exe 同目录），而非 cwd——
+// 用户可能在任意目录调用 CLI，cwd 下不一定有 config.json。
 // 前提：用户已在 OpsCopilot GUI 中配置过 LLM（API key/BaseURL/Model）
-func newAIService() (*ai.AIService, error) {
-	configMgr := config.NewManager()
+func newAIService(env cliEnv) (*ai.AIService, error) {
+	configMgr := config.NewManagerWithDir(env.binDir)
 	if err := configMgr.Load(); err != nil {
 		return nil, fmt.Errorf("加载配置失败（请先在 OpsCopilot GUI 中配置 LLM）: %w", err)
 	}

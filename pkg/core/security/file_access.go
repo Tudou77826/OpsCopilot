@@ -153,15 +153,10 @@ func (c *FileAccessChecker) checkAccess(remotePath string, localPath string, ser
 		}
 	}
 
-	// 2. 检查本地路径安全性
-	if localPath != "" {
-		if !isPathAllowed(localPath, matchedPolicy.AllowedLocalDirs) {
-			return FileAccessCheckResult{
-				Allowed: false,
-				Reason:  fmt.Sprintf("本地路径 %s 不在允许的目录中（允许: %s）", localPath, strings.Join(matchedPolicy.AllowedLocalDirs, ", ")),
-			}
-		}
-	}
+	// 2. 本地路径默认可信：调用方（CLI）能显式传入本地路径即代表用户意图，
+	//    不再做前缀校验。allowed_local_dirs 字段保留兼容但不再作为拦截依据，
+	//    因为 Windows 用户的本地路径不可能匹配 /tmp 这类 Unix 前缀，强制校验
+	//    反而让 CLI 文件传输完全不可用。
 
 	// 3. 检查拒绝路径（优先级最高）
 	for _, denied := range matchedPolicy.DeniedPaths {

@@ -25,7 +25,7 @@ func cmdDiagnose(args []string) int {
 	}
 
 	env := loadCLIEnv()
-	aiSvc, err := newAIService()
+	aiSvc, err := newAIService(env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "初始化 AI 服务失败: %v\n", err)
 		return 1
