@@ -746,7 +746,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             </div>
                             <div style={styles.settingDescription}>
                                 <strong>命令白名单</strong>：按服务器 IP 粒度限制 AI 可执行的命令；
-                                <strong>文件访问控制</strong>：限制 AI 可读写的远程路径和本地落地目录。
+                                <strong>文件访问控制</strong>：限制 AI 可读写的远程路径和文件大小。
                             </div>
                         </div>
                     </div>

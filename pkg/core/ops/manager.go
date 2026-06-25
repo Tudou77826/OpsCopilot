@@ -111,9 +111,7 @@ func NewManager(config *Config) (*Manager, error) {
 	}
 	fileChecker, err := security.NewFileAccessChecker(fileAccessPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ops] Warning: Failed to load file access config: %v, using defaults\n", err)
-		fileChecker, _ = security.NewFileAccessChecker("")
-		_ = fileChecker.UpdateConfig(security.DefaultFileAccessConfig())
+		return nil, fmt.Errorf("加载文件访问配置失败: %w", err)
 	}
 	m.fileChecker = fileChecker
 

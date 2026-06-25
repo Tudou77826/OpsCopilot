@@ -74,7 +74,6 @@ const FileAccessPanel: React.FC = () => {
       read_paths: [],
       write_paths: [],
       denied_paths: [],
-      allowed_local_dirs: ['/tmp/opscopilot-mcp/'],
       max_read_bytes: 10 * 1024 * 1024,
       max_write_bytes: 5 * 1024 * 1024,
     };
@@ -150,8 +149,6 @@ const FileAccessPanel: React.FC = () => {
                     <span>拒绝: {policy.denied_paths.length}</span>
                   </div>
                   <div style={styles.policyMetaSecondary}>
-                    <span>本地目录: {policy.allowed_local_dirs.join(', ')}</span>
-                    <span style={styles.metaSeparator}>|</span>
                     <span>下载上限: {formatBytes(policy.max_read_bytes)}</span>
                     <span style={styles.metaSeparator}>|</span>
                     <span>上传上限: {formatBytes(policy.max_write_bytes)}</span>
@@ -269,15 +266,14 @@ const FileAccessPolicyEditor: React.FC<{
   const [newReadPath, setNewReadPath] = useState('');
   const [newWritePath, setNewWritePath] = useState('');
   const [newDeniedPath, setNewDeniedPath] = useState('');
-  const [newLocalDir, setNewLocalDir] = useState('');
 
-  const addTag = (field: keyof Pick<FileAccessPolicy, 'ip_ranges' | 'read_paths' | 'write_paths' | 'denied_paths' | 'allowed_local_dirs'>, value: string, setter: (v: string) => void) => {
+  const addTag = (field: keyof Pick<FileAccessPolicy, 'ip_ranges' | 'read_paths' | 'write_paths' | 'denied_paths'>, value: string, setter: (v: string) => void) => {
     if (!value.trim()) return;
     setEditing({ ...editing, [field]: [...editing[field], value.trim()] });
     setter('');
   };
 
-  const removeTag = (field: keyof Pick<FileAccessPolicy, 'ip_ranges' | 'read_paths' | 'write_paths' | 'denied_paths' | 'allowed_local_dirs'>, index: number) => {
+  const removeTag = (field: keyof Pick<FileAccessPolicy, 'ip_ranges' | 'read_paths' | 'write_paths' | 'denied_paths'>, index: number) => {
     setEditing({
       ...editing,
       [field]: (editing[field] as string[]).filter((_, i) => i !== index),
@@ -318,7 +314,8 @@ const FileAccessPolicyEditor: React.FC<{
           {/* 读取路径 */}
           <TagEditor
             label="读取路径"
-            hint="允许下载的远程路径前缀"
+            hint="远程路径前缀，不是正则；填写 /tmp/ 可匹配 /tmp/a.log 和 /tmp/app/a.log"
+            helpText={'按规范化后的远程绝对路径做前缀匹配，不支持正则。示例：/tmp/ 可以匹配 /tmp/a.log、/tmp/app/a.log，不会匹配 /tmp2/a.log。/tmp/.* 会被当成普通目录名，不会匹配 /tmp/a.log。'}
             tags={editing.read_paths}
             newValue={newReadPath}
             onNewValueChange={setNewReadPath}
@@ -330,7 +327,8 @@ const FileAccessPolicyEditor: React.FC<{
           {/* 写入路径 */}
           <TagEditor
             label="写入路径"
-            hint="允许上传的远程路径前缀（默认为空，需显式配置）"
+            hint="远程路径前缀，不是正则；默认为空，需显式配置"
+            helpText={'按规范化后的远程绝对路径做前缀匹配，不支持正则。示例：/tmp/ 允许上传到 /tmp/fix.sh、/tmp/app/config.yml，不允许 /tmp2/fix.sh。'}
             tags={editing.write_paths}
             newValue={newWritePath}
             onNewValueChange={setNewWritePath}
@@ -344,7 +342,8 @@ const FileAccessPolicyEditor: React.FC<{
           {/* 拒绝路径 */}
           <TagEditor
             label="拒绝路径"
-            hint="即使读取路径匹配也拒绝的路径（优先级最高）"
+            hint="优先级最高；支持简单 * 通配，不是完整正则"
+            helpText={'拒绝路径先于读取/写入路径生效。支持简单 * 通配，例如 /home/*/.ssh/id_*；不支持正则语法。目录前缀如 /etc/ssh/ 会拒绝其下所有文件。'}
             tags={editing.denied_paths}
             newValue={newDeniedPath}
             onNewValueChange={setNewDeniedPath}
@@ -353,18 +352,6 @@ const FileAccessPolicyEditor: React.FC<{
             placeholder="/etc/shadow"
             tagColor="#3a2020"
             tagTextColor="#f06060"
-          />
-
-          {/* 本地目录 */}
-          <TagEditor
-            label="允许的本地目录"
-            hint="Agent 文件操作只能在这些目录内进行"
-            tags={editing.allowed_local_dirs}
-            newValue={newLocalDir}
-            onNewValueChange={setNewLocalDir}
-            onAdd={(v) => addTag('allowed_local_dirs', v, setNewLocalDir)}
-            onRemove={(i) => removeTag('allowed_local_dirs', i)}
-            placeholder="/tmp/opscopilot-mcp/"
           />
 
           {/* 大小限制 */}
@@ -421,9 +408,17 @@ const TagEditor: React.FC<{
   placeholder?: string;
   tagColor?: string;
   tagTextColor?: string;
-}> = ({ label, hint, tags, newValue, onNewValueChange, onAdd, onRemove, placeholder, tagColor, tagTextColor }) => (
+  helpText?: string;
+}> = ({ label, hint, tags, newValue, onNewValueChange, onAdd, onRemove, placeholder, tagColor, tagTextColor, helpText }) => (
   <div style={editorStyles.field}>
-    <label style={editorStyles.label}>{label}</label>
+    <div style={editorStyles.labelRow}>
+      <label style={editorStyles.label}>{label}</label>
+      {helpText && (
+        <button type="button" title={helpText} aria-label={`${label}规则说明`} style={editorStyles.helpBtn}>
+          ?
+        </button>
+      )}
+    </div>
     <div style={editorStyles.hint}>{hint}</div>
     <div style={editorStyles.inputRow}>
       <input
@@ -710,6 +705,24 @@ const editorStyles: Record<string, React.CSSProperties> = {
     color: '#ccc',
     fontSize: '13px',
     fontWeight: 500,
+  },
+  labelRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+  },
+  helpBtn: {
+    width: '16px',
+    height: '16px',
+    borderRadius: '50%',
+    border: '1px solid #4a4a4a',
+    backgroundColor: '#2d2d30',
+    color: '#aaa',
+    cursor: 'help',
+    fontSize: '11px',
+    lineHeight: '14px',
+    padding: 0,
+    textAlign: 'center',
   },
   hint: {
     color: '#888',

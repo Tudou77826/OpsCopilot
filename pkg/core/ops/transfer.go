@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -105,6 +106,15 @@ func (m *Manager) Download(serverName, remotePath string, opts DownloadOptions) 
 		}
 	}
 
+	// === 安全闸门：文件访问校验（不可绕过）===
+	if err := m.fileChecker.Reload(); err != nil {
+		return nil, fmt.Errorf("加载文件访问配置失败: %w", err)
+	}
+	checkResult := m.fileChecker.CheckRead(remotePath, localPath, conn.Host, 0)
+	if !checkResult.Allowed {
+		return nil, fmt.Errorf("%s", checkResult.Reason)
+	}
+
 	sftpClient, err := m.ensureSFTP(conn)
 	if err != nil {
 		return nil, err
@@ -120,8 +130,7 @@ func (m *Manager) Download(serverName, remotePath string, opts DownloadOptions) 
 
 	fileSize := stat.Size()
 
-	// === 安全闸门：文件访问校验（不可绕过）===
-	checkResult := m.fileChecker.CheckRead(remotePath, localPath, conn.Host, fileSize)
+	checkResult = m.fileChecker.CheckRead(remotePath, localPath, conn.Host, fileSize)
 	if !checkResult.Allowed {
 		return nil, fmt.Errorf("%s", checkResult.Reason)
 	}
@@ -142,14 +151,11 @@ func (m *Manager) Download(serverName, remotePath string, opts DownloadOptions) 
 	}
 
 	// 创建本地目录
-	localDir := localPath
-	if idx := strings.LastIndex(localPath, "/"); idx > 0 {
-		localDir = localPath[:idx]
-	} else if idx := strings.LastIndex(localPath, "\\"); idx > 0 {
-		localDir = localPath[:idx]
-	}
-	if err := os.MkdirAll(localDir, 0755); err != nil {
-		return nil, fmt.Errorf("创建本地目录失败: %w", err)
+	localDir := filepath.Dir(localPath)
+	if localDir != "." && localDir != "" {
+		if err := os.MkdirAll(localDir, 0755); err != nil {
+			return nil, fmt.Errorf("创建本地目录失败: %w", err)
+		}
 	}
 
 	remoteFile, err := sftpClient.Open(remotePath)
@@ -233,6 +239,15 @@ func (m *Manager) Upload(serverName, remotePath string, opts UploadOptions) (*Up
 		}
 	}
 
+	// === 安全闸门：文件访问校验（不可绕过）===
+	if err := m.fileChecker.Reload(); err != nil {
+		return nil, fmt.Errorf("加载文件访问配置失败: %w", err)
+	}
+	checkResult := m.fileChecker.CheckWrite(remotePath, localPath, conn.Host, 0)
+	if !checkResult.Allowed {
+		return nil, fmt.Errorf("%s", checkResult.Reason)
+	}
+
 	localInfo, err := os.Stat(localPath)
 	if err != nil {
 		return nil, fmt.Errorf("本地文件不存在: %w", err)
@@ -242,9 +257,7 @@ func (m *Manager) Upload(serverName, remotePath string, opts UploadOptions) (*Up
 	}
 	fileSize := localInfo.Size()
 
-	// === 安全闸门：文件访问校验（不可绕过）===
-	_ = m.fileChecker.Reload()
-	checkResult := m.fileChecker.CheckWrite(remotePath, localPath, conn.Host, fileSize)
+	checkResult = m.fileChecker.CheckWrite(remotePath, localPath, conn.Host, fileSize)
 	if !checkResult.Allowed {
 		return nil, fmt.Errorf("%s", checkResult.Reason)
 	}

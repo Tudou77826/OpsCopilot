@@ -1,7 +1,9 @@
 package security
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -48,8 +50,17 @@ func NewFileAccessChecker(configPath string) (*FileAccessChecker, error) {
 	}
 
 	if err := checker.load(); err != nil {
+		if configPath == "" {
+			checker.config = DefaultFileAccessConfig()
+			return checker, nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
 		checker.config = DefaultFileAccessConfig()
-		_ = checker.Save()
+		if err := checker.Save(); err != nil {
+			return nil, err
+		}
 	}
 
 	return checker, nil
@@ -60,10 +71,11 @@ func (c *FileAccessChecker) load() error {
 	data, err := os.ReadFile(c.configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("配置文件不存在")
+			return fmt.Errorf("配置文件不存在: %w", err)
 		}
 		return fmt.Errorf("读取配置文件失败: %w", err)
 	}
+	data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
 
 	var config FileAccessConfig
 	if err := json.Unmarshal(data, &config); err != nil {
@@ -136,6 +148,20 @@ func (c *FileAccessChecker) CheckWrite(remotePath string, localPath string, serv
 
 // checkAccess 统一的访问检查逻辑
 func (c *FileAccessChecker) checkAccess(remotePath string, localPath string, serverIP string, fileSize int64, mode string) FileAccessCheckResult {
+	normalizedRemotePath := unixPathClean(remotePath)
+	if normalizedRemotePath == "" {
+		return FileAccessCheckResult{
+			Allowed: false,
+			Reason:  "远程路径不能为空",
+		}
+	}
+	if !strings.HasPrefix(normalizedRemotePath, "/") {
+		return FileAccessCheckResult{
+			Allowed: false,
+			Reason:  fmt.Sprintf("远程路径必须是绝对路径（以 / 开头），当前路径: %s", remotePath),
+		}
+	}
+
 	// 1. 查找匹配的策略
 	var matchedPolicy *FileAccessPolicy
 	for i := range c.config.Policies {
@@ -160,41 +186,41 @@ func (c *FileAccessChecker) checkAccess(remotePath string, localPath string, ser
 
 	// 3. 检查拒绝路径（优先级最高）
 	for _, denied := range matchedPolicy.DeniedPaths {
-		if pathMatches(remotePath, denied) {
+		if pathMatches(normalizedRemotePath, denied) {
 			return FileAccessCheckResult{
 				Allowed: false,
-				Reason:  fmt.Sprintf("远程路径 %s 在拒绝列表中（拒绝规则: %s）", remotePath, denied),
+				Reason:  fmt.Sprintf("文件访问被拒绝: 远程路径在拒绝列表中，%s 命中拒绝规则 %q（策略: %s，规范化路径: %s）", remotePath, denied, matchedPolicy.Name, normalizedRemotePath),
 			}
 		}
 	}
 
 	// 4. 检查远程路径前缀
 	if mode == "read" {
-		if !isPathAllowed(remotePath, matchedPolicy.ReadPaths) {
+		if !isPathAllowed(normalizedRemotePath, matchedPolicy.ReadPaths) {
 			return FileAccessCheckResult{
 				Allowed: false,
-				Reason:  fmt.Sprintf("远程路径 %s 不在允许读取的路径中", remotePath),
+				Reason:  fmt.Sprintf("文件访问被拒绝: 远程路径不在允许读取的路径中（路径: %s，规范化路径: %s，策略: %s，允许读取: %s）", remotePath, normalizedRemotePath, matchedPolicy.Name, formatPathList(matchedPolicy.ReadPaths)),
 			}
 		}
 		// 5. 检查文件大小
 		if matchedPolicy.MaxReadBytes > 0 && fileSize > int64(matchedPolicy.MaxReadBytes) {
 			return FileAccessCheckResult{
 				Allowed: false,
-				Reason:  fmt.Sprintf("文件大小 %d 字节超过下载上限 %d 字节", fileSize, matchedPolicy.MaxReadBytes),
+				Reason:  fmt.Sprintf("文件访问被拒绝: 文件大小 %d 字节超过下载上限 %d 字节（策略: %s，路径: %s）", fileSize, matchedPolicy.MaxReadBytes, matchedPolicy.Name, normalizedRemotePath),
 			}
 		}
 	} else {
-		if !isPathAllowed(remotePath, matchedPolicy.WritePaths) {
+		if !isPathAllowed(normalizedRemotePath, matchedPolicy.WritePaths) {
 			return FileAccessCheckResult{
 				Allowed: false,
-				Reason:  fmt.Sprintf("远程路径 %s 不在允许写入的路径中（写入路径需要管理员显式配置）", remotePath),
+				Reason:  fmt.Sprintf("文件访问被拒绝: 远程路径不在允许写入的路径中（路径: %s，规范化路径: %s，策略: %s，允许写入: %s）", remotePath, normalizedRemotePath, matchedPolicy.Name, formatPathList(matchedPolicy.WritePaths)),
 			}
 		}
 		// 5. 检查文件大小
 		if matchedPolicy.MaxWriteBytes > 0 && fileSize > int64(matchedPolicy.MaxWriteBytes) {
 			return FileAccessCheckResult{
 				Allowed: false,
-				Reason:  fmt.Sprintf("文件大小 %d 字节超过上传上限 %d 字节", fileSize, matchedPolicy.MaxWriteBytes),
+				Reason:  fmt.Sprintf("文件访问被拒绝: 文件大小 %d 字节超过上传上限 %d 字节（策略: %s，路径: %s）", fileSize, matchedPolicy.MaxWriteBytes, matchedPolicy.Name, normalizedRemotePath),
 			}
 		}
 	}
@@ -220,6 +246,13 @@ func isPathAllowed(path string, allowedPrefixes []string) bool {
 		}
 	}
 	return false
+}
+
+func formatPathList(paths []string) string {
+	if len(paths) == 0 {
+		return "未配置"
+	}
+	return strings.Join(paths, ", ")
 }
 
 // unixPathClean 清理 Unix 风格路径（不依赖 filepath.Clean，避免 Windows 路径问题）

@@ -8,7 +8,6 @@ export interface FileAccessPolicy {
   read_paths: string[];
   write_paths: string[];
   denied_paths: string[];
-  allowed_local_dirs: string[];
   max_read_bytes: number;
   max_write_bytes: number;
 }
@@ -30,7 +29,6 @@ export const DEFAULT_FILE_ACCESS_CONFIG: FileAccessConfig = {
       read_paths: ['/var/log/', '/etc/', '/tmp/', '/home/', '/opt/', '/srv/'],
       write_paths: [],
       denied_paths: ['/etc/shadow', '/etc/ssh/', '/root/.ssh/', '/home/*/.ssh/id_*'],
-      allowed_local_dirs: ['/tmp/opscopilot-mcp/'],
       max_read_bytes: 10 * 1024 * 1024,
       max_write_bytes: 5 * 1024 * 1024,
     },

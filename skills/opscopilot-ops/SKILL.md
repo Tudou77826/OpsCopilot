@@ -82,7 +82,7 @@ description: 通过 OpsCopilot CLI 连接用户预先配置的远程 Linux 服�
 "{{OPSCOPILOT_BIN}}" file upload --server <服务器IP> --local <本地路径> --remote <远程路径> [--backup] [--mkdir]
 ```
 
-受文件访问控制约束：可读/可写路径、大小上限、本地落地目录均需在 GUI 配置中放行。默认写入路径为空（禁止上传），需用户显式配置。
+受文件访问控制约束：远程可读/可写路径和大小上限均需在 GUI 配置中放行。默认写入路径为空（禁止上传），需用户显式配置。
 
 ## 工作流程建议
 

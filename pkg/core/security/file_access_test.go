@@ -247,6 +247,24 @@ func TestFileAccessChecker_CheckRead(t *testing.T) {
 			wantAllow:  false,
 			wantReason: "不在允许读取的路径中",
 		},
+		{
+			name:       "relative remote path denied",
+			remotePath: "tmp/test.log",
+			localPath:  "/tmp/opscopilot-mcp/test.log",
+			serverIP:   "192.168.1.100",
+			fileSize:   100,
+			wantAllow:  false,
+			wantReason: "必须是绝对路径",
+		},
+		{
+			name:       "normalized path shown in reason",
+			remotePath: "/tmp/../usr/bin/evil",
+			localPath:  "/tmp/opscopilot-mcp/evil",
+			serverIP:   "192.168.1.100",
+			fileSize:   100,
+			wantAllow:  false,
+			wantReason: "规范化路径: /usr/bin/evil",
+		},
 	}
 
 	for _, tt := range tests {
@@ -401,6 +419,18 @@ func TestFileAccessChecker_SaveAndReload(t *testing.T) {
 	cfg2 := checker2.GetConfig()
 	if len(cfg2.Policies[0].WritePaths) != 1 || cfg2.Policies[0].WritePaths[0] != "/tmp/test/" {
 		t.Errorf("Reloaded config WritePaths = %v, want [/tmp/test/]", cfg2.Policies[0].WritePaths)
+	}
+}
+
+func TestFileAccessChecker_InvalidConfigReturnsError(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "file_access.json")
+	if err := os.WriteFile(configPath, []byte(`{"version":"1.0","policies":[{"read_paths":"/tmp/.*"}]}`), 0644); err != nil {
+		t.Fatalf("write invalid config: %v", err)
+	}
+
+	if _, err := NewFileAccessChecker(configPath); err == nil {
+		t.Fatal("NewFileAccessChecker() error = nil, want parse error")
 	}
 }
 
