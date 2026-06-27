@@ -774,6 +774,11 @@ func (a *App) recordInput(sessionID string, data string) {
 		"session_id": sessionID,
 	})
 	if err != nil {
+		// "not recording" 是预期状态：用户未开启故障排查会话时，绝大多数终端输入都不在录制中。
+		// 这不是错误，静默忽略，避免每个按键都刷一条 WARN 日志。
+		if err.Error() == "not recording" {
+			return
+		}
 		slog.Warn("recordInput error recording input", "error", err)
 		return
 	}
