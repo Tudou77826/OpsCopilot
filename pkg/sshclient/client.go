@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -240,10 +241,76 @@ func (c *Client) StartShell(cols, rows int) (*ssh.Session, io.WriteCloser, io.Re
 		return nil, nil, nil, fmt.Errorf("failed to start shell: %w", err)
 	}
 
-	// Combine stdout and stderr for simplicity in this reader
-	combinedReader := io.MultiReader(stdout, stderr)
+	// 并行合并 stdout 与 stderr。
+	// 不能用 io.MultiReader：它是串行的（读完 stdout 到 EOF 才读 stderr），
+	// 而交互式 PTY 下 stdout 永不自然 EOF，会导致 stderr 数据读不到，
+	// 且在流边界返回伪 EOF，被读取循环误判为"远程关闭"（Issue #39）。
+	// 改为并行合并：两路都真正结束时才返回 EOF，匹配 PTY 的真实语义。
+	combinedReader := newMuxReader(stdout, stderr)
 
 	return session, stdin, combinedReader, nil
+}
+
+// muxReader 并发读取多个 io.Reader，把数据汇合到一个流。
+// 仅当所有 reader 都结束时才返回 io.EOF，避免任一路的瞬时无数据导致伪 EOF。
+type muxReader struct {
+	ch chan readResult
+}
+
+type readResult struct {
+	buf []byte
+	err error
+}
+
+// newMuxReader 为给定 readers 启动独立的读取 goroutine，并行汇合输出。
+// 每个 reader 拥有独立 buffer，数据拷贝后再送入 channel，避免并发写冲突。
+func newMuxReader(readers ...io.Reader) *muxReader {
+	m := &muxReader{ch: make(chan readResult)}
+	var wg sync.WaitGroup
+	for _, r := range readers {
+		wg.Add(1)
+		go func(r io.Reader) {
+			defer wg.Done()
+			buf := make([]byte, 32768)
+			for {
+				n, err := r.Read(buf)
+				if n > 0 {
+					// 拷贝一份再发送，避免下一轮 Read 覆盖 buffer
+					cp := make([]byte, n)
+					copy(cp, buf[:n])
+					m.ch <- readResult{buf: cp}
+				}
+				if err != nil {
+					// 任一路结束（含 EOF），该 goroutine 退出；
+					// 不向下游传递错误，避免伪 EOF。
+					return
+				}
+				// n==0 且 err==nil：流暂时无数据，短暂让出 CPU 避免忙循环
+				if n == 0 {
+					time.Sleep(5 * time.Millisecond)
+				}
+			}
+		}(r)
+	}
+	// 所有 reader 结束后关闭 channel，使 Read 返回 io.EOF
+	go func() {
+		wg.Wait()
+		close(m.ch)
+	}()
+	return m
+}
+
+// Read 实现 io.Reader：从汇合 channel 取数据填入 p。
+// 只有当所有上游 reader 都结束（channel 关闭）时才返回 io.EOF。
+func (m *muxReader) Read(p []byte) (int, error) {
+	for res := range m.ch {
+		if len(res.buf) > 0 {
+			return copy(p, res.buf), nil
+		}
+		// 空 buf 的结果会被忽略（goroutine 不会发送此类），继续等下一条
+	}
+	// channel 关闭：所有 reader 都已结束
+	return 0, io.EOF
 }
 
 type SudoHandler struct {
