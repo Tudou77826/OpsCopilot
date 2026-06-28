@@ -45,6 +45,7 @@ interface SettingsModalProps {
     onToggleBroadcast?: (enabled: boolean) => void;
     onCompletionDelayChange?: (delay: number) => void;
     onHighlightRulesChange?: (rules: HighlightRule[]) => void;
+    updateAvailable?: boolean;
 }
 
 interface PatchSyncStatus {
@@ -98,7 +99,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     isBroadcastMode,
     onToggleBroadcast,
     onCompletionDelayChange,
-    onHighlightRulesChange
+    onHighlightRulesChange,
+    updateAvailable
 }) => {
     const [config, setConfig] = useState<AppConfig | null>(null);
     const [loading, setLoading] = useState(false);
@@ -113,6 +115,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const [skillLoading, setSkillLoading] = useState(false);
     const [skillMsg, setSkillMsg] = useState('');
     const [skillState, setSkillState] = useState<'unknown' | 'not_installed' | 'up_to_date' | 'outdated'>('unknown');
+    // skill 是否需要关注（未配置 / 未安装 / 过期）→ 「AI 接入」导航项亮绿点
+    const [skillNeedsAttention, setSkillNeedsAttention] = useState(false);
     const [skillInstalledVer, setSkillInstalledVer] = useState('');
     const [skillBuiltinVer, setSkillBuiltinVer] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
@@ -154,13 +158,38 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             setMsg('');
             setImportDir('');
             setImportMsg('');
-            setSkillDir('');
             setSkillMsg('');
             setSkillState('unknown');
             setSkillInstalledVer('');
             setSkillBuiltinVer('');
             setSearchQuery('');
             setActiveTab('llm');
+
+            // 回填上次使用的 skill 目录，并据此判断「AI 接入」导航项是否需要亮绿点。
+            // 同时写入 skillState/版本号，供 tab 内状态横幅展示准确文案。
+            const savedSkillDir = localStorage.getItem('opscopilot:skillDir') || '';
+            setSkillDir(savedSkillDir);
+            if (!savedSkillDir) {
+                // 从未配置过 skill 目录 → 引导用户去配置/安装，亮绿点
+                setSkillNeedsAttention(true);
+            } else {
+                // 已配置过：静默检测一次，按 state 决定是否亮点
+                // @ts-ignore
+                window.go?.main?.App?.CheckSkillStatus?.(savedSkillDir)
+                    .then((raw: string) => {
+                        const r = raw ? JSON.parse(raw) : {};
+                        if (r.success === false) {
+                            // 检测出错（目录无效等）不误导，不亮
+                            setSkillNeedsAttention(false);
+                            return;
+                        }
+                        setSkillState(r.state || 'unknown');
+                        setSkillInstalledVer(r.installed || '');
+                        setSkillBuiltinVer(r.builtin || '');
+                        setSkillNeedsAttention(r.state !== 'up_to_date');
+                    })
+                    .catch(() => setSkillNeedsAttention(false));
+            }
         }
     }, [isOpen]);
 
@@ -423,10 +452,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             if (r.success === false) {
                 setSkillMsg(r.error || '检测失败');
                 setSkillState('unknown');
+                setSkillNeedsAttention(false);
             } else {
+                // 记住这次使用的目录，下次打开面板时自动回填并检测
+                localStorage.setItem('opscopilot:skillDir', dir);
                 setSkillInstalledVer(r.installed || '');
                 setSkillBuiltinVer(r.builtin || '');
                 setSkillState(r.state || 'unknown');
+                // 同步导航 badge：非 up_to_date（未安装/过期）则亮绿点
+                setSkillNeedsAttention(r.state !== 'up_to_date');
                 if (r.state === 'not_installed') {
                     setSkillMsg('该目录下尚未安装 OpsCopilot skill');
                 } else if (r.state === 'up_to_date') {
@@ -473,6 +507,38 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     };
 
     if (!isOpen || !config) return null;
+
+    // AI 接入 tab 顶部的状态横幅：当 skill 需要关注时（未配置/未安装/过期），
+    // 明确告诉用户「绿点是因为什么 + 下一步该干嘛」，避免点开 tab 后不知所措。
+    const renderSkillAttentionBanner = () => {
+        let message = '';
+        let tone: 'warning' | 'accent' = 'accent';
+        if (!skillDir) {
+            message = '尚未配置 skill 安装目录，AI Agent 暂时无法调用 OpsCopilot。请在下方填写目录后点击「检测状态」。';
+            tone = 'warning';
+        } else if (skillState === 'not_installed') {
+            message = `目录「${skillDir}」下尚未安装 OpsCopilot skill，请点击下方「安装」。`;
+            tone = 'warning';
+        } else if (skillState === 'outdated') {
+            const ver = skillInstalledVer && skillBuiltinVer
+                ? `（v${skillInstalledVer} → v${skillBuiltinVer}）`
+                : '';
+            message = `已安装的 skill 有新版本可更新${ver}，建议点击下方「更新」。`;
+            tone = 'accent';
+        }
+        if (!message) return null;
+
+        const color = tone === 'warning' ? colors.warning : colors.accent;
+        return (
+            <div style={{
+                ...styles.attentionBanner,
+                borderLeftColor: color,
+            }}>
+                <span style={{ color }}>{TbInfoCircle({ size: 16 })}</span>
+                <span style={styles.attentionText}>{message}</span>
+            </div>
+        );
+    };
 
     // Render tab content
     const renderTabContent = () => {
@@ -676,6 +742,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             case 'aiagent':
                 return (
                     <div style={styles.settingsGroup}>
+                        {renderSkillAttentionBanner()}
                         <div style={styles.groupTitle}>Skill 安装</div>
                         <div style={styles.settingItem}>
                             <label style={styles.settingLabel}>安装 Skill 到 AI Agent</label>
@@ -887,6 +954,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                     >
                                         <span style={styles.navIcon}>{item.icon}</span>
                                         <span style={styles.navText}>{item.label}</span>
+                                        {((item.id === 'about' && updateAvailable) ||
+                                            (item.id === 'aiagent' && skillNeedsAttention)) && (
+                                            <span style={styles.navBadge} />
+                                        )}
                                     </div>
                                 ))
                             ) : (
@@ -1038,6 +1109,7 @@ const styles = {
         overflowY: 'auto' as const,
     },
     navItem: {
+        position: 'relative' as const,
         display: 'flex',
         alignItems: 'center',
         gap: '12px',
@@ -1066,6 +1138,36 @@ const styles = {
         flexShrink: 0,
     },
     navText: {
+        flex: 1,
+    },
+    // 导航项右侧的更新提示绿点，样式与设置按钮齿轮上的点一致
+    navBadge: {
+        position: 'absolute' as const,
+        right: '12px',
+        top: '50%',
+        transform: 'translateY(-50%)',
+        width: '8px',
+        height: '8px',
+        borderRadius: '50%',
+        backgroundColor: '#4caf50',
+        border: '1px solid #1e1e1e',
+        flexShrink: 0,
+    },
+    // tab 顶部状态横幅：左竖边框 + 浅底，醒目但不突兀
+    attentionBanner: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '10px',
+        padding: '10px 12px',
+        borderRadius: radius.sm,
+        backgroundColor: colors.bgPrimary,
+        border: `1px solid ${colors.borderPrimary}`,
+        borderLeft: '3px solid',
+    },
+    attentionText: {
+        color: colors.textSecondary,
+        fontSize: font.sm,
+        lineHeight: 1.6,
         flex: 1,
     },
     noResults: {

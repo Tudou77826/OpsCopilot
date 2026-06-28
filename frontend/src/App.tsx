@@ -776,6 +776,7 @@ function App() {
                 onToggleBroadcast={handleToggleBroadcast}
                 onCompletionDelayChange={setCompletionDelay}
                 onHighlightRulesChange={setHighlightRules}
+                updateAvailable={updateAvailable}
             />
 
             <ConfirmCloseModal
