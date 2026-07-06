@@ -906,6 +906,9 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             fontWeightBold: '700',
             theme: {
                 background: '#1e1e1e',
+                // 双击选词/拖选选区背景色，沿用 VS Code 深色主题的深蓝，避免默认半透明色在深背景下不显眼（#43）
+                selectionBackground: '#264f78',
+                selectionInactiveBackground: '#1e3a5f',
             },
             // 扩展分隔符：加入终端常见分隔符 /:=| 等
             // 但不加 . 和 _，这样 sopuesr.iii_yuyu、my_var 等标识符保持为整体
