@@ -174,6 +174,10 @@ export function GetQuickCommandGroups() {
   return window['go']['main']['App']['GetQuickCommandGroups']();
 }
 
+export function GetReleaseHistory() {
+  return window['go']['main']['App']['GetReleaseHistory']();
+}
+
 export function GetSavedSessions() {
   return window['go']['main']['App']['GetSavedSessions']();
 }

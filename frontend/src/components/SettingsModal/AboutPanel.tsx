@@ -10,6 +10,19 @@ interface ReleaseInfo {
     html_url: string;
 }
 
+interface ReleaseHistoryItem {
+    tag_name: string;
+    name: string;
+    body: string;
+    html_url: string;
+    published_at: string;
+}
+
+interface ReleaseHistoryResponse {
+    releases?: ReleaseHistoryItem[];
+    error?: string;
+}
+
 interface UpdateStatus {
     hasUpdate: boolean;
     currentVersion: string;
@@ -53,6 +66,9 @@ const AboutPanel: React.FC = () => {
     const [errorMsg, setErrorMsg] = useState('');
     const [skippedVersions, setSkippedVersions] = useState<string[]>([]);
     const [progress, setProgress] = useState<DownloadProgress>({ bytesDownloaded: 0, bytesTotal: 0, percentage: 0, speedBps: 0 });
+    const [releaseHistory, setReleaseHistory] = useState<ReleaseHistoryItem[]>([]);
+    const [historyState, setHistoryState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
+    const [historyError, setHistoryError] = useState('');
 
     useEffect(() => {
         const loadVersion = async () => {
@@ -97,6 +113,38 @@ const AboutPanel: React.FC = () => {
             setErrorMsg(friendlyError(e.toString()));
         }
     }, []);
+
+    const handleLoadReleases = useCallback(async () => {
+        setHistoryState('loading');
+        setHistoryError('');
+        try {
+            // @ts-ignore
+            const raw = await window.go?.main?.App?.GetReleaseHistory?.();
+            if (!raw) {
+                setHistoryState('error');
+                setHistoryError('未收到响应');
+                return;
+            }
+            const resp: ReleaseHistoryResponse = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            if (resp.error) {
+                setHistoryState('error');
+                setHistoryError(friendlyError(resp.error));
+                return;
+            }
+            setReleaseHistory(resp.releases || []);
+            setHistoryState('loaded');
+        } catch (e: any) {
+            setHistoryState('error');
+            setHistoryError(friendlyError(e.toString()));
+        }
+    }, []);
+
+    const formatDate = (iso: string) => {
+        if (!iso) return '';
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return iso;
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
 
     const handleUpdate = useCallback(async () => {
         if (!downloadURL) return;
@@ -266,6 +314,62 @@ const AboutPanel: React.FC = () => {
                 )}
             </div>
 
+            {/* Release history section — independent of the update flow, lazy-loaded */}
+            <div style={styles.divider} />
+            <div style={styles.section}>
+                <div style={styles.sectionHeader}>
+                    <div style={styles.sectionTitle}>版本日志</div>
+                    {historyState !== 'loading' && (
+                        <button style={styles.secondaryBtn} onClick={handleLoadReleases}>
+                            {historyState === 'loaded' ? '刷新' : '查看版本日志'}
+                        </button>
+                    )}
+                </div>
+
+                {historyState === 'loading' && (
+                    <div style={styles.checkingRow}>
+                        <div style={styles.loadingSpinner} />
+                        <span style={styles.checkingText}>正在加载版本日志...</span>
+                    </div>
+                )}
+
+                {historyState === 'error' && (
+                    <div style={styles.resultBox}>
+                        <div style={styles.errorMsg}>{historyError}</div>
+                        <button style={styles.secondaryBtn} onClick={handleLoadReleases}>
+                            重试
+                        </button>
+                    </div>
+                )}
+
+                {historyState === 'loaded' && releaseHistory.length === 0 && (
+                    <div style={styles.emptyHint}>暂无版本记录</div>
+                )}
+
+                {historyState === 'loaded' && releaseHistory.length > 0 && (
+                    <div style={styles.releaseList}>
+                        {releaseHistory.map((r) => {
+                            const ver = r.tag_name.startsWith('v') ? r.tag_name.slice(1) : r.tag_name;
+                            const isCurrent = currentVersion && (currentVersion.startsWith('v') ? currentVersion.slice(1) : currentVersion) === ver;
+                            return (
+                                <div key={r.tag_name} style={styles.releaseCard}>
+                                    <div style={styles.releaseHeader}>
+                                        <span style={styles.releaseTag}>{r.tag_name}</span>
+                                        {isCurrent && <span style={styles.currentBadge}>当前版本</span>}
+                                        <span style={styles.releaseDate}>{formatDate(r.published_at)}</span>
+                                    </div>
+                                    {r.body && (
+                                        <div style={styles.releaseBody}>
+                                            <ReactMarkdown>{r.body}</ReactMarkdown>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+
             {/* Footer */}
             <div style={styles.footer}>
                 Made with dedication for Ops teams
@@ -364,6 +468,60 @@ const styles: Record<string, React.CSSProperties> = {
         color: colors.textPrimary,
         fontSize: font.base,
         fontWeight: 600,
+    },
+    sectionHeader: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '8px',
+    },
+    emptyHint: {
+        color: colors.textMuted,
+        fontSize: font.sm,
+    },
+    releaseList: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        maxHeight: '420px',
+        overflowY: 'auto',
+        paddingRight: '4px',
+    },
+    releaseCard: {
+        backgroundColor: colors.bgPrimary,
+        border: `1px solid ${colors.borderPrimary}`,
+        borderRadius: radius.md,
+        padding: '10px 12px',
+    },
+    releaseHeader: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        marginBottom: '6px',
+    },
+    releaseTag: {
+        color: colors.accent,
+        fontSize: font.sm,
+        fontWeight: 600,
+        fontFamily: 'monospace',
+    },
+    currentBadge: {
+        color: colors.textPrimary,
+        fontSize: font.xs,
+        backgroundColor: colors.accent,
+        padding: '1px 6px',
+        borderRadius: '4px',
+        fontWeight: 600,
+    },
+    releaseDate: {
+        color: colors.textMuted,
+        fontSize: font.xs,
+        marginLeft: 'auto',
+    },
+    releaseBody: {
+        color: colors.textSecondary,
+        fontSize: font.sm,
+        lineHeight: 1.6,
     },
     checkBtn: {
         padding: '8px 16px',

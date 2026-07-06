@@ -94,6 +94,8 @@ export function GetPoliciesForIP(arg1:string):Promise<Array<security.Policy>>;
 
 export function GetQuickCommandGroups():Promise<Array<string>>;
 
+export function GetReleaseHistory():Promise<string>;
+
 export function GetSavedSessions():Promise<Array<sessionmanager.Session>>;
 
 export function GetScriptList():Promise<Array<script.Script>>;

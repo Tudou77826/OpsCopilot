@@ -354,6 +354,23 @@ func (a *App) GetVersion() string {
 	return Version
 }
 
+// GetReleaseHistory fetches published releases for the About panel's version log.
+// Returns JSON with a "releases" array (newest first) or an "error" field on failure.
+func (a *App) GetReleaseHistory() string {
+	releases, err := updater.FetchReleaseHistory()
+	if err != nil {
+		slog.Warn("fetch release history failed", "error", err)
+		result, _ := json.Marshal(map[string]interface{}{
+			"error": err.Error(),
+		})
+		return string(result)
+	}
+	result, _ := json.Marshal(map[string]interface{}{
+		"releases": releases,
+	})
+	return string(result)
+}
+
 // CheckUpdate checks GitHub for the latest release and returns update status as JSON.
 func (a *App) CheckUpdate() string {
 	status, err := updater.CheckForUpdate(Version)

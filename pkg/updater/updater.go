@@ -234,6 +234,21 @@ func DownloadAndExtract(downloadURL string, tempDir string, progressFn func(Down
 	return tempDir, nil
 }
 
+// FetchReleaseHistory fetches published releases for display in the About panel's
+// version log. Returns up to 20 entries (newest first), independent of the update
+// flow so users can browse past release notes at any time (issue #44).
+func FetchReleaseHistory() ([]ReleaseInfo, error) {
+	releases, err := fetchAllReleases()
+	if err != nil {
+		return nil, err
+	}
+	// GitHub already returns newest first; cap to a reasonable number for browsing.
+	if len(releases) > 20 {
+		releases = releases[:20]
+	}
+	return releases, nil
+}
+
 // fetchLatestRelease calls the GitHub API to get the latest release.
 func fetchLatestRelease() (*ReleaseInfo, error) {
 	client := newHTTPClient(15 * time.Second)
