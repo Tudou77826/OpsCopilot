@@ -361,9 +361,6 @@ const AboutPanel: React.FC = () => {
                                             <button style={styles.updateBtn} onClick={handleUpdate} disabled={updateState !== 'available'}>
                                                 立即更新
                                             </button>
-                                            <button style={styles.ghostBtn} onClick={() => setUpdateState('idle')}>
-                                                稍后
-                                            </button>
                                         </div>
                                     )}
                                 </div>
