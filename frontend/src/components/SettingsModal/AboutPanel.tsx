@@ -57,6 +57,12 @@ const friendlyError = (raw: string): string => {
     return '检查更新失败，请稍后再试';
 };
 
+const releaseAccentBar = (isCurrent: boolean, isNew: boolean): React.CSSProperties => ({
+    width: '3px',
+    flexShrink: 0,
+    backgroundColor: isCurrent ? colors.success : (isNew ? colors.accent : 'transparent'),
+});
+
 const AboutPanel: React.FC = () => {
     const [currentVersion, setCurrentVersion] = useState('...');
     const [updateState, setUpdateState] = useState<UpdateState>('idle');
@@ -138,6 +144,13 @@ const AboutPanel: React.FC = () => {
             setHistoryError(friendlyError(e.toString()));
         }
     }, []);
+
+    const handleCheckAndLoad = useCallback(() => {
+        handleCheck();
+        if (historyState === 'idle') {
+            handleLoadReleases();
+        }
+    }, [handleCheck, handleLoadReleases, historyState]);
 
     const formatDate = (iso: string) => {
         if (!iso) return '';
@@ -228,68 +241,34 @@ const AboutPanel: React.FC = () => {
 
             <div style={styles.divider} />
 
-            {/* Update section */}
+            {/* 版本与更新（一体化）：更新状态 + 版本日志列表合并展示 */}
             <div style={styles.section}>
-                <div style={styles.sectionTitle}>更新</div>
+                <div style={styles.sectionHeader}>
+                    <div style={styles.sectionTitle}>版本与更新</div>
+                    {(updateState === 'idle' || updateState === 'no-update' || updateState === 'available') && (
+                        <button style={styles.ghostBtn} onClick={handleCheckAndLoad} disabled={historyState === 'loading'}>
+                            {updateState === 'idle' ? '检查更新' : '重新检查'}
+                        </button>
+                    )}
+                </div>
 
-                {updateState === 'idle' && (
-                    <button style={styles.checkBtn} onClick={handleCheck}>
-                        检查更新
-                    </button>
-                )}
+                {/* 更新执行中状态：下载/就绪/错误 —— 作为列表上方的紧凑横幅 */}
                 {updateState === 'checking' && (
-                    <div style={styles.checkingRow}>
+                    <div style={styles.statusBanner}>
                         <div style={styles.loadingSpinner} />
                         <span style={styles.checkingText}>正在检查...</span>
                     </div>
                 )}
-
                 {updateState === 'no-update' && (
-                    <div style={styles.resultBox}>
-                        <div style={styles.upToDate}>已是最新版本 ({latestVersion})</div>
-                        <button style={styles.secondaryBtn} onClick={() => setUpdateState('idle')}>
-                            重新检查
-                        </button>
-                    </div>
+                    <div style={styles.statusBannerOk}>已是最新版本 ({latestVersion})</div>
                 )}
-
-                {updateState === 'available' && (
-                    <div style={styles.resultBox}>
-                        <div style={styles.newVersion}>发现新版本: {latestVersion}</div>
-                        {skippedVersions.length > 0 && (
-                            <div style={styles.skippedHint}>
-                                包含 {skippedVersions.length + 1} 个版本的更新: {latestVersion}, {skippedVersions.slice(0, 2).join(', ')}{skippedVersions.length > 2 ? ' ...' : ''}
-                            </div>
-                        )}
-                        {changelog && (
-                            <div style={styles.changelogBox}>
-                                <div style={styles.changelogTitle}>更新内容</div>
-                                <div style={styles.changelogBody}>
-                                    <ReactMarkdown>{changelog}</ReactMarkdown>
-                                </div>
-                            </div>
-                        )}
-                        <div style={styles.btnRow}>
-                            <button style={styles.updateBtn} onClick={handleUpdate}>
-                                立即更新
-                            </button>
-                            <button style={styles.secondaryBtn} onClick={() => setUpdateState('idle')}>
-                                稍后再说
-                            </button>
-                        </div>
-                    </div>
-                )}
-
                 {updateState === 'downloading' && (
-                    <div style={styles.resultBox}>
+                    <div style={styles.statusBanner}>
                         <div style={styles.progressLabel}>
                             {progress.percentage >= 100 ? '下载完成，正在准备安装...' : '正在下载更新...'}
                         </div>
                         <div style={styles.progressBarBg}>
-                            <div style={{
-                                ...styles.progressBarFill,
-                                width: `${Math.min(progress.percentage, 100)}%`,
-                            }} />
+                            <div style={{ ...styles.progressBarFill, width: `${Math.min(progress.percentage, 100)}%` }} />
                         </div>
                         <div style={styles.progressInfo}>
                             <span>{formatBytes(progress.bytesDownloaded)} / {formatBytes(progress.bytesTotal)}</span>
@@ -297,72 +276,72 @@ const AboutPanel: React.FC = () => {
                         </div>
                     </div>
                 )}
-
                 {updateState === 'ready' && (
-                    <div style={styles.resultBox}>
-                        <div style={styles.readyMsg}>下载完成，正在重启应用...</div>
-                    </div>
+                    <div style={styles.statusBannerOk}>下载完成，正在重启应用...</div>
                 )}
-
                 {updateState === 'error' && (
-                    <div style={styles.resultBox}>
-                        <div style={styles.errorMsg}>{errorMsg}</div>
-                        <button style={styles.secondaryBtn} onClick={handleCheck}>
-                            重试
-                        </button>
+                    <div style={styles.statusBannerError}>
+                        <span>{errorMsg}</span>
+                        <button style={styles.linkBtn} onClick={handleCheck}>重试</button>
                     </div>
                 )}
-            </div>
 
-            {/* Release history section — independent of the update flow, lazy-loaded */}
-            <div style={styles.divider} />
-            <div style={styles.section}>
-                <div style={styles.sectionHeader}>
-                    <div style={styles.sectionTitle}>版本日志</div>
-                    {historyState !== 'loading' && (
-                        <button style={styles.secondaryBtn} onClick={handleLoadReleases}>
-                            {historyState === 'loaded' ? '刷新' : '查看版本日志'}
-                        </button>
-                    )}
-                </div>
-
-                {historyState === 'loading' && (
-                    <div style={styles.checkingRow}>
+                {/* 版本日志列表 loading */}
+                {historyState === 'loading' && updateState !== 'checking' && (
+                    <div style={styles.statusBanner}>
                         <div style={styles.loadingSpinner} />
                         <span style={styles.checkingText}>正在加载版本日志...</span>
                     </div>
                 )}
-
-                {historyState === 'error' && (
-                    <div style={styles.resultBox}>
-                        <div style={styles.errorMsg}>{historyError}</div>
-                        <button style={styles.secondaryBtn} onClick={handleLoadReleases}>
-                            重试
-                        </button>
+                {historyState === 'error' && updateState !== 'error' && (
+                    <div style={styles.statusBannerError}>
+                        <span>{historyError}</span>
+                        <button style={styles.linkBtn} onClick={handleLoadReleases}>重试</button>
                     </div>
                 )}
-
                 {historyState === 'loaded' && releaseHistory.length === 0 && (
                     <div style={styles.emptyHint}>暂无版本记录</div>
                 )}
 
-                {historyState === 'loaded' && releaseHistory.length > 0 && (
+                {/* 版本日志卡片列表 */}
+                {releaseHistory.length > 0 && (
                     <div style={styles.releaseList}>
                         {releaseHistory.map((r) => {
                             const ver = r.tag_name.startsWith('v') ? r.tag_name.slice(1) : r.tag_name;
-                            const isCurrent = currentVersion && (currentVersion.startsWith('v') ? currentVersion.slice(1) : currentVersion) === ver;
+                            const currentVer = currentVersion.startsWith('v') ? currentVersion.slice(1) : currentVersion;
+                            const isCurrent = !!(currentVersion && currentVer === ver);
+                            const isNew = updateState === 'available' && latestVersion === r.tag_name;
+                            const accentStyle = isCurrent
+                                ? styles.releaseCardCurrent
+                                : isNew
+                                    ? styles.releaseCardNew
+                                    : styles.releaseCardNormal;
                             return (
-                                <div key={r.tag_name} style={styles.releaseCard}>
-                                    <div style={styles.releaseHeader}>
-                                        <span style={styles.releaseTag}>{r.tag_name}</span>
-                                        {isCurrent && <span style={styles.currentBadge}>当前版本</span>}
-                                        <span style={styles.releaseDate}>{formatDate(r.published_at)}</span>
-                                    </div>
-                                    {r.body && (
-                                        <div style={styles.releaseBody}>
-                                            <ReactMarkdown>{r.body}</ReactMarkdown>
+                                <div key={r.tag_name} style={{ ...styles.releaseCard, ...accentStyle }}>
+                                    <div style={releaseAccentBar(isCurrent, isNew)} />
+                                    <div style={styles.releaseContent}>
+                                        <div style={styles.releaseHeader}>
+                                            <span style={styles.releaseTag}>{r.tag_name}</span>
+                                            {isNew && <span style={styles.badgeNew}>新版本</span>}
+                                            {isCurrent && <span style={styles.badgeCurrent}>当前版本</span>}
+                                            <span style={styles.releaseDate}>{formatDate(r.published_at)}</span>
                                         </div>
-                                    )}
+                                        {r.body && (
+                                            <div style={styles.releaseBody}>
+                                                <ReactMarkdown>{r.body}</ReactMarkdown>
+                                            </div>
+                                        )}
+                                        {isNew && (
+                                            <div style={styles.btnRow}>
+                                                <button style={styles.updateBtn} onClick={handleUpdate} disabled={updateState !== 'available'}>
+                                                    立即更新
+                                                </button>
+                                                <button style={styles.ghostBtn} onClick={() => setUpdateState('idle')}>
+                                                    稍后
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             );
                         })}
@@ -474,43 +453,121 @@ const styles: Record<string, React.CSSProperties> = {
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: '8px',
+        marginBottom: '2px',
+    },
+    ghostBtn: {
+        padding: '5px 12px',
+        backgroundColor: 'transparent',
+        color: colors.textTertiary,
+        border: `1px solid ${colors.borderPrimary}`,
+        borderRadius: radius.sm,
+        cursor: 'pointer',
+        fontSize: font.sm,
+        fontWeight: 500,
+    } as React.CSSProperties,
+    linkBtn: {
+        background: 'none',
+        border: 'none',
+        color: colors.accent,
+        cursor: 'pointer',
+        fontSize: font.sm,
+        padding: 0,
+        textDecoration: 'underline',
     },
     emptyHint: {
         color: colors.textMuted,
         fontSize: font.sm,
+        padding: '12px 0',
     },
+    // 状态横幅（更新流程的紧凑展示，不占独立空间）
+    statusBanner: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '6px',
+        padding: '10px 12px',
+        backgroundColor: colors.bgPrimary,
+        borderRadius: radius.md,
+        border: `1px solid ${colors.borderPrimary}`,
+    },
+    statusBannerOk: {
+        padding: '8px 12px',
+        color: colors.success,
+        fontSize: font.sm,
+        backgroundColor: 'rgba(76, 175, 80, 0.08)',
+        borderRadius: radius.md,
+        border: `1px solid rgba(76, 175, 80, 0.25)`,
+    },
+    statusBannerError: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        padding: '8px 12px',
+        color: colors.danger,
+        fontSize: font.sm,
+        backgroundColor: 'rgba(244, 67, 54, 0.08)',
+        borderRadius: radius.md,
+        border: `1px solid rgba(244, 67, 54, 0.25)`,
+    },
+    // 版本日志卡片列表
     releaseList: {
         display: 'flex',
         flexDirection: 'column',
-        gap: '8px',
-        maxHeight: '420px',
+        gap: '10px',
+        maxHeight: '460px',
         overflowY: 'auto',
         paddingRight: '4px',
+        marginTop: '4px',
     },
     releaseCard: {
-        backgroundColor: colors.bgPrimary,
-        border: `1px solid ${colors.borderPrimary}`,
+        display: 'flex',
         borderRadius: radius.md,
-        padding: '10px 12px',
+        overflow: 'hidden',
+        backgroundColor: colors.bgSecondary,
+        border: `1px solid ${colors.borderPrimary}`,
+    },
+    releaseCardNormal: {
+        // 普通（历史）版本卡片
+    },
+    releaseCardCurrent: {
+        borderColor: 'rgba(76, 175, 80, 0.4)',
+        backgroundColor: 'rgba(76, 175, 80, 0.04)',
+    },
+    releaseCardNew: {
+        borderColor: 'rgba(0, 122, 204, 0.5)',
+        backgroundColor: 'rgba(0, 122, 204, 0.06)',
+    },
+    releaseContent: {
+        flex: 1,
+        padding: '12px 14px',
+        minWidth: 0,
     },
     releaseHeader: {
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
-        marginBottom: '6px',
+        marginBottom: '8px',
     },
     releaseTag: {
-        color: colors.accent,
-        fontSize: font.sm,
+        color: colors.textPrimary,
+        fontSize: font.base,
         fontWeight: 600,
         fontFamily: 'monospace',
     },
-    currentBadge: {
+    badgeCurrent: {
+        color: colors.success,
+        fontSize: font.xs,
+        backgroundColor: 'rgba(76, 175, 80, 0.15)',
+        padding: '2px 8px',
+        borderRadius: radius.full,
+        fontWeight: 600,
+        border: '1px solid rgba(76, 175, 80, 0.3)',
+    },
+    badgeNew: {
         color: colors.textPrimary,
         fontSize: font.xs,
         backgroundColor: colors.accent,
-        padding: '1px 6px',
-        borderRadius: '4px',
+        padding: '2px 8px',
+        borderRadius: radius.full,
         fontWeight: 600,
     },
     releaseDate: {
