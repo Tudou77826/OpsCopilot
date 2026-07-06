@@ -75,6 +75,7 @@ const AboutPanel: React.FC = () => {
     const [releaseHistory, setReleaseHistory] = useState<ReleaseHistoryItem[]>([]);
     const [historyState, setHistoryState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
     const [historyError, setHistoryError] = useState('');
+    const [releaseIndex, setReleaseIndex] = useState(0);
 
     useEffect(() => {
         const loadVersion = async () => {
@@ -139,6 +140,18 @@ const AboutPanel: React.FC = () => {
             }
             setReleaseHistory(resp.releases || []);
             setHistoryState('loaded');
+            // 默认定位：有新版本→新版本；否则→当前版本；否则→最新一条
+            const list = resp.releases || [];
+            const norm = (t: string) => (t.startsWith('v') ? t.slice(1) : t);
+            const currentVer = norm(currentVersion);
+            let targetIdx = -1;
+            if (latestVersion) {
+                targetIdx = list.findIndex(r => r.tag_name === latestVersion);
+            }
+            if (targetIdx < 0 && currentVersion) {
+                targetIdx = list.findIndex(r => norm(r.tag_name) === currentVer);
+            }
+            setReleaseIndex(targetIdx >= 0 ? Math.min(targetIdx, list.length - 1) : 0);
         } catch (e: any) {
             setHistoryState('error');
             setHistoryError(friendlyError(e.toString()));
@@ -303,50 +316,68 @@ const AboutPanel: React.FC = () => {
                     <div style={styles.emptyHint}>暂无版本记录</div>
                 )}
 
-                {/* 版本日志卡片列表 */}
-                {releaseHistory.length > 0 && (
-                    <div style={styles.releaseList}>
-                        {releaseHistory.map((r) => {
-                            const ver = r.tag_name.startsWith('v') ? r.tag_name.slice(1) : r.tag_name;
-                            const currentVer = currentVersion.startsWith('v') ? currentVersion.slice(1) : currentVersion;
-                            const isCurrent = !!(currentVersion && currentVer === ver);
-                            const isNew = updateState === 'available' && latestVersion === r.tag_name;
-                            const accentStyle = isCurrent
-                                ? styles.releaseCardCurrent
-                                : isNew
-                                    ? styles.releaseCardNew
-                                    : styles.releaseCardNormal;
-                            return (
-                                <div key={r.tag_name} style={{ ...styles.releaseCard, ...accentStyle }}>
-                                    <div style={releaseAccentBar(isCurrent, isNew)} />
-                                    <div style={styles.releaseContent}>
-                                        <div style={styles.releaseHeader}>
-                                            <span style={styles.releaseTag}>{r.tag_name}</span>
-                                            {isNew && <span style={styles.badgeNew}>新版本</span>}
-                                            {isCurrent && <span style={styles.badgeCurrent}>当前版本</span>}
-                                            <span style={styles.releaseDate}>{formatDate(r.published_at)}</span>
-                                        </div>
-                                        {r.body && (
-                                            <div style={styles.releaseBody}>
-                                                <ReactMarkdown>{r.body}</ReactMarkdown>
-                                            </div>
-                                        )}
-                                        {isNew && (
-                                            <div style={styles.btnRow}>
-                                                <button style={styles.updateBtn} onClick={handleUpdate} disabled={updateState !== 'available'}>
-                                                    立即更新
-                                                </button>
-                                                <button style={styles.ghostBtn} onClick={() => setUpdateState('idle')}>
-                                                    稍后
-                                                </button>
-                                            </div>
-                                        )}
+                {/* 版本日志：单卡 + 左右翻页 */}
+                {releaseHistory.length > 0 && (() => {
+                    const total = releaseHistory.length;
+                    const safeIdx = Math.min(releaseIndex, total - 1);
+                    const r = releaseHistory[safeIdx];
+                    const ver = r.tag_name.startsWith('v') ? r.tag_name.slice(1) : r.tag_name;
+                    const currentVer = currentVersion.startsWith('v') ? currentVersion.slice(1) : currentVersion;
+                    const isCurrent = !!(currentVersion && currentVer === ver);
+                    const isNew = updateState === 'available' && latestVersion === r.tag_name;
+                    const accentStyle = isCurrent
+                        ? styles.releaseCardCurrent
+                        : isNew
+                            ? styles.releaseCardNew
+                            : styles.releaseCardNormal;
+                    return (
+                        <div style={styles.releasePager}>
+                            {/* 左右翻页按钮 */}
+                            <button
+                                style={styles.pagerArrow}
+                                onClick={() => setReleaseIndex(i => Math.max(0, i - 1))}
+                                disabled={safeIdx === 0}
+                                aria-label="上一个版本"
+                            >‹</button>
+
+                            {/* 当前版本卡片（一次只显示一张） */}
+                            <div style={{ ...styles.releaseCard, ...accentStyle, flex: 1, minWidth: 0 }}>
+                                <div style={releaseAccentBar(isCurrent, isNew)} />
+                                <div style={styles.releaseContent}>
+                                    <div style={styles.releaseHeader}>
+                                        <span style={styles.releaseTag}>{r.tag_name}</span>
+                                        {isNew && <span style={styles.badgeNew}>新版本</span>}
+                                        {isCurrent && <span style={styles.badgeCurrent}>当前版本</span>}
+                                        <span style={styles.releasePagerInfo}>{safeIdx + 1} / {total}</span>
+                                        <span style={styles.releaseDate}>{formatDate(r.published_at)}</span>
                                     </div>
+                                    {r.body && (
+                                        <div style={styles.releaseBody}>
+                                            <ReactMarkdown>{r.body}</ReactMarkdown>
+                                        </div>
+                                    )}
+                                    {isNew && (
+                                        <div style={styles.btnRow}>
+                                            <button style={styles.updateBtn} onClick={handleUpdate} disabled={updateState !== 'available'}>
+                                                立即更新
+                                            </button>
+                                            <button style={styles.ghostBtn} onClick={() => setUpdateState('idle')}>
+                                                稍后
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
-                            );
-                        })}
-                    </div>
-                )}
+                            </div>
+
+                            <button
+                                style={styles.pagerArrow}
+                                onClick={() => setReleaseIndex(i => Math.min(total - 1, i + 1))}
+                                disabled={safeIdx === total - 1}
+                                aria-label="下一个版本"
+                            >›</button>
+                        </div>
+                    );
+                })()}
             </div>
 
             {/* Footer */}
@@ -508,15 +539,31 @@ const styles: Record<string, React.CSSProperties> = {
         borderRadius: radius.md,
         border: `1px solid rgba(244, 67, 54, 0.25)`,
     },
-    // 版本日志卡片列表
-    releaseList: {
+    // 版本日志翻页容器：左右按钮 + 单张卡片
+    releasePager: {
         display: 'flex',
-        flexDirection: 'column',
-        gap: '10px',
-        maxHeight: '460px',
-        overflowY: 'auto',
-        paddingRight: '4px',
+        alignItems: 'stretch',
+        gap: '8px',
         marginTop: '4px',
+    },
+    pagerArrow: {
+        flexShrink: 0,
+        width: '28px',
+        border: `1px solid ${colors.borderPrimary}`,
+        backgroundColor: colors.bgPrimary,
+        color: colors.textSecondary,
+        borderRadius: radius.md,
+        cursor: 'pointer',
+        fontSize: '18px',
+        lineHeight: 1,
+        padding: 0,
+    } as React.CSSProperties,
+    releasePagerInfo: {
+        color: colors.textMuted,
+        fontSize: font.xs,
+        fontFamily: 'monospace',
+        marginLeft: 'auto',
+        marginRight: '8px',
     },
     releaseCard: {
         display: 'flex',
