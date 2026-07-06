@@ -78,6 +78,8 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
     // Post-output highlight scan refs (Change 2: scan only after output stabilizes)
     const lastOutputAtRef = useRef<number>(0);
     const postScanTimerRef = useRef<number | null>(null);
+    const sizeSyncTimerRef = useRef<number | null>(null);
+    const layoutRestoreRafRef = useRef<number | null>(null);
 
     // Refs to avoid useEffect re-runs
     const completionVisibleRef = useRef(false);
@@ -110,16 +112,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
 
     const getSearchEnabled = () => terminalConfigRef.current?.search_enabled ?? true;
 
-    const closeSearch = useCallback(() => {
-        setSearchVisible(false);
-        setSearchQuery('');
-        setSearchCountText('');
-        searchCountTokenRef.current++;
-        searchHighlightTokenRef.current++;
-        if (searchHighlightTimerRef.current) {
-            window.clearTimeout(searchHighlightTimerRef.current);
-            searchHighlightTimerRef.current = null;
-        }
+    const clearSearchHitDecorations = useCallback(() => {
         for (const entry of searchDecorationsRef.current.values()) {
             for (const d of entry.decos) {
                 try { d.dispose?.(); } catch { }
@@ -127,16 +120,39 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             try { entry.marker?.dispose?.(); } catch { }
         }
         searchDecorationsRef.current.clear();
+    }, []);
+
+    const clearSearchDecorations = useCallback(() => {
+        clearSearchHitDecorations();
         if (currentSearchDecoRef.current) {
             try { currentSearchDecoRef.current.deco?.dispose?.(); } catch { }
             try { currentSearchDecoRef.current.marker?.dispose?.(); } catch { }
             currentSearchDecoRef.current = null;
         }
+    }, [clearSearchHitDecorations]);
+
+    const closeSearch = useCallback(() => {
+        searchVisibleRef.current = false;
+        searchQueryRef.current = '';
+        setSearchVisible(false);
+        setSearchQuery('');
+        setSearchCountText('');
+        searchCountTokenRef.current++;
+        searchHighlightTokenRef.current++;
+        if (searchCountTimerRef.current) {
+            window.clearTimeout(searchCountTimerRef.current);
+            searchCountTimerRef.current = null;
+        }
+        if (searchHighlightTimerRef.current) {
+            window.clearTimeout(searchHighlightTimerRef.current);
+            searchHighlightTimerRef.current = null;
+        }
+        clearSearchDecorations();
         if (xtermRef.current) {
             xtermRef.current.clearSelection();
             xtermRef.current.focus();
         }
-    }, []);
+    }, [clearSearchDecorations]);
 
     useEffect(() => {
         if (!searchVisible) return;
@@ -352,30 +368,24 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         const caseSensitive = opts.caseSensitive;
         const regexMode = opts.regexMode;
 
+        if (!visible || !q) {
+            clearSearchDecorations();
+            return;
+        }
+
         searchHighlightTimerRef.current = window.setTimeout(() => {
             searchHighlightTimerRef.current = null;
 
+            if (token !== searchHighlightTokenRef.current) return;
             const term = xtermRef.current;
             if (!term) return;
 
-            if (!visible || !q) {
-            for (const entry of searchDecorationsRef.current.values()) {
-                for (const d of entry.decos) {
-                        try { d.dispose?.(); } catch { }
-                    }
-                try { entry.marker?.dispose?.(); } catch { }
-                }
-                searchDecorationsRef.current.clear();
+            if (!searchVisibleRef.current || searchQueryRef.current.trim() !== q) {
+                clearSearchDecorations();
                 return;
             }
 
-            for (const entry of searchDecorationsRef.current.values()) {
-                for (const d of entry.decos) {
-                    try { d.dispose?.(); } catch { }
-                }
-                try { entry.marker?.dispose?.(); } catch { }
-            }
-            searchDecorationsRef.current.clear();
+            clearSearchHitDecorations();
 
             const buffer = term.buffer.active;
             const maxDecos = 800;
@@ -478,7 +488,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                 window.setTimeout(() => step(), 0);
             }
         }, Math.max(0, delayMs));
-    }, []);
+    }, [clearSearchDecorations, clearSearchHitDecorations]);
 
     useEffect(() => {
         scheduleSearchHighlightAll(120, { visible: searchVisible, query: searchQuery, caseSensitive: searchCaseSensitive, regexMode: searchRegexMode });
@@ -649,7 +659,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
     }, [clearDecorations]);
 
     // Helper function to sync terminal size to backend PTY
-    const syncSizeToBackend = () => {
+    const syncSizeToBackend = useCallback(() => {
         if (!sessionIDRef.current || !xtermRef.current) return;
 
         const cols = xtermRef.current.cols;
@@ -663,7 +673,84 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             // @ts-ignore
             window.go.main.App.ResizeTerminal(sessionIDRef.current, cols, rows);
         }
+    }, []);
+
+    const scheduleSizeSync = useCallback((delayMs = 10) => {
+        if (sizeSyncTimerRef.current) {
+            window.clearTimeout(sizeSyncTimerRef.current);
+            sizeSyncTimerRef.current = null;
+        }
+        sizeSyncTimerRef.current = window.setTimeout(() => {
+            sizeSyncTimerRef.current = null;
+            syncSizeToBackend();
+        }, delayMs);
+    }, [syncSizeToBackend]);
+
+    const isTerminalMeasurable = (container: HTMLDivElement) => {
+        const style = window.getComputedStyle(container);
+        if (style.display === 'none' || style.visibility === 'hidden') return false;
+
+        const rect = container.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && container.getClientRects().length > 0;
     };
+
+    const hasUsableFitDimensions = (fitAddon: FitAddon) => {
+        const dimensions = fitAddon.proposeDimensions();
+        if (!dimensions) return false;
+        return Number.isFinite(dimensions.cols)
+            && Number.isFinite(dimensions.rows)
+            && dimensions.cols >= 5
+            && dimensions.rows >= 2;
+    };
+
+    const restoreViewport = (term: Terminal, bottomOffset: number) => {
+        const buffer = term.buffer.active;
+        if (bottomOffset <= 0) {
+            term.scrollToBottom();
+            return;
+        }
+
+        term.scrollToLine(Math.max(0, buffer.baseY - bottomOffset));
+    };
+
+    const runFitAndRefresh = useCallback((syncBackend = true) => {
+        const container = terminalRef.current;
+        const term = xtermRef.current;
+        const fitAddon = fitAddonRef.current;
+        if (!container || !term || !fitAddon || !isTerminalMeasurable(container)) return false;
+        if (!hasUsableFitDimensions(fitAddon)) return false;
+
+        const buffer = term.buffer.active;
+        const bottomOffset = Math.max(0, buffer.baseY - buffer.viewportY);
+
+        fitAddon.fit();
+        restoreViewport(term, bottomOffset);
+        term.refresh(0, Math.max(0, term.rows - 1));
+
+        if (syncBackend) {
+            scheduleSizeSync();
+        }
+        return true;
+    }, [scheduleSizeSync]);
+
+    const clearLayoutRestoreTimer = useCallback(() => {
+        if (layoutRestoreRafRef.current !== null) {
+            window.cancelAnimationFrame?.(layoutRestoreRafRef.current);
+            layoutRestoreRafRef.current = null;
+        }
+    }, []);
+
+    const restoreTerminalLayout = useCallback(() => {
+        clearLayoutRestoreTimer();
+        runFitAndRefresh(true);
+
+        if (typeof window.requestAnimationFrame === 'function') {
+            layoutRestoreRafRef.current = window.requestAnimationFrame(() => {
+                layoutRestoreRafRef.current = null;
+                runFitAndRefresh(true);
+            });
+        }
+    }, [clearLayoutRestoreTimer, runFitAndRefresh]);
 
     // Fetch completions from backend
     const fetchCompletions = useCallback(async (input: string) => {
@@ -779,10 +866,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             }
         },
         fit: () => {
-            const container = terminalRef.current;
-            if (container && window.getComputedStyle(container).display === 'none') return;
-            fitAddonRef.current?.fit();
-            setTimeout(() => syncSizeToBackend(), 10);
+            restoreTerminalLayout();
         },
         focus: () => {
             xtermRef.current?.focus();
@@ -844,12 +928,11 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         if (xtermEl instanceof HTMLElement) {
             xtermEl.style.padding = '4px 8px';
         }
-        fitAddon.fit();
-
         fitAddonRef.current = fitAddon;
         xtermRef.current = term;
 
-        setTimeout(() => syncSizeToBackend(), 100);
+        restoreTerminalLayout();
+        scheduleSizeSync(100);
         scheduleHighlightScan(0);
 
         const onScrollDispose = term.onScroll(() => {
@@ -962,9 +1045,12 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                     arg.preventDefault();
                     const selection = term.getSelection();
                     if (!searchVisibleRef.current) {
+                        searchVisibleRef.current = true;
                         setSearchVisible(true);
                         if (selection) {
-                            setSearchQuery(selection.slice(0, 200));
+                            const nextQuery = selection.slice(0, 200);
+                            searchQueryRef.current = nextQuery;
+                            setSearchQuery(nextQuery);
                         }
                         window.setTimeout(() => searchInputRef.current?.focus(), 0);
                     } else {
@@ -1094,10 +1180,17 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
 
         // Window resize
         const handleResize = () => {
-            fitAddon.fit();
-            setTimeout(() => syncSizeToBackend(), 10);
+            restoreTerminalLayout();
         };
         window.addEventListener('resize', handleResize);
+
+        let resizeObserver: ResizeObserver | null = null;
+        if (typeof ResizeObserver !== 'undefined') {
+            resizeObserver = new ResizeObserver(() => {
+                restoreTerminalLayout();
+            });
+            resizeObserver.observe(terminalRef.current);
+        }
 
         return () => {
             if (debounceTimerRef.current) {
@@ -1111,22 +1204,17 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                 window.clearTimeout(highlightTimerRef.current);
                 highlightTimerRef.current = null;
             }
+            if (sizeSyncTimerRef.current) {
+                window.clearTimeout(sizeSyncTimerRef.current);
+                sizeSyncTimerRef.current = null;
+            }
             if (searchHighlightTimerRef.current) {
                 window.clearTimeout(searchHighlightTimerRef.current);
                 searchHighlightTimerRef.current = null;
             }
-            for (const entry of searchDecorationsRef.current.values()) {
-                for (const d of entry.decos) {
-                    try { d.dispose?.(); } catch { }
-                }
-                try { entry.marker?.dispose?.(); } catch { }
-            }
-            searchDecorationsRef.current.clear();
-            if (currentSearchDecoRef.current) {
-                try { currentSearchDecoRef.current.deco?.dispose?.(); } catch { }
-                try { currentSearchDecoRef.current.marker?.dispose?.(); } catch { }
-                currentSearchDecoRef.current = null;
-            }
+            clearLayoutRestoreTimer();
+            resizeObserver?.disconnect();
+            clearSearchDecorations();
             if (selectionDebounceTimer) {
                 window.clearTimeout(selectionDebounceTimer);
                 selectionDebounceTimer = null;
@@ -1145,10 +1233,24 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         fetchCompletions,
         handleCompletionSelect,
         handleNavigate,
+        restoreTerminalLayout,
+        scheduleSizeSync,
+        clearLayoutRestoreTimer,
+        clearSearchDecorations,
         scheduleHighlightScan,
-        terminalConfig?.scrollback,
         terminalConfig?.search_enabled,
     ]);
+
+    useEffect(() => {
+        const term = xtermRef.current;
+        if (!term) return;
+
+        const nextScrollback = terminalConfig?.scrollback || 5000;
+        if (term.options.scrollback === nextScrollback) return;
+
+        term.options.scrollback = nextScrollback;
+        restoreTerminalLayout();
+    }, [restoreTerminalLayout, terminalConfig?.scrollback]);
 
     useEffect(() => {
         scheduleHighlightScan(0);
@@ -1165,7 +1267,10 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             <SearchPanel
                 visible={searchVisible && getSearchEnabled()}
                 query={searchQuery}
-                onQueryChange={(v) => setSearchQuery(v)}
+                onQueryChange={(v) => {
+                    searchQueryRef.current = v;
+                    setSearchQuery(v);
+                }}
                 onClose={closeSearch}
                 onNext={doSearchNext}
                 onPrev={doSearchPrev}

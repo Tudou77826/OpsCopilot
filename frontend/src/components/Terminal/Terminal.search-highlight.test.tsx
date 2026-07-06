@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { act, render } from '@testing-library/react';
 import TerminalComponent, { TerminalRef } from './Terminal';
 import { HighlightRule, TerminalConfig } from './highlightTypes';
@@ -21,6 +21,7 @@ vi.mock('xterm', () => {
                     write: vi.fn((data: string) => termWrite?.(data)),
                     dispose: vi.fn(),
                     onData: vi.fn(),
+                    onSelectionChange: vi.fn(() => ({ dispose: vi.fn() })),
                     attachCustomKeyEventHandler: vi.fn((h: any) => { lastKeyHandler = h; }),
                     getSelection: vi.fn(() => selectionText),
                     clearSelection: vi.fn(),
@@ -28,8 +29,14 @@ vi.mock('xterm', () => {
                     loadAddon: vi.fn(),
                     onScroll: vi.fn(() => ({ dispose: vi.fn() })),
                     focus: vi.fn(),
+                    refresh: vi.fn(),
+                    scrollToBottom: vi.fn(),
+                    scrollToLine: vi.fn(),
                     cols: 80,
                     rows: 24,
+                    options: {
+                        scrollback: 5000,
+                    },
                     buffer: {
                         active: {
                             viewportY: 0,
@@ -50,10 +57,18 @@ vi.mock('xterm', () => {
     };
 });
 
-vi.mock('xterm-addon-fit', () => ({ FitAddon: class { fit = vi.fn(); } }));
+vi.mock('xterm-addon-fit', () => ({ FitAddon: class { fit = vi.fn(); proposeDimensions = vi.fn(() => ({ cols: 80, rows: 24 })); } }));
 vi.mock('xterm-addon-search', () => ({ SearchAddon: class { findNext = vi.fn(); findPrevious = vi.fn(); } }));
 
 describe('Terminal search/highlight integration', () => {
+    afterEach(() => {
+        selectionText = '';
+        lastKeyHandler = null;
+        termWrite = null;
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+    });
+
     it('opens search panel via Ctrl+F handler', async () => {
         const ref = React.createRef<TerminalRef>();
         render(<TerminalComponent id="t1" ref={ref} />);
@@ -106,5 +121,30 @@ describe('Terminal search/highlight integration', () => {
         });
         expect(registerDecoration.mock.calls.length).toBeGreaterThan(before);
         vi.useRealTimers();
+    });
+
+    it('does not recreate search highlights when output arrives immediately after closing search', async () => {
+        vi.useFakeTimers();
+        const ref = React.createRef<TerminalRef>();
+        render(<TerminalComponent id="t4" ref={ref} />);
+
+        selectionText = 'error';
+        await act(async () => {
+            lastKeyHandler!({ type: 'keydown', ctrlKey: true, code: 'KeyF', preventDefault: vi.fn() });
+        });
+        await act(async () => {
+            await vi.runAllTimersAsync();
+        });
+
+        registerDecoration.mockClear();
+
+        await act(async () => {
+            window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            ref.current?.write('error after close');
+            await vi.runAllTimersAsync();
+        });
+
+        const hasYellow = registerDecoration.mock.calls.some((c: any[]) => c[0] && c[0].backgroundColor === '#f6e05e');
+        expect(hasYellow).toBe(false);
     });
 });

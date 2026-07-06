@@ -40,8 +40,14 @@ vi.mock('xterm', () => {
                     loadAddon: vi.fn(),
                     onScroll: vi.fn(() => ({ dispose: vi.fn() })),
                     focus: vi.fn(),
+                    refresh: vi.fn(),
+                    scrollToBottom: vi.fn(),
+                    scrollToLine: vi.fn(),
                     cols: 80,
                     rows: 24,
+                    options: {
+                        scrollback: 5000,
+                    },
                     buffer: {
                         active: {
                             viewportY: 0,
@@ -61,7 +67,7 @@ vi.mock('xterm', () => {
     };
 });
 
-vi.mock('xterm-addon-fit', () => ({ FitAddon: class { fit = vi.fn(); } }));
+vi.mock('xterm-addon-fit', () => ({ FitAddon: class { fit = vi.fn(); proposeDimensions = vi.fn(() => ({ cols: 80, rows: 24 })); } }));
 vi.mock('xterm-addon-search', () => ({ SearchAddon: class { findNext = vi.fn(); findPrevious = vi.fn(); } }));
 
 describe('Terminal write buffering (Change 1)', () => {
