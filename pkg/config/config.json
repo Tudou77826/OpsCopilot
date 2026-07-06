@@ -11,6 +11,9 @@
   "docs": {
     "dir": ""
   },
+  "cli": {
+    "exec_timeout_sec": 120
+  },
   "completion_delay": 150,
   "command_query_shortcut": "Ctrl+K",
   "experimental": {

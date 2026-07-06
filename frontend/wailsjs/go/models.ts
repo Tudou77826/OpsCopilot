@@ -124,6 +124,18 @@ export namespace config {
 	        this.group = source["group"];
 	    }
 	}
+	export class CLIConfig {
+	    exec_timeout_sec: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CLIConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.exec_timeout_sec = source["exec_timeout_sec"];
+	    }
+	}
 	export class ScriptsConfig {
 	    dir: string;
 	
@@ -187,6 +199,7 @@ export namespace config {
 	    log: LogConfig;
 	    docs: DocsConfig;
 	    scripts: ScriptsConfig;
+	    cli: CLIConfig;
 	    quick_commands: QuickCommand[];
 	    completion_delay: number;
 	    command_query_shortcut: string;
@@ -206,6 +219,7 @@ export namespace config {
 	        this.log = this.convertValues(source["log"], LogConfig);
 	        this.docs = this.convertValues(source["docs"], DocsConfig);
 	        this.scripts = this.convertValues(source["scripts"], ScriptsConfig);
+	        this.cli = this.convertValues(source["cli"], CLIConfig);
 	        this.quick_commands = this.convertValues(source["quick_commands"], QuickCommand);
 	        this.completion_delay = source["completion_delay"];
 	        this.command_query_shortcut = source["command_query_shortcut"];
@@ -233,6 +247,7 @@ export namespace config {
 		    return a;
 		}
 	}
+	
 	
 	
 	

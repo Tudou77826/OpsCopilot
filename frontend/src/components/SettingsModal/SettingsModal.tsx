@@ -23,6 +23,9 @@ interface AppConfig {
     docs: {
         dir: string;
     };
+    cli?: {
+        exec_timeout_sec: number;
+    };
     experimental?: {
         // 保留结构以便未来扩展
     };
@@ -75,6 +78,14 @@ const defaultPatchStore = {
     remote_url: '',
     branch: 'main'
 };
+
+const defaultCliConfig = {
+    exec_timeout_sec: 120
+};
+
+const normalizeCliConfig = (cli?: AppConfig['cli']) => ({
+    exec_timeout_sec: cli?.exec_timeout_sec && cli.exec_timeout_sec > 0 ? cli.exec_timeout_sec : defaultCliConfig.exec_timeout_sec
+});
 
 const normalizePatchStore = (patchStore?: AppConfig['patch_store']) => ({
     ...defaultPatchStore,
@@ -257,6 +268,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         ComplexModel: complexModel,
                     },
                     experimental: cfg.experimental || {},
+                    cli: normalizeCliConfig(cfg.cli),
                     terminal,
                     highlight_rules,
                     patch_store: normalizePatchStore(cfg.patch_store),
@@ -303,6 +315,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         try {
             const nextConfig = {
                 ...config,
+                cli: normalizeCliConfig(config.cli),
                 patch_store: normalizePatchStore(config.patch_store)
             };
             setConfig(nextConfig);

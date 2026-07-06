@@ -45,6 +45,21 @@ func loadCLIEnv() cliEnv {
 	}
 }
 
+func loadCLIExecTimeoutSec(env cliEnv) int {
+	data, err := os.ReadFile(filepath.Join(env.binDir, "config.json"))
+	if err != nil {
+		return config.DefaultCLIExecTimeoutSec
+	}
+
+	var cfg struct {
+		CLI config.CLIConfig `json:"cli"`
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil || cfg.CLI.ExecTimeoutSec <= 0 {
+		return config.DefaultCLIExecTimeoutSec
+	}
+	return cfg.CLI.ExecTimeoutSec
+}
+
 // newOpsManager 构造运维内核管理器（复用 core/ops）
 func newOpsManager(env cliEnv) (*ops.Manager, error) {
 	return ops.NewManager(&ops.Config{
@@ -137,11 +152,15 @@ func printCLIUsage() {
 
 // cmdExec: opscopilot exec --server X --command Y
 func cmdExec(args []string) int {
+	env := loadCLIEnv()
+	defaultTimeoutSec := loadCLIExecTimeoutSec(env)
+
 	fs := flag.NewFlagSet("exec", flag.ExitOnError)
 	server := fs.String("server", "", "服务器 IP（必填，需已在 OpsCopilot 中登记）")
 	command := fs.String("command", "", "要执行的命令（必填）")
+	intent := fs.String("intent", "", "执行这条命令的简要意图")
 	maxLineLen := fs.Int("max-line-length", 500, "单行最大长度")
-	timeoutSec := fs.Int("timeout-sec", 120, "单条命令超时秒数")
+	timeoutSec := fs.Int("timeout-sec", defaultTimeoutSec, "单条命令超时秒数")
 	fs.Parse(args)
 
 	if *server == "" || *command == "" {
@@ -149,8 +168,11 @@ func cmdExec(args []string) int {
 		fs.Usage()
 		return 1
 	}
+	if *timeoutSec <= 0 {
+		fmt.Fprintln(os.Stderr, "Error: --timeout-sec must be greater than 0")
+		return 1
+	}
 
-	env := loadCLIEnv()
 	mgr, err := newOpsManager(env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "初始化失败: %v\n", err)
@@ -162,6 +184,7 @@ func cmdExec(args []string) int {
 	result, err := mgr.Exec(context.Background(), *server, *command, ops.ExecOptions{
 		MaxLineLength: *maxLineLen,
 		Timeout:       time.Duration(*timeoutSec) * time.Second,
+		Intent:        *intent,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "执行失败: %v\n", err)

@@ -22,10 +22,10 @@ func buildSudoCommand(command, rootPassword string) string {
 
 // ConnectResult 连接结果
 type ConnectResult struct {
-	Success    bool   `json:"success"`
-	Server     string `json:"server"`
-	Message    string `json:"message"`
-	HasRootAuth bool  `json:"has_root_auth"`
+	Success     bool   `json:"success"`
+	Server      string `json:"server"`
+	Message     string `json:"message"`
+	HasRootAuth bool   `json:"has_root_auth"`
 }
 
 // Connect 连接服务器
@@ -158,13 +158,14 @@ func (m *Manager) Disconnect(serverName string) error {
 type ExecOptions struct {
 	MaxLineLength int           // 单行最大长度，默认 500
 	Timeout       time.Duration // 单条命令超时，默认 120s；超时后向远端发 SIGKILL 并返回错误
+	Intent        string        // 执行意图，供审计和结果解释使用，不参与安全放行判断
 }
 
 // ExecResult 命令执行结果
 type ExecResult struct {
-	Success  bool              `json:"success"`
-	Output   string            `json:"output"`
-	Meta     map[string]any    `json:"meta"`
+	Success bool           `json:"success"`
+	Output  string         `json:"output"`
+	Meta    map[string]any `json:"meta"`
 }
 
 // Exec 在已连接的服务器上执行命令
@@ -192,6 +193,7 @@ func (m *Manager) Exec(ctx context.Context, serverName, command string, opts Exe
 	if opts.Timeout > 0 {
 		timeout = opts.Timeout
 	}
+	intent := strings.TrimSpace(opts.Intent)
 
 	// 1. 先查服务器 host（仅读 sessions.json，不触发 SSH），用于白名单策略匹配
 	m.mu.RLock()
@@ -279,21 +281,26 @@ func (m *Manager) Exec(ctx context.Context, serverName, command string, opts Exe
 	controller := NewOutputController(m.config.MaxTotalBytes, maxLineLength, m.config.HeadLines)
 	result := controller.Process(output)
 
+	meta := map[string]any{
+		"total_bytes":          result.Meta.TotalBytes,
+		"returned_bytes":       result.Meta.ReturnedBytes,
+		"total_lines":          result.Meta.TotalLines,
+		"returned_lines":       result.Meta.ReturnedLines,
+		"truncated_lines":      result.Meta.TruncatedLines,
+		"long_lines_truncated": result.Meta.LongLinesTruncated,
+		"command":              command,
+		"server":               serverName,
+		"duration_ms":          duration.Milliseconds(),
+		"exit_code":            exitCode,
+	}
+	if intent != "" {
+		meta["intent"] = intent
+	}
+
 	return &ExecResult{
 		Success: err == nil,
 		Output:  result.Output,
-		Meta: map[string]any{
-			"total_bytes":          result.Meta.TotalBytes,
-			"returned_bytes":       result.Meta.ReturnedBytes,
-			"total_lines":          result.Meta.TotalLines,
-			"returned_lines":       result.Meta.ReturnedLines,
-			"truncated_lines":      result.Meta.TruncatedLines,
-			"long_lines_truncated": result.Meta.LongLinesTruncated,
-			"command":              command,
-			"server":               serverName,
-			"duration_ms":          duration.Milliseconds(),
-			"exit_code":            exitCode,
-		},
+		Meta:    meta,
 	}, nil
 }
 

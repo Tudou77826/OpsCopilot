@@ -52,4 +52,23 @@ func TestConfigMigration_OldLLMModelToFastAndComplex(t *testing.T) {
 	if mgr.Config.CommandQueryShortcut != "Ctrl+K" {
 		t.Fatalf("CommandQueryShortcut = %q, want %q", mgr.Config.CommandQueryShortcut, "Ctrl+K")
 	}
+	if mgr.Config.CLI.ExecTimeoutSec != DefaultCLIExecTimeoutSec {
+		t.Fatalf("CLI.ExecTimeoutSec = %d, want %d", mgr.Config.CLI.ExecTimeoutSec, DefaultCLIExecTimeoutSec)
+	}
+
+	data, err := os.ReadFile(mgr.configPath)
+	if err != nil {
+		t.Fatalf("read migrated config: %v", err)
+	}
+	var saved map[string]any
+	if err := json.Unmarshal(data, &saved); err != nil {
+		t.Fatalf("unmarshal migrated config: %v", err)
+	}
+	cli, ok := saved["cli"].(map[string]any)
+	if !ok {
+		t.Fatalf("migrated config missing cli section: %#v", saved)
+	}
+	if got := int(cli["exec_timeout_sec"].(float64)); got != DefaultCLIExecTimeoutSec {
+		t.Fatalf("saved cli.exec_timeout_sec = %d, want %d", got, DefaultCLIExecTimeoutSec)
+	}
 }

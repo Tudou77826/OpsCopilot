@@ -28,8 +28,26 @@ description: 通过 OpsCopilot CLI 连接用户预先配置的远程 Linux 服�
 在已连接的服务器上执行命令。命令受白名单约束，非法命令会被拒绝并返回该服务器允许的命令列表。
 
 ```
-"{{OPSCOPILOT_BIN}}" exec --server <服务器IP> --command "<命令>" [--max-line-length <N>] [--timeout-sec <N>]
+"{{OPSCOPILOT_BIN}}" exec --server <服务器IP> --command "<命令>" [--intent "<执行意图>"] [--max-line-length <N>] [--timeout-sec <N>]
 ```
+
+**命令作用**：
+- 用来在指定服务器上执行一条非交互式 shell 命令，并返回标准输出、退出码、耗时、截断信息等结构化结果。
+- 适合收集运行状态、日志片段、进程/端口/磁盘/容器信息，也可执行用户明确授权且白名单允许的修复命令。
+- 不适合运行需要持续交互的程序；需要交互时应改成有明确边界的一次性命令。
+
+**参数说明**：
+- `--server <服务器IP>`：目标服务器标识，必须与 OpsCopilot GUI 中登记的服务器 IP 匹配；命令内部会按需自动连接。
+- `--command "<命令>"`：要在远程服务器执行的完整命令。命令应尽量具体、可重复、非交互；包含空格、管道或重定向时必须整体加引号。
+- `--intent "<执行意图>"`：可选但建议每次提供，用一句话说明为什么执行这条命令，例如“检查磁盘是否打满导致服务异常”。不要只重复命令本身，也不要写入密码、令牌等敏感信息。
+- `--max-line-length <N>`：单行输出最大长度，默认 500。用于避免超长日志行、压缩 JSON、堆栈行把上下文撑爆；需要看完整长行时再适当调大。
+- `--timeout-sec <N>`：单条命令最大运行秒数，必须大于 0。慢命令可调大；不确定耗时时先保持默认或缩小命令范围。
+
+**超时参数使用规则**：
+- `--timeout-sec` 是单条远程命令的执行超时；不传时读取 `config.json` 里的 `cli.exec_timeout_sec`，未配置则默认 120 秒。
+- 快速状态查询（如 `df -h`、`ps aux`、`docker ps`）通常不需要覆盖默认值；已知会慢的日志检索、包管理查询、数据库诊断可显式设置为 180-600 秒。
+- 不要直接执行无界交互/持续输出命令，例如 `tail -f`、裸 `top`、`watch`。改用有边界的命令，例如 `tail -n 200`、`top -b -n 1`，或在命令内部加 `timeout 10s ...`。
+- 如果命令因超时失败，优先向用户说明命令已被超时保护终止；需要继续排查时，缩小查询范围或提高 `--timeout-sec` 后重试。
 
 **输出**（JSON）：
 ```json
@@ -37,24 +55,39 @@ description: 通过 OpsCopilot CLI 连接用户预先配置的远程 Linux 服�
   "success": true,
   "output": "命令的标准输出（已限流）",
   "meta": {
-    "command": "...", "server": "...", "exit_code": 0,
+    "command": "...", "server": "...", "intent": "...", "exit_code": 0,
     "duration_ms": 123, "total_bytes": 1024, "returned_bytes": 1024,
     "truncated_lines": 0, "long_lines_truncated": 0
   }
 }
 ```
 
-**何时用**：用户需要查看服务器状态（如 `ps aux`、`df -h`、`docker ps`、`journalctl -u xxx`、`tail -f /var/log/xxx`）。优先用 exec 执行具体的只读命令收集信息，而不是泛泛描述。
+**何时用**：用户需要查看服务器状态（如 `ps aux`、`df -h`、`docker ps`、`journalctl -u xxx --no-pager`、`tail -n 200 /var/log/xxx`）。优先用 exec 执行具体的只读命令收集信息，而不是泛泛描述。
+
+**示例**：
+```
+"{{OPSCOPILOT_BIN}}" exec --server 10.0.0.12 --command "df -h" --intent "检查磁盘使用率是否异常"
+"{{OPSCOPILOT_BIN}}" exec --server 10.0.0.12 --command "journalctl -u nginx --since '30 min ago' --no-pager | tail -n 200" --intent "查看 nginx 近期错误以定位 5xx 原因" --timeout-sec 180
+```
 
 **白名单机制**：命令按**服务器 IP 段**匹配白名单策略，只有命中策略里登记的命令（正则）才放行。默认策略（`IP段: *`）内置了一批只读命令（ls/cat/ps/df/journalctl/docker ps 等），覆盖常见排查。如需执行写入/重启等操作，需用户在 GUI 中添加对应策略。命令被拒时的错误信息会说明原因并给出指引，据实转达即可。
 
-### 2. diagnose —— AI 故障诊断
+### 2. diagnose —— 查询知识库辅助定位
 
-基于 OpsCopilot 知识库对故障问题进行 AI 诊断。纯知识检索 + 推理，**不连接任何服务器**。输出建议的排查命令和步骤，由你（AI）决定是否调 exec 去验证。
+供 LLM 在定位故障前先查询 OpsCopilot 知识库，获取已有经验、排查路径和建议命令。该命令只做知识库查询和推理，**不连接任何服务器、不执行任何远程命令**；LLM 可以根据查询结果判断下一步是否需要调用 `exec` 做定位尝试或结果验证。
 
 ```
 "{{OPSCOPILOT_BIN}}" diagnose --problem "<故障现象描述>"
 ```
+
+**命令作用**：
+- 根据用户描述的故障现象查询知识库，并结合知识库内容输出诊断摘要、排查步骤和建议命令。
+- 只提供定位指导，不连接服务器、不执行命令、不修改远程环境。
+- 适合在问题方向不清楚、需要团队经验或标准排查路径时先调用；拿到建议后，再由 LLM 判断是否用 `exec` 采集现场信息或验证假设。
+
+**参数说明**：
+- `--problem "<故障现象描述>"`：必填。写清楚业务/组件、错误现象、时间范围、影响范围和已知上下文；描述越具体，知识库匹配和建议命令越可靠。
+- 不要把完整日志大段塞进 `--problem`。日志内容较多时，先用 `exec` 或 `file download` 获取关键片段，再概括成症状输入。
 
 **输出**（JSON）：
 ```json
@@ -68,11 +101,12 @@ description: 通过 OpsCopilot CLI 连接用户预先配置的远程 Linux 服�
 - `steps`：排查步骤
 - `commands`：建议命令，每条带 `source` 指明出自哪份知识库文档的哪一行
 
-**何时用**：用户描述了一个**症状/问题**而非具体命令时（如"支付服务 504 了"、"mysql 连不上"、"内存占用高"）。diagnose 会综合知识库给出完整诊断路径，比逐条 exec 更高效。
+**何时用**：用户描述了一个**症状/问题**而非具体命令时（如"支付服务 504 了"、"mysql 连不上"、"内存占用高"），先用 `diagnose` 查知识库，获得定位方向、排查步骤和建议命令，再按需用 `exec` 验证。
 
 **重要**：
 - **耗时较长**：diagnose 走多轮 LLM 推理（思考 → 检索知识库 → 再思考），单次诊断通常需要 **三到五分钟**，且没有客户端超时。
 - 如果诊断返回空的 commands/steps，说明知识库中没有相关经验——此时如实告诉用户"知识库未覆盖此类问题"。
+- `diagnose` 输出里的命令只是建议，不能自动执行；LLM 应先阅读建议，判断安全性、必要性和白名单可行性，再决定是否调用 `exec` 做定位尝试。
 
 ### 3. file —— 文件传输
 
@@ -81,7 +115,30 @@ description: 通过 OpsCopilot CLI 连接用户预先配置的远程 Linux 服�
 "{{OPSCOPILOT_BIN}}" file download --server <服务器IP> --remote <远程路径> --local <本地路径> [--max-bytes <N>]
 
 # 上传（本地 → 远程）
-"{{OPSCOPILOT_BIN}}" file upload --server <服务器IP> --local <本地路径> --remote <远程路径> [--backup] [--mkdir]
+"{{OPSCOPILOT_BIN}}" file upload --server <服务器IP> --local <本地路径> --remote <远程路径> [--backup=<true|false>] [--mkdir]
+```
+
+**命令作用**：
+- `file download`：把远程服务器上的单个文件下载到本地，适合拉取日志、配置、dump、诊断样本后做本地分析。
+- `file upload`：把本地单个文件上传到远程服务器，适合投放配置、脚本、补丁或临时诊断工具。上传属于写操作，应更谨慎。
+
+**download 参数说明**：
+- `--server <服务器IP>`：目标服务器标识，必须已在 GUI 中登记。
+- `--remote <远程路径>`：远程文件路径，只支持文件，不用于下载目录；路径必须通过文件访问控制。
+- `--local <本地路径>`：本地保存路径。父目录不存在时会自动创建。
+- `--max-bytes <N>`：最大下载字节数，默认 10485760（10 MiB）。实际允许值还会受 GUI 文件访问策略限制；策略更小时以策略为准。
+
+**upload 参数说明**：
+- `--server <服务器IP>`：目标服务器标识，必须已在 GUI 中登记。
+- `--local <本地路径>`：本地源文件路径，只支持文件，不支持目录。
+- `--remote <远程路径>`：远程目标文件路径，必须通过文件访问控制；不要上传到未确认用途的系统关键路径。
+- `--backup=<true|false>`：覆盖远程已有文件前是否自动备份，默认 `true`；备份路径会在结果 `meta.backup_path` 中返回。明确不需要备份时传 `--backup=false`。
+- `--mkdir`：远程目标目录不存在时自动创建，默认关闭。仅在确认目标目录应被创建时使用。
+
+**示例**：
+```
+"{{OPSCOPILOT_BIN}}" file download --server 10.0.0.12 --remote /var/log/nginx/error.log --local ./tmp/error.log --max-bytes 5242880
+"{{OPSCOPILOT_BIN}}" file upload --server 10.0.0.12 --local ./fix.sh --remote /tmp/fix.sh --backup --mkdir
 ```
 
 受文件访问控制约束：远程可读/可写路径和大小上限均需在 GUI 配置中放行。默认写入路径为空（禁止上传），需用户显式配置。

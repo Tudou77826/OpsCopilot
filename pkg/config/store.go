@@ -14,6 +14,7 @@ type AppConfig struct {
 	Log                  LogConfig          `json:"log"`
 	Docs                 DocsConfig         `json:"docs"`
 	Scripts              ScriptsConfig      `json:"scripts"`
+	CLI                  CLIConfig          `json:"cli"`
 	QuickCommands        []QuickCommand     `json:"quick_commands"`
 	CompletionDelay      int                `json:"completion_delay"`
 	CommandQueryShortcut string             `json:"command_query_shortcut"`
@@ -23,12 +24,18 @@ type AppConfig struct {
 	PatchStore           PatchStoreConfig   `json:"patch_store"`
 }
 
+const DefaultCLIExecTimeoutSec = 120
+
+type CLIConfig struct {
+	ExecTimeoutSec int `json:"exec_timeout_sec"`
+}
+
 // PatchStoreConfig 补丁存储配置
 type PatchStoreConfig struct {
-	Enabled    bool   `json:"enabled"`
-	Type       string `json:"type"`        // "git"（未来: "http", "sftp"）
-	RemoteURL  string `json:"remote_url"`  // Git 仓库地址
-	Branch     string `json:"branch"`      // 分支名，默认 "main"
+	Enabled   bool   `json:"enabled"`
+	Type      string `json:"type"`       // "git"（未来: "http", "sftp"）
+	RemoteURL string `json:"remote_url"` // Git 仓库地址
+	Branch    string `json:"branch"`     // 分支名，默认 "main"
 }
 
 // ExperimentalConfig 实验性功能配置（保留结构以便未来扩展）
@@ -127,6 +134,9 @@ func newManagerWithDir(dir string) *Manager {
 		Scripts: ScriptsConfig{
 			Dir: "", // Default to empty, resolved to {logDir}/../scripts at runtime
 		},
+		CLI: CLIConfig{
+			ExecTimeoutSec: DefaultCLIExecTimeoutSec,
+		},
 		QuickCommands:        []QuickCommand{},
 		CompletionDelay:      150, // Default 150ms
 		CommandQueryShortcut: "Ctrl+K",
@@ -178,6 +188,7 @@ func (m *Manager) Load() error {
 	_, hasFastModel := llmRaw["FastModel"]
 	_, hasComplexModel := llmRaw["ComplexModel"]
 	_, hasOldModel := llmRaw["Model"]
+	_, hasCLI := raw["cli"]
 	_, hasCommandQueryShortcut := raw["command_query_shortcut"]
 	_, hasTerminal := raw["terminal"]
 
@@ -197,6 +208,10 @@ func (m *Manager) Load() error {
 	}
 	if hasOldModel && m.Config.LLM.Model != "" {
 		m.Config.LLM.Model = ""
+		changed = true
+	}
+	if !hasCLI || m.Config.CLI.ExecTimeoutSec <= 0 {
+		m.Config.CLI.ExecTimeoutSec = DefaultCLIExecTimeoutSec
 		changed = true
 	}
 	if !hasCommandQueryShortcut || m.Config.CommandQueryShortcut == "" {
@@ -304,6 +319,7 @@ func (m *Manager) Save() error {
 		Log                  LogConfig          `json:"log"`
 		Docs                 DocsConfig         `json:"docs"`
 		Scripts              ScriptsConfig      `json:"scripts"`
+		CLI                  CLIConfig          `json:"cli"`
 		CompletionDelay      int                `json:"completion_delay"`
 		CommandQueryShortcut string             `json:"command_query_shortcut"`
 		Experimental         ExperimentalConfig `json:"experimental"`
@@ -316,6 +332,7 @@ func (m *Manager) Save() error {
 		Log:                  m.Config.Log,
 		Docs:                 m.Config.Docs,
 		Scripts:              m.Config.Scripts,
+		CLI:                  m.Config.CLI,
 		CompletionDelay:      m.Config.CompletionDelay,
 		CommandQueryShortcut: m.Config.CommandQueryShortcut,
 		Experimental:         m.Config.Experimental,
