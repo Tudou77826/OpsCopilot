@@ -119,9 +119,10 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
         const currentIds = new Set(terminals.map(t => t.id));
         const prevIds = prevTerminalIdsRef.current;
 
-        // Add new terminals
+        // Add missing terminals. A tab can disappear from the layout model while
+        // the session is still present, for example after layout recovery/HMR.
         for (const term of terminals) {
-            if (!prevIds.has(term.id)) {
+            if (!prevIds.has(term.id) || !model.getNodeById(term.id)) {
                 let targetId: string | null = null;
 
                 // Find any existing tabset to add to
@@ -147,8 +148,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                         0,
                         true,
                     ));
-                    prevTerminalIdsRef.current = currentIds;
-                    return; // skip the normal addTab below
+                    continue; // skip the normal addTab below; later sessions can use the new tabset
                 }
 
                 if (targetId) {
@@ -225,6 +225,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                 terminalsMapRef={terminalsMapRef}
                 onTerminalData={onTerminalData}
                 terminalRefs={terminalRefs}
+                onActiveTerminalChange={onActiveTerminalChange}
                 completionDelay={completionDelay}
                 terminalConfig={terminalConfig}
                 highlightRules={highlightRules}
@@ -481,6 +482,7 @@ interface TerminalWrapperProps {
     terminalsMapRef: React.MutableRefObject<Map<string, TerminalSession>>;
     onTerminalData: (id: string, data: string) => void;
     terminalRefs: React.MutableRefObject<Map<string, TerminalRef>>;
+    onActiveTerminalChange?: (id: string | null) => void;
     completionDelay?: number;
     terminalConfig?: TerminalConfig;
     highlightRules?: HighlightRule[];
@@ -495,6 +497,7 @@ const TerminalWrapper: React.FC<TerminalWrapperProps> = ({
     terminalId,
     onTerminalData,
     terminalRefs,
+    onActiveTerminalChange,
     completionDelay,
     terminalConfig,
     highlightRules,
@@ -530,7 +533,11 @@ const TerminalWrapper: React.FC<TerminalWrapperProps> = ({
     const isActive = broadcastIds?.includes(terminalId);
 
     return (
-        <div style={{ height: '100%', width: '100%', position: 'relative' }}>
+        <div
+            style={{ height: '100%', width: '100%', position: 'relative' }}
+            onPointerDownCapture={() => onActiveTerminalChange?.(terminalId)}
+            onFocusCapture={() => onActiveTerminalChange?.(terminalId)}
+        >
             <TerminalComponent
                 id={terminalId}
                 sessionID={terminalId}

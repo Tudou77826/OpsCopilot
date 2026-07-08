@@ -22,6 +22,7 @@ interface TerminalProps {
 export interface TerminalRef {
     write: (data: string) => void;
     fit: () => void;
+    prepareForExternalInput: () => void;
     getCursorScreenPosition: () => { x: number; y: number } | null;
     focus: () => void;
 }
@@ -80,6 +81,9 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
     const postScanTimerRef = useRef<number | null>(null);
     const sizeSyncTimerRef = useRef<number | null>(null);
     const layoutRestoreRafRef = useRef<number | null>(null);
+    const layoutRestoreTimerRefs = useRef<number[]>([]);
+    const stickToBottomRef = useRef<boolean>(true);
+    const suppressScrollTrackingRef = useRef<boolean>(false);
 
     // Refs to avoid useEffect re-runs
     const completionVisibleRef = useRef(false);
@@ -703,14 +707,56 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             && dimensions.rows >= 2;
     };
 
-    const restoreViewport = (term: Terminal, bottomOffset: number) => {
+    const isAtBottom = (term: Terminal) => {
         const buffer = term.buffer.active;
-        if (bottomOffset <= 0) {
-            term.scrollToBottom();
-            return;
-        }
+        return Math.max(0, buffer.baseY - buffer.viewportY) <= 1;
+    };
 
-        term.scrollToLine(Math.max(0, buffer.baseY - bottomOffset));
+    const trackScrollPosition = (term: Terminal) => {
+        const container = terminalRef.current;
+        if (!container || !isTerminalMeasurable(container) || suppressScrollTrackingRef.current) return;
+        stickToBottomRef.current = isAtBottom(term);
+    };
+
+    const withSuppressedScrollTracking = (fn: () => void) => {
+        suppressScrollTrackingRef.current = true;
+        try {
+            fn();
+        } finally {
+            window.setTimeout(() => {
+                suppressScrollTrackingRef.current = false;
+            }, 0);
+        }
+    };
+
+    const syncViewportDomToBottom = () => {
+        const viewport = terminalRef.current?.querySelector<HTMLElement>('.xterm-viewport');
+        if (!viewport) return;
+        viewport.scrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+    };
+
+    const scrollToBottomAndRefresh = useCallback(() => {
+        const term = xtermRef.current;
+        if (!term) return;
+        stickToBottomRef.current = true;
+        withSuppressedScrollTracking(() => {
+            term.scrollToBottom();
+            syncViewportDomToBottom();
+            term.refresh(0, Math.max(0, term.rows - 1));
+            syncViewportDomToBottom();
+        });
+    }, []);
+
+    const restoreViewport = (term: Terminal, bottomOffset: number, forceBottom: boolean) => {
+        const buffer = term.buffer.active;
+        withSuppressedScrollTracking(() => {
+            if (forceBottom) {
+                term.scrollToBottom();
+                syncViewportDomToBottom();
+                return;
+            }
+            term.scrollToLine(Math.max(0, buffer.baseY - bottomOffset));
+        });
     };
 
     const runFitAndRefresh = useCallback((syncBackend = true) => {
@@ -722,10 +768,14 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
 
         const buffer = term.buffer.active;
         const bottomOffset = Math.max(0, buffer.baseY - buffer.viewportY);
+        const shouldStickToBottom = stickToBottomRef.current;
 
         fitAddon.fit();
-        restoreViewport(term, bottomOffset);
+        restoreViewport(term, bottomOffset, shouldStickToBottom);
         term.refresh(0, Math.max(0, term.rows - 1));
+        if (shouldStickToBottom) {
+            syncViewportDomToBottom();
+        }
 
         if (syncBackend) {
             scheduleSizeSync();
@@ -738,6 +788,10 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             window.cancelAnimationFrame?.(layoutRestoreRafRef.current);
             layoutRestoreRafRef.current = null;
         }
+        for (const timer of layoutRestoreTimerRefs.current) {
+            window.clearTimeout(timer);
+        }
+        layoutRestoreTimerRefs.current = [];
     }, []);
 
     const restoreTerminalLayout = useCallback(() => {
@@ -750,6 +804,13 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                 runFitAndRefresh(true);
             });
         }
+        layoutRestoreTimerRefs.current = [50, 150].map(delay => {
+            const timer = window.setTimeout(() => {
+                layoutRestoreTimerRefs.current = layoutRestoreTimerRefs.current.filter(t => t !== timer);
+                runFitAndRefresh(true);
+            }, delay);
+            return timer;
+        });
     }, [clearLayoutRestoreTimer, runFitAndRefresh]);
 
     // Fetch completions from backend
@@ -868,6 +929,10 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         fit: () => {
             restoreTerminalLayout();
         },
+        prepareForExternalInput: () => {
+            scrollToBottomAndRefresh();
+            xtermRef.current?.focus();
+        },
         focus: () => {
             xtermRef.current?.focus();
         },
@@ -939,6 +1004,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         scheduleHighlightScan(0);
 
         const onScrollDispose = term.onScroll(() => {
+            trackScrollPosition(term);
             schedulePostOutputScan();
             if (getSearchEnabled() && searchVisibleRef.current && searchQueryRef.current.trim()) {
                 scheduleSearchHighlightAll(200, {
@@ -951,6 +1017,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         });
 
         term.onData((data) => {
+            stickToBottomRef.current = true;
             // Pass all data through to backend immediately
             onDataRef.current?.(data);
 
@@ -1116,6 +1183,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             e.stopPropagation();
             const text = e.clipboardData?.getData('text');
             if (text) {
+                scrollToBottomAndRefresh();
                 currentInputRef.current += text;
                 setCompletionVisible(false);
                 completionVisibleRef.current = false;
@@ -1132,6 +1200,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                 e.preventDefault();
                 const selection = term.getSelection();
                 if (selection) {
+                    scrollToBottomAndRefresh();
                     currentInputRef.current += selection;
                     setCompletionVisible(false);
                     completionVisibleRef.current = false;
@@ -1143,6 +1212,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                 } else {
                     navigator.clipboard.readText().then(text => {
                         if (text) {
+                            scrollToBottomAndRefresh();
                             currentInputRef.current += text;
                             setCompletionVisible(false);
                             completionVisibleRef.current = false;
@@ -1168,6 +1238,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             } else {
                 navigator.clipboard.readText().then(text => {
                     if (text) {
+                        scrollToBottomAndRefresh();
                         currentInputRef.current += text;
                         setCompletionVisible(false);
                         completionVisibleRef.current = false;
@@ -1240,6 +1311,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         scheduleSizeSync,
         clearLayoutRestoreTimer,
         clearSearchDecorations,
+        scrollToBottomAndRefresh,
         scheduleHighlightScan,
         terminalConfig?.search_enabled,
     ]);

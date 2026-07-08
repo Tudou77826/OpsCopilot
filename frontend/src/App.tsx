@@ -443,19 +443,28 @@ function App() {
     };
 
     const handleQuickCommand = (command: string) => {
-        if (!activeTerminalId) {
+        const targetTerminalId = activeTerminalId;
+        if (!targetTerminalId) {
             toast.warning("请先选择一个激活的终端");
             return;
         }
+
+        const targetTerminal = terminalRefs.current.get(targetTerminalId);
+        if (!targetTerminal) {
+            toast.warning("请先选择一个激活的终端");
+            return;
+        }
+
+        targetTerminal.prepareForExternalInput();
 
         // @ts-ignore
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.Write) {
             const payload = command.replace(/[\r\n]+$/g, '');
             // @ts-ignore
-            window.go.main.App.Write(activeTerminalId, payload);
+            window.go.main.App.Write(targetTerminalId, payload);
         }
         setTimeout(() => {
-            terminalRefs.current.get(activeTerminalId)?.focus();
+            terminalRefs.current.get(targetTerminalId)?.focus();
         }, 0);
     };
 

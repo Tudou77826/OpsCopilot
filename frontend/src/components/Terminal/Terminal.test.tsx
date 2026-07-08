@@ -3,10 +3,11 @@ import { act, render, screen } from '@testing-library/react';
 import TerminalComponent, { TerminalRef } from './Terminal';
 import { vi, describe, it, expect, afterEach } from 'vitest';
 
-const { TerminalMock, terminalInstances, fitMock, proposeDimensionsMock, refreshMock, scrollToBottomMock, scrollToLineMock } = vi.hoisted(() => {
+const { TerminalMock, terminalInstances, scrollCallbacks, fitMock, proposeDimensionsMock, refreshMock, scrollToBottomMock, scrollToLineMock } = vi.hoisted(() => {
     return {
         TerminalMock: vi.fn(),
         terminalInstances: [] as any[],
+        scrollCallbacks: [] as Array<() => void>,
         fitMock: vi.fn(),
         proposeDimensionsMock: vi.fn(() => ({ cols: 80, rows: 24 })),
         refreshMock: vi.fn(),
@@ -22,7 +23,14 @@ vi.mock('xterm', () => {
         constructor() {
             TerminalMock();
             const terminal = {
-                open: vi.fn(),
+                open: vi.fn((container: HTMLElement) => {
+                    const xtermEl = document.createElement('div');
+                    xtermEl.className = 'xterm';
+                    const viewportEl = document.createElement('div');
+                    viewportEl.className = 'xterm-viewport';
+                    xtermEl.appendChild(viewportEl);
+                    container.appendChild(xtermEl);
+                }),
                 write: vi.fn(),
                 dispose: vi.fn(),
                 onData: vi.fn(),
@@ -32,7 +40,10 @@ vi.mock('xterm', () => {
                 clearSelection: vi.fn(),
                 paste: vi.fn(),
                 loadAddon: vi.fn(),
-                onScroll: vi.fn(() => ({ dispose: vi.fn() })),
+                onScroll: vi.fn((cb: () => void) => {
+                    scrollCallbacks.push(cb);
+                    return { dispose: vi.fn() };
+                }),
                 focus: vi.fn(),
                 refresh: refreshMock,
                 scrollToBottom: scrollToBottomMock,
@@ -86,6 +97,7 @@ describe('TerminalComponent', () => {
     vi.useRealTimers();
     TerminalMock.mockClear();
     terminalInstances.length = 0;
+    scrollCallbacks.length = 0;
     fitMock.mockClear();
     proposeDimensionsMock.mockClear();
     proposeDimensionsMock.mockReturnValue({ cols: 80, rows: 24 });
@@ -151,7 +163,7 @@ describe('TerminalComponent', () => {
     expect(refreshMock.mock.calls.length).toBeGreaterThan(1);
   });
 
-  it('preserves the scrollback offset when the terminal is not at the bottom', () => {
+  it('preserves the scrollback offset when the terminal is not at the bottom', async () => {
     const rect = {
         width: 800,
         height: 480,
@@ -173,6 +185,14 @@ describe('TerminalComponent', () => {
     term.buffer.active.baseY = 120;
     term.buffer.active.viewportY = 90;
 
+    await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    act(() => {
+        scrollCallbacks.forEach(cb => cb());
+    });
+
     fitMock.mockClear();
     refreshMock.mockClear();
     scrollToBottomMock.mockClear();
@@ -190,5 +210,72 @@ describe('TerminalComponent', () => {
     expect(scrollToBottomMock).not.toHaveBeenCalled();
     expect(scrollToLineMock).toHaveBeenCalledWith(110);
     expect(refreshMock).toHaveBeenCalledWith(0, 23);
+  });
+
+  it('keeps sticky-bottom intent when hidden output leaves viewport stale', () => {
+    let rect = {
+        width: 800,
+        height: 480,
+        top: 0,
+        left: 0,
+        bottom: 480,
+        right: 800,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+    } as DOMRect;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(() => rect);
+    vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(() => (
+        rect.width > 0 && rect.height > 0 ? [rect] as any : [] as any
+    ));
+
+    const ref = React.createRef<TerminalRef>();
+    render(<TerminalComponent id="hidden-output-term" ref={ref} />);
+    const viewport = screen.getByTestId('terminal-container-hidden-output-term')
+        .querySelector<HTMLElement>('.xterm-viewport');
+    expect(viewport).not.toBeNull();
+    Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 9000 });
+    Object.defineProperty(viewport, 'clientHeight', { configurable: true, value: 600 });
+    viewport!.scrollTop = 1200;
+
+    const term = terminalInstances[0];
+    term.buffer.active.baseY = 400;
+    term.buffer.active.viewportY = 400;
+
+    rect = {
+        ...rect,
+        width: 0,
+        height: 0,
+        bottom: 0,
+        right: 0,
+    } as DOMRect;
+    term.buffer.active.baseY = 520;
+    term.buffer.active.viewportY = 320;
+
+    act(() => {
+        scrollCallbacks.forEach(cb => cb());
+    });
+
+    rect = {
+        ...rect,
+        width: 800,
+        height: 480,
+        bottom: 480,
+        right: 800,
+    } as DOMRect;
+
+    fitMock.mockClear();
+    refreshMock.mockClear();
+    scrollToBottomMock.mockClear();
+    scrollToLineMock.mockClear();
+
+    act(() => {
+        ref.current?.fit();
+    });
+
+    expect(scrollToBottomMock).toHaveBeenCalled();
+    expect(scrollToLineMock).not.toHaveBeenCalled();
+    expect(refreshMock).toHaveBeenCalledWith(0, 23);
+    expect(viewport!.scrollTop).toBe(8400);
   });
 });
