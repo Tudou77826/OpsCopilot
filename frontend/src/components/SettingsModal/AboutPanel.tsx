@@ -6,8 +6,10 @@ import { colors, radius, font } from './settingsStyles';
 
 interface ReleaseInfo {
     tag_name: string;
+    name?: string;
     body: string;
     html_url: string;
+    published_at?: string;
 }
 
 interface ReleaseHistoryItem {
@@ -57,25 +59,47 @@ const friendlyError = (raw: string): string => {
     return '检查更新失败，请稍后再试';
 };
 
+const friendlyHistoryError = (raw: string): string => {
+    const lower = raw.toLowerCase();
+    if (lower.includes('timeout') || lower.includes('deadline')) return '版本日志加载超时，请稍后再试';
+    if (lower.includes('403') || lower.includes('rate limit')) return '版本日志暂不可用，请稍后再试';
+    if (lower.includes('dial tcp') || lower.includes('connect') || lower.includes('dns') || lower.includes('lookup')) {
+        return '版本日志加载失败，请检查网络连接';
+    }
+    return '版本日志暂不可用，请稍后再试';
+};
+
 const releaseAccentBar = (isCurrent: boolean, isNew: boolean): React.CSSProperties => ({
     width: '3px',
     flexShrink: 0,
     backgroundColor: isCurrent ? colors.success : (isNew ? colors.accent : 'transparent'),
 });
 
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const stripLeadingVersionHeading = (body: string, tagName: string) => {
+    const version = tagName.trim().replace(/^v/i, '');
+    if (!body || !version) return body;
+    return body.replace(new RegExp(`^\\s{0,3}#{1,6}\\s+v?${escapeRegExp(version)}\\s*\\n+`, 'i'), '');
+};
+
+const extractSingleReleaseBody = (body: string, tagName: string) => {
+    const firstSection = body.split(/\n\s*---\s*\n/)[0] || body;
+    return stripLeadingVersionHeading(firstSection, tagName);
+};
+
 const AboutPanel: React.FC = () => {
     const [currentVersion, setCurrentVersion] = useState('...');
     const [updateState, setUpdateState] = useState<UpdateState>('idle');
     const [latestVersion, setLatestVersion] = useState('');
-    const [changelog, setChangelog] = useState('');
     const [downloadURL, setDownloadURL] = useState('');
     const [errorMsg, setErrorMsg] = useState('');
-    const [skippedVersions, setSkippedVersions] = useState<string[]>([]);
     const [progress, setProgress] = useState<DownloadProgress>({ bytesDownloaded: 0, bytesTotal: 0, percentage: 0, speedBps: 0 });
     const [releaseHistory, setReleaseHistory] = useState<ReleaseHistoryItem[]>([]);
     const [historyState, setHistoryState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
     const [historyError, setHistoryError] = useState('');
     const [releaseIndex, setReleaseIndex] = useState(0);
+    const [pageDirection, setPageDirection] = useState<'next' | 'prev' | 'none'>('none');
 
     useEffect(() => {
         const loadVersion = async () => {
@@ -88,7 +112,7 @@ const AboutPanel: React.FC = () => {
         loadVersion();
     }, []);
 
-    const handleCheck = useCallback(async () => {
+    const handleCheck = useCallback(async (): Promise<UpdateStatus | null> => {
         setUpdateState('checking');
         setErrorMsg('');
         try {
@@ -97,31 +121,46 @@ const AboutPanel: React.FC = () => {
             if (!raw) {
                 setUpdateState('error');
                 setErrorMsg('未收到响应');
-                return;
+                return null;
             }
             const status: UpdateStatus = typeof raw === 'string' ? JSON.parse(raw) : raw;
             if (status.error) {
                 setUpdateState('error');
                 setErrorMsg(friendlyError(status.error));
-                return;
+                return null;
             }
             if (status.hasUpdate && status.downloadUrl) {
                 setLatestVersion(status.latestVersion || '');
-                setChangelog(status.release?.body || '');
                 setDownloadURL(status.downloadUrl);
-                setSkippedVersions(status.skippedVersions || []);
+                if (status.release) {
+                    const latestTag = status.latestVersion || status.release.tag_name;
+                    const latestRelease: ReleaseHistoryItem = {
+                        tag_name: latestTag,
+                        name: status.release.name || latestTag,
+                        body: extractSingleReleaseBody(status.release.body || '', latestTag),
+                        html_url: status.release.html_url || '',
+                        published_at: status.release.published_at || '',
+                    };
+                    setReleaseHistory(prev => [latestRelease, ...prev.filter(r => r.tag_name !== latestTag)]);
+                    setReleaseIndex(0);
+                    setPageDirection('none');
+                    setHistoryState('loaded');
+                    setHistoryError('');
+                }
                 setUpdateState('available');
             } else {
                 setLatestVersion(status.latestVersion || status.currentVersion);
                 setUpdateState('no-update');
             }
+            return status;
         } catch (e: any) {
             setUpdateState('error');
             setErrorMsg(friendlyError(e.toString()));
+            return null;
         }
     }, []);
 
-    const handleLoadReleases = useCallback(async () => {
+    const handleLoadReleases = useCallback(async (preferredVersion = '') => {
         setHistoryState('loading');
         setHistoryError('');
         try {
@@ -135,7 +174,7 @@ const AboutPanel: React.FC = () => {
             const resp: ReleaseHistoryResponse = typeof raw === 'string' ? JSON.parse(raw) : raw;
             if (resp.error) {
                 setHistoryState('error');
-                setHistoryError(friendlyError(resp.error));
+                setHistoryError(friendlyHistoryError(resp.error));
                 return;
             }
             setReleaseHistory(resp.releases || []);
@@ -144,26 +183,28 @@ const AboutPanel: React.FC = () => {
             const list = resp.releases || [];
             const norm = (t: string) => (t.startsWith('v') ? t.slice(1) : t);
             const currentVer = norm(currentVersion);
+            const targetVersion = preferredVersion || latestVersion;
             let targetIdx = -1;
-            if (latestVersion) {
-                targetIdx = list.findIndex(r => r.tag_name === latestVersion);
+            if (targetVersion) {
+                targetIdx = list.findIndex(r => r.tag_name === targetVersion);
             }
             if (targetIdx < 0 && currentVersion) {
                 targetIdx = list.findIndex(r => norm(r.tag_name) === currentVer);
             }
             setReleaseIndex(targetIdx >= 0 ? Math.min(targetIdx, list.length - 1) : 0);
+            setPageDirection('none');
         } catch (e: any) {
             setHistoryState('error');
-            setHistoryError(friendlyError(e.toString()));
+            setHistoryError(friendlyHistoryError(e.toString()));
         }
-    }, []);
+    }, [currentVersion, latestVersion]);
 
-    const handleCheckAndLoad = useCallback(() => {
-        handleCheck();
-        if (historyState === 'idle') {
-            handleLoadReleases();
+    const handleCheckAndLoad = useCallback(async () => {
+        const status = await handleCheck();
+        if (status) {
+            await handleLoadReleases(status.latestVersion || '');
         }
-    }, [handleCheck, handleLoadReleases, historyState]);
+    }, [handleCheck, handleLoadReleases]);
 
     const formatDate = (iso: string) => {
         if (!iso) return '';
@@ -214,6 +255,11 @@ const AboutPanel: React.FC = () => {
         }
     }, [downloadURL]);
 
+    const pageRelease = useCallback((delta: number, total: number) => {
+        setPageDirection(delta > 0 ? 'next' : 'prev');
+        setReleaseIndex(i => Math.max(0, Math.min(total - 1, i + delta)));
+    }, []);
+
     const formatBytes = (b: number) => {
         if (b < 1024) return `${b} B`;
         if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`;
@@ -226,38 +272,44 @@ const AboutPanel: React.FC = () => {
         return `${(bps / 1048576).toFixed(1)} MB/s`;
     };
 
+    const releaseMarkdownComponents = {
+        h1: ({ children }: { children?: React.ReactNode }) => <div style={styles.releaseHeading}>{children}</div>,
+        h2: ({ children }: { children?: React.ReactNode }) => <div style={styles.releaseHeading}>{children}</div>,
+        h3: ({ children }: { children?: React.ReactNode }) => <div style={styles.releaseSubheading}>{children}</div>,
+        p: ({ children }: { children?: React.ReactNode }) => <p style={styles.releaseParagraph}>{children}</p>,
+        ul: ({ children }: { children?: React.ReactNode }) => <ul style={styles.releaseList}>{children}</ul>,
+        li: ({ children }: { children?: React.ReactNode }) => <li style={styles.releaseListItem}>{children}</li>,
+        strong: ({ children }: { children?: React.ReactNode }) => <strong style={styles.releaseStrong}>{children}</strong>,
+        a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
+            <a href={href} target="_blank" rel="noopener noreferrer" style={styles.releaseLink}>{children}</a>
+        ),
+    };
+
     return (
         <div style={styles.container}>
-            {/* Hero card */}
-            <div style={styles.heroCard}>
-                <img src={logo} alt="OpsCopilot" style={styles.heroLogo} />
-                <div style={styles.heroInfo}>
-                    <div style={styles.heroName}>OpsCopilot</div>
-                    <div style={styles.heroDesc}>AI 驱动的智能运维助手</div>
-                    <div style={styles.heroVersion}>{currentVersion.startsWith('v') ? currentVersion : `v${currentVersion}`}</div>
+            <div style={styles.productHeader}>
+                <img src={logo} alt="OpsCopilot" style={styles.productLogo} />
+                <div style={styles.productMain}>
+                    <div style={styles.productTitleRow}>
+                        <div style={styles.productName}>OpsCopilot</div>
+                        <span style={styles.versionBadge}>{currentVersion.startsWith('v') ? currentVersion : `v${currentVersion}`}</span>
+                    </div>
+                    <div style={styles.productDesc}>AI 驱动的智能运维助手</div>
                 </div>
+                <a href={GITHUB_REPO} target="_blank" rel="noopener noreferrer" style={styles.projectLink}>项目主页</a>
             </div>
 
-            {/* Info grid */}
-            <div style={styles.infoGrid}>
-                <div style={styles.infoCard}>
-                    <div style={styles.infoLabel}>作者</div>
-                    <div style={styles.infoValue}>z-yibo</div>
-                </div>
-                <div style={styles.infoCard}>
-                    <div style={styles.infoLabel}>项目主页</div>
-                    <a href={GITHUB_REPO} target="_blank" rel="noopener noreferrer" style={styles.link}>
-                        GitHub
-                    </a>
-                </div>
-            </div>
-
-            <div style={styles.divider} />
-
-            {/* 版本与更新（一体化）：更新状态 + 版本日志列表合并展示 */}
             <div style={styles.section}>
                 <div style={styles.sectionHeader}>
-                    <div style={styles.sectionTitle}>版本与更新</div>
+                    <div>
+                        <div style={styles.sectionTitle}>版本与更新</div>
+                        <div style={styles.sectionHint}>
+                            <span>发布记录与可用更新</span>
+                            {updateState === 'available' && (
+                                <span style={styles.updateMiniWarning}>新版本 {latestVersion}，重启会丢失会话</span>
+                            )}
+                        </div>
+                    </div>
                     {(updateState === 'idle' || updateState === 'no-update' || updateState === 'available') && (
                         <button style={styles.ghostBtn} onClick={handleCheckAndLoad} disabled={historyState === 'loading'}>
                             {updateState === 'idle' ? '检查更新' : '重新检查'}
@@ -272,8 +324,19 @@ const AboutPanel: React.FC = () => {
                         <span style={styles.checkingText}>正在检查...</span>
                     </div>
                 )}
+                {updateState === 'idle' && historyState === 'idle' && (
+                    <div style={styles.statusBannerMuted}>尚未检查更新</div>
+                )}
                 {updateState === 'no-update' && (
                     <div style={styles.statusBannerOk}>已是最新版本 ({latestVersion})</div>
+                )}
+                {updateState === 'available' && releaseHistory.length === 0 && (
+                    <div style={styles.updateFallback}>
+                        <span>可更新至 {latestVersion}</span>
+                        <button style={styles.updateBtn} onClick={handleUpdate} disabled={!downloadURL}>
+                            更新并重启
+                        </button>
+                    </div>
                 )}
                 {updateState === 'downloading' && (
                     <div style={styles.statusBanner}>
@@ -306,10 +369,10 @@ const AboutPanel: React.FC = () => {
                         <span style={styles.checkingText}>正在加载版本日志...</span>
                     </div>
                 )}
-                {historyState === 'error' && updateState !== 'error' && (
+                {historyState === 'error' && updateState !== 'error' && updateState !== 'available' && (
                     <div style={styles.statusBannerError}>
                         <span>{historyError}</span>
-                        <button style={styles.linkBtn} onClick={handleLoadReleases}>重试</button>
+                        <button style={styles.linkBtn} onClick={() => handleLoadReleases()}>重试</button>
                     </div>
                 )}
                 {historyState === 'loaded' && releaseHistory.length === 0 && (
@@ -321,6 +384,7 @@ const AboutPanel: React.FC = () => {
                     const total = releaseHistory.length;
                     const safeIdx = Math.min(releaseIndex, total - 1);
                     const r = releaseHistory[safeIdx];
+                    const releaseBody = stripLeadingVersionHeading(r.body, r.tag_name);
                     const ver = r.tag_name.startsWith('v') ? r.tag_name.slice(1) : r.tag_name;
                     const currentVer = currentVersion.startsWith('v') ? currentVersion.slice(1) : currentVersion;
                     const isCurrent = !!(currentVersion && currentVer === ver);
@@ -332,54 +396,63 @@ const AboutPanel: React.FC = () => {
                             : styles.releaseCardNormal;
                     return (
                         <div style={styles.releasePager}>
-                            {/* 左右翻页按钮 */}
-                            <button
-                                style={styles.pagerArrow}
-                                onClick={() => setReleaseIndex(i => Math.max(0, i - 1))}
-                                disabled={safeIdx === 0}
-                                aria-label="上一个版本"
-                            >‹</button>
+                            {total > 1 && (
+                                <button
+                                    style={{ ...styles.pagerArrow, ...styles.pagerArrowPrev }}
+                                    onClick={() => pageRelease(-1, total)}
+                                    disabled={safeIdx === 0}
+                                    aria-label="上一个版本"
+                                >‹</button>
+                            )}
 
-                            {/* 当前版本卡片（一次只显示一张） */}
-                            <div style={{ ...styles.releaseCard, ...accentStyle, flex: 1, minWidth: 0 }}>
-                                <div style={releaseAccentBar(isCurrent, isNew)} />
-                                <div style={styles.releaseContent}>
-                                    <div style={styles.releaseHeader}>
-                                        <span style={styles.releaseTag}>{r.tag_name}</span>
-                                        {isNew && <span style={styles.badgeNew}>新版本</span>}
-                                        {isCurrent && <span style={styles.badgeCurrent}>当前版本</span>}
-                                        <span style={styles.releasePagerInfo}>{safeIdx + 1} / {total}</span>
-                                        <span style={styles.releaseDate}>{formatDate(r.published_at)}</span>
+                            <div style={styles.releaseDeck}>
+                                {total > 1 && (
+                                    <>
+                                        <div style={{ ...styles.releaseStackCard, ...styles.releaseStackCardBack }} />
+                                        <div style={{ ...styles.releaseStackCard, ...styles.releaseStackCardMid }} />
+                                    </>
+                                )}
+                                <div
+                                    key={r.tag_name}
+                                    className={`about-release-card about-release-card-${pageDirection}`}
+                                    style={{ ...styles.releaseCard, ...accentStyle }}
+                                >
+                                    <div style={releaseAccentBar(isCurrent, isNew)} />
+                                    <div style={styles.releaseContent}>
+                                        <div style={styles.releaseHeader}>
+                                            <span style={styles.releaseTag}>{r.tag_name}</span>
+                                            {isNew && <span style={styles.badgeNew}>新版本</span>}
+                                            {isCurrent && <span style={styles.badgeCurrent}>当前版本</span>}
+                                            {total > 1 && <span style={styles.releasePagerInfo}>{safeIdx + 1} / {total}</span>}
+                                            <span style={styles.releaseDate}>{formatDate(r.published_at)}</span>
+                                        </div>
+                                        {releaseBody && (
+                                            <div style={styles.releaseBody}>
+                                                <ReactMarkdown components={releaseMarkdownComponents}>{releaseBody}</ReactMarkdown>
+                                            </div>
+                                        )}
+                                        {isNew && (
+                                            <div style={styles.btnRow}>
+                                                <button style={styles.updateBtn} onClick={handleUpdate} disabled={updateState !== 'available'}>
+                                                    更新并重启
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
-                                    {r.body && (
-                                        <div style={styles.releaseBody}>
-                                            <ReactMarkdown>{r.body}</ReactMarkdown>
-                                        </div>
-                                    )}
-                                    {isNew && (
-                                        <div style={styles.btnRow}>
-                                            <button style={styles.updateBtn} onClick={handleUpdate} disabled={updateState !== 'available'}>
-                                                立即更新
-                                            </button>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
 
-                            <button
-                                style={styles.pagerArrow}
-                                onClick={() => setReleaseIndex(i => Math.min(total - 1, i + 1))}
-                                disabled={safeIdx === total - 1}
-                                aria-label="下一个版本"
-                            >›</button>
+                            {total > 1 && (
+                                <button
+                                    style={{ ...styles.pagerArrow, ...styles.pagerArrowNext }}
+                                    onClick={() => pageRelease(1, total)}
+                                    disabled={safeIdx === total - 1}
+                                    aria-label="下一个版本"
+                                >›</button>
+                            )}
                         </div>
                     );
                 })()}
-            </div>
-
-            {/* Footer */}
-            <div style={styles.footer}>
-                Made with dedication for Ops teams
             </div>
         </div>
     );
@@ -389,104 +462,100 @@ const styles: Record<string, React.CSSProperties> = {
     container: {
         display: 'flex',
         flexDirection: 'column',
-        gap: '0',
-        padding: '4px 0 0 0',
+        gap: '14px',
+        padding: '2px 0 24px 0',
     },
-    // Hero
-    heroCard: {
+    productHeader: {
         display: 'flex',
         alignItems: 'center',
-        gap: '16px',
-        padding: '20px',
-        backgroundColor: colors.bgPrimary,
-        borderRadius: radius.lg,
-        border: `1px solid ${colors.borderPrimary}`,
+        gap: '12px',
+        padding: '8px 2px 14px',
+        borderBottom: `1px solid ${colors.borderSubtle}`,
     },
-    heroLogo: {
-        width: 56,
-        height: 56,
-        borderRadius: '12px',
+    productLogo: {
+        width: 42,
+        height: 42,
+        borderRadius: radius.md,
         flexShrink: 0,
     },
-    heroInfo: {
+    productMain: {
         display: 'flex',
         flexDirection: 'column',
-        gap: '2px',
+        gap: '3px',
+        minWidth: 0,
+        flex: 1,
     },
-    heroName: {
+    productTitleRow: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        flexWrap: 'wrap',
+    },
+    productName: {
         color: colors.textPrimary,
-        fontSize: '20px',
+        fontSize: '18px',
         fontWeight: 700,
-        letterSpacing: '-0.3px',
     },
-    heroDesc: {
+    productDesc: {
         color: colors.textTertiary,
-        fontSize: font.base,
-    },
-    heroVersion: {
-        color: colors.accent,
         fontSize: font.sm,
-        fontFamily: 'monospace',
-        marginTop: '2px',
     },
-    // Info grid
-    infoGrid: {
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: '8px',
-        marginTop: '10px',
-    },
-    infoCard: {
-        padding: '10px 12px',
-        backgroundColor: colors.bgPrimary,
-        borderRadius: radius.md,
-        border: `1px solid ${colors.borderPrimary}`,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '6px',
-    },
-    infoLabel: {
-        color: colors.textMuted,
-        fontSize: font.xs,
-        textTransform: 'uppercase' as const,
-        letterSpacing: '0.5px',
-    },
-    infoValue: {
-        color: colors.textSecondary,
-        fontSize: font.base,
-    },
-    link: {
+    versionBadge: {
         color: colors.accent,
-        fontSize: font.base,
+        fontSize: font.xs,
+        fontFamily: 'monospace',
+        backgroundColor: 'rgba(0, 122, 204, 0.12)',
+        border: '1px solid rgba(0, 122, 204, 0.28)',
+        borderRadius: radius.full,
+        padding: '2px 8px',
+    },
+    projectLink: {
+        color: colors.textSecondary,
+        fontSize: font.sm,
         textDecoration: 'none',
+        padding: '5px 10px',
+        borderRadius: radius.sm,
+        border: `1px solid ${colors.borderPrimary}`,
+        backgroundColor: colors.bgPrimary,
+        flexShrink: 0,
     },
-    // Divider
-    divider: {
-        borderTop: `1px solid ${colors.borderPrimary}`,
-        margin: '16px 0',
-    },
-    // Update section
     section: {
         display: 'flex',
         flexDirection: 'column',
         gap: '10px',
+        padding: '8px 0 0',
     },
     sectionTitle: {
         color: colors.textPrimary,
-        fontSize: font.base,
+        fontSize: font.lg,
         fontWeight: 600,
+    },
+    sectionHint: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        flexWrap: 'wrap',
+        color: colors.textMuted,
+        fontSize: font.xs,
+        marginTop: '3px',
+    },
+    updateMiniWarning: {
+        color: colors.warning,
+        backgroundColor: 'rgba(255, 152, 0, 0.08)',
+        border: '1px solid rgba(255, 152, 0, 0.22)',
+        borderRadius: radius.full,
+        padding: '1px 7px',
     },
     sectionHeader: {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: '8px',
-        marginBottom: '2px',
+        gap: '12px',
     },
     ghostBtn: {
         padding: '5px 12px',
-        backgroundColor: 'transparent',
-        color: colors.textTertiary,
+        backgroundColor: colors.bgPrimary,
+        color: colors.textSecondary,
         border: `1px solid ${colors.borderPrimary}`,
         borderRadius: radius.sm,
         cursor: 'pointer',
@@ -518,18 +587,26 @@ const styles: Record<string, React.CSSProperties> = {
         border: `1px solid ${colors.borderPrimary}`,
     },
     statusBannerOk: {
-        padding: '8px 12px',
+        padding: '9px 12px',
         color: colors.success,
         fontSize: font.sm,
         backgroundColor: 'rgba(76, 175, 80, 0.08)',
         borderRadius: radius.md,
         border: `1px solid rgba(76, 175, 80, 0.25)`,
     },
+    statusBannerMuted: {
+        padding: '9px 12px',
+        color: colors.textMuted,
+        fontSize: font.sm,
+        backgroundColor: colors.bgPrimary,
+        borderRadius: radius.md,
+        border: `1px solid ${colors.borderSubtle}`,
+    },
     statusBannerError: {
         display: 'flex',
         alignItems: 'center',
         gap: '12px',
-        padding: '8px 12px',
+        padding: '9px 12px',
         color: colors.danger,
         fontSize: font.sm,
         backgroundColor: 'rgba(244, 67, 54, 0.08)',
@@ -538,41 +615,78 @@ const styles: Record<string, React.CSSProperties> = {
     },
     // 版本日志翻页容器：左右按钮 + 单张卡片
     releasePager: {
+        position: 'relative',
         display: 'flex',
-        alignItems: 'flex-start',
-        gap: '8px',
-        marginTop: '4px',
+        alignItems: 'stretch',
+        marginTop: '2px',
+        minHeight: '304px',
+        padding: '0 42px',
     },
     pagerArrow: {
-        flexShrink: 0,
-        width: '32px',
-        height: '32px',
-        marginTop: '8px',
+        position: 'absolute',
+        top: '50%',
+        transform: 'translateY(-50%)',
+        zIndex: 5,
+        width: '28px',
+        height: '42px',
         border: `1px solid ${colors.borderPrimary}`,
         backgroundColor: colors.bgPrimary,
         color: colors.textSecondary,
-        borderRadius: radius.md,
+        borderRadius: radius.sm,
         cursor: 'pointer',
         fontSize: '20px',
         fontWeight: 300,
-        lineHeight: '30px',
+        lineHeight: '40px',
         padding: 0,
         textAlign: 'center' as const,
         transition: 'background-color 0.15s, color 0.15s',
     } as React.CSSProperties,
+    pagerArrowPrev: {
+        left: '0',
+    },
+    pagerArrowNext: {
+        right: '0',
+    },
     releasePagerInfo: {
         color: colors.textMuted,
         fontSize: font.xs,
         fontFamily: 'monospace',
         marginLeft: 'auto',
-        marginRight: '8px',
+    },
+    releaseDeck: {
+        position: 'relative',
+        flex: 1,
+        minWidth: 0,
+        minHeight: '292px',
+        padding: '0 14px 10px 0',
+    },
+    releaseStackCard: {
+        position: 'absolute',
+        inset: '8px 4px 2px 12px',
+        borderRadius: radius.md,
+        border: `1px solid ${colors.borderSubtle}`,
+        backgroundColor: colors.bgPrimary,
+        pointerEvents: 'none',
+    },
+    releaseStackCardBack: {
+        transform: 'translate(14px, 10px) rotate(1.2deg)',
+        opacity: 0.28,
+    },
+    releaseStackCardMid: {
+        transform: 'translate(7px, 5px) rotate(0.6deg)',
+        opacity: 0.42,
     },
     releaseCard: {
+        position: 'relative',
+        zIndex: 2,
         display: 'flex',
+        minHeight: '272px',
+        height: '100%',
         borderRadius: radius.md,
         overflow: 'hidden',
-        backgroundColor: colors.bgSecondary,
+        backgroundColor: colors.bgPrimary,
         border: `1px solid ${colors.borderPrimary}`,
+        boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.02)',
     },
     releaseCardNormal: {
         // 普通（历史）版本卡片
@@ -582,13 +696,16 @@ const styles: Record<string, React.CSSProperties> = {
         backgroundColor: 'rgba(76, 175, 80, 0.04)',
     },
     releaseCardNew: {
-        borderColor: 'rgba(0, 122, 204, 0.5)',
-        backgroundColor: 'rgba(0, 122, 204, 0.06)',
+        borderColor: 'rgba(0, 122, 204, 0.32)',
+        backgroundColor: colors.bgPrimary,
     },
     releaseContent: {
         flex: 1,
-        padding: '12px 14px',
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '12px 14px 14px',
         minWidth: 0,
+        minHeight: 0,
     },
     releaseHeader: {
         display: 'flex',
@@ -601,6 +718,7 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: font.base,
         fontWeight: 600,
         fontFamily: 'monospace',
+        letterSpacing: 0,
     },
     badgeCurrent: {
         color: colors.success,
@@ -625,24 +743,48 @@ const styles: Record<string, React.CSSProperties> = {
         marginLeft: 'auto',
     },
     releaseBody: {
+        flex: 1,
         color: colors.textSecondary,
         fontSize: font.sm,
         lineHeight: 1.6,
+        maxHeight: '206px',
+        overflowY: 'auto',
+        paddingRight: '6px',
     },
-    checkBtn: {
-        padding: '8px 16px',
-        backgroundColor: colors.accent,
+    releaseHeading: {
         color: colors.textPrimary,
-        border: 'none',
-        borderRadius: radius.sm,
-        cursor: 'pointer',
         fontSize: font.base,
-        alignSelf: 'flex-start',
+        fontWeight: 700,
+        margin: '2px 0 7px',
     },
-    checkingRow: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
+    releaseSubheading: {
+        color: colors.textSecondary,
+        fontSize: font.base,
+        fontWeight: 600,
+        margin: '8px 0 6px',
+    },
+    releaseParagraph: {
+        margin: '6px 0',
+        color: colors.textSecondary,
+        fontSize: font.sm,
+        lineHeight: 1.55,
+    },
+    releaseList: {
+        margin: '6px 0',
+        paddingLeft: '18px',
+        color: colors.textSecondary,
+    },
+    releaseListItem: {
+        margin: '2px 0',
+        lineHeight: 1.55,
+    },
+    releaseStrong: {
+        color: colors.textPrimary,
+        fontWeight: 600,
+    },
+    releaseLink: {
+        color: colors.accent,
+        textDecoration: 'none',
     },
     loadingSpinner: {
         width: '14px',
@@ -657,66 +799,33 @@ const styles: Record<string, React.CSSProperties> = {
         color: colors.textTertiary,
         fontSize: font.base,
     },
-    secondaryBtn: {
-        padding: '6px 12px',
-        backgroundColor: 'transparent',
-        color: colors.textTertiary,
-        border: `1px solid ${colors.bgHover}`,
-        borderRadius: radius.sm,
-        cursor: 'pointer',
-        fontSize: font.sm,
-        alignSelf: 'flex-start',
-    },
     updateBtn: {
-        padding: '8px 16px',
-        backgroundColor: colors.success,
+        padding: '7px 14px',
+        backgroundColor: colors.accent,
         color: colors.textPrimary,
         border: 'none',
         borderRadius: radius.sm,
         cursor: 'pointer',
-        fontSize: font.base,
-    },
-    resultBox: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px',
-    },
-    upToDate: {
-        color: colors.success,
-        fontSize: font.base,
-    },
-    newVersion: {
-        color: colors.success,
-        fontSize: font.lg,
+        fontSize: font.sm,
         fontWeight: 600,
     },
-    skippedHint: {
-        color: colors.textMuted,
-        fontSize: font.xs,
-        lineHeight: 1.5,
-    },
-    changelogBox: {
-        backgroundColor: colors.bgPrimary,
-        border: `1px solid ${colors.borderPrimary}`,
-        borderRadius: radius.md,
-        padding: '10px 12px',
-        maxHeight: '360px',
-        overflowY: 'auto',
-    },
-    changelogTitle: {
-        color: colors.textTertiary,
-        fontSize: font.xs,
-        marginBottom: '6px',
-    },
-    changelogBody: {
-        color: colors.textSecondary,
+    updateFallback: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '10px',
+        padding: '9px 12px',
+        color: colors.warning,
         fontSize: font.sm,
-        lineHeight: 1.6,
+        backgroundColor: 'rgba(255, 152, 0, 0.08)',
+        border: '1px solid rgba(255, 152, 0, 0.25)',
+        borderRadius: radius.md,
     },
     btnRow: {
         display: 'flex',
         gap: '8px',
         alignItems: 'center',
+        marginTop: '10px',
     },
     progressBarBg: {
         width: '100%',
@@ -740,24 +849,6 @@ const styles: Record<string, React.CSSProperties> = {
         justifyContent: 'space-between',
         color: colors.textTertiary,
         fontSize: font.xs,
-    },
-    readyMsg: {
-        color: colors.success,
-        fontSize: font.base,
-        fontWeight: 600,
-    },
-    errorMsg: {
-        color: colors.danger,
-        fontSize: font.sm,
-    },
-    // Footer
-    footer: {
-        color: colors.bgHover,
-        fontSize: font.xs,
-        textAlign: 'center' as const,
-        marginTop: '16px',
-        paddingTop: '12px',
-        borderTop: `1px solid ${colors.borderPrimary}`,
     },
 };
 

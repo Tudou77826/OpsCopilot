@@ -25,6 +25,18 @@ interface TerminalSession {
     disconnectReason?: string;
 }
 
+const DAILY_UPDATE_CHECK_HOUR = 8;
+const ATTENTION_DOT_COLOR = '#f44336';
+
+const getDelayUntilNextDailyUpdateCheck = (now = new Date()) => {
+    const next = new Date(now);
+    next.setHours(DAILY_UPDATE_CHECK_HOUR, 0, 0, 0);
+    if (next.getTime() <= now.getTime()) {
+        next.setDate(next.getDate() + 1);
+    }
+    return next.getTime() - now.getTime();
+};
+
 function App() {
     const toast = useToast();
     const [status, setStatus] = useState("就绪");
@@ -164,18 +176,41 @@ function App() {
         };
         loadSettings();
 
-        // Check for updates on startup (background, non-blocking)
+        // Check for updates on startup and then once per day at 08:00 local time.
+        let updateCheckTimer: ReturnType<typeof setTimeout> | undefined;
+        let disposed = false;
+
         const checkUpdate = async () => {
             try {
                 // @ts-ignore
                 const raw = await window.go?.main?.App?.CheckUpdate?.();
+                if (disposed) return;
                 if (raw) {
                     const result = typeof raw === 'string' ? JSON.parse(raw) : raw;
-                    if (result.hasUpdate) setUpdateAvailable(true);
+                    if (result.error) return;
+                    setUpdateAvailable(!!result.hasUpdate);
                 }
             } catch { /* silent */ }
         };
+
+        const scheduleDailyUpdateCheck = () => {
+            updateCheckTimer = setTimeout(async () => {
+                await checkUpdate();
+                if (!disposed) {
+                    scheduleDailyUpdateCheck();
+                }
+            }, getDelayUntilNextDailyUpdateCheck());
+        };
+
         checkUpdate();
+        scheduleDailyUpdateCheck();
+
+        return () => {
+            disposed = true;
+            if (updateCheckTimer) {
+                clearTimeout(updateCheckTimer);
+            }
+        };
     }, []);
 
     useEffect(() => {
@@ -636,7 +671,7 @@ function App() {
                                 width: '8px',
                                 height: '8px',
                                 borderRadius: '50%',
-                                backgroundColor: '#4caf50',
+                                backgroundColor: ATTENTION_DOT_COLOR,
                                 border: '1px solid #1e1e1e',
                             }} />
                         )}

@@ -126,7 +126,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const [skillLoading, setSkillLoading] = useState(false);
     const [skillMsg, setSkillMsg] = useState('');
     const [skillState, setSkillState] = useState<'unknown' | 'not_installed' | 'up_to_date' | 'outdated'>('unknown');
-    // skill 是否需要关注（未配置 / 未安装 / 过期）→ 「AI 接入」导航项亮绿点
+    // skill 是否需要关注（未配置 / 未安装 / 过期）→ 「AI 接入」导航项亮红点
     const [skillNeedsAttention, setSkillNeedsAttention] = useState(false);
     const [skillInstalledVer, setSkillInstalledVer] = useState('');
     const [skillBuiltinVer, setSkillBuiltinVer] = useState('');
@@ -176,12 +176,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             setSearchQuery('');
             setActiveTab('llm');
 
-            // 回填上次使用的 skill 目录，并据此判断「AI 接入」导航项是否需要亮绿点。
+            // 回填上次使用的 skill 目录，并据此判断「AI 接入」导航项是否需要亮红点。
             // 同时写入 skillState/版本号，供 tab 内状态横幅展示准确文案。
             const savedSkillDir = localStorage.getItem('opscopilot:skillDir') || '';
             setSkillDir(savedSkillDir);
             if (!savedSkillDir) {
-                // 从未配置过 skill 目录 → 引导用户去配置/安装，亮绿点
+                // 从未配置过 skill 目录 → 引导用户去配置/安装，亮红点
                 setSkillNeedsAttention(true);
             } else {
                 // 已配置过：静默检测一次，按 state 决定是否亮点
@@ -472,7 +472,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 setSkillInstalledVer(r.installed || '');
                 setSkillBuiltinVer(r.builtin || '');
                 setSkillState(r.state || 'unknown');
-                // 同步导航 badge：非 up_to_date（未安装/过期）则亮绿点
+                // 同步导航 badge：非 up_to_date（未安装/过期）则亮红点
                 setSkillNeedsAttention(r.state !== 'up_to_date');
                 if (r.state === 'not_installed') {
                     setSkillMsg('该目录下尚未安装 OpsCopilot skill');
@@ -522,7 +522,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     if (!isOpen || !config) return null;
 
     // AI 接入 tab 顶部的状态横幅：当 skill 需要关注时（未配置/未安装/过期），
-    // 明确告诉用户「绿点是因为什么 + 下一步该干嘛」，避免点开 tab 后不知所措。
+    // 明确告诉用户「红点是因为什么 + 下一步该干嘛」，避免点开 tab 后不知所措。
     const renderSkillAttentionBanner = () => {
         let message = '';
         let tone: 'warning' | 'accent' = 'accent';
@@ -1153,7 +1153,7 @@ const styles = {
     navText: {
         flex: 1,
     },
-    // 导航项右侧的更新提示绿点，样式与设置按钮齿轮上的点一致
+    // 导航项右侧的更新提示红点，样式与设置按钮齿轮上的点一致
     navBadge: {
         position: 'absolute' as const,
         right: '12px',
@@ -1162,7 +1162,7 @@ const styles = {
         width: '8px',
         height: '8px',
         borderRadius: '50%',
-        backgroundColor: '#4caf50',
+        backgroundColor: colors.danger,
         border: '1px solid #1e1e1e',
         flexShrink: 0,
     },
