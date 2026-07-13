@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, forwardRef, useImperativeHandle, useState, useCallback } from 'react';
-import { Terminal } from 'xterm';
-import { FitAddon } from 'xterm-addon-fit';
-import { SearchAddon } from 'xterm-addon-search';
-import 'xterm/css/xterm.css';
+import { Terminal } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import '@xterm/xterm/css/xterm.css';
 import CompletionOverlay, { CompletionData, CompletionSuggestion } from './CompletionOverlay';
 import SearchPanel from './SearchPanel';
 import { HighlightRule, TerminalConfig } from './highlightTypes';
@@ -12,6 +11,8 @@ import {
     getTerminalFontStack,
 } from './terminalAppearance';
 import { parseTimestamp, TimestampResult } from '../../utils/timestampParser';
+import { SearchController } from './search/SearchController';
+import { RuleHighlightController } from './highlight/RuleHighlightController';
 
 interface TerminalProps {
     id: string;
@@ -63,32 +64,25 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
     const [searchQuery, setSearchQuery] = useState('');
     const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
     const [searchRegexMode, setSearchRegexMode] = useState(false);
+    const [searchWholeWord, setSearchWholeWord] = useState(false);
     const [searchCountText, setSearchCountText] = useState('');
+    const [searchErrorText, setSearchErrorText] = useState('');
+    const [searchComposing, setSearchComposing] = useState(false);
     const [zoomIndicatorSize, setZoomIndicatorSize] = useState<number | null>(null);
-    const searchAddonRef = useRef<SearchAddon | null>(null);
-    const searchCountTimerRef = useRef<number | null>(null);
+    const searchControllerRef = useRef<SearchController | null>(null);
+    const ruleHighlightControllerRef = useRef<RuleHighlightController | null>(null);
+    const searchDebounceTimerRef = useRef<number | null>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
     const searchVisibleRef = useRef(false);
     const searchQueryRef = useRef('');
-    const searchCountTokenRef = useRef(0);
     const searchCaseSensitiveRef = useRef(false);
     const searchRegexModeRef = useRef(false);
-    const searchDecorationsRef = useRef<Map<number, { marker: any; decos: any[] }>>(new Map());
-    const searchHighlightTimerRef = useRef<number | null>(null);
-    const searchHighlightTokenRef = useRef(0);
-    const currentSearchDecoRef = useRef<{ marker: any; deco: any } | null>(null);
-
-    const highlightEnabledRef = useRef<boolean>(true);
-    const decorationsRef = useRef<Map<number, any[]>>(new Map());
-    const highlightTimerRef = useRef<number | null>(null);
+    const searchWholeWordRef = useRef(false);
 
     // Write buffering refs (Change 1: frame-level flush)
     const writeQueueRef = useRef<string[]>([]);
     const flushScheduledRef = useRef<boolean>(false);
 
-    // Post-output highlight scan refs (Change 2: scan only after output stabilizes)
-    const lastOutputAtRef = useRef<number>(0);
-    const postScanTimerRef = useRef<number | null>(null);
     const sizeSyncTimerRef = useRef<number | null>(null);
     const layoutRestoreRafRef = useRef<number | null>(null);
     const layoutRestoreTimerRefs = useRef<number[]>([]);
@@ -112,7 +106,8 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         searchQueryRef.current = searchQuery;
         searchCaseSensitiveRef.current = searchCaseSensitive;
         searchRegexModeRef.current = searchRegexMode;
-    }, [searchQuery, searchVisible, searchCaseSensitive, searchRegexMode]);
+        searchWholeWordRef.current = searchWholeWord;
+    }, [searchQuery, searchVisible, searchCaseSensitive, searchRegexMode, searchWholeWord]);
 
     useEffect(() => {
         onDataRef.current = onData;
@@ -123,7 +118,6 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         onFontSizeChangeRef.current = onFontSizeChange;
         pendingFontSizeRef.current = clampTerminalFontSize(terminalConfig?.font_size);
         highlightRulesRef.current = highlightRules;
-        highlightEnabledRef.current = terminalConfig?.highlight_enabled ?? true;
     }, [onData, onSelectionParsed, sessionID, completionDelay, terminalConfig, onFontSizeChange, highlightRules]);
 
     const getSearchEnabled = () => terminalConfigRef.current?.search_enabled ?? true;
@@ -167,47 +161,23 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         return () => container.removeEventListener('wheel', handleWheel);
     }, [adjustTerminalFontSize]);
 
-    const clearSearchHitDecorations = useCallback(() => {
-        for (const entry of searchDecorationsRef.current.values()) {
-            for (const d of entry.decos) {
-                try { d.dispose?.(); } catch { }
-            }
-            try { entry.marker?.dispose?.(); } catch { }
-        }
-        searchDecorationsRef.current.clear();
-    }, []);
-
-    const clearSearchDecorations = useCallback(() => {
-        clearSearchHitDecorations();
-        if (currentSearchDecoRef.current) {
-            try { currentSearchDecoRef.current.deco?.dispose?.(); } catch { }
-            try { currentSearchDecoRef.current.marker?.dispose?.(); } catch { }
-            currentSearchDecoRef.current = null;
-        }
-    }, [clearSearchHitDecorations]);
-
     const closeSearch = useCallback(() => {
         searchVisibleRef.current = false;
         searchQueryRef.current = '';
         setSearchVisible(false);
         setSearchQuery('');
         setSearchCountText('');
-        searchCountTokenRef.current++;
-        searchHighlightTokenRef.current++;
-        if (searchCountTimerRef.current) {
-            window.clearTimeout(searchCountTimerRef.current);
-            searchCountTimerRef.current = null;
+        setSearchErrorText('');
+        if (searchDebounceTimerRef.current !== null) {
+            window.clearTimeout(searchDebounceTimerRef.current);
+            searchDebounceTimerRef.current = null;
         }
-        if (searchHighlightTimerRef.current) {
-            window.clearTimeout(searchHighlightTimerRef.current);
-            searchHighlightTimerRef.current = null;
-        }
-        clearSearchDecorations();
+        searchControllerRef.current?.clear();
         if (xtermRef.current) {
             xtermRef.current.clearSelection();
             xtermRef.current.focus();
         }
-    }, [clearSearchDecorations]);
+    }, []);
 
     useEffect(() => {
         if (!searchVisible) return;
@@ -221,333 +191,65 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         return () => window.removeEventListener('keydown', onKeyDown, true);
     }, [closeSearch, searchVisible]);
 
-    const clearCurrentSearchDecoration = useCallback(() => {
-        if (currentSearchDecoRef.current) {
-            try { currentSearchDecoRef.current.deco?.dispose?.(); } catch { }
-            try { currentSearchDecoRef.current.marker?.dispose?.(); } catch { }
-            currentSearchDecoRef.current = null;
-        }
-    }, []);
-
-    useEffect(() => {
-        if (!searchVisible) {
-            clearCurrentSearchDecoration();
-            return;
-        }
-        if (!searchQuery.trim()) {
-            clearCurrentSearchDecoration();
-            return;
-        }
-        clearCurrentSearchDecoration();
-    }, [clearCurrentSearchDecoration, searchQuery, searchRegexMode, searchCaseSensitive, searchVisible]);
-
-    const updateCurrentSearchDecoration = useCallback(() => {
-        const term = xtermRef.current;
-        if (!term) return;
-        clearCurrentSearchDecoration();
-        // @ts-ignore
-        const pos = term.getSelectionPosition?.();
-        if (!pos) return;
-        const start = pos.start;
-        const end = pos.end;
-        if (!start || !end) return;
-        let sx = start.x ?? 0;
-        let sy = start.y ?? 0;
-        let ex = end.x ?? sx;
-        let ey = end.y ?? sy;
-        if (sy > ey || (sy === ey && sx > ex)) {
-            [sx, ex] = [ex, sx];
-            [sy, ey] = [ey, sy];
-        }
-
-        const buffer = term.buffer.active;
-        const lineIdx = Math.max(0, sy);
-        const cursorAbs = buffer.baseY + buffer.cursorY;
-        const offset = lineIdx - cursorAbs;
-        const marker = term.registerMarker(offset);
-        if (!marker) return;
-
-        const x = Math.max(0, sx);
-        const width = Math.max(1, sy === ey ? (ex - sx) : (term.cols - sx));
-        const deco = term.registerDecoration({
-            marker,
-            x,
-            width,
-            backgroundColor: '#f59e0b',
-            foregroundColor: '#000000',
-            layer: 'top',
-        });
-        if (!deco) {
-            try { marker.dispose?.(); } catch { }
-            return;
-        }
-        currentSearchDecoRef.current = { marker, deco };
-    }, [clearCurrentSearchDecoration]);
-
-    const scheduleSearchCount = useCallback(() => {
-        if (searchCountTimerRef.current) {
-            window.clearTimeout(searchCountTimerRef.current);
-            searchCountTimerRef.current = null;
-        }
-        if (!searchVisible) return;
-        const q = searchQuery.trim();
-        if (!q) {
-            setSearchCountText('');
-            return;
-        }
-        const term = xtermRef.current;
-        if (!term) return;
-        const token = ++searchCountTokenRef.current;
-
-        const run = () => {
-            const max = 1000;
-            const buffer = term.buffer.active;
-            let count = 0;
-            let re: RegExp | null = null;
-            let needleLower = '';
-            let needle = q;
-            if (searchRegexMode) {
-                const flags = `g${searchCaseSensitive ? '' : 'i'}`;
-                try {
-                    re = new RegExp(q, flags);
-                } catch {
-                    setSearchCountText('');
-                    return;
-                }
-            } else if (!searchCaseSensitive) {
-                needleLower = q.toLowerCase();
-            }
-
-            let i = 0;
-            const step = (deadline?: IdleDeadline) => {
-                if (token !== searchCountTokenRef.current) return;
-                const start = performance.now();
-                for (; i < buffer.length; i++) {
-                    if (token !== searchCountTokenRef.current) return;
-                    const line = buffer.getLine(i)?.translateToString(true) || '';
-                    if (!line) continue;
-                    if (re) {
-                        re.lastIndex = 0;
-                        let m: RegExpExecArray | null;
-                        while ((m = re.exec(line)) !== null) {
-                            count++;
-                            if (count >= max) break;
-                            if (m.index === re.lastIndex) re.lastIndex++;
-                        }
-                    } else {
-                        const hay = searchCaseSensitive ? line : line.toLowerCase();
-                        const n = searchCaseSensitive ? needle : needleLower;
-                        let idx = 0;
-                        while ((idx = hay.indexOf(n, idx)) !== -1) {
-                            count++;
-                            if (count >= max) break;
-                            idx += Math.max(1, n.length);
-                        }
-                    }
-                    if (count >= max) break;
-                    if (deadline && deadline.timeRemaining() < 4) break;
-                    if (!deadline && performance.now() - start > 8) break;
-                }
-
-                if (count >= max || i >= buffer.length) {
-                    setSearchCountText(count >= max ? `>=${max}` : `${count}`);
-                    return;
-                }
-
-                if (typeof (window as any).requestIdleCallback === 'function') {
-                    (window as any).requestIdleCallback(step);
-                } else {
-                    window.setTimeout(() => step(), 0);
-                }
-            };
-
-            if (typeof (window as any).requestIdleCallback === 'function') {
-                (window as any).requestIdleCallback(step);
-            } else {
-                window.setTimeout(() => step(), 0);
-            }
-        };
-
-        searchCountTimerRef.current = window.setTimeout(() => {
-            searchCountTimerRef.current = null;
-            if (token !== searchCountTokenRef.current) return;
-            run();
-        }, 180);
-    }, [searchCaseSensitive, searchQuery, searchRegexMode, searchVisible]);
-
-    useEffect(() => {
-        scheduleSearchCount();
-    }, [scheduleSearchCount]);
-
     const doSearchNext = useCallback(() => {
-        const addon = searchAddonRef.current;
-        if (!addon || !xtermRef.current) return;
-        const q = searchQueryRef.current.trim();
-        if (!q) return;
-        let ok = false;
-        try {
-            ok = addon.findNext(q, { caseSensitive: searchCaseSensitiveRef.current, regex: searchRegexModeRef.current, incremental: false });
-        } catch {
-            // ignore
-        }
-        if (ok) updateCurrentSearchDecoration();
-        else clearCurrentSearchDecoration();
+        const controller = searchControllerRef.current;
+        const query = searchQueryRef.current;
+        if (!controller || query.length === 0 || searchErrorText) return;
+        controller.findNext(query, {
+            caseSensitive: searchCaseSensitiveRef.current,
+            regex: searchRegexModeRef.current,
+            wholeWord: searchWholeWordRef.current,
+        });
         searchInputRef.current?.focus();
-    }, [clearCurrentSearchDecoration, updateCurrentSearchDecoration]);
+    }, [searchErrorText]);
 
     const doSearchPrev = useCallback(() => {
-        const addon = searchAddonRef.current;
-        if (!addon || !xtermRef.current) return;
-        const q = searchQueryRef.current.trim();
-        if (!q) return;
-        let ok = false;
-        try {
-            ok = addon.findPrevious(q, { caseSensitive: searchCaseSensitiveRef.current, regex: searchRegexModeRef.current, incremental: false });
-        } catch {
-            // ignore
-        }
-        if (ok) updateCurrentSearchDecoration();
-        else clearCurrentSearchDecoration();
+        const controller = searchControllerRef.current;
+        const query = searchQueryRef.current;
+        if (!controller || query.length === 0 || searchErrorText) return;
+        controller.findPrevious(query, {
+            caseSensitive: searchCaseSensitiveRef.current,
+            regex: searchRegexModeRef.current,
+            wholeWord: searchWholeWordRef.current,
+        });
         searchInputRef.current?.focus();
-    }, [clearCurrentSearchDecoration, updateCurrentSearchDecoration]);
-
-    const scheduleSearchHighlightAll = useCallback((delayMs: number, opts: { visible: boolean; query: string; caseSensitive: boolean; regexMode: boolean }) => {
-        if (searchHighlightTimerRef.current) {
-            window.clearTimeout(searchHighlightTimerRef.current);
-            searchHighlightTimerRef.current = null;
-        }
-
-        const token = ++searchHighlightTokenRef.current;
-        const visible = opts.visible;
-        const q = opts.query.trim();
-        const caseSensitive = opts.caseSensitive;
-        const regexMode = opts.regexMode;
-
-        if (!visible || !q) {
-            clearSearchDecorations();
-            return;
-        }
-
-        searchHighlightTimerRef.current = window.setTimeout(() => {
-            searchHighlightTimerRef.current = null;
-
-            if (token !== searchHighlightTokenRef.current) return;
-            const term = xtermRef.current;
-            if (!term) return;
-
-            if (!searchVisibleRef.current || searchQueryRef.current.trim() !== q) {
-                clearSearchDecorations();
-                return;
-            }
-
-            clearSearchHitDecorations();
-
-            const buffer = term.buffer.active;
-            const maxDecos = 800;
-            const bg = '#f6e05e';
-            const fg = '#000000';
-
-            let regex: RegExp | null = null;
-            let needle = q;
-            let needleLower = '';
-            if (regexMode) {
-                const flags = `g${caseSensitive ? '' : 'i'}`;
-                try {
-                    regex = new RegExp(q, flags);
-                } catch {
-                    return;
-                }
-            } else if (!caseSensitive) {
-                needleLower = q.toLowerCase();
-            }
-
-            let i = 0;
-            let total = 0;
-            const step = (deadline?: IdleDeadline) => {
-                if (token !== searchHighlightTokenRef.current) return;
-
-                const startTs = performance.now();
-                for (; i < buffer.length; i++) {
-                    if (token !== searchHighlightTokenRef.current) return;
-                    const line = buffer.getLine(i)?.translateToString(true) || '';
-                    if (!line) continue;
-
-                    const matches: Array<{ s: number; e: number }> = [];
-                    if (regex) {
-                        regex.lastIndex = 0;
-                        let m: RegExpExecArray | null;
-                        while ((m = regex.exec(line)) !== null) {
-                            const s = m.index;
-                            const e = s + Math.max(1, m[0]?.length || 1);
-                            matches.push({ s, e });
-                            if (matches.length >= 50) break;
-                            if (m.index === regex.lastIndex) regex.lastIndex++;
-                        }
-                    } else {
-                        const hay = caseSensitive ? line : line.toLowerCase();
-                        const n = caseSensitive ? needle : needleLower;
-                        let idx = 0;
-                        while ((idx = hay.indexOf(n, idx)) !== -1) {
-                            matches.push({ s: idx, e: idx + Math.max(1, n.length) });
-                            if (matches.length >= 50) break;
-                            idx += Math.max(1, n.length);
-                        }
-                    }
-
-                    if (matches.length > 0) {
-                        const cursorAbs = buffer.baseY + buffer.cursorY;
-                        const offset = i - cursorAbs;
-                        const marker = term.registerMarker(offset);
-                        if (marker) {
-                            const ds: any[] = [];
-                            for (const m of matches) {
-                                if (total >= maxDecos) break;
-                                const deco = term.registerDecoration({
-                                    marker,
-                                    x: m.s,
-                                    width: Math.max(1, m.e - m.s),
-                                    backgroundColor: bg,
-                                    foregroundColor: fg,
-                                    layer: 'bottom',
-                                });
-                                if (deco) {
-                                    ds.push(deco);
-                                    total++;
-                                }
-                            }
-                            if (ds.length > 0) {
-                                searchDecorationsRef.current.set(i, { marker, decos: ds });
-                            } else {
-                                try { marker.dispose?.(); } catch { }
-                            }
-                        }
-                    }
-
-                    if (total >= maxDecos) break;
-                    if (deadline && deadline.timeRemaining() < 4) break;
-                    if (!deadline && performance.now() - startTs > 8) break;
-                }
-
-                if (total >= maxDecos || i >= buffer.length) return;
-
-                if (typeof (window as any).requestIdleCallback === 'function') {
-                    (window as any).requestIdleCallback(step);
-                } else {
-                    window.setTimeout(() => step(), 0);
-                }
-            };
-
-            if (typeof (window as any).requestIdleCallback === 'function') {
-                (window as any).requestIdleCallback(step);
-            } else {
-                window.setTimeout(() => step(), 0);
-            }
-        }, Math.max(0, delayMs));
-    }, [clearSearchDecorations, clearSearchHitDecorations]);
+    }, [searchErrorText]);
 
     useEffect(() => {
-        scheduleSearchHighlightAll(120, { visible: searchVisible, query: searchQuery, caseSensitive: searchCaseSensitive, regexMode: searchRegexMode });
-    }, [scheduleSearchHighlightAll, searchVisible, searchQuery, searchCaseSensitive, searchRegexMode]);
+        if (searchDebounceTimerRef.current !== null) window.clearTimeout(searchDebounceTimerRef.current);
+        if (!searchVisible || searchQuery.length === 0) {
+            setSearchErrorText('');
+            setSearchCountText('');
+            searchControllerRef.current?.clear();
+            return;
+        }
+        if (searchComposing) return;
+        if (searchRegexMode) {
+            try {
+                new RegExp(searchQuery);
+            } catch {
+                setSearchErrorText('正则表达式无效');
+                setSearchCountText('');
+                searchControllerRef.current?.clear();
+                return;
+            }
+        }
+        setSearchErrorText('');
+        searchDebounceTimerRef.current = window.setTimeout(() => {
+            searchDebounceTimerRef.current = null;
+            searchControllerRef.current?.findNext(searchQuery, {
+                caseSensitive: searchCaseSensitive,
+                regex: searchRegexMode,
+                wholeWord: searchWholeWord,
+            }, true);
+        }, 80);
+        return () => {
+            if (searchDebounceTimerRef.current !== null) {
+                window.clearTimeout(searchDebounceTimerRef.current);
+                searchDebounceTimerRef.current = null;
+            }
+        };
+    }, [searchCaseSensitive, searchComposing, searchQuery, searchRegexMode, searchVisible, searchWholeWord]);
 
     // --- Change 1: Flush writes once per animation frame ---
     const flushWrites = useCallback(() => {
@@ -557,161 +259,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         const merged = queue.join('');
         writeQueueRef.current = [];
         xtermRef.current?.write(merged);
-        lastOutputAtRef.current = Date.now();
     }, []);
-
-    // --- Change 2: Schedule highlight scan only after output stabilizes ---
-    const schedulePostOutputScan = useCallback(() => {
-        if (postScanTimerRef.current) {
-            window.clearTimeout(postScanTimerRef.current);
-            postScanTimerRef.current = null;
-        }
-        postScanTimerRef.current = window.setTimeout(() => {
-            postScanTimerRef.current = null;
-            // Only scan if output has been stable for >= 300ms
-            if (Date.now() - lastOutputAtRef.current >= 300) {
-                scheduleHighlightScan(0);
-            } else {
-                // Output is still happening, reschedule
-                schedulePostOutputScan();
-            }
-        }, 300);
-    }, []);
-
-    const clearDecorations = useCallback(() => {
-        const m = decorationsRef.current;
-        for (const ds of m.values()) {
-            for (const d of ds) {
-                try { d.dispose?.(); } catch { }
-            }
-        }
-        m.clear();
-    }, []);
-
-    const scheduleHighlightScan = useCallback((delayMs: number) => {
-        if (highlightTimerRef.current) {
-            window.clearTimeout(highlightTimerRef.current);
-            highlightTimerRef.current = null;
-        }
-        highlightTimerRef.current = window.setTimeout(() => {
-            highlightTimerRef.current = null;
-            const term = xtermRef.current;
-            if (!term) return;
-            if (!highlightEnabledRef.current) {
-                clearDecorations();
-                return;
-            }
-
-            const rules = (highlightRulesRef.current || []).slice().filter(r => r && r.is_enabled);
-            if (rules.length === 0) {
-                clearDecorations();
-                return;
-            }
-            rules.sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
-
-            const buffer = term.buffer.active;
-            const viewportY = buffer.viewportY;
-            const cursorAbs = buffer.baseY + buffer.cursorY;
-            const start = Math.max(0, viewportY - 40);
-            const end = Math.min(buffer.length - 1, viewportY + term.rows - 1 + 40);
-
-            for (const [k, ds] of decorationsRef.current.entries()) {
-                if (k < start || k > end) {
-                    for (const d of ds) {
-                        try { d.dispose?.(); } catch { }
-                    }
-                    decorationsRef.current.delete(k);
-                }
-            }
-
-            let totalDecos = 0;
-            for (const ds of decorationsRef.current.values()) totalDecos += ds.length;
-
-            const compiled = rules.map(r => {
-                let pattern = r.pattern || '';
-                let extraI = false;
-                if (pattern.startsWith('(?i)')) {
-                    extraI = true;
-                    pattern = pattern.slice(4);
-                }
-                const flags = `g${extraI ? 'i' : ''}`;
-                try {
-                    return { rule: r, re: new RegExp(pattern, flags) };
-                } catch {
-                    return null;
-                }
-            }).filter(Boolean) as Array<{ rule: HighlightRule; re: RegExp }>;
-
-            const budgetMs = 12;
-            const t0 = performance.now();
-
-            for (let lineIdx = start; lineIdx <= end; lineIdx++) {
-                if (performance.now() - t0 > budgetMs) break;
-                const line = buffer.getLine(lineIdx)?.translateToString(true) || '';
-                if (!line) continue;
-
-                const old = decorationsRef.current.get(lineIdx);
-                if (old) {
-                    for (const d of old) {
-                        try { d.dispose?.(); } catch { }
-                    }
-                    decorationsRef.current.delete(lineIdx);
-                    totalDecos = Math.max(0, totalDecos - old.length);
-                }
-
-                const ranges: Array<{ s: number; e: number; style: HighlightRule['style'] }> = [];
-                for (const { rule, re } of compiled) {
-                    if (ranges.length >= 20) break;
-                    re.lastIndex = 0;
-                    let m: RegExpExecArray | null;
-                    while ((m = re.exec(line)) !== null) {
-                        const s = m.index;
-                        const e = s + Math.max(1, m[0]?.length || 1);
-                        if (s >= e) {
-                            if (m.index === re.lastIndex) re.lastIndex++;
-                            continue;
-                        }
-                        const overlap = ranges.some(rg => !(e <= rg.s || s >= rg.e));
-                        if (!overlap) {
-                            ranges.push({ s, e, style: rule.style });
-                        }
-                        if (ranges.length >= 20) break;
-                        if (m.index === re.lastIndex) re.lastIndex++;
-                    }
-                    if (ranges.length >= 20) break;
-                }
-
-                if (ranges.length === 0) continue;
-                ranges.sort((a, b) => a.s - b.s);
-
-                const decos: any[] = [];
-                for (const rg of ranges) {
-                    if (totalDecos >= 1500) break;
-                    const offset = lineIdx - cursorAbs;
-                    const marker = term.registerMarker(offset);
-                    if (!marker) continue;
-                    const bg = rg.style?.background_color;
-                    const fg = rg.style?.color;
-                    const deco = term.registerDecoration({
-                        marker,
-                        x: rg.s,
-                        width: Math.max(1, rg.e - rg.s),
-                        backgroundColor: bg,
-                        foregroundColor: fg,
-                        layer: 'bottom',
-                    });
-                    if (deco) {
-                        decos.push(deco);
-                        totalDecos++;
-                    } else {
-                        try { marker.dispose?.(); } catch { }
-                    }
-                }
-                if (decos.length > 0) decorationsRef.current.set(lineIdx, decos);
-                if (totalDecos >= 1500) break;
-            }
-        }, Math.max(0, delayMs));
-    }, [clearDecorations]);
 
     // Helper function to sync terminal size to backend PTY
     const syncSizeToBackend = useCallback(() => {
@@ -965,17 +513,6 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                 flushScheduledRef.current = true;
                 requestAnimationFrame(flushWrites);
             }
-            // Change 2: Schedule post-output scan instead of immediate scan
-            schedulePostOutputScan();
-            if (getSearchEnabled() && searchVisibleRef.current && searchQueryRef.current.trim()) {
-                scheduleSearchCount();
-                scheduleSearchHighlightAll(120, {
-                    visible: searchVisibleRef.current,
-                    query: searchQueryRef.current,
-                    caseSensitive: searchCaseSensitiveRef.current,
-                    regexMode: searchRegexModeRef.current
-                });
-            }
         },
         fit: () => {
             restoreTerminalLayout();
@@ -1033,11 +570,18 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         const fitAddon = new FitAddon();
         term.loadAddon(fitAddon);
         if (terminalConfig?.search_enabled ?? true) {
-            const searchAddon = new SearchAddon();
-            term.loadAddon(searchAddon);
-            searchAddonRef.current = searchAddon;
+            searchControllerRef.current = new SearchController(term, results => {
+                if (results.limitReached) {
+                    setSearchCountText(`${results.resultCount}+`);
+                } else if (results.resultCount === 0) {
+                    setSearchCountText('0');
+                } else {
+                    const current = results.resultIndex >= 0 ? results.resultIndex + 1 : '?';
+                    setSearchCountText(`${current} / ${results.resultCount}`);
+                }
+            });
         } else {
-            searchAddonRef.current = null;
+            searchControllerRef.current = null;
         }
 
         term.open(terminalRef.current);
@@ -1049,22 +593,44 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         }
         fitAddonRef.current = fitAddon;
         xtermRef.current = term;
+        const ruleController = new RuleHighlightController(term);
+        ruleHighlightControllerRef.current = ruleController;
+        ruleController.setRules(highlightRulesRef.current, terminalConfigRef.current?.highlight_enabled ?? true);
+
+        const syncRuleControllerVisibility = () => {
+            const container = terminalRef.current;
+            ruleController.setVisible(container !== null && !document.hidden && isTerminalMeasurable(container));
+        };
+        const handleVisibilityChange = () => {
+            syncRuleControllerVisibility();
+            if (!document.hidden) restoreTerminalLayout();
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
 
         restoreTerminalLayout();
         scheduleSizeSync(100);
-        scheduleHighlightScan(0);
 
         const onScrollDispose = term.onScroll(() => {
             trackScrollPosition(term);
-            schedulePostOutputScan();
-            if (getSearchEnabled() && searchVisibleRef.current && searchQueryRef.current.trim()) {
-                scheduleSearchHighlightAll(200, {
-                    visible: searchVisibleRef.current,
-                    query: searchQueryRef.current,
-                    caseSensitive: searchCaseSensitiveRef.current,
-                    regexMode: searchRegexModeRef.current
-                });
+            ruleController.schedule('scroll');
+        });
+
+        const onWriteParsedDispose = term.onWriteParsed(() => {
+            ruleController.schedule('output', 32);
+        });
+
+        let lastCols = term.cols;
+        const onResizeDispose = term.onResize(({ cols }) => {
+            if (cols !== lastCols) {
+                lastCols = cols;
+                ruleController.invalidate();
             }
+            ruleController.schedule('resize');
+        });
+
+        const onBufferChangeDispose = term.buffer.onBufferChange(() => {
+            ruleController.invalidate();
+            ruleController.schedule('buffer');
         });
 
         term.onData((data) => {
@@ -1192,7 +758,10 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                         }
                         window.setTimeout(() => searchInputRef.current?.focus(), 0);
                     } else {
-                        closeSearch();
+                        window.setTimeout(() => {
+                            searchInputRef.current?.focus();
+                            searchInputRef.current?.select();
+                        }, 0);
                     }
                     return false;
                 }
@@ -1257,7 +826,6 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                 completionVisibleRef.current = false;
                 triggerCompletion();
                 term.paste(text);
-                schedulePostOutputScan();
             }
         };
         terminalRef.current.addEventListener('paste', handlePaste);
@@ -1274,7 +842,6 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                     completionVisibleRef.current = false;
                     triggerCompletion();
                     term.paste(selection);
-                    schedulePostOutputScan();
                     term.clearSelection();
                     term.focus();
                 } else {
@@ -1286,7 +853,6 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                             completionVisibleRef.current = false;
                             triggerCompletion();
                             term.paste(text);
-                            schedulePostOutputScan();
                         }
                         term.focus();
                     });
@@ -1312,7 +878,6 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                         completionVisibleRef.current = false;
                         triggerCompletion();
                         term.paste(text);
-                        schedulePostOutputScan();
                     }
                     term.focus();
                 });
@@ -1329,6 +894,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         let resizeObserver: ResizeObserver | null = null;
         if (typeof ResizeObserver !== 'undefined') {
             resizeObserver = new ResizeObserver(() => {
+                syncRuleControllerVisibility();
                 restoreTerminalLayout();
             });
             resizeObserver.observe(terminalRef.current);
@@ -1338,49 +904,44 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             if (debounceTimerRef.current) {
                 clearTimeout(debounceTimerRef.current);
             }
-            if (searchCountTimerRef.current) {
-                window.clearTimeout(searchCountTimerRef.current);
-                searchCountTimerRef.current = null;
-            }
-            if (highlightTimerRef.current) {
-                window.clearTimeout(highlightTimerRef.current);
-                highlightTimerRef.current = null;
+            if (searchDebounceTimerRef.current !== null) {
+                window.clearTimeout(searchDebounceTimerRef.current);
+                searchDebounceTimerRef.current = null;
             }
             if (sizeSyncTimerRef.current) {
                 window.clearTimeout(sizeSyncTimerRef.current);
                 sizeSyncTimerRef.current = null;
             }
-            if (searchHighlightTimerRef.current) {
-                window.clearTimeout(searchHighlightTimerRef.current);
-                searchHighlightTimerRef.current = null;
-            }
             clearLayoutRestoreTimer();
             resizeObserver?.disconnect();
-            clearSearchDecorations();
             if (selectionDebounceTimer) {
                 window.clearTimeout(selectionDebounceTimer);
                 selectionDebounceTimer = null;
             }
             onSelectionChangeDispose.dispose();
             onScrollDispose.dispose();
-            clearDecorations();
+            onWriteParsedDispose.dispose();
+            onResizeDispose.dispose();
+            onBufferChangeDispose.dispose();
+            searchControllerRef.current?.dispose();
+            searchControllerRef.current = null;
+            ruleController.dispose();
+            ruleHighlightControllerRef.current = null;
             window.removeEventListener('resize', handleResize);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
             terminalRef.current?.removeEventListener('paste', handlePaste);
             terminalRef.current?.removeEventListener('auxclick', handleAuxClick);
             terminalRef.current?.removeEventListener('contextmenu', handleContextMenu);
             term.dispose();
         };
     }, [
-        clearDecorations,
         fetchCompletions,
         handleCompletionSelect,
         handleNavigate,
         restoreTerminalLayout,
         scheduleSizeSync,
         clearLayoutRestoreTimer,
-        clearSearchDecorations,
         scrollToBottomAndRefresh,
-        scheduleHighlightScan,
         terminalConfig?.search_enabled,
         adjustTerminalFontSize,
     ]);
@@ -1411,8 +972,11 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
     }, [restoreTerminalLayout, terminalConfig?.font_family, terminalConfig?.font_size]);
 
     useEffect(() => {
-        scheduleHighlightScan(0);
-    }, [highlightRules, terminalConfig?.highlight_enabled, scheduleHighlightScan]);
+        ruleHighlightControllerRef.current?.setRules(
+            highlightRules,
+            terminalConfig?.highlight_enabled ?? true
+        );
+    }, [highlightRules, terminalConfig?.highlight_enabled]);
 
     return (
         <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
@@ -1436,7 +1000,11 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                 onCaseSensitiveChange={setSearchCaseSensitive}
                 regexMode={searchRegexMode}
                 onRegexModeChange={setSearchRegexMode}
+                wholeWord={searchWholeWord}
+                onWholeWordChange={setSearchWholeWord}
+                onCompositionChange={setSearchComposing}
                 matchText={searchCountText}
+                errorText={searchErrorText}
                 ref={searchInputRef}
             />
             <CompletionOverlay

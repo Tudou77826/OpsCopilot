@@ -4,6 +4,7 @@ import { colors } from './settingsStyles';
 interface SwitchProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
+  disabled?: boolean;
   size?: 'default' | 'small';
 }
 
@@ -20,7 +21,7 @@ const SIZES = {
   },
 } as const;
 
-const Switch: React.FC<SwitchProps> = ({ checked, onChange, size = 'default' }) => {
+const Switch: React.FC<SwitchProps> = ({ checked, onChange, disabled = false, size = 'default' }) => {
   const s = SIZES[size];
 
   const trackStyle: React.CSSProperties = {
@@ -31,7 +32,8 @@ const Switch: React.FC<SwitchProps> = ({ checked, onChange, size = 'default' }) 
     height: s.trackH,
     backgroundColor: checked ? colors.accent : '#555555',
     borderRadius: s.trackH,
-    cursor: 'pointer',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.55 : 1,
     transition: 'background-color 0.25s ease',
     flexShrink: 0,
     verticalAlign: 'middle',
@@ -65,6 +67,7 @@ const Switch: React.FC<SwitchProps> = ({ checked, onChange, size = 'default' }) 
       <input
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
         style={inputStyle}
       />

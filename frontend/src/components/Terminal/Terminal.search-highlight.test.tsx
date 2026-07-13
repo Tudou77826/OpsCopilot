@@ -9,13 +9,14 @@ let termWrite: ((data: string) => void) | null = null;
 let registerDecoration: any = null;
 let registerMarker: any = null;
 let selectionText = '';
+let searchFindNext: any = null;
 
-vi.mock('xterm', () => {
+vi.mock('@xterm/xterm', () => {
     return {
         Terminal: class {
             constructor() {
                 registerDecoration = vi.fn(() => ({ dispose: vi.fn() }));
-                registerMarker = vi.fn(() => ({ dispose: vi.fn() }));
+                registerMarker = vi.fn((offset = 0) => ({ line: offset, dispose: vi.fn() }));
                 return {
                     open: vi.fn(),
                     write: vi.fn((data: string) => termWrite?.(data)),
@@ -28,6 +29,8 @@ vi.mock('xterm', () => {
                     paste: vi.fn(),
                     loadAddon: vi.fn(),
                     onScroll: vi.fn(() => ({ dispose: vi.fn() })),
+                    onWriteParsed: vi.fn(() => ({ dispose: vi.fn() })),
+                    onResize: vi.fn(() => ({ dispose: vi.fn() })),
                     focus: vi.fn(),
                     refresh: vi.fn(),
                     scrollToBottom: vi.fn(),
@@ -38,6 +41,7 @@ vi.mock('xterm', () => {
                         scrollback: 5000,
                     },
                     buffer: {
+                        onBufferChange: vi.fn(() => ({ dispose: vi.fn() })),
                         active: {
                             viewportY: 0,
                             baseY: 0,
@@ -45,7 +49,20 @@ vi.mock('xterm', () => {
                             length: 3,
                             getLine: vi.fn((i: number) => {
                                 const lines = ['hello', 'error happened', 'world'];
-                                return { translateToString: vi.fn(() => lines[i] || '') };
+                                const text = lines[i] || '';
+                                return {
+                                    isWrapped: false,
+                                    length: 80,
+                                    translateToString: vi.fn(() => text),
+                                    getCell: vi.fn((col: number) => {
+                                        const char = text[col] || '';
+                                        return {
+                                            getWidth: () => 1,
+                                            getChars: () => char,
+                                            getCode: () => char ? char.codePointAt(0)! : 0,
+                                        };
+                                    })
+                                };
                             })
                         }
                     },
@@ -57,14 +74,22 @@ vi.mock('xterm', () => {
     };
 });
 
-vi.mock('xterm-addon-fit', () => ({ FitAddon: class { fit = vi.fn(); proposeDimensions = vi.fn(() => ({ cols: 80, rows: 24 })); } }));
-vi.mock('xterm-addon-search', () => ({ SearchAddon: class { findNext = vi.fn(); findPrevious = vi.fn(); } }));
+vi.mock('@xterm/addon-fit', () => ({ FitAddon: class { fit = vi.fn(); proposeDimensions = vi.fn(() => ({ cols: 80, rows: 24 })); } }));
+vi.mock('@xterm/addon-search', () => ({ SearchAddon: class {
+    constructor() { searchFindNext = vi.fn(); }
+    findNext = (...args: any[]) => searchFindNext(...args);
+    findPrevious = vi.fn();
+    clearDecorations = vi.fn();
+    dispose = vi.fn();
+    onDidChangeResults = vi.fn(() => ({ dispose: vi.fn() }));
+} }));
 
 describe('Terminal search/highlight integration', () => {
     afterEach(() => {
         selectionText = '';
         lastKeyHandler = null;
         termWrite = null;
+        searchFindNext = null;
         vi.useRealTimers();
         vi.restoreAllMocks();
     });
@@ -99,7 +124,7 @@ describe('Terminal search/highlight integration', () => {
         vi.useRealTimers();
     });
 
-    it('highlights all search hits in yellow when search is visible', async () => {
+    it('delegates all-match highlighting to SearchAddon when search is visible', async () => {
         vi.useFakeTimers();
         const ref = React.createRef<TerminalRef>();
         render(<TerminalComponent id="t3" ref={ref} />);
@@ -111,15 +136,15 @@ describe('Terminal search/highlight integration', () => {
         await act(async () => {
             await vi.runAllTimersAsync();
         });
-        const hasYellow = registerDecoration.mock.calls.some((c: any[]) => c[0] && c[0].backgroundColor === '#f6e05e');
-        expect(hasYellow).toBe(true);
-
-        const before = registerDecoration.mock.calls.length;
-        await act(async () => {
-            ref.current?.write('new output');
-            await vi.runAllTimersAsync();
+        expect(searchFindNext).toHaveBeenCalled();
+        const options = searchFindNext.mock.calls.at(-1)?.[1];
+        expect(options).toMatchObject({
+            incremental: true,
+            decorations: {
+                matchBackground: '#665c00',
+                activeMatchBackground: '#f59e0b'
+            }
         });
-        expect(registerDecoration.mock.calls.length).toBeGreaterThan(before);
         vi.useRealTimers();
     });
 

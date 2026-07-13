@@ -17,7 +17,7 @@ const { TerminalMock, terminalInstances, scrollCallbacks, fitMock, proposeDimens
 });
 
 // Mock xterm
-vi.mock('xterm', () => {
+vi.mock('@xterm/xterm', () => {
   return {
     Terminal: class {
         constructor() {
@@ -44,6 +44,8 @@ vi.mock('xterm', () => {
                     scrollCallbacks.push(cb);
                     return { dispose: vi.fn() };
                 }),
+                onWriteParsed: vi.fn(() => ({ dispose: vi.fn() })),
+                onResize: vi.fn(() => ({ dispose: vi.fn() })),
                 focus: vi.fn(),
                 refresh: refreshMock,
                 scrollToBottom: scrollToBottomMock,
@@ -54,6 +56,7 @@ vi.mock('xterm', () => {
                     scrollback: 5000,
                 },
                 buffer: {
+                    onBufferChange: vi.fn(() => ({ dispose: vi.fn() })),
                     active: {
                         viewportY: 0,
                         baseY: 0,
@@ -62,7 +65,7 @@ vi.mock('xterm', () => {
                         getLine: vi.fn(() => ({ translateToString: vi.fn(() => '') }))
                     }
                 },
-                registerMarker: vi.fn(() => ({ dispose: vi.fn() })),
+                registerMarker: vi.fn((offset = 0) => ({ line: offset, dispose: vi.fn() })),
                 registerDecoration: vi.fn(() => ({ dispose: vi.fn() })),
             };
             terminalInstances.push(terminal);
@@ -73,7 +76,7 @@ vi.mock('xterm', () => {
 });
 
 // Mock xterm-addon-fit
-vi.mock('xterm-addon-fit', () => {
+vi.mock('@xterm/addon-fit', () => {
   return {
     FitAddon: class {
         fit = fitMock;
@@ -82,11 +85,14 @@ vi.mock('xterm-addon-fit', () => {
   }
 })
 
-vi.mock('xterm-addon-search', () => {
+vi.mock('@xterm/addon-search', () => {
     return {
         SearchAddon: class {
             findNext = vi.fn();
             findPrevious = vi.fn();
+            clearDecorations = vi.fn();
+            dispose = vi.fn();
+            onDidChangeResults = vi.fn(() => ({ dispose: vi.fn() }));
         }
     };
 });

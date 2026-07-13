@@ -190,7 +190,7 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
             pattern: '',
             is_enabled: false,
             priority: sorted.length > 0 ? (sorted[sorted.length - 1].priority + 10) : 10,
-            style: { background_color: '#1d3a5a', color: '#ffffff', font_weight: 'bold' }
+            style: { background_color: '#1d3a5a', color: '#ffffff' }
         };
         setDraft([...sorted, r]);
         setEditingId(r.id);
@@ -304,6 +304,7 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
                                                 <div style={styles.ruleInfo}>
                                                     <Switch
                                                         checked={!!r.is_enabled}
+                                                        disabled={!r.is_enabled && !canEnable}
                                                         onChange={(v) => {
                                                             if (v && !canEnable) return;
                                                             patch(r.id, { is_enabled: v });
@@ -504,18 +505,6 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <div style={styles.field}>
-                                                    <label style={styles.fieldLabel}>字重</label>
-                                                    <select
-                                                        value={r.style?.font_weight || 'normal'}
-                                                        onChange={(e) => patchStyle(r.id, { font_weight: e.target.value })}
-                                                        style={styles.select}
-                                                    >
-                                                        <option value="normal">常规</option>
-                                                        <option value="bold">粗体</option>
-                                                    </select>
-                                                </div>
-
                                                 {/* Preview */}
                                                 {r.pattern && (
                                                     <div style={styles.field}>
@@ -524,12 +513,9 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
                                                             <span style={{
                                                                 backgroundColor: r.style?.background_color ? r.style.background_color : 'unset',
                                                                 color: r.style?.color || '#ffffff',
-                                                                fontWeight: r.style?.font_weight as any || 'normal',
                                                                 padding: '2px 6px',
                                                                 borderRadius: '3px',
                                                                 whiteSpace: 'nowrap',
-                                                                textDecoration: r.style?.text_decoration || 'none',
-                                                                opacity: r.style?.opacity !== undefined ? r.style.opacity : 1
                                                             }}>
                                                                 {r.name || '未命名'} 示例文本
                                                             </span>

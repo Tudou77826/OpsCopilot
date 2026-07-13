@@ -11,7 +11,11 @@ interface SearchPanelProps {
     onCaseSensitiveChange: (v: boolean) => void;
     regexMode: boolean;
     onRegexModeChange: (v: boolean) => void;
+    wholeWord?: boolean;
+    onWholeWordChange?: (v: boolean) => void;
+    onCompositionChange?: (composing: boolean) => void;
     matchText?: string;
+    errorText?: string;
 }
 
 const SearchPanel = forwardRef<HTMLInputElement, SearchPanelProps>(function SearchPanel({
@@ -25,7 +29,11 @@ const SearchPanel = forwardRef<HTMLInputElement, SearchPanelProps>(function Sear
     onCaseSensitiveChange,
     regexMode,
     onRegexModeChange,
-    matchText
+    wholeWord = false,
+    onWholeWordChange,
+    onCompositionChange,
+    matchText,
+    errorText
 }: SearchPanelProps, inputRef) {
 
     // 拖动相关状态
@@ -95,6 +103,8 @@ const SearchPanel = forwardRef<HTMLInputElement, SearchPanelProps>(function Sear
                     ref={inputRef}
                     value={query}
                     onChange={(e) => onQueryChange(e.target.value)}
+                    onCompositionStart={() => onCompositionChange?.(true)}
+                    onCompositionEnd={() => onCompositionChange?.(false)}
                     onKeyDown={(e) => {
                         if (e.ctrlKey && e.code === 'KeyF') {
                             e.preventDefault();
@@ -115,7 +125,7 @@ const SearchPanel = forwardRef<HTMLInputElement, SearchPanelProps>(function Sear
                             return;
                         }
                     }}
-                    style={styles.input}
+                    style={{ ...styles.input, ...(errorText ? styles.inputError : {}) }}
                     placeholder="搜索…"
                 />
                 <div style={styles.counter}>{matchText || ''}</div>
@@ -132,6 +142,11 @@ const SearchPanel = forwardRef<HTMLInputElement, SearchPanelProps>(function Sear
                     <input type="checkbox" checked={regexMode} onChange={(e) => onRegexModeChange(e.target.checked)} />
                     <span style={styles.optText}>.*</span>
                 </label>
+                <label style={styles.opt}>
+                    <input type="checkbox" checked={wholeWord} onChange={(e) => onWholeWordChange?.(e.target.checked)} />
+                    <span style={styles.optText}>全词</span>
+                </label>
+                {errorText && <span style={styles.errorText}>{errorText}</span>}
             </div>
         </div>
     );
@@ -192,6 +207,14 @@ const styles: Record<string, React.CSSProperties> = {
         padding: '8px 12px',
         outline: 'none',
         fontSize: '13px'
+    },
+    inputError: {
+        border: '1px solid #e05252'
+    },
+    errorText: {
+        color: '#e87979',
+        fontSize: '11px',
+        marginLeft: 'auto'
     },
     counter: {
         fontSize: '11px',

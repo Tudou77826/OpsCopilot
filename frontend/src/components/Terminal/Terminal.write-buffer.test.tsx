@@ -8,6 +8,7 @@ let xtermWrite: ReturnType<typeof vi.fn>;
 let registerDecoration: ReturnType<typeof vi.fn>;
 let registerMarker: ReturnType<typeof vi.fn>;
 let mockBufferLines: string[] = [];
+let writeParsedCallback: (() => void) | null = null;
 
 // Helper to capture RAF callbacks
 let rafCallbacks: FrameRequestCallback[] = [];
@@ -20,13 +21,13 @@ const flushRAFs = (time = 0) => {
     cbs.forEach(cb => cb(time));
 };
 
-vi.mock('xterm', () => {
+vi.mock('@xterm/xterm', () => {
     return {
         Terminal: class {
             constructor() {
-                xtermWrite = vi.fn();
+                xtermWrite = vi.fn(() => writeParsedCallback?.());
                 registerDecoration = vi.fn(() => ({ dispose: vi.fn() }));
-                registerMarker = vi.fn(() => ({ dispose: vi.fn() }));
+                registerMarker = vi.fn((offset = 0) => ({ line: offset, dispose: vi.fn() }));
                 return {
                     open: vi.fn(),
                     write: xtermWrite,
@@ -39,6 +40,11 @@ vi.mock('xterm', () => {
                     paste: vi.fn(),
                     loadAddon: vi.fn(),
                     onScroll: vi.fn(() => ({ dispose: vi.fn() })),
+                    onWriteParsed: vi.fn((cb: () => void) => {
+                        writeParsedCallback = cb;
+                        return { dispose: vi.fn() };
+                    }),
+                    onResize: vi.fn(() => ({ dispose: vi.fn() })),
                     focus: vi.fn(),
                     refresh: vi.fn(),
                     scrollToBottom: vi.fn(),
@@ -49,14 +55,28 @@ vi.mock('xterm', () => {
                         scrollback: 5000,
                     },
                     buffer: {
+                        onBufferChange: vi.fn(() => ({ dispose: vi.fn() })),
                         active: {
                             viewportY: 0,
                             baseY: 0,
                             cursorY: 0,
                             get length() { return mockBufferLines.length; },
-                            getLine: vi.fn((i: number) => ({
-                                translateToString: vi.fn(() => mockBufferLines[i] || '')
-                            }))
+                            getLine: vi.fn((i: number) => {
+                                const text = mockBufferLines[i] || '';
+                                return {
+                                    isWrapped: false,
+                                    length: 80,
+                                    translateToString: vi.fn(() => text),
+                                    getCell: vi.fn((col: number) => {
+                                        const char = text[col] || '';
+                                        return {
+                                            getWidth: () => 1,
+                                            getChars: () => char,
+                                            getCode: () => char ? char.codePointAt(0)! : 0,
+                                        };
+                                    })
+                                };
+                            })
                         }
                     },
                     registerMarker,
@@ -67,12 +87,13 @@ vi.mock('xterm', () => {
     };
 });
 
-vi.mock('xterm-addon-fit', () => ({ FitAddon: class { fit = vi.fn(); proposeDimensions = vi.fn(() => ({ cols: 80, rows: 24 })); } }));
-vi.mock('xterm-addon-search', () => ({ SearchAddon: class { findNext = vi.fn(); findPrevious = vi.fn(); } }));
+vi.mock('@xterm/addon-fit', () => ({ FitAddon: class { fit = vi.fn(); proposeDimensions = vi.fn(() => ({ cols: 80, rows: 24 })); } }));
+vi.mock('@xterm/addon-search', () => ({ SearchAddon: class { findNext = vi.fn(); findPrevious = vi.fn(); clearDecorations = vi.fn(); dispose = vi.fn(); onDidChangeResults = vi.fn(() => ({ dispose: vi.fn() })); } }));
 
 describe('Terminal write buffering (Change 1)', () => {
     beforeEach(() => {
         mockBufferLines = [''];
+        writeParsedCallback = null;
         rafCallbacks = [];
         vi.spyOn(window, 'requestAnimationFrame').mockImplementation(mockRAF);
     });
@@ -205,7 +226,7 @@ describe('Terminal post-output highlight scan (Change 2)', () => {
         expect(registerDecoration).not.toHaveBeenCalled();
     });
 
-    it('should trigger highlight scan after output stabilizes', () => {
+    it('should trigger highlight scan after parsed output', async () => {
         const rules: HighlightRule[] = [{
             id: '1', name: 'err', pattern: '(?i)\\berror\\b',
             is_enabled: true, priority: 0,
@@ -224,15 +245,15 @@ describe('Terminal post-output highlight scan (Change 2)', () => {
         });
 
         // Advance past the 300ms post-output debounce + scheduleHighlightScan(0) timer
-        act(() => {
-            vi.advanceTimersByTime(350);
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(350);
         });
 
         // Now the highlight scan should have created decorations
         expect(registerDecoration).toHaveBeenCalled();
     });
 
-    it('should NOT trigger scan while output is still flowing', () => {
+    it('should update highlights while output is still flowing', async () => {
         const rules: HighlightRule[] = [{
             id: '1', name: 'err', pattern: '(?i)\\berror\\b',
             is_enabled: true, priority: 0,
@@ -244,10 +265,11 @@ describe('Terminal post-output highlight scan (Change 2)', () => {
         render(<TerminalComponent id="scan-test3" ref={ref} terminalConfig={cfg} highlightRules={rules} />);
 
         // Let mount-time timers complete first
-        act(() => {
-            vi.advanceTimersByTime(500);
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(500);
         });
         registerDecoration.mockClear();
+        mockBufferLines = ['hello', 'prefix error', 'world'];
 
         // Simulate continuous output: write at t=0, t=100, t=200
         act(() => {
@@ -255,14 +277,14 @@ describe('Terminal post-output highlight scan (Change 2)', () => {
             flushRAFs();
         });
 
-        act(() => {
-            vi.advanceTimersByTime(100);
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(100);
             ref.current?.write('line2 error\n');
             flushRAFs();
         });
 
-        act(() => {
-            vi.advanceTimersByTime(100);
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(100);
             ref.current?.write('line3 error\n');
             flushRAFs();
         });
@@ -270,18 +292,18 @@ describe('Terminal post-output highlight scan (Change 2)', () => {
         // At t=200, the post-output scan timer keeps getting rescheduled
         // because each write resets the 300ms debounce. No scan has fired from write path.
         const callsDuringFlow = registerDecoration.mock.calls.length;
-        expect(callsDuringFlow).toBe(0);
+        expect(callsDuringFlow).toBeGreaterThan(0);
 
         // Now wait for output to stabilize — use runAllTimers to handle nested timers
-        act(() => {
-            vi.runAllTimers();
+        await act(async () => {
+            await vi.runAllTimersAsync();
         });
 
-        // Now scan should have fired
-        expect(registerDecoration.mock.calls.length).toBeGreaterThan(callsDuringFlow);
+        // The final pass reuses unchanged decorations instead of rebuilding them.
+        expect(registerDecoration.mock.calls.length).toBe(callsDuringFlow);
     });
 
-    it('should debounce post-output scan timer on rapid writes', () => {
+    it('should coalesce a rapid write batch into one parsed-output update', async () => {
         const rules: HighlightRule[] = [{
             id: '1', name: 'err', pattern: '(?i)\\berror\\b',
             is_enabled: true, priority: 0,
@@ -293,10 +315,11 @@ describe('Terminal post-output highlight scan (Change 2)', () => {
         render(<TerminalComponent id="scan-test4" ref={ref} terminalConfig={cfg} highlightRules={rules} />);
 
         // Let mount-time timers complete
-        act(() => {
-            vi.advanceTimersByTime(500);
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(500);
         });
         registerDecoration.mockClear();
+        mockBufferLines = ['prefix error', 'world'];
 
         // Rapid-fire 10 writes — each resets the 300ms debounce
         act(() => {
@@ -307,14 +330,14 @@ describe('Terminal post-output highlight scan (Change 2)', () => {
         });
 
         // Advance 200ms — debounce not yet elapsed, scan should NOT fire
-        act(() => {
-            vi.advanceTimersByTime(200);
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(31);
         });
         expect(registerDecoration).not.toHaveBeenCalled();
 
         // Advance past 300ms — now the scan fires (run all timers to handle nesting)
-        act(() => {
-            vi.runAllTimers();
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(20);
         });
 
         // Scan should have fired — registerDecoration called at least once
