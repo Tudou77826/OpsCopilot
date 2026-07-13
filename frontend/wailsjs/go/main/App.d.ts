@@ -160,6 +160,8 @@ export function SaveQuickCommands(arg1:Array<config.QuickCommand>):Promise<strin
 
 export function SaveSettings(arg1:config.AppConfig):Promise<string>;
 
+export function SaveTerminalConfig(arg1:config.TerminalConfig):Promise<string>;
+
 export function SendCommand(arg1:string,arg2:string):Promise<void>;
 
 export function StartScriptRecording(arg1:string,arg2:string,arg3:string):Promise<script.Script>;

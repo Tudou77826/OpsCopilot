@@ -23,10 +23,15 @@ func TestTerminalConfigDefaultAndSave(t *testing.T) {
 	if m.Config.Terminal.Scrollback != 5000 {
 		t.Fatalf("expected default scrollback 5000, got %d", m.Config.Terminal.Scrollback)
 	}
+	if m.Config.Terminal.FontFamily != DefaultTerminalFontFamily || m.Config.Terminal.FontSize != DefaultTerminalFontSize {
+		t.Fatalf("unexpected default terminal appearance: %+v", m.Config.Terminal)
+	}
 
 	m.Config.Terminal.Scrollback = 8000
 	m.Config.Terminal.SearchEnabled = false
 	m.Config.Terminal.HighlightEnabled = false
+	m.Config.Terminal.FontFamily = "Fira Code"
+	m.Config.Terminal.FontSize = 18
 	if err := m.Save(); err != nil {
 		t.Fatalf("save: %v", err)
 	}
@@ -38,7 +43,29 @@ func TestTerminalConfigDefaultAndSave(t *testing.T) {
 	if err := m2.Load(); err != nil {
 		t.Fatalf("load2: %v", err)
 	}
-	if m2.Config.Terminal.Scrollback != 8000 || m2.Config.Terminal.SearchEnabled || m2.Config.Terminal.HighlightEnabled {
+	if m2.Config.Terminal.Scrollback != 8000 || m2.Config.Terminal.SearchEnabled || m2.Config.Terminal.HighlightEnabled || m2.Config.Terminal.FontFamily != "Fira Code" || m2.Config.Terminal.FontSize != 18 {
 		t.Fatalf("unexpected terminal config: %+v", m2.Config.Terminal)
+	}
+}
+
+func TestNormalizeTerminalConfigAppearance(t *testing.T) {
+	cfg := NormalizeTerminalConfig(TerminalConfig{Scrollback: 5000})
+	if cfg.FontFamily != DefaultTerminalFontFamily || cfg.FontSize != DefaultTerminalFontSize {
+		t.Fatalf("expected appearance defaults, got %+v", cfg)
+	}
+
+	cfg = NormalizeTerminalConfig(TerminalConfig{Scrollback: 5000, FontFamily: "  Fira Code  ", FontSize: 99})
+	if cfg.FontFamily != "Fira Code" || cfg.FontSize != MaxTerminalFontSize {
+		t.Fatalf("expected trimmed family and clamped size, got %+v", cfg)
+	}
+
+	cfg = NormalizeTerminalConfig(TerminalConfig{Scrollback: 5000, FontFamily: " Inconsolata ", FontSize: 16})
+	if cfg.FontFamily != "Inconsolata" || cfg.FontSize != 16 {
+		t.Fatalf("expected bundled Inconsolata font to be preserved, got %+v", cfg)
+	}
+
+	cfg = NormalizeTerminalConfig(TerminalConfig{Scrollback: 5000, FontFamily: "Consolas", FontSize: 14})
+	if cfg.FontFamily != DefaultTerminalFontFamily {
+		t.Fatalf("expected unsupported system font to migrate to default, got %+v", cfg)
 	}
 }

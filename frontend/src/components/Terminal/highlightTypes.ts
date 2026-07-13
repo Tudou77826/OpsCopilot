@@ -19,5 +19,6 @@ export interface TerminalConfig {
     scrollback: number;
     search_enabled: boolean;
     highlight_enabled: boolean;
+    font_family?: string;
+    font_size?: number;
 }
-

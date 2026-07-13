@@ -10,7 +10,11 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@fontsource/fira-code": "^5.2.7",
+    "@fontsource/ibm-plex-mono": "^5.2.7",
+    "@fontsource/inconsolata": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",
+    "@fontsource/source-code-pro": "^5.2.7",
     "flexlayout-react": "^0.9.1",
     "highlight.js": "^11.11.1",
     "react": "^18.2.0",

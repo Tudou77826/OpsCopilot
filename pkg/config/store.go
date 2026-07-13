@@ -26,6 +26,13 @@ type AppConfig struct {
 
 const DefaultCLIExecTimeoutSec = 120
 
+const (
+	DefaultTerminalFontFamily = "JetBrains Mono"
+	DefaultTerminalFontSize   = 14
+	MinTerminalFontSize       = 10
+	MaxTerminalFontSize       = 32
+)
+
 type CLIConfig struct {
 	ExecTimeoutSec int `json:"exec_timeout_sec"`
 }
@@ -43,9 +50,36 @@ type ExperimentalConfig struct {
 }
 
 type TerminalConfig struct {
-	Scrollback       int  `json:"scrollback"`
-	SearchEnabled    bool `json:"search_enabled"`
-	HighlightEnabled bool `json:"highlight_enabled"`
+	Scrollback       int    `json:"scrollback"`
+	SearchEnabled    bool   `json:"search_enabled"`
+	HighlightEnabled bool   `json:"highlight_enabled"`
+	FontFamily       string `json:"font_family"`
+	FontSize         int    `json:"font_size"`
+}
+
+func NormalizeTerminalConfig(cfg TerminalConfig) TerminalConfig {
+	if cfg.Scrollback <= 0 {
+		cfg.Scrollback = 5000
+	}
+	if strings.TrimSpace(cfg.FontFamily) == "" {
+		cfg.FontFamily = DefaultTerminalFontFamily
+	} else {
+		cfg.FontFamily = strings.TrimSpace(cfg.FontFamily)
+	}
+	switch cfg.FontFamily {
+	case "JetBrains Mono", "Fira Code", "Source Code Pro", "IBM Plex Mono", "Inconsolata":
+	default:
+		cfg.FontFamily = DefaultTerminalFontFamily
+	}
+	if cfg.FontSize <= 0 {
+		cfg.FontSize = DefaultTerminalFontSize
+	} else if cfg.FontSize < MinTerminalFontSize {
+		cfg.FontSize = MinTerminalFontSize
+	}
+	if cfg.FontSize > MaxTerminalFontSize {
+		cfg.FontSize = MaxTerminalFontSize
+	}
+	return cfg
 }
 
 type HighlightRule struct {
@@ -145,6 +179,8 @@ func newManagerWithDir(dir string) *Manager {
 			Scrollback:       5000,
 			SearchEnabled:    true,
 			HighlightEnabled: true,
+			FontFamily:       DefaultTerminalFontFamily,
+			FontSize:         DefaultTerminalFontSize,
 		},
 		HighlightRules: []HighlightRule{},
 	}
@@ -223,11 +259,14 @@ func (m *Manager) Load() error {
 			Scrollback:       5000,
 			SearchEnabled:    true,
 			HighlightEnabled: true,
+			FontFamily:       DefaultTerminalFontFamily,
+			FontSize:         DefaultTerminalFontSize,
 		}
 		changed = true
 	}
-	if m.Config.Terminal.Scrollback <= 0 {
-		m.Config.Terminal.Scrollback = 5000
+	normalizedTerminal := NormalizeTerminalConfig(m.Config.Terminal)
+	if normalizedTerminal != m.Config.Terminal {
+		m.Config.Terminal = normalizedTerminal
 		changed = true
 	}
 

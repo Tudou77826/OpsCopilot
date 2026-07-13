@@ -32,6 +32,7 @@ interface FlexLayoutAdapterProps {
     onToggleTerminalBroadcast?: (id: string) => void;
     completionDelay?: number;
     terminalConfig?: TerminalConfig;
+    onTerminalFontSizeChange?: (fontSize: number) => void;
     highlightRules?: HighlightRule[];
     onSelectionParsed?: (result: TimestampResult | null) => void;
 }
@@ -51,6 +52,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
     onToggleTerminalBroadcast,
     completionDelay,
     terminalConfig,
+    onTerminalFontSizeChange,
     highlightRules,
     onSelectionParsed,
 }) => {
@@ -228,6 +230,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                 onActiveTerminalChange={onActiveTerminalChange}
                 completionDelay={completionDelay}
                 terminalConfig={terminalConfig}
+                onTerminalFontSizeChange={onTerminalFontSizeChange}
                 highlightRules={highlightRules}
                 onSelectionParsed={onSelectionParsed}
                 node={node}
@@ -236,7 +239,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                 onToggleTerminalBroadcast={onToggleTerminalBroadcast}
             />
         );
-    }, [activeTerminalId, terminals, onTerminalData, terminalRefs, completionDelay, terminalConfig, highlightRules, onSelectionParsed, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast]);
+    }, [activeTerminalId, terminals, onTerminalData, terminalRefs, completionDelay, terminalConfig, onTerminalFontSizeChange, highlightRules, onSelectionParsed, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast]);
 
     // --- Custom tab rendering ---
     const handleRenderTab = useCallback((node: TabNode, renderValues: ITabRenderValues) => {
@@ -485,6 +488,7 @@ interface TerminalWrapperProps {
     onActiveTerminalChange?: (id: string | null) => void;
     completionDelay?: number;
     terminalConfig?: TerminalConfig;
+    onTerminalFontSizeChange?: (fontSize: number) => void;
     highlightRules?: HighlightRule[];
     onSelectionParsed?: (result: TimestampResult | null) => void;
     node: TabNode;
@@ -500,6 +504,7 @@ const TerminalWrapper: React.FC<TerminalWrapperProps> = ({
     onActiveTerminalChange,
     completionDelay,
     terminalConfig,
+    onTerminalFontSizeChange,
     highlightRules,
     onSelectionParsed,
     node,
@@ -544,6 +549,7 @@ const TerminalWrapper: React.FC<TerminalWrapperProps> = ({
                 onData={(data) => onTerminalData(terminalId, data)}
                 completionDelay={completionDelay}
                 terminalConfig={terminalConfig}
+                onFontSizeChange={onTerminalFontSizeChange}
                 highlightRules={highlightRules}
                 onSelectionParsed={onSelectionParsed}
                 ref={(el) => {

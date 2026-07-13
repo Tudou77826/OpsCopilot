@@ -10,6 +10,34 @@ body {
   width: 100vw;
 }
 
+/* The terminal appearance page provides its own consistent step buttons. */
+.terminal-font-size-input {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.terminal-font-size-input::-webkit-inner-spin-button,
+.terminal-font-size-input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.terminal-font-card:hover {
+  border-color: #5a5a5a !important;
+  background-color: #292929 !important;
+}
+
+.terminal-font-card[aria-checked="true"]:hover {
+  border-color: #007acc !important;
+  background-color: #202f3a !important;
+}
+
+.terminal-font-card:focus-visible {
+  outline: 2px solid #75beff;
+  outline-offset: 2px;
+}
+
 #root {
   height: 100%;
   width: 100%;

@@ -15,6 +15,7 @@ import CommandQueryOverlay, { CommandQueryResult } from './components/CommandQue
 import ConnectErrorModal from './components/ConnectErrorModal/ConnectErrorModal';
 import { ConnectionConfig, SessionStatus, SessionDisconnectedEvent } from './types';
 import { HighlightRule, TerminalConfig } from './components/Terminal/highlightTypes';
+import { normalizeTerminalConfig } from './components/Terminal/terminalAppearance';
 import { TimestampResult } from './utils/timestampParser';
 
 interface TerminalSession {
@@ -51,7 +52,7 @@ function App() {
     const [isConfirmCloseOpen, setIsConfirmCloseOpen] = useState(false);
     const [confirmCloseMessage, setConfirmCloseMessage] = useState("");
     const [completionDelay, setCompletionDelay] = useState(150);
-    const [terminalConfig, setTerminalConfig] = useState<TerminalConfig>({ scrollback: 5000, search_enabled: true, highlight_enabled: true });
+    const [terminalConfig, setTerminalConfig] = useState<TerminalConfig>(() => normalizeTerminalConfig());
     const [highlightRules, setHighlightRules] = useState<HighlightRule[]>([]);
     const [isCommandQueryOpen, setIsCommandQueryOpen] = useState(false);
     const [commandQueryText, setCommandQueryText] = useState('');
@@ -77,6 +78,37 @@ function App() {
         broadcastIdsRef.current = broadcastIds;
     }, [broadcastIds]);
     const terminalRefs = useRef(new Map<string, TerminalRef>());
+    const terminalConfigStateRef = useRef<TerminalConfig>(terminalConfig);
+    const terminalConfigSaveTimerRef = useRef<number | null>(null);
+
+    const handleTerminalConfigChange = useCallback((nextConfig: TerminalConfig) => {
+        const normalized = normalizeTerminalConfig(nextConfig);
+        terminalConfigStateRef.current = normalized;
+        setTerminalConfig(normalized);
+
+        if (terminalConfigSaveTimerRef.current !== null) {
+            window.clearTimeout(terminalConfigSaveTimerRef.current);
+        }
+        terminalConfigSaveTimerRef.current = window.setTimeout(async () => {
+            terminalConfigSaveTimerRef.current = null;
+            try {
+                // @ts-ignore
+                await window.go?.main?.App?.SaveTerminalConfig?.(terminalConfigStateRef.current);
+            } catch (error) {
+                console.error('Failed to save terminal settings:', error);
+            }
+        }, 350);
+    }, []);
+
+    const handleTerminalFontSizeChange = useCallback((fontSize: number) => {
+        handleTerminalConfigChange({ ...terminalConfigStateRef.current, font_size: fontSize });
+    }, [handleTerminalConfigChange]);
+
+    useEffect(() => () => {
+        if (terminalConfigSaveTimerRef.current !== null) {
+            window.clearTimeout(terminalConfigSaveTimerRef.current);
+        }
+    }, []);
     const scheduleFitAll = useCallback((delay = 120) => {
         setTimeout(() => {
             terminalRefs.current.forEach(t => t.fit());
@@ -164,7 +196,9 @@ function App() {
                         setCompletionDelay(cfg.completion_delay);
                     }
                     if (cfg && cfg.terminal) {
-                        setTerminalConfig(cfg.terminal);
+                        const normalized = normalizeTerminalConfig(cfg.terminal);
+                        terminalConfigStateRef.current = normalized;
+                        setTerminalConfig(normalized);
                     }
                     if (cfg && Array.isArray(cfg.highlight_rules)) {
                         setHighlightRules(cfg.highlight_rules);
@@ -711,6 +745,7 @@ function App() {
                             onToggleTerminalBroadcast={handleToggleTerminalBroadcast}
                             completionDelay={completionDelay}
                             terminalConfig={terminalConfig}
+                            onTerminalFontSizeChange={handleTerminalFontSizeChange}
                             highlightRules={highlightRules}
                             onSelectionParsed={setParsedTimestamp}
                         />
@@ -820,6 +855,7 @@ function App() {
                 onToggleBroadcast={handleToggleBroadcast}
                 onCompletionDelayChange={setCompletionDelay}
                 onHighlightRulesChange={setHighlightRules}
+                onTerminalConfigChange={handleTerminalConfigChange}
                 updateAvailable={updateAvailable}
             />
 

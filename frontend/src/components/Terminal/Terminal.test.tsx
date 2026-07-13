@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import TerminalComponent, { TerminalRef } from './Terminal';
 import { vi, describe, it, expect, afterEach } from 'vitest';
 
@@ -115,6 +115,55 @@ describe('TerminalComponent', () => {
   it('initializes xterm on mount', () => {
     render(<TerminalComponent id="test-term" />);
     expect(TerminalMock).toHaveBeenCalled();
+  });
+
+  it('changes only the terminal font size on Ctrl + wheel', () => {
+    const onFontSizeChange = vi.fn();
+    render(
+      <TerminalComponent
+        id="test-term"
+        terminalConfig={{ scrollback: 5000, search_enabled: true, highlight_enabled: true, font_size: 14 }}
+        onFontSizeChange={onFontSizeChange}
+      />
+    );
+
+    fireEvent.wheel(screen.getByTestId('terminal-container-test-term'), { ctrlKey: true, deltaY: -100 });
+    expect(onFontSizeChange).toHaveBeenCalledWith(15);
+    expect(screen.getByText('字号 15px')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '恢复默认字号 14px' }));
+    expect(onFontSizeChange).toHaveBeenLastCalledWith(14);
+    expect(screen.queryByText('字号 15px')).not.toBeInTheDocument();
+  });
+
+  it('restores the default terminal font size with Ctrl + 0', () => {
+    const onFontSizeChange = vi.fn();
+    render(
+      <TerminalComponent
+        id="test-term"
+        terminalConfig={{ scrollback: 5000, search_enabled: true, highlight_enabled: true, font_size: 18 }}
+        onFontSizeChange={onFontSizeChange}
+      />
+    );
+
+    const keyHandler = terminalInstances[0].attachCustomKeyEventHandler.mock.calls[0][0];
+    const preventDefault = vi.fn();
+    let handled: boolean | undefined;
+    act(() => {
+      handled = keyHandler({
+        type: 'keydown',
+        ctrlKey: true,
+        altKey: false,
+        metaKey: false,
+        code: 'Digit0',
+        preventDefault,
+      });
+    });
+
+    expect(handled).toBe(false);
+    expect(preventDefault).toHaveBeenCalled();
+    expect(onFontSizeChange).toHaveBeenCalledWith(14);
+    expect(screen.getByText('默认')).toBeInTheDocument();
   });
 
   it('refits and refreshes the visible terminal over multiple frames', () => {

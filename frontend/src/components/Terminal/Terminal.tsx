@@ -6,6 +6,11 @@ import 'xterm/css/xterm.css';
 import CompletionOverlay, { CompletionData, CompletionSuggestion } from './CompletionOverlay';
 import SearchPanel from './SearchPanel';
 import { HighlightRule, TerminalConfig } from './highlightTypes';
+import {
+    DEFAULT_TERMINAL_FONT_SIZE,
+    clampTerminalFontSize,
+    getTerminalFontStack,
+} from './terminalAppearance';
 import { parseTimestamp, TimestampResult } from '../../utils/timestampParser';
 
 interface TerminalProps {
@@ -14,6 +19,7 @@ interface TerminalProps {
     onData?: (data: string) => void;
     completionDelay?: number;  // Completion delay in milliseconds
     terminalConfig?: TerminalConfig;
+    onFontSizeChange?: (fontSize: number) => void;
     highlightRules?: HighlightRule[];
     /** 选区解析回调，用于置顶栏展示时间戳等解析结果 */
     onSelectionParsed?: (result: TimestampResult | null) => void;
@@ -27,7 +33,7 @@ export interface TerminalRef {
     focus: () => void;
 }
 
-const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionID, onData, completionDelay = 150, terminalConfig, highlightRules, onSelectionParsed }, ref) => {
+const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionID, onData, completionDelay = 150, terminalConfig, onFontSizeChange, highlightRules, onSelectionParsed }, ref) => {
     const terminalRef = useRef<HTMLDivElement>(null);
     const xtermRef = useRef<Terminal | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
@@ -36,6 +42,9 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
     const sessionIDRef = useRef<string | undefined>(sessionID);
     const completionDelayRef = useRef<number>(completionDelay);
     const terminalConfigRef = useRef<TerminalConfig | undefined>(undefined);
+    const onFontSizeChangeRef = useRef<((fontSize: number) => void) | undefined>(onFontSizeChange);
+    const pendingFontSizeRef = useRef(DEFAULT_TERMINAL_FONT_SIZE);
+    const zoomIndicatorTimerRef = useRef<number | null>(null);
     const highlightRulesRef = useRef<HighlightRule[] | undefined>(undefined);
 
     // Completion state
@@ -55,6 +64,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
     const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
     const [searchRegexMode, setSearchRegexMode] = useState(false);
     const [searchCountText, setSearchCountText] = useState('');
+    const [zoomIndicatorSize, setZoomIndicatorSize] = useState<number | null>(null);
     const searchAddonRef = useRef<SearchAddon | null>(null);
     const searchCountTimerRef = useRef<number | null>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
@@ -110,11 +120,52 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         sessionIDRef.current = sessionID;
         completionDelayRef.current = completionDelay;
         terminalConfigRef.current = terminalConfig;
+        onFontSizeChangeRef.current = onFontSizeChange;
+        pendingFontSizeRef.current = clampTerminalFontSize(terminalConfig?.font_size);
         highlightRulesRef.current = highlightRules;
         highlightEnabledRef.current = terminalConfig?.highlight_enabled ?? true;
-    }, [onData, onSelectionParsed, sessionID, completionDelay, terminalConfig, highlightRules]);
+    }, [onData, onSelectionParsed, sessionID, completionDelay, terminalConfig, onFontSizeChange, highlightRules]);
 
     const getSearchEnabled = () => terminalConfigRef.current?.search_enabled ?? true;
+
+    const showZoomIndicator = useCallback((fontSize: number) => {
+        setZoomIndicatorSize(fontSize);
+        if (zoomIndicatorTimerRef.current !== null) {
+            window.clearTimeout(zoomIndicatorTimerRef.current);
+        }
+        zoomIndicatorTimerRef.current = window.setTimeout(() => {
+            zoomIndicatorTimerRef.current = null;
+            setZoomIndicatorSize(null);
+        }, 3200);
+    }, []);
+
+    const adjustTerminalFontSize = useCallback((next: number | ((current: number) => number)) => {
+        const current = pendingFontSizeRef.current;
+        const fontSize = clampTerminalFontSize(typeof next === 'function' ? next(current) : next);
+        if (fontSize === current) return;
+        pendingFontSizeRef.current = fontSize;
+        showZoomIndicator(fontSize);
+        onFontSizeChangeRef.current?.(fontSize);
+    }, [showZoomIndicator]);
+
+    useEffect(() => () => {
+        if (zoomIndicatorTimerRef.current !== null) {
+            window.clearTimeout(zoomIndicatorTimerRef.current);
+        }
+    }, []);
+
+    useEffect(() => {
+        const container = terminalRef.current;
+        if (!container) return;
+        const handleWheel = (event: WheelEvent) => {
+            if (!event.ctrlKey) return;
+            event.preventDefault();
+            event.stopPropagation();
+            adjustTerminalFontSize(current => current + (event.deltaY < 0 ? 1 : -1));
+        };
+        container.addEventListener('wheel', handleWheel, { passive: false });
+        return () => container.removeEventListener('wheel', handleWheel);
+    }, [adjustTerminalFontSize]);
 
     const clearSearchHitDecorations = useCallback(() => {
         for (const entry of searchDecorationsRef.current.values()) {
@@ -965,8 +1016,8 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             allowProposedApi: true,
             cursorBlink: true,
             scrollback: terminalConfig?.scrollback || 5000,
-            fontFamily: 'var(--font-mono)',
-            fontSize: 14,
+            fontFamily: getTerminalFontStack(terminalConfig?.font_family),
+            fontSize: clampTerminalFontSize(terminalConfig?.font_size),
             fontWeight: '400',
             fontWeightBold: '700',
             theme: {
@@ -1111,6 +1162,23 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         // Add key handler for Tab
         term.attachCustomKeyEventHandler((arg) => {
             if (arg.type === 'keydown') {
+                if (arg.ctrlKey && !arg.altKey && !arg.metaKey) {
+                    if (arg.code === 'Equal' || arg.code === 'NumpadAdd') {
+                        arg.preventDefault();
+                        adjustTerminalFontSize(current => current + 1);
+                        return false;
+                    }
+                    if (arg.code === 'Minus' || arg.code === 'NumpadSubtract') {
+                        arg.preventDefault();
+                        adjustTerminalFontSize(current => current - 1);
+                        return false;
+                    }
+                    if (arg.code === 'Digit0' || arg.code === 'Numpad0') {
+                        arg.preventDefault();
+                        adjustTerminalFontSize(DEFAULT_TERMINAL_FONT_SIZE);
+                        return false;
+                    }
+                }
                 if (getSearchEnabled() && arg.ctrlKey && arg.code === 'KeyF') {
                     arg.preventDefault();
                     const selection = term.getSelection();
@@ -1314,6 +1382,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         scrollToBottomAndRefresh,
         scheduleHighlightScan,
         terminalConfig?.search_enabled,
+        adjustTerminalFontSize,
     ]);
 
     useEffect(() => {
@@ -1326,6 +1395,20 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         term.options.scrollback = nextScrollback;
         restoreTerminalLayout();
     }, [restoreTerminalLayout, terminalConfig?.scrollback]);
+
+    useEffect(() => {
+        const term = xtermRef.current;
+        if (!term) return;
+
+        const fontFamily = getTerminalFontStack(terminalConfig?.font_family);
+        const fontSize = clampTerminalFontSize(terminalConfig?.font_size);
+        if (term.options.fontFamily === fontFamily && term.options.fontSize === fontSize) return;
+
+        term.options.fontFamily = fontFamily;
+        term.options.fontSize = fontSize;
+        pendingFontSizeRef.current = fontSize;
+        restoreTerminalLayout();
+    }, [restoreTerminalLayout, terminalConfig?.font_family, terminalConfig?.font_size]);
 
     useEffect(() => {
         scheduleHighlightScan(0);
@@ -1365,8 +1448,79 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                 onNavigate={handleNavigate}
                 onClose={() => setCompletionVisible(false)}
             />
+            {zoomIndicatorSize !== null && (
+                <div
+                    role="group"
+                    aria-label="终端缩放"
+                    style={zoomIndicatorStyles.container}
+                >
+                    <span role="status" aria-live="polite" style={zoomIndicatorStyles.current}>
+                        字号 {zoomIndicatorSize}px
+                    </span>
+                    <span style={zoomIndicatorStyles.separator} aria-hidden="true" />
+                    {zoomIndicatorSize === DEFAULT_TERMINAL_FONT_SIZE ? (
+                        <span style={zoomIndicatorStyles.defaultLabel}>默认</span>
+                    ) : (
+                        <button
+                            type="button"
+                            style={zoomIndicatorStyles.resetButton}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => {
+                                adjustTerminalFontSize(DEFAULT_TERMINAL_FONT_SIZE);
+                                setZoomIndicatorSize(null);
+                            }}
+                            aria-label={`恢复默认字号 ${DEFAULT_TERMINAL_FONT_SIZE}px`}
+                        >
+                            恢复 {DEFAULT_TERMINAL_FONT_SIZE}px
+                        </button>
+                    )}
+                </div>
+            )}
         </div>
     );
 });
+
+const zoomIndicatorStyles: Record<string, React.CSSProperties> = {
+    container: {
+        position: 'absolute',
+        right: '14px',
+        bottom: '12px',
+        zIndex: 20,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '9px',
+        minHeight: '30px',
+        padding: '0 10px',
+        border: '1px solid #4a4a4a',
+        borderRadius: '5px',
+        backgroundColor: 'rgba(43, 43, 43, 0.96)',
+        boxShadow: '0 4px 14px rgba(0, 0, 0, 0.35)',
+        color: '#d4d4d4',
+        fontSize: '12px',
+        lineHeight: 1,
+        userSelect: 'none',
+    },
+    current: {
+        color: '#f0f0f0',
+        fontWeight: 500,
+    },
+    separator: {
+        width: '1px',
+        height: '14px',
+        backgroundColor: '#555555',
+    },
+    defaultLabel: {
+        color: '#909090',
+    },
+    resetButton: {
+        minHeight: '28px',
+        padding: '0',
+        border: 'none',
+        background: 'transparent',
+        color: '#4aa3df',
+        font: 'inherit',
+        cursor: 'pointer',
+    },
+};
 
 export default TerminalComponent;

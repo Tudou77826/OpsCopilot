@@ -306,6 +306,10 @@ export function SaveSettings(arg1) {
   return window['go']['main']['App']['SaveSettings'](arg1);
 }
 
+export function SaveTerminalConfig(arg1) {
+  return window['go']['main']['App']['SaveTerminalConfig'](arg1);
+}
+
 export function SendCommand(arg1, arg2) {
   return window['go']['main']['App']['SendCommand'](arg1, arg2);
 }

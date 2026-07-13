@@ -1,11 +1,19 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { TbRobot, TbPalette, TbKeyboard, TbLayoutGrid, TbBooks, TbShieldCheck, TbLock, TbSettings, TbInfoCircle, TbSearch, TbPlugConnected } from 'react-icons/tb';
+import { TbRobot, TbPalette, TbKeyboard, TbLayoutGrid, TbBooks, TbShieldCheck, TbLock, TbSettings, TbInfoCircle, TbSearch, TbPlugConnected, TbTerminal2, TbMinus, TbPlus, TbRefresh, TbCheck } from 'react-icons/tb';
 import KeysMap from './KeysMap';
 import HighlightRulesModal from './HighlightRulesModal';
 import CommandWhitelistPanel from './CommandWhitelist/CommandWhitelistPanel';
 import FileAccessPanel from './FileAccess/FileAccessPanel';
 import AboutPanel from './AboutPanel';
 import { HighlightRule, TerminalConfig } from '../Terminal/highlightTypes';
+import {
+    DEFAULT_TERMINAL_FONT_SIZE,
+    MAX_TERMINAL_FONT_SIZE,
+    MIN_TERMINAL_FONT_SIZE,
+    TERMINAL_FONT_OPTIONS,
+    clampTerminalFontSize,
+    normalizeTerminalConfig,
+} from '../Terminal/terminalAppearance';
 import { colors, radius, font, inputStyle, btnSecondary, descStyle, labelStyle, sectionTitle } from './settingsStyles';
 import Switch from './Switch';
 
@@ -48,6 +56,7 @@ interface SettingsModalProps {
     onToggleBroadcast?: (enabled: boolean) => void;
     onCompletionDelayChange?: (delay: number) => void;
     onHighlightRulesChange?: (rules: HighlightRule[]) => void;
+    onTerminalConfigChange?: (config: TerminalConfig) => void;
     updateAvailable?: boolean;
 }
 
@@ -63,7 +72,7 @@ interface PatchSyncStatus {
     branch?: string;
 }
 
-type TabId = 'llm' | 'highlight' | 'shortcuts' | 'broadcast' | 'knowledge' | 'aiagent' | 'whitelist' | 'fileaccess' | 'experimental' | 'about';
+type TabId = 'llm' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'knowledge' | 'aiagent' | 'whitelist' | 'fileaccess' | 'experimental' | 'about';
 
 interface NavItem {
     id: TabId;
@@ -111,6 +120,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     onToggleBroadcast,
     onCompletionDelayChange,
     onHighlightRulesChange,
+    onTerminalConfigChange,
     updateAvailable
 }) => {
     const [config, setConfig] = useState<AppConfig | null>(null);
@@ -138,6 +148,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     // Navigation items structure
     const navItems: NavItem[] = [
         { id: 'llm', label: '模型服务', icon: TbRobot({}), category: 'AI' },
+        { id: 'terminal', label: '终端外观', icon: TbTerminal2({}), category: '终端' },
         { id: 'highlight', label: '突出显示', icon: TbPalette({}), category: '终端' },
         { id: 'shortcuts', label: '快捷键', icon: TbKeyboard({}), category: '交互' },
         { id: 'broadcast', label: '多窗口', icon: TbLayoutGrid({}), category: '交互' },
@@ -258,7 +269,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 const llmCfg = cfg.llm || {};
                 const fastModel = llmCfg.FastModel || llmCfg.Model || '';
                 const complexModel = llmCfg.ComplexModel || '';
-                const terminal: TerminalConfig = cfg.terminal || { scrollback: 5000, search_enabled: true, highlight_enabled: true };
+                const terminal = normalizeTerminalConfig(cfg.terminal);
                 const highlight_rules: HighlightRule[] = Array.isArray(cfg.highlight_rules) ? cfg.highlight_rules : [];
                 setConfig({
                     ...cfg,
@@ -316,6 +327,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             const nextConfig = {
                 ...config,
                 cli: normalizeCliConfig(config.cli),
+                terminal: normalizeTerminalConfig(config.terminal),
                 patch_store: normalizePatchStore(config.patch_store)
             };
             setConfig(nextConfig);
@@ -331,6 +343,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 }
                 if (onHighlightRulesChange) {
                     onHighlightRulesChange(nextConfig.highlight_rules || []);
+                }
+                if (onTerminalConfigChange) {
+                    onTerminalConfigChange(nextConfig.terminal);
                 }
                 setTimeout(() => {
                     setMsg('');
@@ -599,6 +614,112 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
                     </div>
                 );
+
+            case 'terminal': {
+                const terminal = normalizeTerminalConfig(config.terminal);
+                const fontSize = clampTerminalFontSize(terminal.font_size);
+                const updateTerminal = (patch: Partial<TerminalConfig>) => {
+                    setConfig({
+                        ...config,
+                        terminal: normalizeTerminalConfig({ ...terminal, ...patch }),
+                    });
+                };
+                return (
+                    <div style={styles.settingsGroup}>
+                        <div style={styles.groupTitle}>终端外观</div>
+                        <div style={styles.settingItem}>
+                            <div id="terminal-font-family-label" style={styles.settingLabel}>字体</div>
+                            <div
+                                style={styles.fontPreviewList}
+                                role="radiogroup"
+                                aria-labelledby="terminal-font-family-label"
+                            >
+                                {TERMINAL_FONT_OPTIONS.map(option => {
+                                    const selected = terminal.font_family === option.value;
+                                    return (
+                                        <button
+                                            key={option.value}
+                                            type="button"
+                                            className="terminal-font-card"
+                                            role="radio"
+                                            aria-checked={selected}
+                                            aria-label={`${option.label}：${option.description}`}
+                                            style={{
+                                                ...styles.fontPreviewCard,
+                                                ...(selected ? styles.fontPreviewCardSelected : {}),
+                                            }}
+                                            onClick={() => updateTerminal({ font_family: option.value })}
+                                        >
+                                            <span style={styles.fontPreviewHeader}>
+                                                <span>
+                                                    <strong style={styles.fontPreviewName}>{option.label}</strong>
+                                                    <span style={styles.fontPreviewDescription}>{option.description}</span>
+                                                </span>
+                                                <span style={{
+                                                    ...styles.fontSelectedIndicator,
+                                                    opacity: selected ? 1 : 0,
+                                                }} aria-hidden="true">
+                                                    {TbCheck({ size: 14 })}
+                                                </span>
+                                            </span>
+                                            <span style={{ ...styles.fontPreviewSample, fontFamily: option.stack }}>
+                                                ops@node:~$ ls -la&nbsp;&nbsp;01Il0O&nbsp;&nbsp;()[]
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        <div style={styles.settingItem}>
+                            <label htmlFor="terminal-font-size" style={styles.settingLabel}>字号</label>
+                            <div style={styles.fontSizeRow}>
+                                <button
+                                    type="button"
+                                    style={styles.fontSizeButton}
+                                    onClick={() => updateTerminal({ font_size: fontSize - 1 })}
+                                    disabled={fontSize <= MIN_TERMINAL_FONT_SIZE}
+                                    aria-label="减小终端字号"
+                                >
+                                    {TbMinus({ size: 16 })}
+                                </button>
+                                <div style={styles.fontSizeInputWrap}>
+                                    <input
+                                        id="terminal-font-size"
+                                        className="terminal-font-size-input"
+                                        type="number"
+                                        min={MIN_TERMINAL_FONT_SIZE}
+                                        max={MAX_TERMINAL_FONT_SIZE}
+                                        style={styles.fontSizeInput}
+                                        value={fontSize}
+                                        onChange={(event) => updateTerminal({ font_size: Number(event.target.value) })}
+                                    />
+                                    <span style={styles.fontSizeUnit}>px</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    style={styles.fontSizeButton}
+                                    onClick={() => updateTerminal({ font_size: fontSize + 1 })}
+                                    disabled={fontSize >= MAX_TERMINAL_FONT_SIZE}
+                                    aria-label="增大终端字号"
+                                >
+                                    {TbPlus({ size: 16 })}
+                                </button>
+                                <button
+                                    type="button"
+                                    style={styles.resetAppearanceButton}
+                                    onClick={() => updateTerminal({ font_family: 'JetBrains Mono', font_size: DEFAULT_TERMINAL_FONT_SIZE })}
+                                >
+                                    {TbRefresh({ size: 15 })}
+                                    恢复默认
+                                </button>
+                            </div>
+                            <div style={styles.settingDescription}>
+                                支持 {MIN_TERMINAL_FONT_SIZE}–{MAX_TERMINAL_FONT_SIZE}px；终端内可使用 Ctrl + 滚轮、Ctrl +/− 和 Ctrl + 0 快速调整。
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
 
             case 'highlight':
                 return (
@@ -1235,6 +1356,121 @@ const styles = {
     },
     input: {
         ...inputStyle,
+    },
+    fontSizeRow: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+    },
+    fontPreviewList: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+        gap: '8px',
+    },
+    fontPreviewCard: {
+        width: '100%',
+        minHeight: '70px',
+        padding: '10px 12px',
+        border: `1px solid ${colors.borderPrimary}`,
+        borderRadius: radius.md,
+        backgroundColor: colors.bgSecondary,
+        color: colors.textSecondary,
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '8px',
+        textAlign: 'left' as const,
+        cursor: 'pointer',
+        transition: 'border-color 160ms ease, background-color 160ms ease',
+    },
+    fontPreviewCardSelected: {
+        border: `1px solid ${colors.accent}`,
+        backgroundColor: '#202f3a',
+    },
+    fontPreviewHeader: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '12px',
+    },
+    fontPreviewName: {
+        color: colors.textPrimary,
+        fontSize: font.base,
+        fontWeight: 600,
+    },
+    fontPreviewDescription: {
+        color: colors.textTertiary,
+        fontSize: font.sm,
+        marginLeft: '10px',
+    },
+    fontSelectedIndicator: {
+        width: '20px',
+        height: '20px',
+        borderRadius: '50%',
+        backgroundColor: colors.accent,
+        color: '#ffffff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+    },
+    fontPreviewSample: {
+        color: '#d7d7d7',
+        fontSize: '13px',
+        lineHeight: 1.45,
+        whiteSpace: 'nowrap' as const,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+    },
+    fontSizeButton: {
+        width: '34px',
+        height: '34px',
+        border: `1px solid ${colors.borderPrimary}`,
+        borderRadius: radius.sm,
+        backgroundColor: colors.bgSecondary,
+        color: colors.textPrimary,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+    },
+    fontSizeInputWrap: {
+        width: '92px',
+        height: '34px',
+        display: 'flex',
+        alignItems: 'center',
+        border: `1px solid ${colors.borderPrimary}`,
+        borderRadius: radius.sm,
+        backgroundColor: colors.bgSecondary,
+        overflow: 'hidden',
+    },
+    fontSizeInput: {
+        width: '58px',
+        height: '100%',
+        padding: '0 8px',
+        border: 'none',
+        outline: 'none',
+        backgroundColor: 'transparent',
+        color: colors.textPrimary,
+        fontFamily: 'var(--font-mono)',
+        fontSize: font.base,
+        boxSizing: 'border-box' as const,
+    },
+    fontSizeUnit: {
+        color: colors.textTertiary,
+        fontSize: font.sm,
+    },
+    resetAppearanceButton: {
+        height: '34px',
+        padding: '0 12px',
+        border: `1px solid ${colors.borderPrimary}`,
+        borderRadius: radius.sm,
+        backgroundColor: 'transparent',
+        color: colors.textSecondary,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        cursor: 'pointer',
+        fontSize: font.base,
     },
     secondaryButton: {
         ...btnSecondary,

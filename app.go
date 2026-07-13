@@ -52,27 +52,27 @@ type App struct {
 	secretStore       secretstore.SecretStore
 	aiService         *ai.AIService
 	configMgr         *config.Manager
-	coreRecorder      *recorder.Recorder               // 统一录制引擎
-	troubleMgr        *troubleshoot.Manager            // 故障排查管理器
-	scriptMgr         *script.Manager                  // 脚本管理器
+	coreRecorder      *recorder.Recorder    // 统一录制引擎
+	troubleMgr        *troubleshoot.Manager // 故障排查管理器
+	scriptMgr         *script.Manager       // 脚本管理器
 	completionService *completion.Service
-	whitelistMgr      *security.WhitelistManager       // 命令白名单管理器
-	fileAccessMgr     *security.FileAccessChecker      // 文件访问控制管理器
+	whitelistMgr      *security.WhitelistManager  // 命令白名单管理器
+	fileAccessMgr     *security.FileAccessChecker // 文件访问控制管理器
 	activeConfigs     map[string]ConnectConfig
-	activeConfigsMu   sync.RWMutex                     // protects activeConfigs
-	isForceQuitting   bool                             // Flag to skip confirmation on force quit
+	activeConfigsMu   sync.RWMutex // protects activeConfigs
+	isForceQuitting   bool         // Flag to skip confirmation on force quit
 	ftMu              sync.Mutex
 	ftCancels         map[string]context.CancelFunc
 	relayMu           sync.Mutex
 	relayTransports   map[string]*filetransfer.RootRelayTransport
 	shellTransports   map[string]*filetransfer.RootRelayTransport
-	sessionStates     map[string]*SessionState         // 会话状态追踪
+	sessionStates     map[string]*SessionState // 会话状态追踪
 	sessionStateMu    sync.RWMutex
 	commandExtractors map[string]*terminal.CommandExtractor // 命令提取器（Tab 补全修正）
-	extractorMu       sync.RWMutex                     // 命令提取器锁
+	extractorMu       sync.RWMutex                          // 命令提取器锁
 	patchStoreMu      sync.RWMutex
-	patchStore        patchstore.PatchStore       // 补丁存储（可选）
-	feedbackStore     patchstore.FeedbackStore     // 反馈存储（可选）
+	patchStore        patchstore.PatchStore    // 补丁存储（可选）
+	feedbackStore     patchstore.FeedbackStore // 反馈存储（可选）
 	patchSyncStatusMu sync.RWMutex
 	patchSyncStatus   PatchSyncStatus
 	patchSyncing      atomic.Bool
@@ -178,16 +178,16 @@ func NewApp() *App {
 	// Set the CommandSender to app itself
 	scriptMgr.SetCommandSender(app)
 
-		// 构建知识库目录
-		knowledgeDir := app.resolveKnowledgeBase()
-		slog.Info("startup: resolved knowledge base", "dir", knowledgeDir)
-		if knowledgeDir != "" {
-			if err := aiService.UpdateCatalog(knowledgeDir); err != nil {
-				slog.Error("startup: failed to build knowledge catalog", "error", err)
-			} else if aiService.GetCatalog() != nil {
-				slog.Info("startup: knowledge catalog built", "scenarios", aiService.GetCatalog().TotalScenarios())
-			}
+	// 构建知识库目录
+	knowledgeDir := app.resolveKnowledgeBase()
+	slog.Info("startup: resolved knowledge base", "dir", knowledgeDir)
+	if knowledgeDir != "" {
+		if err := aiService.UpdateCatalog(knowledgeDir); err != nil {
+			slog.Error("startup: failed to build knowledge catalog", "error", err)
+		} else if aiService.GetCatalog() != nil {
+			slog.Info("startup: knowledge catalog built", "scenarios", aiService.GetCatalog().TotalScenarios())
 		}
+	}
 
 	return app
 }
@@ -1471,6 +1471,7 @@ func (a *App) initFeedbackStore() {
 }
 
 func (a *App) SaveSettings(cfg config.AppConfig) string {
+	cfg.Terminal = config.NormalizeTerminalConfig(cfg.Terminal)
 	cfg.PatchStore.Type = "git"
 	cfg.PatchStore.RemoteURL = strings.TrimSpace(cfg.PatchStore.RemoteURL)
 	cfg.PatchStore.Branch = strings.TrimSpace(cfg.PatchStore.Branch)
@@ -1517,6 +1518,18 @@ func (a *App) SaveSettings(cfg config.AppConfig) string {
 
 	return ""
 }
+
+// SaveTerminalConfig persists terminal appearance and behavior settings without
+// rebuilding unrelated services. It is used by the status bar and terminal
+// keyboard/mouse shortcuts, which can update the font size frequently.
+func (a *App) SaveTerminalConfig(cfg config.TerminalConfig) string {
+	a.configMgr.Config.Terminal = config.NormalizeTerminalConfig(cfg)
+	if err := a.configMgr.Save(); err != nil {
+		return fmt.Sprintf("Failed to save terminal settings: %v", err)
+	}
+	return ""
+}
+
 // GetCommandWhitelist 获取命令白名单配置
 func (a *App) GetCommandWhitelist() (*security.WhitelistConfig, error) {
 	if a.whitelistMgr == nil {
@@ -1590,7 +1603,6 @@ func (a *App) ImportConfigFromDirectory(dirPath string) string {
 
 	return a.configMgr.LastImportMessage()
 }
-
 
 type ftResponse struct {
 	OK      bool                         `json:"ok"`

@@ -82,6 +82,8 @@ export namespace config {
 	    scrollback: number;
 	    search_enabled: boolean;
 	    highlight_enabled: boolean;
+	    font_family: string;
+	    font_size: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new TerminalConfig(source);
@@ -92,6 +94,8 @@ export namespace config {
 	        this.scrollback = source["scrollback"];
 	        this.search_enabled = source["search_enabled"];
 	        this.highlight_enabled = source["highlight_enabled"];
+	        this.font_family = source["font_family"];
+	        this.font_size = source["font_size"];
 	    }
 	}
 	export class ExperimentalConfig {
