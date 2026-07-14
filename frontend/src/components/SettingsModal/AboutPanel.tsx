@@ -199,13 +199,6 @@ const AboutPanel: React.FC = () => {
         }
     }, [currentVersion, latestVersion]);
 
-    const handleCheckAndLoad = useCallback(async () => {
-        const status = await handleCheck();
-        if (status) {
-            await handleLoadReleases(status.latestVersion || '');
-        }
-    }, [handleCheck, handleLoadReleases]);
-
     const formatDate = (iso: string) => {
         if (!iso) return '';
         const d = new Date(iso);
@@ -288,44 +281,46 @@ const AboutPanel: React.FC = () => {
     return (
         <div style={styles.container}>
             <div style={styles.productHeader}>
-                <img src={logo} alt="OpsCopilot" style={styles.productLogo} />
-                <div style={styles.productMain}>
-                    <div style={styles.productTitleRow}>
-                        <div style={styles.productName}>OpsCopilot</div>
-                        <span style={styles.versionBadge}>{currentVersion.startsWith('v') ? currentVersion : `v${currentVersion}`}</span>
-                    </div>
-                    <div style={styles.productDesc}>AI 驱动的智能运维助手</div>
-                </div>
-                <a href={GITHUB_REPO} target="_blank" rel="noopener noreferrer" style={styles.projectLink}>项目主页</a>
-            </div>
-
-            <div style={styles.section}>
-                <div style={styles.sectionHeader}>
-                    <div>
-                        <div style={styles.sectionTitle}>版本与更新</div>
-                        <div style={styles.sectionHint}>
-                            <span>发布记录与可用更新</span>
-                            {updateState === 'available' && (
-                                <span style={styles.updateMiniWarning}>新版本 {latestVersion}，重启会丢失会话</span>
-                            )}
+                <div style={styles.productIdentity}>
+                    <img src={logo} alt="OpsCopilot" style={styles.productLogo} />
+                    <div style={styles.productMain}>
+                        <div style={styles.productTitleRow}>
+                            <div style={styles.productName}>OpsCopilot</div>
+                            <span style={styles.versionBadge}>{currentVersion.startsWith('v') ? currentVersion : `v${currentVersion}`}</span>
                         </div>
+                        <div style={styles.productDesc}>AI 驱动的智能运维助手</div>
                     </div>
-                    {(updateState === 'idle' || updateState === 'no-update' || updateState === 'available') && (
-                        <button style={styles.ghostBtn} onClick={handleCheckAndLoad} disabled={historyState === 'loading'}>
+                </div>
+                <div style={styles.updateSummary}>
+                    <div style={styles.sectionTitle}>版本与更新</div>
+                    <div style={styles.sectionHint}>
+                        <span>{updateState === 'idle' ? '尚未检查更新' : '发布记录与可用更新'}</span>
+                        {updateState === 'available' && (
+                            <span style={styles.updateMiniWarning}>新版本 {latestVersion}，重启会丢失会话</span>
+                        )}
+                    </div>
+                </div>
+                <div style={styles.headerActions}>
+                    <a href={GITHUB_REPO} target="_blank" rel="noopener noreferrer" style={styles.projectLink}>项目主页</a>
+                    <button style={styles.ghostBtn} onClick={() => handleLoadReleases()} disabled={historyState === 'loading'}>
+                        {historyState === 'loading' ? '加载中...' : '更新日志'}
+                    </button>
+                    {(updateState === 'idle' || updateState === 'no-update' || updateState === 'available' || updateState === 'error') && (
+                        <button style={styles.ghostBtn} onClick={handleCheck}>
                             {updateState === 'idle' ? '检查更新' : '重新检查'}
                         </button>
                     )}
                 </div>
+            </div>
 
+            {(updateState !== 'idle' || historyState !== 'idle' || releaseHistory.length > 0) && (
+                <div style={styles.section}>
                 {/* 更新执行中状态：下载/就绪/错误 —— 作为列表上方的紧凑横幅 */}
                 {updateState === 'checking' && (
                     <div style={styles.statusBanner}>
                         <div style={styles.loadingSpinner} />
                         <span style={styles.checkingText}>正在检查...</span>
                     </div>
-                )}
-                {updateState === 'idle' && historyState === 'idle' && (
-                    <div style={styles.statusBannerMuted}>尚未检查更新</div>
                 )}
                 {updateState === 'no-update' && (
                     <div style={styles.statusBannerOk}>已是最新版本 ({latestVersion})</div>
@@ -453,7 +448,8 @@ const AboutPanel: React.FC = () => {
                         </div>
                     );
                 })()}
-            </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -468,9 +464,15 @@ const styles: Record<string, React.CSSProperties> = {
     productHeader: {
         display: 'flex',
         alignItems: 'center',
-        gap: '12px',
-        padding: '8px 2px 14px',
+        gap: '16px',
+        padding: '10px 2px 14px',
         borderBottom: `1px solid ${colors.borderSubtle}`,
+    },
+    productIdentity: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        flexShrink: 0,
     },
     productLogo: {
         width: 42,
@@ -483,7 +485,6 @@ const styles: Record<string, React.CSSProperties> = {
         flexDirection: 'column',
         gap: '3px',
         minWidth: 0,
-        flex: 1,
     },
     productTitleRow: {
         display: 'flex',
@@ -519,6 +520,22 @@ const styles: Record<string, React.CSSProperties> = {
         backgroundColor: colors.bgPrimary,
         flexShrink: 0,
     },
+    updateSummary: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '2px',
+        flex: 1,
+        minWidth: '120px',
+        paddingLeft: '16px',
+        borderLeft: `1px solid ${colors.borderSubtle}`,
+    },
+    headerActions: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        gap: '8px',
+        flexShrink: 0,
+    },
     section: {
         display: 'flex',
         flexDirection: 'column',
@@ -545,12 +562,6 @@ const styles: Record<string, React.CSSProperties> = {
         border: '1px solid rgba(255, 152, 0, 0.22)',
         borderRadius: radius.full,
         padding: '1px 7px',
-    },
-    sectionHeader: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '12px',
     },
     ghostBtn: {
         padding: '5px 12px',
@@ -593,14 +604,6 @@ const styles: Record<string, React.CSSProperties> = {
         backgroundColor: 'rgba(76, 175, 80, 0.08)',
         borderRadius: radius.md,
         border: `1px solid rgba(76, 175, 80, 0.25)`,
-    },
-    statusBannerMuted: {
-        padding: '9px 12px',
-        color: colors.textMuted,
-        fontSize: font.sm,
-        backgroundColor: colors.bgPrimary,
-        borderRadius: radius.md,
-        border: `1px solid ${colors.borderSubtle}`,
     },
     statusBannerError: {
         display: 'flex',

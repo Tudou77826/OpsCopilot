@@ -44,6 +44,58 @@ body {
   overflow: hidden;
 }
 
+/* Keep xterm flush with the workspace and use only xterm's overlay scrollbar. */
+.terminal-host,
+.terminal-host > .xterm {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  background-color: #1e1e1e;
+}
+
+.terminal-host {
+  padding: 4px 8px;
+}
+
+.terminal-host > .xterm {
+  padding: 0 !important;
+}
+
+.terminal-host .xterm-viewport {
+  background-color: #1e1e1e !important;
+  scrollbar-width: none;
+}
+
+.terminal-host .xterm-viewport::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* xterm 6 renders its own scrollbar divs; map them to the global scrollbar
+   tokens so terminal and application scrollbars stay visually consistent. */
+.terminal-host .xterm-scrollable-element > .scrollbar.vertical,
+.terminal-host .xterm-scrollable-element > .scrollbar.vertical > .slider {
+  width: var(--app-scrollbar-size) !important;
+}
+
+.terminal-host .xterm-scrollable-element > .scrollbar.horizontal,
+.terminal-host .xterm-scrollable-element > .scrollbar.horizontal > .slider {
+  height: var(--app-scrollbar-size) !important;
+}
+
+.terminal-host .xterm-scrollable-element > .scrollbar > .slider {
+  background: var(--app-scrollbar-thumb) !important;
+  border-radius: 3px;
+}
+
+.terminal-host .xterm-scrollable-element > .scrollbar > .slider:hover,
+.terminal-host .xterm-scrollable-element > .scrollbar > .slider.active {
+  background: var(--app-scrollbar-thumb-hover) !important;
+}
+
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }

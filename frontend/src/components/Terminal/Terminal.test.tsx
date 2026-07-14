@@ -116,6 +116,7 @@ describe('TerminalComponent', () => {
     render(<TerminalComponent id="test-term" />);
     const element = screen.getByTestId('terminal-container-test-term');
     expect(element).toBeInTheDocument();
+    expect(element).toHaveClass('terminal-host');
   });
 
   it('initializes xterm on mount', () => {

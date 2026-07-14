@@ -1,3 +1,10 @@
+:root {
+  --app-scrollbar-size: 6px;
+  --app-scrollbar-track: transparent;
+  --app-scrollbar-thumb: #444;
+  --app-scrollbar-thumb-hover: #666;
+}
+
 #app {
   height: 100vh;
   width: 100vw;
@@ -7,22 +14,22 @@
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: var(--app-scrollbar-size);
+  height: var(--app-scrollbar-size);
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--app-scrollbar-track);
 }
 ::-webkit-scrollbar-thumb {
-  background: #444;
+  background: var(--app-scrollbar-thumb);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #666;
+  background: var(--app-scrollbar-thumb-hover);
 }
 * {
   scrollbar-width: thin;
-  scrollbar-color: #444 transparent;
+  scrollbar-color: var(--app-scrollbar-thumb) var(--app-scrollbar-track);
 }
 
 /* Toast animations */

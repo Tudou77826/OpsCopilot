@@ -10,6 +10,8 @@ export const BOTTOM_BAR_TIPS = [
     '选中时间戳可以快速查看对应时间',
 ];
 
+export const BOTTOM_BAR_TIP_INTERVAL_MS = 5000;
+
 const BottomBar: React.FC = () => {
     const [version, setVersion] = useState('');
     const [tipIndex, setTipIndex] = useState(0);
@@ -49,7 +51,7 @@ const BottomBar: React.FC = () => {
                 setTipIndex(index => (index + 1) % BOTTOM_BAR_TIPS.length);
                 setTipVisible(true);
             }, 180);
-        }, 9000);
+        }, BOTTOM_BAR_TIP_INTERVAL_MS);
         return () => {
             window.clearInterval(interval);
             if (fadeTimer !== undefined) window.clearTimeout(fadeTimer);

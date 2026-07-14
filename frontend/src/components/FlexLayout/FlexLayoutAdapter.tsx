@@ -539,7 +539,7 @@ const TerminalWrapper: React.FC<TerminalWrapperProps> = ({
 
     return (
         <div
-            style={{ height: '100%', width: '100%', position: 'relative' }}
+            style={{ height: '100%', width: '100%', minWidth: 0, minHeight: 0, position: 'relative', overflow: 'hidden' }}
             onPointerDownCapture={() => onActiveTerminalChange?.(terminalId)}
             onFocusCapture={() => onActiveTerminalChange?.(terminalId)}
         >

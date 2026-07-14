@@ -559,6 +559,9 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             fontWeightBold: '700',
             theme: {
                 background: '#1e1e1e',
+                scrollbarSliderBackground: '#444444',
+                scrollbarSliderHoverBackground: '#666666',
+                scrollbarSliderActiveBackground: '#666666',
                 // 双击选词/拖选选区背景色，沿用 VS Code 深色主题的深蓝，避免默认半透明色在深背景下不显眼（#43）
                 selectionBackground: '#264f78',
                 selectionInactiveBackground: '#1e3a5f',
@@ -586,11 +589,6 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
 
         term.open(terminalRef.current);
 
-        // 给终端画布加内边距，避免字符紧贴边缘
-        const xtermEl = terminalRef.current.querySelector('.xterm');
-        if (xtermEl instanceof HTMLElement) {
-            xtermEl.style.padding = '4px 8px';
-        }
         fitAddonRef.current = fitAddon;
         xtermRef.current = term;
         const ruleController = new RuleHighlightController(term);
@@ -979,12 +977,13 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
     }, [highlightRules, terminalConfig?.highlight_enabled]);
 
     return (
-        <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
+        <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative', backgroundColor: '#1e1e1e' }}>
             <div
                 id={`terminal-${id}`}
                 data-testid={`terminal-container-${id}`}
+                className="terminal-host"
                 ref={terminalRef}
-                style={{ width: '100%', height: '100%', overflow: 'hidden' }}
+                style={{ width: '100%', height: '100%', overflow: 'hidden', backgroundColor: '#1e1e1e' }}
             />
             <SearchPanel
                 visible={searchVisible && getSearchEnabled()}
