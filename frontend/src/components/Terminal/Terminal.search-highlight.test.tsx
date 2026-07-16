@@ -10,6 +10,7 @@ let registerDecoration: any = null;
 let registerMarker: any = null;
 let selectionText = '';
 let searchFindNext: any = null;
+let searchAddonOptions: any = null;
 
 vi.mock('@xterm/xterm', () => {
     return {
@@ -76,7 +77,10 @@ vi.mock('@xterm/xterm', () => {
 
 vi.mock('@xterm/addon-fit', () => ({ FitAddon: class { fit = vi.fn(); proposeDimensions = vi.fn(() => ({ cols: 80, rows: 24 })); } }));
 vi.mock('@xterm/addon-search', () => ({ SearchAddon: class {
-    constructor() { searchFindNext = vi.fn(); }
+    constructor(options: any) {
+        searchAddonOptions = options;
+        searchFindNext = vi.fn();
+    }
     findNext = (...args: any[]) => searchFindNext(...args);
     findPrevious = vi.fn();
     clearDecorations = vi.fn();
@@ -90,6 +94,7 @@ describe('Terminal search/highlight integration', () => {
         lastKeyHandler = null;
         termWrite = null;
         searchFindNext = null;
+        searchAddonOptions = null;
         vi.useRealTimers();
         vi.restoreAllMocks();
     });
@@ -137,6 +142,7 @@ describe('Terminal search/highlight integration', () => {
             await vi.runAllTimersAsync();
         });
         expect(searchFindNext).toHaveBeenCalled();
+        expect(searchAddonOptions).toEqual({ highlightLimit: 10_000 });
         const options = searchFindNext.mock.calls.at(-1)?.[1];
         expect(options).toMatchObject({
             incremental: true,

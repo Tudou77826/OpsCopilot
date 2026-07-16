@@ -12,7 +12,7 @@ export interface SearchResults {
     limitReached: boolean;
 }
 
-const HIGHLIGHT_LIMIT = 1000;
+const HIGHLIGHT_LIMIT = 10_000;
 
 const decorations: ISearchDecorationOptions = {
     matchBackground: '#665c00',
