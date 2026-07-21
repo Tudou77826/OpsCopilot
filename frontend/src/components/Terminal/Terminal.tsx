@@ -157,8 +157,8 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             event.stopPropagation();
             adjustTerminalFontSize(current => current + (event.deltaY < 0 ? 1 : -1));
         };
-        container.addEventListener('wheel', handleWheel, { passive: false });
-        return () => container.removeEventListener('wheel', handleWheel);
+        container.addEventListener('wheel', handleWheel, { passive: false, capture: true });
+        return () => container.removeEventListener('wheel', handleWheel, { capture: true } as any);
     }, [adjustTerminalFontSize]);
 
     const closeSearch = useCallback(() => {
