@@ -24,8 +24,8 @@ func TestHighlightRulesLoadSave(t *testing.T) {
 	m.Config.HighlightRules = []HighlightRule{
 		{ID: "1", Name: "err", Pattern: "error", IsEnabled: true, Priority: 10, Style: HighlightStyle{BackgroundColor: "#111"}},
 	}
-	if err := m.Save(); err != nil {
-		t.Fatalf("save: %v", err)
+	if err := m.saveHighlightRules(); err != nil {
+		t.Fatalf("saveHighlightRules: %v", err)
 	}
 
 	m2 := NewManager()

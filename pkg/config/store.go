@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -383,21 +384,11 @@ func (m *Manager) Save() error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(m.configPath, data, 0644); err != nil {
-		return err
+	// 内容未变化时跳过写盘，避免无谓刷新 mtime
+	if old, rerr := os.ReadFile(m.configPath); rerr == nil && bytes.Equal(old, data) {
+		return nil
 	}
-
-	// 保存 quick_commands 到独立文件
-	if err := m.saveQuickCommands(); err != nil {
-		return err
-	}
-
-	// 保存 highlight_rules 到独立文件
-	if err := m.saveHighlightRules(); err != nil {
-		return err
-	}
-
-	return nil
+	return os.WriteFile(m.configPath, data, 0644)
 }
 
 func (m *Manager) LastImportMessage() string {
@@ -557,6 +548,15 @@ func (m *Manager) ImportFromDirectory(dirPath string) error {
 		*m.Config = *original
 		return err
 	}
+	// Save() 不再捆绑写入独立文件，这里显式落盘导入的 quick_commands/highlight_rules
+	if err := m.saveQuickCommands(); err != nil {
+		*m.Config = *original
+		return err
+	}
+	if err := m.saveHighlightRules(); err != nil {
+		*m.Config = *original
+		return err
+	}
 
 	msg := fmt.Sprintf("已成功导入 %d 个配置文件", len(imported))
 	if len(warnings) > 0 {
@@ -604,6 +604,10 @@ func (m *Manager) saveQuickCommands() error {
 	if err != nil {
 		return err
 	}
+	// 内容未变化时跳过写盘，避免无谓刷新 mtime
+	if old, rerr := os.ReadFile(m.quickCommandsPath); rerr == nil && bytes.Equal(old, data) {
+		return nil
+	}
 	return os.WriteFile(m.quickCommandsPath, data, 0644)
 }
 
@@ -648,6 +652,10 @@ func (m *Manager) saveHighlightRules() error {
 	data, err := json.MarshalIndent(m.Config.HighlightRules, "", "  ")
 	if err != nil {
 		return err
+	}
+	// 内容未变化时跳过写盘，避免无谓刷新 mtime
+	if old, rerr := os.ReadFile(m.highlightRulesPath); rerr == nil && bytes.Equal(old, data) {
+		return nil
 	}
 	return os.WriteFile(m.highlightRulesPath, data, 0644)
 }

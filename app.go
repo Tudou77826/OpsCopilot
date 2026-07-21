@@ -2401,9 +2401,6 @@ func (a *App) GetHighlightRules() []config.HighlightRule {
 
 func (a *App) SaveHighlightRules(rules []config.HighlightRule) string {
 	a.configMgr.SetHighlightRules(rules)
-	if err := a.configMgr.Save(); err != nil {
-		return fmt.Sprintf("Error saving config: %v", err)
-	}
 	return ""
 }
 
@@ -2415,9 +2412,6 @@ func (a *App) LoadQuickCommands() []config.QuickCommand {
 // SaveQuickCommands updates and saves quick commands
 func (a *App) SaveQuickCommands(commands []config.QuickCommand) string {
 	a.configMgr.SetQuickCommands(commands)
-	if err := a.configMgr.Save(); err != nil {
-		return fmt.Sprintf("Error saving config: %v", err)
-	}
 	return ""
 }
 

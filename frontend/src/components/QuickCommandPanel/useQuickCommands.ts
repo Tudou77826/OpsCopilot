@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { QuickCommand, QuickCommandStorageAdapter } from './types';
 
 class WailsAdapter implements QuickCommandStorageAdapter {
@@ -55,6 +55,8 @@ export function useQuickCommands(options?: UseQuickCommandsOptions): UseQuickCom
     const [commands, setCommands] = useState<QuickCommand[]>([]);
     const [loaded, setLoaded] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState<string>('default');
+    // 标记本次 commands 变化是否由用户操作触发；加载完成后首次赋值应跳过保存
+    const skipNextSaveRef = useRef(false);
 
     const availableGroups = useMemo(() => {
         const groupSet = new Set<string>();
@@ -82,6 +84,8 @@ export function useQuickCommands(options?: UseQuickCommandsOptions): UseQuickCom
                 ...cmd,
                 group: cmd.group === '__new__' ? 'default' : (cmd.group || 'default'),
             }));
+            // 加载完成后的首次 setCommands 不是用户操作，跳过保存
+            skipNextSaveRef.current = true;
             setCommands(fixedCmds);
             setLoaded(true);
         }).catch(() => {
@@ -91,6 +95,11 @@ export function useQuickCommands(options?: UseQuickCommandsOptions): UseQuickCom
 
     useEffect(() => {
         if (!loaded) return;
+        // 跳过加载完成后的首次回写，避免无谓刷盘
+        if (skipNextSaveRef.current) {
+            skipNextSaveRef.current = false;
+            return;
+        }
         adapter.save(commands);
     }, [commands, loaded, adapter]);
 

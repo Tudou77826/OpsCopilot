@@ -365,7 +365,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         setConfig(newConfig);
         try {
             // @ts-ignore
-            const err = await window.go.main.App.SaveSettings(newConfig);
+            const err = await window.go.main.App.SaveHighlightRules(rules);
             if (err) {
                 setMsg('错误: ' + err);
             } else {

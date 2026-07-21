@@ -33,6 +33,13 @@ func newTestManager(t *testing.T) (*Manager, string) {
 	if err := mgr.Save(); err != nil {
 		t.Fatalf("Save baseline config: %v", err)
 	}
+	// Save() 不再捆绑写独立文件，显式落盘 baseline 的 quick_commands/highlight_rules
+	if err := mgr.saveQuickCommands(); err != nil {
+		t.Fatalf("Save baseline quick_commands: %v", err)
+	}
+	if err := mgr.saveHighlightRules(); err != nil {
+		t.Fatalf("Save baseline highlight_rules: %v", err)
+	}
 
 	return mgr, dir
 }
