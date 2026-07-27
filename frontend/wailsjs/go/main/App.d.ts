@@ -6,7 +6,7 @@ import {security} from '../models';
 import {config} from '../models';
 import {sessionmanager} from '../models';
 import {recorder} from '../models';
-import {sshclient} from '../models';
+import {remote} from '../models';
 
 export function ArchiveSession(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<string>;
 
@@ -176,7 +176,7 @@ export function StreamConclusion(arg1:string,arg2:string):Promise<string>;
 
 export function UpdatePatchIssueStatus(arg1:string,arg2:string,arg3:string):Promise<string>;
 
-export function UpdateSavedSession(arg1:string,arg2:sshclient.ConnectConfig):Promise<string>;
+export function UpdateSavedSession(arg1:string,arg2:remote.ConnectConfig):Promise<string>;
 
 export function UpdateScript(arg1:script.Script):Promise<void>;
 

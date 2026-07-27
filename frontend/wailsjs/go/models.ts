@@ -267,7 +267,7 @@ export namespace main {
 	
 	export class ConnectConfig {
 	    name: string;
-	    protocol: string;
+	    protocol?: string;
 	    host: string;
 	    port: number;
 	    user: string;
@@ -275,11 +275,11 @@ export namespace main {
 	    rootPassword: string;
 	    bastion?: ConnectConfig;
 	    group: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ConnectConfig(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -480,6 +480,57 @@ export namespace recorder {
 	        this.root_cause = source["root_cause"];
 	        this.conclusion = source["conclusion"];
 	        this.suggestions = source["suggestions"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
+export namespace remote {
+	
+	export class ConnectConfig {
+	    name: string;
+	    protocol?: string;
+	    host: string;
+	    port: number;
+	    user: string;
+	    password: string;
+	    root_password: string;
+	    bastion?: ConnectConfig;
+	    group?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConnectConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.protocol = source["protocol"];
+	        this.host = source["host"];
+	        this.port = source["port"];
+	        this.user = source["user"];
+	        this.password = source["password"];
+	        this.root_password = source["root_password"];
+	        this.bastion = this.convertValues(source["bastion"], ConnectConfig);
+	        this.group = source["group"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -802,7 +853,7 @@ export namespace sessionmanager {
 	    name: string;
 	    type: string;
 	    children?: Session[];
-	    config?: sshclient.ConnectConfig;
+	    config?: remote.ConnectConfig;
 	
 	    static createFrom(source: any = {}) {
 	        return new Session(source);
@@ -814,58 +865,7 @@ export namespace sessionmanager {
 	        this.name = source["name"];
 	        this.type = source["type"];
 	        this.children = this.convertValues(source["children"], Session);
-	        this.config = this.convertValues(source["config"], sshclient.ConnectConfig);
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-
-}
-
-export namespace sshclient {
-	
-	export class ConnectConfig {
-	    name: string;
-	    protocol: string;
-	    host: string;
-	    port: number;
-	    user: string;
-	    password: string;
-	    root_password: string;
-	    bastion?: ConnectConfig;
-	    group?: string;
-
-	    static createFrom(source: any = {}) {
-	        return new ConnectConfig(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.name = source["name"];
-	        this.protocol = source["protocol"];
-	        this.host = source["host"];
-	        this.port = source["port"];
-	        this.user = source["user"];
-	        this.password = source["password"];
-	        this.root_password = source["root_password"];
-	        this.bastion = this.convertValues(source["bastion"], ConnectConfig);
-	        this.group = source["group"];
+	        this.config = this.convertValues(source["config"], remote.ConnectConfig);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
