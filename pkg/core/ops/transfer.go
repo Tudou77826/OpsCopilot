@@ -11,10 +11,15 @@ import (
 
 	"github.com/pkg/sftp"
 	"opscopilot/pkg/core/security"
+	"opscopilot/pkg/remote"
 )
 
 // ensureSFTP 确保连接有可用的 SFTP 客户端
 // 首次调用时尝试创建，成功则缓存，失败则标记不可用
+//
+// SFTP 是 SSH 专属能力:通过 remote.SFTPCapable 类型断言查询。
+// telnet 等协议不实现该接口,断言失败即标记不可用(缓存结果,
+// 后续调用直接返回"不支持",不再重复尝试)。
 func (m *Manager) ensureSFTP(conn *Connection) (*sftp.Client, error) {
 	conn.sftpMu.Lock()
 	defer conn.sftpMu.Unlock()
@@ -26,14 +31,15 @@ func (m *Manager) ensureSFTP(conn *Connection) (*sftp.Client, error) {
 		return nil, fmt.Errorf("该服务器不支持 SFTP 文件传输")
 	}
 
-	sshClient := conn.Client.SSHClient()
-	if sshClient == nil {
+	// 类型断言查询 SFTP 能力。SSH 实现了 SFTPCapable;telnet 未实现。
+	sftpConn, ok := conn.Conn.(remote.SFTPCapable)
+	if !ok {
 		conn.sftpTested = true
 		conn.sftpAvailable = false
-		return nil, fmt.Errorf("SSH 连接不可用")
+		return nil, fmt.Errorf("当前协议(非 SSH)不支持 SFTP 文件传输")
 	}
 
-	client, err := sftp.NewClient(sshClient)
+	client, err := sftpConn.SFTPClient()
 	if err != nil {
 		conn.sftpTested = true
 		conn.sftpAvailable = false

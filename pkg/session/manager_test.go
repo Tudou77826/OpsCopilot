@@ -1,15 +1,46 @@
 package session
 
 import (
-	"opscopilot/pkg/sshclient"
+	"context"
+	"io"
 	"sync"
 	"testing"
+
+	"opscopilot/pkg/remote"
 )
 
-// MockClient 模拟 sshclient.Client
-type MockClient struct{}
+// mockConn 是 remote.Connection 的测试桩,不依赖任何真实协议实现。
+type mockConn struct {
+	mu       sync.Mutex
+	resized  bool
+	closed   bool
+	lastCols int
+	lastRows int
+}
 
-func (m *MockClient) Close() error { return nil }
+func (m *mockConn) StartShell(cols, rows int) (io.WriteCloser, io.Reader, error) {
+	return nil, nil, nil
+}
+func (m *mockConn) Resize(cols, rows int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.resized = true
+	m.lastCols = cols
+	m.lastRows = rows
+	return nil
+}
+func (m *mockConn) Run(ctx context.Context, cmd string) (string, error) { return "", nil }
+func (m *mockConn) Healthy() bool                                       { return true }
+func (m *mockConn) Close() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.closed = true
+	return nil
+}
+func (m *mockConn) Protocol() string { return remote.ProtocolSSH }
+
+// 编译期断言:确保 mockConn 实现 remote.Connection。
+var _ remote.Connection = (*mockConn)(nil)
 
 type MockWriter struct {
 	data []byte
@@ -29,7 +60,7 @@ func TestSessionManager(t *testing.T) {
 	manager := NewManager()
 
 	// Test Add
-	sessionID := manager.Add(&sshclient.Client{}, &MockWriter{}, nil)
+	sessionID := manager.Add(&mockConn{}, &MockWriter{})
 	if sessionID == "" {
 		t.Error("Expected session ID, got empty string")
 	}
@@ -42,6 +73,20 @@ func TestSessionManager(t *testing.T) {
 	if sess.ID != sessionID {
 		t.Errorf("Expected session ID %s, got %s", sessionID, sess.ID)
 	}
+	if sess.Conn == nil {
+		t.Error("Expected session Conn to be set")
+	}
+
+	// Test Resize 委托到 Conn.Resize
+	if err := manager.Resize(sessionID, 100, 40); err != nil {
+		t.Errorf("Resize returned error: %v", err)
+	}
+	mc := sess.Conn.(*mockConn)
+	mc.mu.Lock()
+	if !mc.resized || mc.lastCols != 100 || mc.lastRows != 40 {
+		t.Errorf("Resize not delegated correctly: resized=%v cols=%d rows=%d", mc.resized, mc.lastCols, mc.lastRows)
+	}
+	mc.mu.Unlock()
 
 	// Test List
 	list := manager.List()
@@ -67,7 +112,7 @@ func TestBroadcast(t *testing.T) {
 
 	ids := []string{}
 	for _, w := range writers {
-		id := manager.Add(&sshclient.Client{}, w, nil)
+		id := manager.Add(&mockConn{}, w)
 		ids = append(ids, id)
 	}
 

@@ -11,22 +11,47 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pkg/sftp"
+	"opscopilot/pkg/remote"
 	"golang.org/x/crypto/ssh"
 )
 
-type ConnectConfig struct {
-	Name         string         `json:"name"`
-	Host         string         `json:"host"`
-	Port         int            `json:"port"`
-	User         string         `json:"user"`
-	Password     string         `json:"password"`
-	RootPassword string         `json:"root_password"`
-	Bastion      *ConnectConfig `json:"bastion"`
-	Group        string         `json:"group,omitempty"` // UI Grouping
+// ConnectConfig 是 remote.ConnectConfig 的类型别名。
+//
+// 历史上 sshclient 自定义 ConnectConfig 作为 sessions.json 持久化结构;
+// 引入 remote 抽象层后,协议无关配置收敛到 remote.ConnectConfig。本别名
+// 保证现有引用 sshclient.ConnectConfig 的代码零改动,且 JSON tag 完全
+// 一致(下划线风格),sessions.json 向后兼容。
+type ConnectConfig = remote.ConnectConfig
+
+// init 在包初始化时向 remote 注册 SSH 协议的 Dialer。
+// 这样 remote.Dial(cfg) 在 Protocol=="ssh"(或空)时分派到 NewClient,
+// 上层无需 import sshclient,打破循环依赖。
+func init() {
+	remote.RegisterDialer(remote.ProtocolSSH, func(cfg *remote.ConnectConfig) (remote.Connection, error) {
+		c, err := NewClient(cfg)
+		if err != nil {
+			return nil, err
+		}
+		return c, nil
+	})
 }
+
+// 编译期接口断言:确保 *Client 实现 remote.Connection 与 remote.SFTPCapable。
+// 若接口签名漂移,此处编译失败,提前暴露问题。
+var (
+	_ remote.Connection  = (*Client)(nil)
+	_ remote.SFTPCapable = (*Client)(nil)
+)
 
 type Client struct {
 	client *ssh.Client
+
+	// lastSessionMu 保护 lastSession:StartShell 写入,Resize 读取,
+	// 这两个调用可能来自不同 goroutine(app.go 的 read loop 与
+	// ResizeTerminal 调用并发)。
+	lastSessionMu sync.Mutex
+	lastSession   *ssh.Session
 }
 
 func (c *Client) SSHClient() *ssh.Client {
@@ -117,27 +142,6 @@ func (c *Client) Close() error {
 	return nil
 }
 
-func (c *Client) Run(cmd string) (string, error) {
-	if c.client == nil {
-		return "", fmt.Errorf("client is not connected")
-	}
-
-	session, err := c.client.NewSession()
-	if err != nil {
-		return "", fmt.Errorf("failed to create session: %w", err)
-	}
-	defer session.Close()
-
-	var stdoutBuf bytes.Buffer
-	session.Stdout = &stdoutBuf
-
-	if err := session.Run(cmd); err != nil {
-		return "", fmt.Errorf("failed to run command: %w", err)
-	}
-
-	return stdoutBuf.String(), nil
-}
-
 // RunWithContext 执行命令，支持 context 取消。
 // 当 ctx 被取消（含超时）时，向远端进程发送 SIGKILL 并立即返回，
 // 避免慢命令无限期阻塞、拖死共享的 SSH 连接。
@@ -196,7 +200,67 @@ func (c *Client) NewSession() (*ssh.Session, error) {
 	return c.client.NewSession()
 }
 
-func (c *Client) StartShell(cols, rows int) (*ssh.Session, io.WriteCloser, io.Reader, error) {
+// === remote.Connection 接口适配方法 ===
+//
+// 以下方法实现 pkg/remote.Connection 接口。各方法内部转发到 SSH 的等价
+// 语义,保证 SSH 路径行为与重构前一致。
+
+// Resize 实现 remote.Connection:调整 PTY 尺寸。
+// 转发到最近一次 StartShell 建立的 session 的 WindowChange。
+// 若尚无活跃 session(未调过 StartShell),静默忽略 —— 与历史行为一致
+// (历史 Resize 由 session.Manager 直接调 SSHSession.WindowChange,
+// session 为空时也忽略)。
+func (c *Client) Resize(cols, rows int) error {
+	c.lastSessionMu.Lock()
+	session := c.lastSession
+	c.lastSessionMu.Unlock()
+	if session == nil {
+		return nil
+	}
+	return session.WindowChange(rows, cols)
+}
+
+// Run 实现 remote.Connection:执行单条命令,返回 stdout。
+// 包装 RunWithContext(用 context.Background),保持与历史 Run 方法等价。
+func (c *Client) Run(ctx context.Context, cmd string) (string, error) {
+	return c.RunWithContext(ctx, cmd)
+}
+
+// Healthy 实现 remote.Connection:探测连接是否健康。
+// 通过试建一个 session 判断底层 client 是否可用;失败返回 false。
+// 与 ops.isConnectionDead 的历史探活逻辑等价(那里也用 NewSession)。
+func (c *Client) Healthy() bool {
+	if c.client == nil {
+		return false
+	}
+	s, err := c.NewSession()
+	if err != nil {
+		return false
+	}
+	s.Close()
+	return true
+}
+
+// Protocol 实现 remote.Connection:返回协议标识。
+func (c *Client) Protocol() string {
+	return remote.ProtocolSSH
+}
+
+// SFTPClient 实现 remote.SFTPCapable:返回底层 SSH 连接上的 SFTP 客户端。
+// 每次调用新建一个 sftp.Client;调用方负责 Close。
+// 文件传输路径(ops/transfer.go、app.go SFTP 相关)通过类型断言查询本方法。
+func (c *Client) SFTPClient() (*sftp.Client, error) {
+	if c.client == nil {
+		return nil, fmt.Errorf("client is not connected")
+	}
+	return sftp.NewClient(c.client)
+}
+
+// startShellSession 建立 PTY 会话,返回 session、stdin、合并后的 stdout。
+// 内部将 session 记录到 c.lastSession,供 Resize 使用。
+// 这是 SSH 协议专属的会话建立逻辑;公开的 StartShell(接口方法)和
+// StartShellWithSudo 都复用本方法。
+func (c *Client) startShellSession(cols, rows int) (*ssh.Session, io.WriteCloser, io.Reader, error) {
 	if c.client == nil {
 		return nil, nil, nil, fmt.Errorf("client is not connected")
 	}
@@ -241,14 +305,30 @@ func (c *Client) StartShell(cols, rows int) (*ssh.Session, io.WriteCloser, io.Re
 		return nil, nil, nil, fmt.Errorf("failed to start shell: %w", err)
 	}
 
+	// 记录 session 供 Resize 使用(接口方法不再返回 *ssh.Session)。
+	c.lastSessionMu.Lock()
+	c.lastSession = session
+	c.lastSessionMu.Unlock()
+
 	// 并行合并 stdout 与 stderr。
 	// 不能用 io.MultiReader：它是串行的（读完 stdout 到 EOF 才读 stderr），
 	// 而交互式 PTY 下 stdout 永不自然 EOF，会导致 stderr 数据读不到，
-	// 且在流边界返回伪 EOF，被读取循环误判为"远程关闭"（Issue #39）。
+	// 且在流边界返回伪 EOF，被读取读取循环误判为"远程关闭"（Issue #39）。
 	// 改为并行合并：两路都真正结束时才返回 EOF，匹配 PTY 的真实语义。
 	combinedReader := newMuxReader(stdout, stderr)
 
 	return session, stdin, combinedReader, nil
+}
+
+// StartShell 实现 remote.Connection 接口:启动交互式 shell,返回三元组。
+// 不再向调用方暴露 *ssh.Session —— session 由 Client 内部持有(供 Resize)。
+// 行为与历史四元组版本等价,只是收敛了 session 的归属。
+func (c *Client) StartShell(cols, rows int) (io.WriteCloser, io.Reader, error) {
+	_, stdin, stdout, err := c.startShellSession(cols, rows)
+	if err != nil {
+		return nil, nil, err
+	}
+	return stdin, stdout, nil
 }
 
 // muxReader 并发读取多个 io.Reader，把数据汇合到一个流。
@@ -350,10 +430,14 @@ func (r *AutoSudoReader) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
-func (c *Client) StartShellWithSudo(cols, rows int, rootPassword string) (*ssh.Session, io.WriteCloser, io.Reader, error) {
-	session, stdin, stdout, err := c.StartShell(cols, rows)
+// StartShellWithSudo 启动 shell 并(若提供 rootPassword)自动 su - 提权。
+// SSH 路径专用(app.go SSH 分支调用),不进 remote 接口(sudo 是 SSH+root
+// 密码的特定组合,telnet 无等价语义)。
+// 返回三元组,与 StartShell 接口方法签名一致;session 仍由 Client 持有。
+func (c *Client) StartShellWithSudo(cols, rows int, rootPassword string) (io.WriteCloser, io.Reader, error) {
+	_, stdin, stdout, err := c.startShellSession(cols, rows)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	if rootPassword != "" {
@@ -372,10 +456,10 @@ func (c *Client) StartShellWithSudo(cols, rows int, rootPassword string) (*ssh.S
 			stdin.Write([]byte("su -\n"))
 		}()
 
-		return session, stdin, wrappedStdout, nil
+		return stdin, wrappedStdout, nil
 	}
 
-	return session, stdin, stdout, nil
+	return stdin, stdout, nil
 }
 
 // ncConn implements net.Conn via ssh session and nc command

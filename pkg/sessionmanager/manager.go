@@ -3,7 +3,7 @@ package sessionmanager
 import (
 	"encoding/json"
 	"fmt"
-	"opscopilot/pkg/sshclient"
+	"opscopilot/pkg/remote"
 	"os"
 	"strings"
 	"sync"
@@ -23,7 +23,7 @@ type Session struct {
 	Name     string                   `json:"name"` // Display name (IP)
 	Type     SessionType              `json:"type"`
 	Children []*Session               `json:"children,omitempty"` // For folders
-	Config   *sshclient.ConnectConfig `json:"config,omitempty"`   // For sessions
+	Config   *remote.ConnectConfig `json:"config,omitempty"`   // For sessions
 }
 
 type Manager struct {
@@ -138,23 +138,54 @@ func (m *Manager) RenameSession(id, newName string) error {
 // Upsert adds or updates a session.
 // If groupName is provided, it puts it in that folder.
 // Naming rule: Use IP (Host) as Name.
-func (m *Manager) Upsert(config sshclient.ConnectConfig, groupName string) error {
+// sameEndpoint 判断两个连接配置是否指向同一远程端点。
+// key 为 (Host, Port, Protocol) 三元组。Protocol 空值归一化为 SSH,
+// 保证老数据(无 Protocol 字段)与新数据比较一致。
+// 用于 Upsert/UpdateSession 的去重,允许同 host 不同协议/端口共存。
+func sameEndpoint(a, b *remote.ConnectConfig) bool {
+	if a == nil || b == nil {
+		return false
+	}
+	ap := a.Protocol
+	if ap == "" {
+		ap = remote.ProtocolSSH
+	}
+	bp := b.Protocol
+	if bp == "" {
+		bp = remote.ProtocolSSH
+	}
+	return a.Host == b.Host && a.Port == b.Port && ap == bp
+}
+
+// Upsert adds or updates a session.
+// If groupName is provided, it puts it in that folder.
+// Naming rule: Use IP (Host) as Name.
+//
+// 去重 key 为 (Host, Port, Protocol) 三元组:同一 host 不同协议/端口可共存,
+// 例如 192.168.1.1:22(SSH) 与 192.168.1.1:23(Telnet) 不冲突。
+// Protocol 空值在比较前归一化为 SSH,保证一致。
+func (m *Manager) Upsert(config remote.ConnectConfig, groupName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	// 归一化 Protocol:空值视为 SSH,保证去重比较一致。
+	if config.Protocol == "" {
+		config.Protocol = remote.ProtocolSSH
+	}
 
 	targetName := config.Host
 	if targetName == "" {
 		targetName = config.Name // Fallback
 	}
 
-	// Step 1: Remove existing session with same Host from anywhere in the tree
-	// This handles "Update" (by removing old and adding new) and "Move" (if group changed)
+	// Step 1: Remove existing session with same (Host, Port, Protocol) from anywhere in the tree.
+	// This handles "Update" (by removing old and adding new) and "Move" (if group changed).
 	var removedID string
 	var removeByHost func(nodes []*Session) []*Session
 	removeByHost = func(nodes []*Session) []*Session {
 		var result []*Session
 		for _, node := range nodes {
-			if node.Type == TypeSession && node.Config != nil && node.Config.Host == config.Host {
+			if node.Type == TypeSession && node.Config != nil && sameEndpoint(node.Config, &config) {
 				removedID = node.ID // Reuse ID
 				continue            // Remove
 			}
@@ -207,9 +238,14 @@ func (m *Manager) Upsert(config sshclient.ConnectConfig, groupName string) error
 	return m.Save()
 }
 
-func (m *Manager) UpdateSession(id string, config sshclient.ConnectConfig, groupName string) error {
+func (m *Manager) UpdateSession(id string, config remote.ConnectConfig, groupName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	// 归一化 Protocol:空值视为 SSH,保证去重比较一致。
+	if config.Protocol == "" {
+		config.Protocol = remote.ProtocolSSH
+	}
 
 	var removed *Session
 	var removeByID func(nodes []*Session) []*Session
@@ -234,10 +270,11 @@ func (m *Manager) UpdateSession(id string, config sshclient.ConnectConfig, group
 
 	config.Group = groupName
 
+	// 重复检测:key 为 (Host, Port, Protocol) 三元组,允许同 host 不同协议共存。
 	var hasDuplicateHost func(nodes []*Session) bool
 	hasDuplicateHost = func(nodes []*Session) bool {
 		for _, node := range nodes {
-			if node.Type == TypeSession && node.Config != nil && node.Config.Host == config.Host && node.ID != id {
+			if node.Type == TypeSession && node.Config != nil && sameEndpoint(node.Config, &config) && node.ID != id {
 				return true
 			}
 			if node.Type == TypeFolder && hasDuplicateHost(node.Children) {

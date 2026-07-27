@@ -9,9 +9,9 @@ import (
 
 	"github.com/pkg/sftp"
 	"opscopilot/pkg/core/security"
+	"opscopilot/pkg/remote"
 	"opscopilot/pkg/secretstore"
 	"opscopilot/pkg/sessionmanager"
-	"opscopilot/pkg/sshclient"
 )
 
 // Config 运维内核配置
@@ -39,11 +39,16 @@ type Manager struct {
 	stopChan         chan struct{}
 }
 
-// Connection SSH 连接
+// Connection 远程连接(协议无关)。
+//
+// 重构后持有 remote.Connection 接口,可承载 SSH/Telnet 等多协议。
+// 命令执行、健康检查、关闭等能力通过 Conn 直接调用(各协议实现等价语义);
+// SFTP 等协议特有能力通过类型断言 remote.SFTPCapable 查询。
 type Connection struct {
 	Name          string
 	Host          string // 服务器 IP 地址（用于白名单匹配）
-	Client        *sshclient.Client
+	Protocol      string // 协议标识(remote.ProtocolSSH / remote.ProtocolTelnet)
+	Conn          remote.Connection
 	RootPassword  string // 用于 sudo 提权
 	ConnectedAt   time.Time
 	LastActive    atomic.Int64 // Unix 纳秒时间戳，支持并发读写
@@ -132,8 +137,8 @@ func (m *Manager) Shutdown() {
 
 	for name, conn := range m.connections {
 		closeSFTP(conn)
-		if conn.Client != nil {
-			conn.Client.Close()
+		if conn.Conn != nil {
+			conn.Conn.Close()
 			fmt.Fprintf(os.Stderr, "[ops] Closed connection to %s\n", name)
 		}
 	}
@@ -167,8 +172,8 @@ func (m *Manager) cleanIdleConnections() {
 		idleDuration := now.Sub(lastActive)
 		if idleDuration > idleTimeout {
 			closeSFTP(conn)
-			if conn.Client != nil {
-				conn.Client.Close()
+			if conn.Conn != nil {
+				conn.Conn.Close()
 			}
 			delete(m.connections, name)
 			fmt.Fprintf(os.Stderr, "[ops] Disconnected idle server '%s' (idle for %v)\n", name, idleDuration.Round(time.Second))

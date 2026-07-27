@@ -31,6 +31,7 @@ import (
 	"opscopilot/pkg/llm"
 	"opscopilot/pkg/logging"
 	"opscopilot/pkg/recorder"
+	"opscopilot/pkg/remote"
 	"opscopilot/pkg/script"
 	"opscopilot/pkg/secretstore"
 	"opscopilot/pkg/session"
@@ -295,8 +296,16 @@ func (a *App) getRelayTransport(sessionID string) *filetransfer.RootRelayTranspo
 	}
 
 	sess, ok := a.sessionMgr.Get(sessionID)
-	if !ok || sess.Client == nil || sess.Client.SSHClient() == nil {
-		slog.Debug("ft getRelayTransport session not found or SSH client nil", "session", sessionID[:8])
+	if !ok || sess.Conn == nil {
+		slog.Debug("ft getRelayTransport session not found or conn nil", "session", sessionID[:8])
+		return nil
+	}
+
+	// RootRelayTransport 依赖 *ssh.Client(SSH 专属),仅 SSH 连接支持。
+	// telnet 等协议不持有 *ssh.Client,断言失败即不支持 root-relay。
+	sshConn, ok := sess.Conn.(*sshclient.Client)
+	if !ok || sshConn.SSHClient() == nil {
+		slog.Debug("ft getRelayTransport protocol does not support root-relay (SSH only)", "session", sessionID[:8])
 		return nil
 	}
 
@@ -307,7 +316,7 @@ func (a *App) getRelayTransport(sessionID string) *filetransfer.RootRelayTranspo
 	}
 
 	slog.Info("ft getRelayTransport created new RootRelayTransport", "session", sessionID[:8], "loginUser", cfg.User)
-	t := filetransfer.NewRootRelayTransport(sess.Client.SSHClient(), cfg.RootPassword, cfg.User)
+	t := filetransfer.NewRootRelayTransport(sshConn.SSHClient(), cfg.RootPassword, cfg.User)
 	if cfg.Bastion != nil {
 		t.SetSkipRelay(true)
 	}
@@ -557,6 +566,7 @@ func (a *App) ForceQuit() {
 
 type ConnectConfig struct {
 	Name         string         `json:"name"`
+	Protocol     string         `json:"protocol,omitempty"` // 空值或 "ssh" 走 SSH;"telnet" 走 Telnet
 	Host         string         `json:"host"`
 	Port         int            `json:"port"`
 	User         string         `json:"user"`
@@ -613,7 +623,10 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 		_ = a.secretStore.Set("OpsCopilot-SSH", config.Host+":"+config.User, config.Password)
 	}
 
-	clientConfig := &sshclient.ConnectConfig{
+	// 构造协议无关配置(remote.ConnectConfig 是 sshclient.ConnectConfig 的别名,
+	// JSON tag 一致,持久化向后兼容)。Protocol 字段由前端传入,空值走 SSH。
+	clientConfig := &remote.ConnectConfig{
+		Protocol:     config.Protocol,
 		Host:         config.Host,
 		Port:         config.Port,
 		User:         config.User,
@@ -624,7 +637,7 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 
 	// 递归构建 Bastion 配置
 	if config.Bastion != nil {
-		clientConfig.Bastion = &sshclient.ConnectConfig{
+		clientConfig.Bastion = &remote.ConnectConfig{
 			Host:     config.Bastion.Host,
 			Port:     config.Bastion.Port,
 			User:     config.Bastion.User,
@@ -636,34 +649,44 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 		}
 	}
 
-	client, err := sshclient.NewClient(clientConfig)
+	// 通过统一工厂分派:Protocol=="ssh"(或空)走 SSH,"telnet" 走 Telnet。
+	// remote 包用注册表,app.go 不直接 import 协议实现包(除类型断言需用
+	// *sshclient.Client 的 SSH 路径外)。
+	conn, err := remote.Dial(clientConfig)
 	if err != nil {
 		return ConnectResult{Success: false, Message: fmt.Sprintf("Error connecting: %v", err)}
 	}
 
-	// Start shell with default size
-	var sshSession *ssh.Session
+	// 启动交互式 shell。SSH+rootPassword 路径需调 StartShellWithSudo(SSH 专属),
+	// 通过类型断言到 *sshclient.Client 获取;其他情况走接口方法 StartShell。
 	var stdin io.WriteCloser
 	var stdout io.Reader
 
 	if config.RootPassword != "" {
-		sshSession, stdin, stdout, err = client.StartShellWithSudo(120, 30, config.RootPassword)
+		// StartShellWithSudo 是 SSH+root 密码的特定组合,仅 SSH 实现。
+		// 类型断言失败说明该协议不支持此能力,回退到普通 StartShell。
+		if sshConn, ok := conn.(*sshclient.Client); ok {
+			stdin, stdout, err = sshConn.StartShellWithSudo(120, 30, config.RootPassword)
+		} else {
+			stdin, stdout, err = conn.StartShell(120, 30)
+		}
 	} else {
-		sshSession, stdin, stdout, err = client.StartShell(120, 30)
+		stdin, stdout, err = conn.StartShell(120, 30)
 	}
 
 	if err != nil {
-		client.Close()
+		conn.Close()
 		return ConnectResult{Success: false, Message: fmt.Sprintf("Error starting shell: %v", err)}
 	}
 
-	// Add to session manager (with SSH session for resizing)
+	// Add to session manager。session 现在持有 remote.Connection,
+	// Resize 由 Conn 自身提供,不再需要单独传 *ssh.Session。
 	var sessionID string
 	if specifiedSessionID != "" {
-		a.sessionMgr.AddWithID(specifiedSessionID, client, stdin, sshSession)
+		a.sessionMgr.AddWithID(specifiedSessionID, conn, stdin)
 		sessionID = specifiedSessionID
 	} else {
-		sessionID = a.sessionMgr.Add(client, stdin, sshSession)
+		sessionID = a.sessionMgr.Add(conn, stdin)
 	}
 
 	// Store config mapping for duplication
@@ -1935,11 +1958,18 @@ type transferClientInfo struct {
 
 func (a *App) getTransferClientWithRelay(sessionID string) (transferClientInfo, error) {
 	sess, ok := a.sessionMgr.Get(sessionID)
-	if !ok || sess.Client == nil || sess.Client.SSHClient() == nil {
+	if !ok || sess.Conn == nil {
 		return transferClientInfo{}, &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotFound, Message: "会话不存在"}
 	}
 
-	base := sess.Client.SSHClient()
+	// 文件传输(SFTP/SCP)依赖 *ssh.Client,仅 SSH 连接支持。
+	// telnet 等协议断言失败,返回"不支持"错误,前端据此禁用文件传输入口。
+	sshConn, ok := sess.Conn.(*sshclient.Client)
+	if !ok || sshConn.SSHClient() == nil {
+		return transferClientInfo{}, &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotSupported, Message: "当前协议不支持文件传输"}
+	}
+
+	base := sshConn.SSHClient()
 	baseClose := func() {}
 	identity := "login"
 

@@ -2,18 +2,21 @@ package session
 
 import (
 	"io"
-	"opscopilot/pkg/sshclient"
 	"sync"
 
 	"github.com/google/uuid"
-	"golang.org/x/crypto/ssh"
+	"opscopilot/pkg/remote"
 )
 
+// Session 表示一个活跃的远程连接会话。
+//
+// 重构后只持有 remote.Connection 接口(协议无关),不再感知 *sshclient.Client
+// 或 *ssh.Session。Resize 能力由 Conn 自身提供(SSH 实现内部转发到
+// session.WindowChange),故无需单独的 SSHSession 字段。
 type Session struct {
-	ID         string
-	Client     *sshclient.Client
-	Stdin      io.WriteCloser
-	SSHSession *ssh.Session  // Keep reference to SSH session for resizing
+	ID    string
+	Conn  remote.Connection
+	Stdin io.WriteCloser
 }
 
 type Manager struct {
@@ -27,30 +30,29 @@ func NewManager() *Manager {
 	}
 }
 
-func (m *Manager) Add(client *sshclient.Client, stdin io.WriteCloser, sshSession *ssh.Session) string {
+// Add 注册一个新会话,返回生成的 sessionID。
+func (m *Manager) Add(conn remote.Connection, stdin io.WriteCloser) string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	id := uuid.New().String()
 	m.sessions[id] = &Session{
-		ID:         id,
-		Client:     client,
-		Stdin:      stdin,
-		SSHSession: sshSession,
+		ID:    id,
+		Conn:  conn,
+		Stdin: stdin,
 	}
 	return id
 }
 
-// AddWithID adds a session with a specific ID (for reconnection)
-func (m *Manager) AddWithID(id string, client *sshclient.Client, stdin io.WriteCloser, sshSession *ssh.Session) {
+// AddWithID 以指定 ID 注册会话(用于重连复用同一 sessionID)。
+func (m *Manager) AddWithID(id string, conn remote.Connection, stdin io.WriteCloser) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.sessions[id] = &Session{
-		ID:         id,
-		Client:     client,
-		Stdin:      stdin,
-		SSHSession: sshSession,
+		ID:    id,
+		Conn:  conn,
+		Stdin: stdin,
 	}
 }
 
@@ -66,9 +68,9 @@ func (m *Manager) Remove(id string) {
 	defer m.mu.Unlock()
 
 	if sess, ok := m.sessions[id]; ok {
-		// Ensure resources are closed
-		if sess.Client != nil {
-			sess.Client.Close()
+		// 关闭底层连接资源
+		if sess.Conn != nil {
+			sess.Conn.Close()
 		}
 		delete(m.sessions, id)
 	}
@@ -104,7 +106,10 @@ func (m *Manager) Broadcast(ids []string, data string) {
 	wg.Wait()
 }
 
-// Resize resizes the terminal PTY for a given session
+// Resize 调整指定会话的远端终端尺寸。
+// 委托给 Conn.Resize(各协议映射到本协议的尺寸通知机制:
+// SSH -> session.WindowChange,Telnet -> IAC SB NAWS)。
+// 会话不存在或 Conn 为空时静默忽略,与历史行为一致。
 func (m *Manager) Resize(id string, cols, rows int) error {
 	m.mu.RLock()
 	sess, ok := m.sessions[id]
@@ -114,10 +119,9 @@ func (m *Manager) Resize(id string, cols, rows int) error {
 		return nil // Session not found, ignore silently
 	}
 
-	if sess.SSHSession == nil {
-		return nil // No SSH session, ignore
+	if sess.Conn == nil {
+		return nil // No connection, ignore
 	}
 
-	// Send window change request to the PTY
-	return sess.SSHSession.WindowChange(rows, cols)
+	return sess.Conn.Resize(cols, rows)
 }

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"opscopilot/pkg/remote"
 	"opscopilot/pkg/sessionmanager"
-	"opscopilot/pkg/sshclient"
 )
 
 // buildSudoCommand 构造以 root 身份执行命令的 shell 语句
@@ -67,9 +67,11 @@ func (m *Manager) Connect(serverName string) (*ConnectResult, error) {
 		return nil, fmt.Errorf("服务器 '%s' 的密码未找到，请先在 OpsCopilot 中连接一次", serverName)
 	}
 
-	// 创建 SSH 配置
-	sshConfig := &sshclient.ConnectConfig{
+	// 创建协议无关配置(remote.ConnectConfig 是 sshclient.ConnectConfig 的别名)。
+	// Protocol 来自 sessions.json;空值由 remote.Dial 归一化为 SSH。
+	sshConfig := &remote.ConnectConfig{
 		Name:     serverConfig.Name,
+		Protocol: serverConfig.Protocol,
 		Host:     serverConfig.Host,
 		Port:     serverConfig.Port,
 		User:     serverConfig.User,
@@ -100,7 +102,7 @@ func (m *Manager) Connect(serverName string) (*ConnectResult, error) {
 		if bastionPassword == "" {
 			return nil, fmt.Errorf("跳板机 '%s' 的密码未找到", serverConfig.Bastion.Host)
 		}
-		sshConfig.Bastion = &sshclient.ConnectConfig{
+		sshConfig.Bastion = &remote.ConnectConfig{
 			Name:     serverConfig.Bastion.Name,
 			Host:     serverConfig.Bastion.Host,
 			Port:     serverConfig.Bastion.Port,
@@ -109,8 +111,8 @@ func (m *Manager) Connect(serverName string) (*ConnectResult, error) {
 		}
 	}
 
-	// 创建 SSH 客户端
-	client, err := sshclient.NewClient(sshConfig)
+	// 通过统一工厂建立连接(按 Protocol 分派 SSH/Telnet)。
+	client, err := remote.Dial(sshConfig)
 	if err != nil {
 		return nil, fmt.Errorf("连接失败: %w", err)
 	}
@@ -118,7 +120,8 @@ func (m *Manager) Connect(serverName string) (*ConnectResult, error) {
 	conn := &Connection{
 		Name:         serverName,
 		Host:         serverConfig.Host,
-		Client:       client,
+		Protocol:     sshConfig.NormalizedProtocol(),
+		Conn:         client,
 		RootPassword: rootPassword,
 		ConnectedAt:  time.Now(),
 	}
@@ -147,8 +150,8 @@ func (m *Manager) Disconnect(serverName string) error {
 		return fmt.Errorf("服务器 '%s' 未连接", serverName)
 	}
 
-	if conn.Client != nil {
-		conn.Client.Close()
+	if conn.Conn != nil {
+		conn.Conn.Close()
 	}
 	delete(m.connections, serverName)
 	return nil
@@ -241,17 +244,17 @@ func (m *Manager) Exec(ctx context.Context, serverName, command string, opts Exe
 		// 如果配置了 root 密码，使用 su 执行命令
 		if c.RootPassword != "" {
 			fullCmd := buildSudoCommand(command, c.RootPassword)
-			out, e := c.Client.RunWithContext(cmdCtx, fullCmd)
+			out, e := c.Conn.Run(cmdCtx, fullCmd)
 			if e != nil {
 				// su 失败回退到普通执行（注意：超时错误不回退）
 				if isTimeoutErr(e) {
 					return out, e
 				}
-				return c.Client.RunWithContext(cmdCtx, command)
+				return c.Conn.Run(cmdCtx, command)
 			}
 			return out, nil
 		}
-		return c.Client.RunWithContext(cmdCtx, command)
+		return c.Conn.Run(cmdCtx, command)
 	}
 
 	output, err := runCmd(conn)
@@ -308,7 +311,7 @@ func (m *Manager) Exec(ctx context.Context, serverName, command string, opts Exe
 // 以 IP 为唯一主键：用户在 OpsCopilot 中登记服务器时 Host 字段即 IP，
 // 且 UpdateSession 保证同 Host 唯一，因此 IP → session 是 1:1 映射，
 // 避免了 Name 可被改成别名导致 CLI 无法定位的问题。
-func findSessionConfig(nodes []*sessionmanager.Session, host string) *sshclient.ConnectConfig {
+func findSessionConfig(nodes []*sessionmanager.Session, host string) *remote.ConnectConfig {
 	for _, node := range nodes {
 		if node.Type == sessionmanager.TypeSession && node.Config != nil && node.Config.Host == host {
 			return node.Config
@@ -328,18 +331,14 @@ func isTimeoutErr(err error) bool {
 	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
 }
 
-// isConnectionDead 探测 SSH 连接是否已失效
-// 通过尝试创建新 session 判断：若失败，说明底层 client 不可用，需要重建
+// isConnectionDead 探测连接是否已失效。
+// 通过 remote.Connection.Healthy() 判断:SSH 内部试建 NewSession,
+// Telnet 发 IAC NOP。失败说明底层连接不可用,需要重建。
 func isConnectionDead(conn *Connection) bool {
-	if conn == nil || conn.Client == nil {
+	if conn == nil || conn.Conn == nil {
 		return true
 	}
-	s, err := conn.Client.NewSession()
-	if err != nil {
-		return true
-	}
-	s.Close()
-	return false
+	return !conn.Conn.Healthy()
 }
 
 // reconnect 强制断开旧连接并重建
@@ -349,8 +348,8 @@ func (m *Manager) reconnect(serverName string) (*Connection, error) {
 	old, exists := m.connections[serverName]
 	if exists {
 		closeSFTP(old)
-		if old.Client != nil {
-			old.Client.Close()
+		if old.Conn != nil {
+			old.Conn.Close()
 		}
 		delete(m.connections, serverName)
 	}

@@ -1,6 +1,7 @@
 package sshclient
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -22,7 +23,7 @@ func TestSSHConnection(t *testing.T) {
 	defer client.Close()
 
 	// 验证基础命令执行
-	output, err := client.Run("whoami")
+	output, err := client.Run(context.Background(), "whoami")
 	if err != nil {
 		t.Fatalf("Failed to run command: %v", err)
 	}
