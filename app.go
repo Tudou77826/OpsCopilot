@@ -37,6 +37,9 @@ import (
 	"opscopilot/pkg/session"
 	"opscopilot/pkg/sessionmanager"
 	"opscopilot/pkg/sshclient"
+	// blank import 触发 telnetclient 的 init(),向 remote 注册 telnet dialer。
+	// remote 包用注册表避免循环依赖,故需在入口处显式引入协议实现包。
+	_ "opscopilot/pkg/telnetclient"
 	"opscopilot/pkg/terminal"
 	"opscopilot/pkg/troubleshoot"
 	"opscopilot/pkg/updater"
@@ -657,20 +660,32 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 		return ConnectResult{Success: false, Message: fmt.Sprintf("Error connecting: %v", err)}
 	}
 
-	// 启动交互式 shell。SSH+rootPassword 路径需调 StartShellWithSudo(SSH 专属),
-	// 通过类型断言到 *sshclient.Client 获取;其他情况走接口方法 StartShell。
+	// 启动交互式 shell。按协议与凭据选择启动方式:
+	//   - SSH + rootPassword  → StartShellWithSudo(SSH 专属,类型断言到 *sshclient.Client)
+	//   - telnet + 有用户名   → StartShellWithAutoLogin(协议无标准认证,自动回填凭据,
+	//                          类型断言到 remote.AutoLoginCapable;SSH 不实现该接口)
+	//   - 其他                → 普通 StartShell(接口方法)
+	// 类型断言失败即回退到普通 StartShell,保证各协议都有合理行为。
 	var stdin io.WriteCloser
 	var stdout io.Reader
 
-	if config.RootPassword != "" {
-		// StartShellWithSudo 是 SSH+root 密码的特定组合,仅 SSH 实现。
-		// 类型断言失败说明该协议不支持此能力,回退到普通 StartShell。
+	switch {
+	case config.RootPassword != "":
+		// SSH+root 密码路径:StartShellWithSudo 仅 SSH 实现。
 		if sshConn, ok := conn.(*sshclient.Client); ok {
 			stdin, stdout, err = sshConn.StartShellWithSudo(120, 30, config.RootPassword)
 		} else {
 			stdin, stdout, err = conn.StartShell(120, 30)
 		}
-	} else {
+	case config.User != "":
+		// 有用户名:若协议支持 AutoLoginCapable(当前仅 telnet),自动回填凭据。
+		// SSH 不实现该接口,断言失败走普通 StartShell(SSH 用协议内认证,无需此机制)。
+		if al, ok := conn.(remote.AutoLoginCapable); ok {
+			stdin, stdout, err = al.StartShellWithAutoLogin(120, 30, config.User, config.Password)
+		} else {
+			stdin, stdout, err = conn.StartShell(120, 30)
+		}
+	default:
 		stdin, stdout, err = conn.StartShell(120, 30)
 	}
 

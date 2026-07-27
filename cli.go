@@ -13,6 +13,11 @@ import (
 	"opscopilot/pkg/config"
 	"opscopilot/pkg/core/ops"
 	"opscopilot/pkg/llm"
+	// blank import 触发 sshclient/telnetclient 的 init(),向 remote 注册
+	// 协议 dialer。ops 包只依赖 remote 抽象,不直接 import 协议实现,
+	// 故在 CLI 入口显式引入,确保 CLI exec 能分派到对应协议。
+	_ "opscopilot/pkg/sshclient"
+	_ "opscopilot/pkg/telnetclient"
 )
 
 // cliEnv 聚合 CLI 子命令需要的环境/路径配置
