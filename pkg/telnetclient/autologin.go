@@ -41,12 +41,16 @@ var (
 //   - Handle 入口立即 string(data) 拷贝,不跨 goroutine 持有调用方 buffer。
 //
 // 相对 AutoSudoReader 的增强:状态机 + stateDone 终态,防止登录后误触发。
+//
+// doneCh 在登录流程完成(state==stateDone)时关闭,供 Run(CLI exec)同步
+// 等待登录完成后再发命令。GUI 路径不需要等(用户看终端自己判断)。
 type LoginHandler struct {
 	mu       sync.Mutex
 	state    loginState
 	username string
 	password string
 	stdin    io.Writer
+	doneCh   chan struct{} // 登录完成时关闭(一次性)
 }
 
 // newLoginHandler 构造一个登录回填处理器。username/password 为空时,
@@ -57,6 +61,23 @@ func newLoginHandler(stdin io.Writer, username, password string) *LoginHandler {
 		username: username,
 		password: password,
 		stdin:    stdin,
+		doneCh:   make(chan struct{}),
+	}
+}
+
+// Done 返回一个 channel,在登录流程完成(state==stateDone)时关闭。
+// 调用方可 select 等待它或超时。若无需登录(无凭据),构造后已完成。
+func (h *LoginHandler) Done() <-chan struct{} {
+	return h.doneCh
+}
+
+// markDone 关闭 doneCh(幂等,只关一次)。调用前需持有 h.mu。
+func (h *LoginHandler) markDone() {
+	select {
+	case <-h.doneCh:
+		// 已关闭,noop
+	default:
+		close(h.doneCh)
 	}
 }
 
@@ -77,6 +98,10 @@ func (h *LoginHandler) Handle(data []byte) {
 			// fallthrough 不安全(锁已持),手动重试一次 password 匹配
 			if h.password != "" && containsAny(s, passwordKeywords) {
 				h.writePassword()
+			} else if h.password == "" {
+				// 无凭据,直接标记完成(设备免登录或无需回填)
+				h.state = stateDone
+				h.markDone()
 			}
 			return
 		}
@@ -87,6 +112,7 @@ func (h *LoginHandler) Handle(data []byte) {
 	case stateWaitPassword:
 		if h.password == "" {
 			h.state = stateDone
+			h.markDone()
 			return
 		}
 		if containsAny(s, passwordKeywords) {
@@ -101,6 +127,7 @@ func (h *LoginHandler) Handle(data []byte) {
 func (h *LoginHandler) writePassword() {
 	h.stdin.Write([]byte(h.password + "\n"))
 	h.state = stateDone
+	h.markDone()
 }
 
 // containsAny 判断 s 是否包含 keywords 中任一子串。

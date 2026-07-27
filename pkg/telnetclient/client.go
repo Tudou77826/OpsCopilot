@@ -48,12 +48,21 @@ type Client struct {
 	// 初始尺寸(StartShell 时记录,NAWS 协商用)
 	initCols int
 	initRows int
+
+	// 凭据:telnet 无协议层认证,登录在 PTY 数据流里完成。
+	// Run(CLI exec)需要这些来自动登录,否则卡在 login 提示。
+	// GUI 路径走 StartShellWithAutoLogin 显式传参,不读这两个字段。
+	user     string
+	password string
 }
 
 // NewClient 建立 Telnet 连接。
 //
 // telnet 不支持 bastion(实践不走 SSH 堡垒机);若 config.Bastion 非 nil,
 // 忽略并继续直连(与 UI 上 telnet 隐藏 bastion 字段一致)。
+//
+// 保存 user/password 到 Client,供 Run(CLI exec)自动登录使用 ——
+// telnet 无 SSH 的协议层认证,Run 必须先在数据流里完成登录才能发命令。
 func NewClient(config *remote.ConnectConfig) (*Client, error) {
 	if config == nil {
 		return nil, fmt.Errorf("telnet: nil config")
@@ -70,7 +79,7 @@ func NewClient(config *remote.ConnectConfig) (*Client, error) {
 	}
 
 	tc := newTelnetConn(nc)
-	return &Client{conn: tc}, nil
+	return &Client{conn: tc, user: config.User, password: config.Password}, nil
 }
 
 // StartShell 实现 remote.Connection:启动交互式 shell。
@@ -154,12 +163,17 @@ func (c *Client) Protocol() string { return remote.ProtocolTelnet }
 // Run 实现 remote.Connection:执行单条命令并返回 stdout。
 //
 // telnet 没有 SSH 那样的"单次 exec"语义(连上就是一个交互 shell)。
-// 这里采用通用做法:连一个临时 shell → 发命令 + 标记 → 读到标记 → 关闭。
-// 标记用 echo 打印唯一字符串,读到该字符串即认为命令输出结束。
+// 实现流程:
+//  1. StartShell;若配置了用户名,套 AutoLogin 并等登录完成(同步等待,
+//     带 ctx 超时)。不登录则卡在 login 提示,命令被当成凭据吞掉。
+//  2. 发命令 + echo 唯一标记 + 换行。
+//  3. 读 stdout 直到出现标记(命令执行完才会 echo 标记)或 ctx 超时。
+//  4. 截取标记前的内容,清理回显后返回。
 //
-// 注意:此实现是 best-effort。对于无登录提示的设备(如已配置免密),
-// 或命令输出含标记字符串的极端情况,可能不完美。CLI exec 路径对 telnet
-// 属辅助能力,主交互走 StartShell。
+// 局限(best-effort,协议本质无法完美解决):
+//   - 依赖远端 shell 有 echo 命令(Linux/Unix 必有,部分精简 CLI 可能没有);
+//   - 输出含 ANSI 码或 banner 时可能混入少量噪声。
+// 主交互(GUI 终端)走 StartShell,不经过本方法,完全可靠。
 func (c *Client) Run(ctx context.Context, cmd string) (string, error) {
 	if c.conn == nil {
 		return "", fmt.Errorf("telnet: not connected")
@@ -168,11 +182,50 @@ func (c *Client) Run(ctx context.Context, cmd string) (string, error) {
 	c.conn.SetDeadline(time.Time{})
 	defer c.conn.SetDeadline(time.Time{})
 
+	// 若有用户名,走 AutoLogin 并同步等待登录完成。
+	// 否则设备免登录(或已认证),直接 StartShell。
+	var loginDone <-chan struct{}
 	stdin, stdout, err := c.StartShell(c.initCols, c.initRows)
 	if err != nil {
 		return "", err
 	}
 	defer stdin.Close()
+
+	if c.user != "" {
+		// 用 AutoLogin 装饰器包装 stdout,并等登录完成。
+		handler := newLoginHandler(stdin, c.user, c.password)
+		stdout = &autoLoginReader{reader: stdout, handler: handler}
+		loginDone = handler.Done()
+	}
+
+	// 等登录完成(若有)。必须边读 stdout 边等 —— AutoLogin 的 Handle 在
+	// Read 时异步触发,不读 stdout 则永远等不到 login/password 提示。
+	// 读到的登录阶段数据(banner/提示符)丢弃,不混入命令输出。
+	if loginDone != nil {
+		loginDeadline := time.Now().Add(10 * time.Second)
+		readTmp := make([]byte, 4096)
+	waitLogin:
+		for {
+			// 设短 deadline 让 Read 不阻塞太久,好轮询 loginDone 和 ctx
+			c.conn.SetDeadline(time.Now().Add(200 * time.Millisecond))
+			n, _ := stdout.Read(readTmp) // 驱动 AutoLogin,数据丢弃
+			_ = n
+			select {
+			case <-loginDone:
+				break waitLogin
+			default:
+			}
+			if time.Now().After(loginDeadline) {
+				c.conn.SetDeadline(time.Time{})
+				return "", fmt.Errorf("telnet run: 登录超时(未收到 login/password 提示)")
+			}
+			if ctx.Err() != nil {
+				c.conn.SetDeadline(time.Time{})
+				return "", fmt.Errorf("telnet run: %w (登录前被取消)", ctx.Err())
+			}
+		}
+		c.conn.SetDeadline(time.Time{}) // 恢复,下面用 ctx deadline
+	}
 
 	// 唯一结束标记。用 echo 打印,读到该行表示命令已完成。
 	marker := "__OPSCOPILOT_TELNET_CMD_END_4f8a__"
@@ -194,8 +247,7 @@ func (c *Client) Run(ctx context.Context, cmd string) (string, error) {
 	defer c.conn.SetDeadline(time.Time{})
 
 	readBuf := make([]byte, 4096)
-	done := false
-	for !done {
+	for {
 		n, rerr := stdout.Read(readBuf)
 		if n > 0 {
 			buf.Write(readBuf[:n])
@@ -214,7 +266,6 @@ func (c *Client) Run(ctx context.Context, cmd string) (string, error) {
 			return cleanTelnetOutput(buf.String(), cmd), nil
 		}
 	}
-	return cleanTelnetOutput(buf.String(), cmd), nil
 }
 
 // cleanTelnetOutput 简单清理命令输出:
