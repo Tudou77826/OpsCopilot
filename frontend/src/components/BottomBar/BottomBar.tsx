@@ -8,6 +8,8 @@ export const BOTTOM_BAR_TIPS = [
     'Ctrl + K：用自然语言生成 Linux 命令',
     '广播模式可将输入同步发送到多个终端',
     '选中时间戳可以快速查看对应时间',
+    '网络设备用 Telnet 连接，创建后标签带橙色标识区分',
+    'Telnet 连接不支持文件传输，需要传文件请用 SSH',
 ];
 
 export const BOTTOM_BAR_TIP_INTERVAL_MS = 5000;
