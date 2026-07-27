@@ -195,23 +195,28 @@ const styles = {
         overflow: 'hidden' as const,
         border: '1px solid #444',
         width: 'fit-content',
+        // 与 input 等高,避免表单内高度参差
+        height: '34px',
     },
+    // 协议按钮用 segmented control 风格:激活态用浅底 + 白字(不用主操作蓝,
+    // 那是"执行动作"的主按钮专用色,这里只是配置选择,视觉层级要低一档)。
     protocolBtn: {
-        padding: '8px 18px',
+        padding: '0 16px',
         backgroundColor: '#1e1e1e',
-        color: '#ccc',
+        color: '#9a9a9a',
         border: 'none',
         cursor: 'pointer',
         fontSize: '0.85rem',
+        height: '100%',
     },
     protocolBtnActive: {
-        padding: '8px 18px',
-        backgroundColor: '#007acc',
+        padding: '0 16px',
+        backgroundColor: '#3a3d41',
         color: '#fff',
         border: 'none',
         cursor: 'pointer',
         fontSize: '0.85rem',
-        fontWeight: 600 as const,
+        height: '100%',
     },
     input: {
         padding: '8px',

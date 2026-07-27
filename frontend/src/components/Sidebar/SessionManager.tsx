@@ -541,20 +541,21 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
     );
 };
 
-// protocolChipStyle:telnet 协议标识的橙色 chip。
-// 配色复用项目现有"跳板/特殊连接"语义色(#e67e22),贴合 VS Code 深色主题。
+// protocolChipStyle:telnet 协议标识 chip。
+// 风格对齐 FilesPanel 的 infoChip(胶囊形 999px + 冷调深底),仅文字色
+// 用低饱和橙(#d08a3e)区分协议,避免强对比暖色块在侧栏里突兀。
 const protocolChipStyle: React.CSSProperties = {
     display: 'inline-block',
     marginLeft: '6px',
-    padding: '1px 6px',
-    fontSize: '0.65rem',
-    fontWeight: 600,
-    color: '#e67e22',
-    backgroundColor: '#3a2d20',
-    border: '1px solid #5a4030',
-    borderRadius: '3px',
-    lineHeight: '1.4',
+    padding: '1px 7px',
+    fontSize: '10px',
+    lineHeight: '1.5',
+    color: '#d08a3e',
+    backgroundColor: '#1a1a1a',
+    border: '1px solid #3a3a3a',
+    borderRadius: '999px',
     userSelect: 'none',
+    verticalAlign: 'middle',
 };
 
 const styles = {

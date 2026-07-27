@@ -305,7 +305,8 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
             );
         }
 
-        // 协议 chip:仅非默认协议(telnet)显示,与侧栏会话树风格一致。
+        // 协议 chip:仅非默认协议(telnet)显示,与侧栏会话树风格一致
+        // (胶囊形 + 低饱和橙文字 + 冷调深底)。
         if (normalizeProtocol(term.config?.protocol) === 'telnet') {
             parts.push(
                 <span
@@ -313,13 +314,13 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                     style={{
                         display: 'inline-block',
                         marginLeft: '6px',
-                        padding: '1px 5px',
-                        fontSize: '0.62rem',
-                        fontWeight: 600,
-                        color: '#e67e22',
-                        backgroundColor: '#3a2d20',
-                        border: '1px solid #5a4030',
-                        borderRadius: '3px',
+                        padding: '1px 7px',
+                        fontSize: '10px',
+                        lineHeight: '1.5',
+                        color: '#d08a3e',
+                        backgroundColor: '#1a1a1a',
+                        border: '1px solid #3a3a3a',
+                        borderRadius: '999px',
                         flexShrink: 0,
                         userSelect: 'none',
                     }}
