@@ -343,3 +343,131 @@ func TestClient_Run_WithMockServer(t *testing.T) {
 		t.Logf("Run returned (acceptable for mock): out=%q err=%v", out, runErr)
 	}
 }
+
+// === RunWarningReporter:协议警示上报 ===
+
+// TestRunWarnings_SuccessHasProtocolNotice 验证:即使命令成功执行,
+// telnet Run 也应上报"输出可能有终端噪声"的协议层提示,让下游 Agent
+// 知道输出非纯净 stdout。
+func TestRunWarnings_SuccessHasProtocolNotice(t *testing.T) {
+	// 用一个会回显命令 + echo 标记的 mock server(模拟正常 telnet 设备)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		buf := make([]byte, 4096)
+		for {
+			n, err := conn.Read(buf)
+			if err != nil {
+				return
+			}
+			// 回显收到的数据(模拟设备把命令 + echo 标记都执行并回显)
+			conn.Write(buf[:n])
+		}
+	}()
+
+	cfg := &remote.ConnectConfig{
+		Protocol: remote.ProtocolTelnet,
+		Host:     ln.Addr().(*net.TCPAddr).IP.String(),
+		Port:     ln.Addr().(*net.TCPAddr).Port,
+	}
+	client, err := NewClient(cfg)
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, _ = client.Run(ctx, "echo hello")
+
+	// 即使成功(或因 mock 简化返回错误),都应有协议层 noise warning
+	ws := client.TakeRunWarnings()
+	if len(ws) == 0 {
+		t.Fatal("期望 Run 后有协议警示,实际为空")
+	}
+	// 验证警示内容提及"终端噪声"或"echo"
+	found := false
+	for _, w := range ws {
+		if strings.Contains(w, "噪声") || strings.Contains(w, "echo") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("警示未提及协议噪声/echo 依赖,实际: %v", ws)
+	}
+
+	// 验证 TakeRunWarnings 是"取走即清空"语义
+	if ws2 := client.TakeRunWarnings(); len(ws2) != 0 {
+		t.Errorf("重复调用应返回空,实际: %v", ws2)
+	}
+}
+
+// TestRunWarnings_TimeoutHasEchoMarkerWarning 验证:ctx 超时(没读到 echo
+// 标记)时,应上报"未读到结束标记,可能设备不支持 echo"的警示。
+func TestRunWarnings_TimeoutHasEchoMarkerWarning(t *testing.T) {
+	// mock server:接受连接后什么都不做(不回显任何数据)→ Run 永远读不到
+	// echo 标记 → ctx 超时
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		// 故意不回显任何东西,让 Run 等到超时
+		buf := make([]byte, 4096)
+		for {
+			if _, err := conn.Read(buf); err != nil {
+				conn.Close()
+				return
+			}
+		}
+	}()
+
+	cfg := &remote.ConnectConfig{
+		Protocol: remote.ProtocolTelnet,
+		Host:     ln.Addr().(*net.TCPAddr).IP.String(),
+		Port:     ln.Addr().(*net.TCPAddr).Port,
+	}
+	client, err := NewClient(cfg)
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	defer client.Close()
+
+	// 短超时,快速失败
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	defer cancel()
+	_, runErr := client.Run(ctx, "echo hello")
+	// 应该超时
+	if runErr == nil {
+		t.Fatal("期望超时错误,实际 nil")
+	}
+
+	ws := client.TakeRunWarnings()
+	// 应有"未读到结束标记"或"echo"相关警示
+	found := false
+	for _, w := range ws {
+		if strings.Contains(w, "结束标记") || strings.Contains(w, "echo") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("超时时应有 echo 标记相关警示,实际: %v", ws)
+	}
+}

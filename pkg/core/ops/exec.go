@@ -169,6 +169,11 @@ type ExecResult struct {
 	Success bool           `json:"success"`
 	Output  string         `json:"output"`
 	Meta    map[string]any `json:"meta"`
+	// Warnings 携带协议层或执行过程的非致命警示,供下游 Agent 区分
+	// "设备能力局限"vs"命令本身失败"。例如 telnet 的 echo 标记超时、
+	// 输出含噪声等。SSH 路径不填(omitempty,JSON 无此键),仅 telnet
+	// 等有协议局限的路径填充。空表示无警示。
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // Exec 在已连接的服务器上执行命令
@@ -280,6 +285,14 @@ func (m *Manager) Exec(ctx context.Context, serverName, command string, opts Exe
 	// 更新最后活动时间（使用原子操作，并发安全）
 	activeConn.LastActive.Store(time.Now().UnixNano())
 
+	// 采集协议层警示(若有)。telnet 等有协议局限的实现通过 RunWarningReporter
+	// 上报,填入 ExecResult.Warnings 供下游 Agent 区分"设备能力局限"vs"命令失败"。
+	// SSH 不实现该接口,断言失败即跳过,result.Warnings 保持空(omitempty)。
+	var warnings []string
+	if wr, ok := activeConn.Conn.(remote.RunWarningReporter); ok {
+		warnings = wr.TakeRunWarnings()
+	}
+
 	// 处理输出
 	controller := NewOutputController(m.config.MaxTotalBytes, maxLineLength, m.config.HeadLines)
 	result := controller.Process(output)
@@ -301,9 +314,10 @@ func (m *Manager) Exec(ctx context.Context, serverName, command string, opts Exe
 	}
 
 	return &ExecResult{
-		Success: err == nil,
-		Output:  result.Output,
-		Meta:    meta,
+		Success:  err == nil,
+		Output:   result.Output,
+		Meta:     meta,
+		Warnings: warnings,
 	}, nil
 }
 

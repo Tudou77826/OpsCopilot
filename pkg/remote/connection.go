@@ -72,3 +72,25 @@ type AutoLoginCapable interface {
 	// 看到登录提示时自动向 stdin 回填用户名/密码。数据原样透传给调用方。
 	StartShellWithAutoLogin(cols, rows int, user, password string) (stdin io.WriteCloser, stdout io.Reader, err error)
 }
+
+// RunWarningReporter 是可选能力接口:协议在执行单条命令(Run)时可能
+// 产生非致命的协议层警示(如 telnet 的 echo 标记超时、输出含终端噪声)。
+// 调用方(ops.Manager.Exec)在 Run 后通过类型断言查询并取走警示,
+// 填入 ExecResult.Warnings,供下游 Agent 区分"设备能力局限"vs"命令失败"。
+//
+// 设计为"取走即清空"的副作用语义:每次 Run 重置,Warnings 返回本次 Run
+// 期间累积的警示。SSH 不实现本接口(SSH 的 exec 语义纯净,无协议局限),
+// 断言失败即跳过,SSH 路径完全不受影响。
+//
+// 使用:
+//
+//	if wr, ok := conn.(remote.RunWarningReporter); ok {
+//	    if ws := wr.TakeRunWarnings(); len(ws) > 0 {
+//	        result.Warnings = append(result.Warnings, ws...)
+//	    }
+//	}
+type RunWarningReporter interface {
+	// TakeRunWarnings 返回并清空上次 Run 累积的协议警示。
+	// 重复调用返回空(已取走)。
+	TakeRunWarnings() []string
+}

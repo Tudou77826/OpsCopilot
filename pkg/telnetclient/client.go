@@ -30,11 +30,26 @@ func init() {
 	})
 }
 
-// 编译期接口断言:确保 *Client 实现 remote.Connection 与 remote.AutoLoginCapable。
+// 编译期接口断言:确保 *Client 实现 remote.Connection、remote.AutoLoginCapable
+// 与 remote.RunWarningReporter。
 var (
-	_ remote.Connection     = (*Client)(nil)
-	_ remote.AutoLoginCapable = (*Client)(nil)
+	_ remote.Connection          = (*Client)(nil)
+	_ remote.AutoLoginCapable    = (*Client)(nil)
+	_ remote.RunWarningReporter  = (*Client)(nil)
 )
+
+// TakeRunWarnings 实现 remote.RunWarningReporter:返回并清空本次 Run 累积的
+// 协议警示。ops.Manager.Exec 在 Run 后调用,填入 ExecResult.Warnings。
+func (c *Client) TakeRunWarnings() []string {
+	ws := c.runWarnings
+	c.runWarnings = nil
+	return ws
+}
+
+// addWarning 向本次 Run 追加一条协议警示(内部辅助)。
+func (c *Client) addWarning(w string) {
+	c.runWarnings = append(c.runWarnings, w)
+}
 
 // Client 是 Telnet 连接的客户端,实现 remote.Connection。
 type Client struct {
@@ -48,6 +63,11 @@ type Client struct {
 	// 初始尺寸(StartShell 时记录,NAWS 协商用)
 	initCols int
 	initRows int
+
+	// runWarnings 累积本次 Run 的协议层警示(登录超时/echo 超时/输出噪声)。
+	// 由 Run 写入,TakeRunWarnings 取走。Run 开始时清空(每次只反映本次)。
+	// 单 goroutine 访问(ops.Manager.Exec 顺序调 Run + Take),无需加锁。
+	runWarnings []string
 
 	// 凭据:telnet 无协议层认证,登录在 PTY 数据流里完成。
 	// Run(CLI exec)需要这些来自动登录,否则卡在 login 提示。
@@ -178,6 +198,10 @@ func (c *Client) Run(ctx context.Context, cmd string) (string, error) {
 	if c.conn == nil {
 		return "", fmt.Errorf("telnet: not connected")
 	}
+	// 清空上次 Run 的警示(每次只反映本次)
+	c.runWarnings = nil
+	// telnet Run 天然有协议局限,无条件提醒下游 Agent 输出可能不纯
+	c.addWarning("telnet 协议通过终端流执行命令,输出可能含 banner/提示符/回显等终端噪声(非纯净 stdout);依赖远端 shell 支持 echo 命令作为结束标记")
 	// 临时关闭 read deadline(StartShell 可能设过),用 ctx 控制
 	c.conn.SetDeadline(time.Time{})
 	defer c.conn.SetDeadline(time.Time{})
@@ -217,6 +241,7 @@ func (c *Client) Run(ctx context.Context, cmd string) (string, error) {
 			}
 			if time.Now().After(loginDeadline) {
 				c.conn.SetDeadline(time.Time{})
+				c.addWarning("登录阶段超时:10s 内未收到 login/password 提示。可能原因:设备提示符非标准(未匹配 login:/username:/password:)、凭据错误、或设备无需登录但配置了用户名")
 				return "", fmt.Errorf("telnet run: 登录超时(未收到 login/password 提示)")
 			}
 			if ctx.Err() != nil {
@@ -260,9 +285,11 @@ func (c *Client) Run(ctx context.Context, cmd string) (string, error) {
 		}
 		if rerr != nil {
 			if ctx.Err() != nil {
+				c.addWarning("命令执行超时:未读到 echo 结束标记。最可能原因:远端 shell 不支持 echo 命令(部分精简 CLI/老式网络设备),或命令本身耗时过长。返回的是已读到的部分输出,可能不完整")
 				return cleanTelnetOutput(buf.String(), cmd), fmt.Errorf("telnet run: %w", ctx.Err())
 			}
 			// 连接关闭,返回已读到的内容
+			c.addWarning("连接在读到 echo 结束标记前关闭。返回的是已读到的部分输出,可能不完整")
 			return cleanTelnetOutput(buf.String(), cmd), nil
 		}
 	}
