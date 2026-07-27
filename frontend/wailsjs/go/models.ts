@@ -267,6 +267,7 @@ export namespace main {
 	
 	export class ConnectConfig {
 	    name: string;
+	    protocol: string;
 	    host: string;
 	    port: number;
 	    user: string;
@@ -274,14 +275,15 @@ export namespace main {
 	    rootPassword: string;
 	    bastion?: ConnectConfig;
 	    group: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new ConnectConfig(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
+	        this.protocol = source["protocol"];
 	        this.host = source["host"];
 	        this.port = source["port"];
 	        this.user = source["user"];
@@ -840,6 +842,7 @@ export namespace sshclient {
 	
 	export class ConnectConfig {
 	    name: string;
+	    protocol: string;
 	    host: string;
 	    port: number;
 	    user: string;
@@ -847,14 +850,15 @@ export namespace sshclient {
 	    root_password: string;
 	    bastion?: ConnectConfig;
 	    group?: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new ConnectConfig(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
+	        this.protocol = source["protocol"];
 	        this.host = source["host"];
 	        this.port = source["port"];
 	        this.user = source["user"];

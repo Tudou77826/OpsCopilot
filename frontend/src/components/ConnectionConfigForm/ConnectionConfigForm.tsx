@@ -1,5 +1,5 @@
 import React from 'react';
-import { ConnectionConfig } from '../../types';
+import { ConnectionConfig, Protocol, PROTOCOL_DEFAULT_PORT, normalizeProtocol } from '../../types';
 
 type Props = {
     config: ConnectionConfig;
@@ -10,6 +10,11 @@ type Props = {
 };
 
 const ConnectionConfigForm: React.FC<Props> = ({ config, onChange, idPrefix = 'cfg', showName = true, showGroup = true }) => {
+    // 当前协议(归一化:空值视为 ssh)
+    const protocol: Protocol = normalizeProtocol(config.protocol);
+    // telnet 模式:隐藏 Root 密码(无标准 sudo)和 bastion(无标准堡垒机)
+    const isTelnet = protocol === 'telnet';
+
     const updateRoot = (field: keyof ConnectionConfig, value: any) => {
         if (field === 'host') {
             const next: ConnectionConfig = { ...config, host: value };
@@ -20,6 +25,21 @@ const ConnectionConfigForm: React.FC<Props> = ({ config, onChange, idPrefix = 'c
             return;
         }
         onChange({ ...config, [field]: value });
+    };
+
+    // 切换协议时的联动:
+    //  - 端口:若当前端口等于旧协议默认值,自动切到新协议默认值;
+    //    用户手改过的端口(非默认值)则保留,避免覆盖用户意图。
+    //  - 不清空 rootPassword/bastion 字段值,仅 UI 隐藏(切回 SSH 时仍在)。
+    const handleProtocolChange = (next: Protocol) => {
+        if (next === protocol) return;
+        const updated: ConnectionConfig = { ...config, protocol: next };
+        const oldDefault = PROTOCOL_DEFAULT_PORT[protocol];
+        const newDefault = PROTOCOL_DEFAULT_PORT[next];
+        if (config.port === oldDefault || !config.port) {
+            updated.port = newDefault;
+        }
+        onChange(updated);
     };
 
     const updateBastion = (field: keyof ConnectionConfig, value: any) => {
@@ -59,12 +79,35 @@ const ConnectionConfigForm: React.FC<Props> = ({ config, onChange, idPrefix = 'c
                 </div>
             )}
 
+            {/* 协议选择:SSH / Telnet。切换时联动端口默认值与字段显隐。 */}
+            <div style={styles.row}>
+                <div style={styles.fieldGroup}>
+                    <label style={styles.fieldLabel}>协议</label>
+                    <div style={styles.protocolSwitch}>
+                        <button
+                            type="button"
+                            style={protocol === 'ssh' ? styles.protocolBtnActive : styles.protocolBtn}
+                            onClick={() => handleProtocolChange('ssh')}
+                        >
+                            SSH
+                        </button>
+                        <button
+                            type="button"
+                            style={protocol === 'telnet' ? styles.protocolBtnActive : styles.protocolBtn}
+                            onClick={() => handleProtocolChange('telnet')}
+                        >
+                            Telnet
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div style={styles.row}>
                 <div style={{ flex: 2 }}>
                     {renderField('主机地址', config.host, (v) => updateRoot('host', v), 'text', '', `${idPrefix}-host`)}
                 </div>
                 <div style={{ flex: 1 }}>
-                    {renderField('端口', config.port, (v) => updateRoot('port', parseInt(v) || 22), 'number', '', `${idPrefix}-port`)}
+                    {renderField('端口', config.port, (v) => updateRoot('port', parseInt(v) || PROTOCOL_DEFAULT_PORT[protocol]), 'number', '', `${idPrefix}-port`)}
                 </div>
             </div>
             <div style={styles.row}>
@@ -75,51 +118,57 @@ const ConnectionConfigForm: React.FC<Props> = ({ config, onChange, idPrefix = 'c
                     {renderField('密码', config.password || '', (v) => updateRoot('password', v), 'password', '', `${idPrefix}-password`)}
                 </div>
             </div>
-            <div style={styles.row}>
-                <div style={{ flex: 1 }}>
-                    {renderField('Root 密码', config.rootPassword || '', (v) => updateRoot('rootPassword', v), 'password', '可选 (用于 sudo)', `${idPrefix}-root-password`)}
-                </div>
-            </div>
-
-            <div style={styles.bastionSection}>
-                <label style={styles.bastionHeader}>
-                    <input
-                        type="checkbox"
-                        checked={!!config.bastion}
-                        onChange={(e) => {
-                            if (e.target.checked) {
-                                updateBastion('host', '');
-                            } else {
-                                const next = { ...config };
-                                delete next.bastion;
-                                onChange(next);
-                            }
-                        }}
-                        style={{ marginRight: '8px' }}
-                    />
-                    <span>使用跳板机 (Bastion)</span>
-                </label>
-                {config.bastion && (
-                    <div style={styles.bastionBody}>
-                        <div style={styles.row}>
-                            <div style={{ flex: 2 }}>
-                                {renderField('跳板机主机', config.bastion.host, (v) => updateBastion('host', v), 'text', '', `${idPrefix}-bastion-host`)}
-                            </div>
-                            <div style={{ flex: 1 }}>
-                                {renderField('跳板机端口', config.bastion.port, (v) => updateBastion('port', parseInt(v) || 22), 'number', '', `${idPrefix}-bastion-port`)}
-                            </div>
-                        </div>
-                        <div style={styles.row}>
-                            <div style={{ flex: 1 }}>
-                                {renderField('跳板机用户', config.bastion.user, (v) => updateBastion('user', v), 'text', '', `${idPrefix}-bastion-user`)}
-                            </div>
-                            <div style={{ flex: 1 }}>
-                                {renderField('跳板机密码', config.bastion.password || '', (v) => updateBastion('password', v), 'password', '', `${idPrefix}-bastion-password`)}
-                            </div>
-                        </div>
+            {/* Root 密码:仅 SSH 显示(telnet 无标准 sudo 流程)。值保留在对象里,切回 SSH 仍在。 */}
+            {!isTelnet && (
+                <div style={styles.row}>
+                    <div style={{ flex: 1 }}>
+                        {renderField('Root 密码', config.rootPassword || '', (v) => updateRoot('rootPassword', v), 'password', '可选 (用于 sudo)', `${idPrefix}-root-password`)}
                     </div>
-                )}
-            </div>
+                </div>
+            )}
+
+            {/* 跳板机:仅 SSH 显示(telnet 实践不走 SSH 堡垒机)。值保留,切回 SSH 仍在。 */}
+            {!isTelnet && (
+                <div style={styles.bastionSection}>
+                    <label style={styles.bastionHeader}>
+                        <input
+                            type="checkbox"
+                            checked={!!config.bastion}
+                            onChange={(e) => {
+                                if (e.target.checked) {
+                                    updateBastion('host', '');
+                                } else {
+                                    const next = { ...config };
+                                    delete next.bastion;
+                                    onChange(next);
+                                }
+                            }}
+                            style={{ marginRight: '8px' }}
+                        />
+                        <span>使用跳板机 (Bastion)</span>
+                    </label>
+                    {config.bastion && (
+                        <div style={styles.bastionBody}>
+                            <div style={styles.row}>
+                                <div style={{ flex: 2 }}>
+                                    {renderField('跳板机主机', config.bastion.host, (v) => updateBastion('host', v), 'text', '', `${idPrefix}-bastion-host`)}
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    {renderField('跳板机端口', config.bastion.port, (v) => updateBastion('port', parseInt(v) || 22), 'number', '', `${idPrefix}-bastion-port`)}
+                                </div>
+                            </div>
+                            <div style={styles.row}>
+                                <div style={{ flex: 1 }}>
+                                    {renderField('跳板机用户', config.bastion.user, (v) => updateBastion('user', v), 'text', '', `${idPrefix}-bastion-user`)}
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    {renderField('跳板机密码', config.bastion.password || '', (v) => updateBastion('password', v), 'password', '', `${idPrefix}-bastion-password`)}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };
@@ -138,6 +187,31 @@ const styles = {
     fieldLabel: {
         fontSize: '0.8rem',
         color: '#ccc',
+    },
+    protocolSwitch: {
+        display: 'flex',
+        gap: '0',
+        borderRadius: '4px',
+        overflow: 'hidden' as const,
+        border: '1px solid #444',
+        width: 'fit-content',
+    },
+    protocolBtn: {
+        padding: '8px 18px',
+        backgroundColor: '#1e1e1e',
+        color: '#ccc',
+        border: 'none',
+        cursor: 'pointer',
+        fontSize: '0.85rem',
+    },
+    protocolBtnActive: {
+        padding: '8px 18px',
+        backgroundColor: '#007acc',
+        color: '#fff',
+        border: 'none',
+        cursor: 'pointer',
+        fontSize: '0.85rem',
+        fontWeight: 600 as const,
     },
     input: {
         padding: '8px',

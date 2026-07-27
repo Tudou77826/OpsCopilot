@@ -104,6 +104,7 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
     const handleAddManual = () => {
         const newConfig: ConnectionConfig = {
             host: '',
+            protocol: 'ssh',
             port: 22,
             user: 'root',
             name: '新连接'

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TbFolderOpen, TbFolder, TbTerminal2 } from 'react-icons/tb';
-import { ConnectionConfig } from '../../types';
+import { ConnectionConfig, normalizeProtocol, PROTOCOL_LABEL } from '../../types';
 import EditSavedSessionModal from './EditSavedSessionModal';
 import { confirmDialog } from '../ConfirmDialog/ConfirmDialog';
 
@@ -322,11 +322,17 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                                 style={styles.renameInput}
                             />
                         ) : (
-                            <span style={{
-                                ...styles.nodeName,
-                                fontWeight: isFolder ? 600 : 400,
-                                color: isFolder ? '#e0e0e0' : '#bbb',
-                            }}>{node.name}</span>
+                            <>
+                                <span style={{
+                                    ...styles.nodeName,
+                                    fontWeight: isFolder ? 600 : 400,
+                                    color: isFolder ? '#e0e0e0' : '#bbb',
+                                }}>{node.name}</span>
+                                {/* 协议 chip:仅非默认协议(telnet)显示,避免全 SSH 环境噪声 */}
+                                {!isFolder && normalizeProtocol(node.config?.protocol) === 'telnet' && (
+                                    <span style={protocolChipStyle}>{PROTOCOL_LABEL.telnet}</span>
+                                )}
+                            </>
                         )}
                     </div>
                     {isFolder && isExpanded && node.children && (
@@ -533,6 +539,22 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
             )}
         </div>
     );
+};
+
+// protocolChipStyle:telnet 协议标识的橙色 chip。
+// 配色复用项目现有"跳板/特殊连接"语义色(#e67e22),贴合 VS Code 深色主题。
+const protocolChipStyle: React.CSSProperties = {
+    display: 'inline-block',
+    marginLeft: '6px',
+    padding: '1px 6px',
+    fontSize: '0.65rem',
+    fontWeight: 600,
+    color: '#e67e22',
+    backgroundColor: '#3a2d20',
+    border: '1px solid #5a4030',
+    borderRadius: '3px',
+    lineHeight: '1.4',
+    userSelect: 'none',
 };
 
 const styles = {

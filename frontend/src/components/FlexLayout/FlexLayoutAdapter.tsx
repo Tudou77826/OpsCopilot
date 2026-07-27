@@ -3,7 +3,7 @@ import { Layout, Model, TabNode, TabSetNode, BorderNode, Actions, DockLocation, 
 import TerminalComponent, { TerminalRef } from '../Terminal/Terminal';
 import FilesPanel from '../Sidebar/FilesPanel';
 import { HighlightRule, TerminalConfig } from '../Terminal/highlightTypes';
-import { SessionStatus } from '../../types';
+import { SessionStatus, normalizeProtocol, PROTOCOL_LABEL } from '../../types';
 import { TimestampResult } from '../../utils/timestampParser';
 import { createInitialLayout } from './layoutConfig';
 
@@ -301,6 +301,31 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                     title={isActive ? '广播已开启' : '广播已关闭'}
                 >
                     {isActive ? '📡' : '🔇'}
+                </span>
+            );
+        }
+
+        // 协议 chip:仅非默认协议(telnet)显示,与侧栏会话树风格一致。
+        if (normalizeProtocol(term.config?.protocol) === 'telnet') {
+            parts.push(
+                <span
+                    key="protocol"
+                    style={{
+                        display: 'inline-block',
+                        marginLeft: '6px',
+                        padding: '1px 5px',
+                        fontSize: '0.62rem',
+                        fontWeight: 600,
+                        color: '#e67e22',
+                        backgroundColor: '#3a2d20',
+                        border: '1px solid #5a4030',
+                        borderRadius: '3px',
+                        flexShrink: 0,
+                        userSelect: 'none',
+                    }}
+                    title="Telnet 协议"
+                >
+                    {PROTOCOL_LABEL.telnet}
                 </span>
             );
         }
