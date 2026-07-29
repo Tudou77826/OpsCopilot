@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"opscopilot/pkg/core/ops"
 )
@@ -79,6 +80,10 @@ func cmdFile(args []string) int {
 			fmt.Fprintln(os.Stderr, "错误: --server --remote --local 必填")
 			return 1
 		}
+		if hint := msysPathConvHint(*remote); hint != "" {
+			fmt.Fprintln(os.Stderr, hint)
+			return 1
+		}
 		// Download 内部自动连接（惰性）
 		r, err := mgr.Download(*server, *remote, ops.DownloadOptions{LocalPath: *local, MaxBytes: *maxBytes})
 		if err != nil {
@@ -101,6 +106,10 @@ func cmdFile(args []string) int {
 			fmt.Fprintln(os.Stderr, "错误: --server --local --remote 必填")
 			return 1
 		}
+		if hint := msysPathConvHint(*remote); hint != "" {
+			fmt.Fprintln(os.Stderr, hint)
+			return 1
+		}
 		// Upload 内部自动连接（惰性）
 		r, err := mgr.Upload(*server, *remote, ops.UploadOptions{LocalPath: *local, Backup: *backup, Mkdir: *mkdir})
 		if err != nil {
@@ -115,4 +124,48 @@ func cmdFile(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+// msysPathConvHint 检测 remotePath 是否像被 Git Bash / MSYS2 路径转换改写过。
+// 在 Windows 上用 Git Bash 调用原生 exe 时，MSYS2 会把命令行里形如 /tmp/...
+// 的 POSIX 路径自动转成 Windows 路径，导致 --remote 提前失效。
+// 识别特征：盘符开头（C:\ 或 C:/）或含 8.3 短文件名（NAME~1）。
+// 命中则返回友好提示，否则返回空串。
+func msysPathConvHint(remotePath string) string {
+	looksLikeWindows := false
+
+	// 盘符开头：C:\... 或 C:/...
+	if len(remotePath) >= 3 {
+		c := remotePath[0]
+		if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') {
+			if remotePath[1] == ':' && (remotePath[2] == '\\' || remotePath[2] == '/') {
+				looksLikeWindows = true
+			}
+		}
+	}
+
+	// 含 8.3 短文件名：NAME~1
+	if !looksLikeWindows {
+		if strings.Contains(remotePath, "~") {
+			parts := strings.FieldsFunc(remotePath, func(r rune) bool { return r == '/' || r == '\\' })
+			for _, p := range parts {
+				idx := strings.IndexByte(p, '~')
+				if idx > 0 && idx < len(p)-1 { // ~ 不能在首尾
+					looksLikeWindows = true
+					break
+				}
+			}
+		}
+	}
+
+	if !looksLikeWindows {
+		return ""
+	}
+
+	return fmt.Sprintf(`检测到 --remote 的值是 Windows 路径（%s），这通常是 Git Bash / MSYS2 的路径自动转换造成的：命令行里的 /tmp/... 在进入程序前被改写成了 Windows 临时目录。
+两种解决办法（任选其一）：
+  1. 改用 cmd 或 PowerShell 运行本命令；
+  2. 继续用 Git Bash，但在本条命令前加环境变量禁用转换，例如：
+       MSYS_NO_PATHCONV=1 opscopilot.exe file upload --server ... --remote /tmp/xxx
+     （只对这一条命令生效，推荐）`, remotePath)
 }
