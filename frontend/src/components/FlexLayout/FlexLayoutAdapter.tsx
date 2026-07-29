@@ -30,6 +30,7 @@ interface FlexLayoutAdapterProps {
     isBroadcastMode?: boolean;
     broadcastIds?: string[];
     onToggleTerminalBroadcast?: (id: string) => void;
+    onStartBroadcastFrom?: (id: string) => void;
     completionDelay?: number;
     terminalConfig?: TerminalConfig;
     onTerminalFontSizeChange?: (fontSize: number) => void;
@@ -50,6 +51,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
     isBroadcastMode,
     broadcastIds,
     onToggleTerminalBroadcast,
+    onStartBroadcastFrom,
     completionDelay,
     terminalConfig,
     onTerminalFontSizeChange,
@@ -498,6 +500,10 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                     onRename={(id, name) => { onRenameTerminal(id, name); setContextMenu(null); }}
                     onDuplicate={onDuplicateTerminal ? (id) => { onDuplicateTerminal(id); setContextMenu(null); } : undefined}
                     onOpenFileTransfer={(id) => { openFileTransferTab(id); setContextMenu(null); }}
+                    isBroadcastMode={isBroadcastMode}
+                    broadcastIds={broadcastIds}
+                    onToggleTerminalBroadcast={onToggleTerminalBroadcast ? (id) => { onToggleTerminalBroadcast(id); setContextMenu(null); } : undefined}
+                    onStartBroadcastFrom={onStartBroadcastFrom ? (id) => { onStartBroadcastFrom(id); setContextMenu(null); } : undefined}
                     onClose={() => setContextMenu(null)}
                 />
             )}
@@ -630,12 +636,41 @@ interface ContextMenuProps {
     onRename: (id: string, name: string) => void;
     onDuplicate?: (id: string) => void;
     onOpenFileTransfer?: (id: string) => void;
+    isBroadcastMode?: boolean;
+    broadcastIds?: string[];
+    onToggleTerminalBroadcast?: (id: string) => void;
+    onStartBroadcastFrom?: (id: string) => void;
     onClose: () => void;
 }
 
-const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, terminalId, terminals, onCloseTerminal, onRename, onDuplicate, onOpenFileTransfer, onClose }) => {
+const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, terminalId, terminals, onCloseTerminal, onRename, onDuplicate, onOpenFileTransfer, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast, onStartBroadcastFrom, onClose }) => {
     const term = terminals.find(t => t.id === terminalId);
     const idx = terminals.findIndex(t => t.id === terminalId);
+
+    // 广播菜单项文案与行为随状态变化:
+    //   未开启        → 开启广播(仅本标签)
+    //   已开 + 在组内  → 退出广播组
+    //   已开 + 不在组  → 加入广播组
+    // 断开的终端置灰,不可操作。
+    const broadcastProps = useMemo(() => {
+        if (!onStartBroadcastFrom && !onToggleTerminalBroadcast) return null;
+        const isConnected = term?.status === SessionStatus.CONNECTED;
+        const inGroup = isBroadcastMode && (broadcastIds?.includes(terminalId) ?? false);
+        let label: string;
+        let onClick: (() => void) | null;
+        if (!isBroadcastMode) {
+            label = '📡 开启广播(仅本标签)';
+            onClick = onStartBroadcastFrom ? () => onStartBroadcastFrom(terminalId) : null;
+        } else if (inGroup) {
+            label = '🔇 退出广播组';
+            onClick = onToggleTerminalBroadcast ? () => onToggleTerminalBroadcast(terminalId) : null;
+        } else {
+            label = '📡 加入广播组';
+            onClick = onToggleTerminalBroadcast ? () => onToggleTerminalBroadcast(terminalId) : null;
+        }
+        const disabled = !isConnected || !onClick;
+        return { label, onClick: disabled ? null : onClick, disabled };
+    }, [term, isBroadcastMode, broadcastIds, terminalId, onStartBroadcastFrom, onToggleTerminalBroadcast]);
 
     return (
         <div
@@ -664,6 +699,22 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, terminalId, terminals, 
             {onDuplicate && (
                 <div style={menuItemStyle} onClick={() => { onDuplicate(terminalId); onClose(); }}>
                     复制标签
+                </div>
+            )}
+            {broadcastProps && (
+                <div
+                    style={{
+                        ...menuItemStyle,
+                        color: broadcastProps.disabled ? '#555' : '#ccc',
+                        cursor: broadcastProps.disabled ? 'default' : 'pointer',
+                    }}
+                    onClick={() => {
+                        if (broadcastProps.disabled || !broadcastProps.onClick) return;
+                        broadcastProps.onClick();
+                        onClose();
+                    }}
+                >
+                    {broadcastProps.label}
                 </div>
             )}
             <div style={menuSeparatorStyle} />

@@ -499,12 +499,25 @@ function App() {
         }
     };
 
+    // 从指定标签开启广播:广播组初始仅含该标签(区别于 handleToggleBroadcast 的"全选")
+    // 用于标签右键菜单「开启广播(仅本标签)」入口。
+    const handleStartBroadcastFrom = (id: string) => {
+        setIsBroadcastMode(true);
+        setBroadcastIds([id]);
+    };
+
     const handleToggleTerminalBroadcast = (id: string) => {
         if (!isBroadcastMode) return;
 
         setBroadcastIds(prev => {
             if (prev.includes(id)) {
-                return prev.filter(bid => bid !== id);
+                const next = prev.filter(bid => bid !== id);
+                // 退出最后一个标签后,广播组为空 → 自动关闭广播模式,
+                // 避免"广播开着但组是空的"这种无意义状态。
+                if (next.length === 0) {
+                    setIsBroadcastMode(false);
+                }
+                return next;
             } else {
                 return [...prev, id];
             }
@@ -743,6 +756,7 @@ function App() {
                             isBroadcastMode={isBroadcastMode}
                             broadcastIds={broadcastIds}
                             onToggleTerminalBroadcast={handleToggleTerminalBroadcast}
+                            onStartBroadcastFrom={handleStartBroadcastFrom}
                             completionDelay={completionDelay}
                             terminalConfig={terminalConfig}
                             onTerminalFontSizeChange={handleTerminalFontSizeChange}
