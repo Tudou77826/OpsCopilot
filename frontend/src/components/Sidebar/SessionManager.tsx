@@ -371,6 +371,9 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
     };
     
     // Auto-expand effect when searching
+    // 仅依赖 searchTerm:只在用户改动搜索词时展开一次匹配的文件夹。
+    // 不依赖 sessions——loadSessions 每 5 秒轮询会替换 sessions,若把它放进依赖,
+    // 会在每次定时刷新时重新展开所有匹配项,把用户刚刚手动折叠的文件夹再次撑开。
     useEffect(() => {
         if (searchTerm) {
             const expandRecursive = (nodes: SessionNode[]) => {
@@ -383,7 +386,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
             };
             expandRecursive(filterNodes(sessions, searchTerm));
         }
-    }, [searchTerm, sessions]); // Added sessions dependency to re-expand if data loads while searching
+    }, [searchTerm]);
 
     const displayedSessions = filterNodes(sessions, searchTerm);
 
