@@ -6,6 +6,7 @@ import CommandWhitelistPanel from './CommandWhitelist/CommandWhitelistPanel';
 import FileAccessPanel from './FileAccess/FileAccessPanel';
 import AboutPanel from './AboutPanel';
 import { HighlightRule, TerminalConfig } from '../Terminal/highlightTypes';
+import { assessPattern } from '../Terminal/highlight/regexSafety';
 import {
     DEFAULT_TERMINAL_FONT_SIZE,
     MAX_TERMINAL_FONT_SIZE,
@@ -138,6 +139,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const [skillState, setSkillState] = useState<'unknown' | 'not_installed' | 'up_to_date' | 'outdated'>('unknown');
     // skill 是否需要关注（未配置 / 未安装 / 过期）→ 「AI 接入」导航项亮红点
     const [skillNeedsAttention, setSkillNeedsAttention] = useState(false);
+    // 高亮规则是否有存量问题（语法错 / 灾难正则，常因用户直改 JSON 引入）→ 「突出显示」导航项亮红点
+    const [highlightIssues, setHighlightIssues] = useState<{ name: string; issues: string[] }[]>([]);
     const [skillInstalledVer, setSkillInstalledVer] = useState('');
     const [skillBuiltinVer, setSkillBuiltinVer] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
@@ -271,6 +274,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 const complexModel = llmCfg.ComplexModel || '';
                 const terminal = normalizeTerminalConfig(cfg.terminal);
                 const highlight_rules: HighlightRule[] = Array.isArray(cfg.highlight_rules) ? cfg.highlight_rules : [];
+                // 存量校验：JSON 直改可能引入语法错 / 灾难正则，逐条 assessPattern 检查。
+                // 只关注「完全不生效」的规则（!canEnable = severe 或语法错），它们需要用户介入；
+                // moderate/high（如「正则较长」）只是提示，不亮红点。
+                const ruleIssues = highlight_rules
+                    .map(r => {
+                        const risk = assessPattern(r.pattern || '');
+                        return { name: r.name || r.pattern || '未命名', failed: !risk.canEnable, issues: risk.issues };
+                    })
+                    .filter(it => it.failed);
+                setHighlightIssues(ruleIssues);
                 setConfig({
                     ...cfg,
                     llm: {
@@ -725,6 +738,23 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 return (
                     <div style={styles.settingsGroup}>
                         <div style={styles.groupTitle}>突出显示规则</div>
+                        {highlightIssues.length > 0 && (
+                            <div style={{ ...styles.attentionBanner, borderLeftColor: colors.warning, marginBottom: '12px' }}>
+                                <span style={{ color: colors.warning }}>{TbInfoCircle({ size: 16 })}</span>
+                                <div style={styles.attentionText}>
+                                    <div style={{ marginBottom: '6px' }}>
+                                        检测到 {highlightIssues.length} 条规则存在问题（语法错误或灾难性正则，已自动失效），建议前往下方编辑修改：
+                                    </div>
+                                    <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                                        {highlightIssues.map((it, idx) => (
+                                            <li key={idx} style={{ fontSize: font.sm, color: colors.textSecondary }}>
+                                                <strong>{it.name}</strong>：{it.issues.join('；')}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+                        )}
                         <div style={styles.settingItem}>
                             <label style={styles.settingLabel}>管理突出显示集</label>
                             <button
@@ -1089,7 +1119,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                         <span style={styles.navIcon}>{item.icon}</span>
                                         <span style={styles.navText}>{item.label}</span>
                                         {((item.id === 'about' && updateAvailable) ||
-                                            (item.id === 'aiagent' && skillNeedsAttention)) && (
+                                            (item.id === 'aiagent' && skillNeedsAttention) ||
+                                            (item.id === 'highlight' && highlightIssues.length > 0)) && (
                                             <span style={styles.navBadge} />
                                         )}
                                     </div>
