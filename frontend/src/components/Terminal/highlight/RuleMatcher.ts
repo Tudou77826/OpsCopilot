@@ -21,7 +21,7 @@ interface WorkerResponse {
 }
 
 const MAX_MATCHES_PER_LINE = 100;
-const WORKER_TIMEOUT_MS = 75;
+const WORKER_TIMEOUT_MS = 100;
 
 const matchSynchronously = (lines: MatcherLine[], rules: MatcherRule[]): MatcherResult[] => {
     const results: MatcherResult[] = [];

@@ -3,6 +3,7 @@ import { HighlightRule } from '../highlightTypes';
 import { DecorationStore, RenderRange } from './DecorationStore';
 import { TerminalLineMapper } from './TerminalLineMapper';
 import { MatcherRule, RuleMatcher } from './RuleMatcher';
+import { assessPattern } from './regexSafety';
 
 interface CompiledRule {
     rule: HighlightRule;
@@ -16,17 +17,12 @@ const FRAME_BUDGET_MS = 4;
 const validColor = (value?: string): string | undefined =>
     value && /^#[0-9a-f]{6}$/i.test(value) ? value : undefined;
 
-// JavaScript RegExp cannot be interrupted on the UI thread. Reject the common
-// catastrophic-backtracking shapes until matching is moved to a bounded worker.
-export const hasUnsafeRegexShape = (pattern: string): boolean => {
-    const normalized = pattern.replace(/^\(\?i\)/, '');
-    return /\([^)]*[+*][^)]*\)[+*{]/.test(normalized)
-        || /\([^)]*\|[^)]*\)[+*{]/.test(normalized)
-        || /(\.\*){2,}|(\.\+){2,}/.test(normalized);
-};
-
+// 规则丢弃标准与编辑界面同源（assessPattern）：severe（确证灾难性回溯）或语法
+// 非法时丢弃，防老鼠屎正则卡死共享 worker。safe/moderate/high 一律保留——
+// 此前用本地 hasUnsafeRegexShape 会误杀 (a+)+、(error|fail)+ 等安全正则，导致
+// 「界面判定安全、执行侧却静默丢弃，该亮的不亮」，现在两处共用同一判断。
 const compileRules = (rules: HighlightRule[]): CompiledRule[] => rules
-    .filter(rule => rule?.is_enabled && rule.pattern && !hasUnsafeRegexShape(rule.pattern))
+    .filter(rule => rule?.is_enabled && rule.pattern && assessPattern(rule.pattern).canEnable)
     .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
     .map(rule => {
         let pattern = rule.pattern;

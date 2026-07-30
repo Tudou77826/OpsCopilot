@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { HighlightRule } from '../Terminal/highlightTypes';
+import { assessPattern } from '../Terminal/highlight/regexSafety';
 import { colors, radius, font } from './settingsStyles';
 import Switch from './Switch';
 
@@ -11,14 +12,6 @@ interface HighlightRulesModalProps {
     onClose: () => void;
 }
 
-type RiskLevel = 'safe' | 'moderate' | 'high' | 'severe';
-
-interface PatternRisk {
-    level: RiskLevel;
-    issues: string[];
-    canEnable: boolean;
-}
-
 function newId() {
     // @ts-ignore
     if (globalThis.crypto && globalThis.crypto.randomUUID) {
@@ -26,49 +19,6 @@ function newId() {
         return globalThis.crypto.randomUUID();
     }
     return `r_${Math.random().toString(16).slice(2)}_${Date.now()}`;
-}
-
-function assessPatternRisk(pattern: string): PatternRisk {
-    const p = pattern.trim();
-    if (!p) return { level: 'safe', issues: [], canEnable: true };
-
-    const issues: string[] = [];
-    let level: RiskLevel = 'safe';
-
-    if (p.length > 500) {
-        issues.push(`正则非常长 (${p.length}字符)`);
-        level = 'high';
-    } else if (p.length > 200) {
-        issues.push(`正则较长 (${p.length}字符)`);
-        level = 'moderate';
-    }
-
-    if (/\(\.\*\)\+/.test(p) || /\(\.\+\)\+/.test(p)) {
-        issues.push('包含嵌套量词，可能导致指数级匹配');
-        if (level === 'safe') {
-            level = 'high';
-        } else if (level === 'moderate') {
-            level = 'severe';
-        }
-    }
-
-    if (/^(\.\*|\.\+)[+*]/.test(p)) {
-        issues.push('灾难性回溯模式');
-        level = 'severe';
-    }
-
-    if (/\(\?:?[^)]*[+*][^)]*\)[+*]/.test(p)) {
-        issues.push('复杂的嵌套量词组合');
-        if (level === 'safe') {
-            level = 'moderate';
-        }
-    }
-
-    return {
-        level,
-        issues,
-        canEnable: level !== 'severe'
-    };
 }
 
 function areRulesEqual(a: HighlightRule[], b: HighlightRule[]): boolean {
@@ -292,7 +242,7 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
                         <div style={styles.list}>
                             {sorted.length === 0 && <div style={styles.empty}>暂无规则，点击上方按钮添加</div>}
                             {sorted.map((r, i) => {
-                                const risk = assessPatternRisk(r.pattern);
+                                const risk = assessPattern(r.pattern);
                                 const canEnable = risk.canEnable && (risk.level === 'safe' || riskAcknowledged[r.id]);
                                 const editing = isEditing(r.id);
 
