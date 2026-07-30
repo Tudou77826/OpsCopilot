@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { TbClock, TbScreenShare, TbStethoscope, TbMessageChatbot, TbCode, TbBolt, TbBook } from 'react-icons/tb';
 import { useToast } from './components/Toast/Toast';
 import './App.css';
@@ -15,6 +15,7 @@ import CommandQueryOverlay, { CommandQueryResult } from './components/CommandQue
 import ConnectErrorModal from './components/ConnectErrorModal/ConnectErrorModal';
 import { ConnectionConfig, SessionStatus, SessionDisconnectedEvent } from './types';
 import { HighlightRule, TerminalConfig } from './components/Terminal/highlightTypes';
+import { assessPattern } from './components/Terminal/highlight/regexSafety';
 import { normalizeTerminalConfig } from './components/Terminal/terminalAppearance';
 import { TimestampResult } from './utils/timestampParser';
 
@@ -54,6 +55,13 @@ function App() {
     const [completionDelay, setCompletionDelay] = useState(150);
     const [terminalConfig, setTerminalConfig] = useState<TerminalConfig>(() => normalizeTerminalConfig());
     const [highlightRules, setHighlightRules] = useState<HighlightRule[]>([]);
+    // 高亮规则存量校验：存在语法错/灾难正则（!canEnable）时，外层设置按钮亮红点，
+    // 与 SettingsModal 内「突出显示」导航项的红点形成层层引导。直接由 highlightRules 派生，
+    // 规则一变（含 JSON 直改后重新加载）即重算，无需额外同步。
+    const highlightNeedsAttention = useMemo(
+        () => highlightRules.some(r => !assessPattern(r.pattern || '').canEnable),
+        [highlightRules]
+    );
     const [isCommandQueryOpen, setIsCommandQueryOpen] = useState(false);
     const [commandQueryText, setCommandQueryText] = useState('');
     const [commandQueryLoading, setCommandQueryLoading] = useState(false);
@@ -710,7 +718,7 @@ function App() {
                             <circle cx="12" cy="12" r="3"></circle>
                             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                         </svg>
-                        {updateAvailable && (
+                        {(updateAvailable || highlightNeedsAttention) && (
                             <span style={{
                                 position: 'absolute',
                                 top: '2px',
