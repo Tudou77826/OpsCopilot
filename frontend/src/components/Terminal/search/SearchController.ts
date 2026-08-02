@@ -24,11 +24,13 @@ const decorations: ISearchDecorationOptions = {
 };
 
 export class SearchController {
+    private readonly terminal: Terminal;
     private readonly addon = new SearchAddon({ highlightLimit: HIGHLIGHT_LIMIT });
     private readonly resultDisposable: IDisposable;
     private disposed = false;
 
     constructor(terminal: Terminal, onResults: (results: SearchResults) => void) {
+        this.terminal = terminal;
         terminal.loadAddon(this.addon);
         this.resultDisposable = this.addon.onDidChangeResults(({ resultIndex, resultCount }) => {
             onResults({
@@ -41,7 +43,14 @@ export class SearchController {
 
     public findNext(query: string, options: SearchQueryOptions, incremental = false): boolean {
         if (this.disposed || query.length === 0) return false;
-        return this.addon.findNext(query, this.options(options, incremental));
+        // 增量搜索（用户正在输入）时保持当前滚动位置，避免被第一个匹配拽到缓冲区顶部。
+        // 高亮照常渲染全部匹配；只有用户主动按 下一个/上一个 时才允许跳转滚动。
+        const savedViewportY = incremental ? this.terminal.buffer.active.viewportY : null;
+        const found = this.addon.findNext(query, this.options(options, incremental));
+        if (savedViewportY !== null && this.terminal.buffer.active.viewportY !== savedViewportY) {
+            this.terminal.scrollToLine(savedViewportY);
+        }
+        return found;
     }
 
     public findPrevious(query: string, options: SearchQueryOptions): boolean {
