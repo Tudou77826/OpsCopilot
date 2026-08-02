@@ -56,7 +56,9 @@ body {
 }
 
 .terminal-host {
-  padding: 4px 8px;
+  /* 左右对称留白，避免单侧 padding（原 8px ≈ 半个字符宽）被 fit 计入可用宽度
+     而在右边缘裁掉约半个字符；4px 仍保留视觉间距。 */
+  padding: 4px;
 }
 
 .terminal-host > .xterm {

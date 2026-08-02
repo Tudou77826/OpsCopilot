@@ -608,6 +608,19 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         restoreTerminalLayout();
         scheduleSizeSync(100);
 
+        // 字体（@fontsource JetBrains Mono 等）以 font-display: swap 打包，
+        // 首次挂载时真实 woff2 可能尚未就绪，xterm 会先用 monospace fallback
+        // 测出较窄的字符宽度并据此算 cols；待真实字体加载完毕后实际 cell 更宽，
+        // 末列字符就会在右边缘被裁掉约半个字符（偶现）。这里等字体就绪后再 fit 一次，
+        // 确保最终按真实字体度量布局。
+        let fontReadyCancelled = false;
+        if (typeof document !== 'undefined' && document.fonts && typeof document.fonts.ready === 'object') {
+            document.fonts.ready.then(() => {
+                if (fontReadyCancelled) return;
+                restoreTerminalLayout();
+            });
+        }
+
         const onScrollDispose = term.onScroll(() => {
             trackScrollPosition(term);
             ruleController.schedule('scroll');
@@ -899,6 +912,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         }
 
         return () => {
+            fontReadyCancelled = true;
             if (debounceTimerRef.current) {
                 clearTimeout(debounceTimerRef.current);
             }
