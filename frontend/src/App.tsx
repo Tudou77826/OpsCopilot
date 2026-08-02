@@ -17,6 +17,8 @@ import { ConnectionConfig, SessionStatus, SessionDisconnectedEvent } from './typ
 import { HighlightRule, TerminalConfig } from './components/Terminal/highlightTypes';
 import { assessPattern } from './components/Terminal/highlight/regexSafety';
 import { normalizeTerminalConfig } from './components/Terminal/terminalAppearance';
+import { Theme } from './components/appearanceTypes';
+import { DEFAULT_THEME, normalizeTheme, persistTheme, readPersistedTheme } from './components/appearance';
 import { TimestampResult } from './utils/timestampParser';
 
 interface TerminalSession {
@@ -54,6 +56,8 @@ function App() {
     const [confirmCloseMessage, setConfirmCloseMessage] = useState("");
     const [completionDelay, setCompletionDelay] = useState(150);
     const [terminalConfig, setTerminalConfig] = useState<TerminalConfig>(() => normalizeTerminalConfig());
+    // 主题初值读 localStorage（与 index.html 防闪屏脚本同源），保证 React 首帧与内联脚本一致。
+    const [theme, setTheme] = useState<Theme>(() => readPersistedTheme());
     const [highlightRules, setHighlightRules] = useState<HighlightRule[]>([]);
     // 高亮规则存量校验：存在语法错/灾难正则（!canEnable）时，外层设置按钮亮红点，
     // 与 SettingsModal 内「突出显示」导航项的红点形成层层引导。直接由 highlightRules 派生，
@@ -122,6 +126,19 @@ function App() {
             terminalRefs.current.forEach(t => t.fit());
         }, delay);
     }, []);
+    // 主题变化时广播到所有已打开终端（仿 scheduleFitAll 的全实例遍历范式）。
+    // 新建的 tab 由 theme prop 经 FlexLayoutAdapter 透传覆盖。
+    const applyThemeAll = useCallback((nextTheme: Theme) => {
+        terminalRefs.current.forEach(t => t.applyTheme?.(nextTheme));
+    }, []);
+
+    // 主题驱动：写 data-theme 属性（CSS 变量据此切换）+ 持久化 localStorage +
+    // 广播到所有终端实例。data-theme 与首屏内联脚本写的是同一属性，首帧已就位，这里负责后续切换。
+    useEffect(() => {
+        document.documentElement.dataset.theme = theme;
+        persistTheme(theme);
+        applyThemeAll(theme);
+    }, [theme, applyThemeAll]);
     // Store unlisten functions for events
     const unlisteners = useRef(new Map<string, () => void>());
     const activeConnectError = connectErrors.length > 0 ? connectErrors[0] : null;
@@ -207,6 +224,11 @@ function App() {
                         const normalized = normalizeTerminalConfig(cfg.terminal);
                         terminalConfigStateRef.current = normalized;
                         setTerminalConfig(normalized);
+                    }
+                    if (cfg && cfg.appearance) {
+                        // 后端权威值校正 localStorage（防止漂移/首访/跨设备）
+                        const nextTheme = normalizeTheme(cfg.appearance.theme);
+                        setTheme(nextTheme);
                     }
                     if (cfg && Array.isArray(cfg.highlight_rules)) {
                         setHighlightRules(cfg.highlight_rules);
@@ -769,6 +791,7 @@ function App() {
                             terminalConfig={terminalConfig}
                             onTerminalFontSizeChange={handleTerminalFontSizeChange}
                             highlightRules={highlightRules}
+                            theme={theme}
                             onSelectionParsed={setParsedTimestamp}
                         />
                     </div>

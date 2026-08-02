@@ -21,6 +21,7 @@ type AppConfig struct {
 	CommandQueryShortcut string             `json:"command_query_shortcut"`
 	Experimental         ExperimentalConfig `json:"experimental"`
 	Terminal             TerminalConfig     `json:"terminal"`
+	Appearance           AppearanceConfig   `json:"appearance"`
 	HighlightRules       []HighlightRule    `json:"highlight_rules"`
 	PatchStore           PatchStoreConfig   `json:"patch_store"`
 }
@@ -33,6 +34,30 @@ const (
 	MinTerminalFontSize       = 10
 	MaxTerminalFontSize       = 32
 )
+
+// AppearanceConfig 外观模式配置（亮色/暗色主题）
+type AppearanceConfig struct {
+	Theme string `json:"theme"` // "dark"（默认）或 "light"
+}
+
+const (
+	DefaultAppearanceTheme = "dark"
+	ThemeDark              = "dark"
+	ThemeLight             = "light"
+)
+
+// NormalizeAppearanceConfig 归一化外观配置：仅接受 dark/light，否则回退默认 dark
+func NormalizeAppearanceConfig(cfg AppearanceConfig) AppearanceConfig {
+	switch strings.ToLower(strings.TrimSpace(cfg.Theme)) {
+	case ThemeLight:
+		cfg.Theme = ThemeLight
+	case ThemeDark:
+		cfg.Theme = ThemeDark
+	default:
+		cfg.Theme = DefaultAppearanceTheme
+	}
+	return cfg
+}
 
 type CLIConfig struct {
 	ExecTimeoutSec int `json:"exec_timeout_sec"`
@@ -183,6 +208,9 @@ func newManagerWithDir(dir string) *Manager {
 			FontFamily:       DefaultTerminalFontFamily,
 			FontSize:         DefaultTerminalFontSize,
 		},
+		Appearance: AppearanceConfig{
+			Theme: DefaultAppearanceTheme,
+		},
 		HighlightRules: []HighlightRule{},
 	}
 
@@ -228,6 +256,7 @@ func (m *Manager) Load() error {
 	_, hasCLI := raw["cli"]
 	_, hasCommandQueryShortcut := raw["command_query_shortcut"]
 	_, hasTerminal := raw["terminal"]
+	_, hasAppearance := raw["appearance"]
 
 	// 解析配置
 	if err := json.Unmarshal(data, m.Config); err != nil {
@@ -268,6 +297,15 @@ func (m *Manager) Load() error {
 	normalizedTerminal := NormalizeTerminalConfig(m.Config.Terminal)
 	if normalizedTerminal != m.Config.Terminal {
 		m.Config.Terminal = normalizedTerminal
+		changed = true
+	}
+	if !hasAppearance {
+		m.Config.Appearance = AppearanceConfig{Theme: DefaultAppearanceTheme}
+		changed = true
+	}
+	normalizedAppearance := NormalizeAppearanceConfig(m.Config.Appearance)
+	if normalizedAppearance != m.Config.Appearance {
+		m.Config.Appearance = normalizedAppearance
 		changed = true
 	}
 
@@ -364,6 +402,7 @@ func (m *Manager) Save() error {
 		CommandQueryShortcut string             `json:"command_query_shortcut"`
 		Experimental         ExperimentalConfig `json:"experimental"`
 		Terminal             TerminalConfig     `json:"terminal"`
+		Appearance           AppearanceConfig   `json:"appearance"`
 		PatchStore           PatchStoreConfig   `json:"patch_store"`
 	}
 
@@ -377,6 +416,7 @@ func (m *Manager) Save() error {
 		CommandQueryShortcut: m.Config.CommandQueryShortcut,
 		Experimental:         m.Config.Experimental,
 		Terminal:             m.Config.Terminal,
+		Appearance:           m.Config.Appearance,
 		PatchStore:           m.Config.PatchStore,
 	}
 

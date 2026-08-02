@@ -1,8 +1,109 @@
+/* =====================================================================
+   主题 token —— 全站颜色的唯一真相源。所有组件应使用 var(--xxx)，
+   不要内联 #xxxxxx。新增颜色先在此处两套（dark/light）各加一个 token。
+   dark 为默认（:root），亮色通过 :root[data-theme="light"] 覆盖。
+   data-theme 由 index.html 防闪屏脚本与 App.tsx 写入 <html>。
+   色板取自 VS Code Dark+（暗）/ One Half Light（亮），语义对齐。
+   ===================================================================== */
 :root {
+  /* —— 背景层级（由深到浅）—— */
+  --bg-primary: #1e1e1e;        /* 主背景（body、终端、主面板） */
+  --bg-secondary: #252526;      /* 次级背景（侧栏、次面板） */
+  --bg-tertiary: #2d2d2d;       /* 三级背景（卡片内、分组） */
+  --bg-elevated: #2a2a2a;       /* 浮层/卡片 */
+  --bg-input: #3c3c3c;          /* 输入框、可交互底 */
+  --bg-hover: #3c3c3c;          /* hover 态底色 */
+  --bg-active: #094771;         /* 选中/激活态底色（蓝调） */
+  --bg-active-soft: #2f4a6b;    /* 激活态柔和变体 */
+  --bg-tooltip: #303030;        /* tooltip / 浮层提示 */
+
+  /* —— 边框 —— */
+  --border: #3c3c3c;            /* 主边框 */
+  --border-subtle: #2d2d2d;     /* 次级边框（更弱） */
+  --border-strong: #555;        /* 强调边框 */
+  --border-focus: #007acc;      /* 焦点边框 */
+
+  /* —— 文字层级 —— */
+  --text-primary: #fff;         /* 主文字 */
+  --text-secondary: #ccc;       /* 次级文字 */
+  --text-tertiary: #aaa;        /* 三级文字 */
+  --text-muted: #888;           /* 弱化文字 */
+  --text-disabled: #666;        /* 禁用文字 */
+  --text-on-accent: #fff;       /* 覆盖在 accent 上的文字 */
+
+  /* —— 强调 / 语义色 —— */
+  --accent: #007acc;            /* 主强调（VS Code 蓝） */
+  --accent-hover: #1f8ad3;      /* accent hover */
+  --accent-soft: #2c5d8a;       /* accent 柔和底 */
+  --success: #4caf50;           /* 成功 */
+  --warning: #ff9800;           /* 警告 */
+  --danger: #f44336;            /* 危险/错误 */
+  --danger-bg-subtle: #3a2d2d;  /* 危险柔和底（如断连 tab） */
+  --info: #2196f3;              /* 信息 */
+
+  /* —— 危险/状态文字（用于 badge）—— */
+  --severity-danger: #e06060;
+  --severity-warning: #d4a843;
+  --severity-info: #4a9eda;
+  --severity-success: #6ecf8a;
+  --severity-muted: #888;
+
+  /* —— 遮罩与阴影 —— */
+  --overlay: rgba(0, 0, 0, 0.7);
+  --shadow: rgba(0, 0, 0, 0.4);
+
+  /* —— 滚动条 —— */
   --app-scrollbar-size: 6px;
   --app-scrollbar-track: transparent;
   --app-scrollbar-thumb: #444;
   --app-scrollbar-thumb-hover: #666;
+}
+
+/* —— 亮色主题：覆盖同名 token。色板取自 One Half Light / GitHub Light，
+   yellow 等在白底不可读的色已调暗。data-theme="light" 由切换逻辑写入 <html>。 —— */
+:root[data-theme="light"] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f0f0f0;
+  --bg-tertiary: #e8e8e8;
+  --bg-elevated: #f8f8f8;
+  --bg-input: #ffffff;
+  --bg-hover: #e0e0e0;
+  --bg-active: #cde7ff;
+  --bg-active-soft: #dceeff;
+  --bg-tooltip: #2b2b2b;
+
+  --border: #d0d0d0;
+  --border-subtle: #e0e0e0;
+  --border-strong: #b0b0b0;
+  --border-focus: #0184bc;
+
+  --text-primary: #383a42;
+  --text-secondary: #4f525e;
+  --text-tertiary: #6a737d;
+  --text-muted: #8a8f98;
+  --text-disabled: #b0b0b0;
+  --text-on-accent: #ffffff;
+
+  --accent: #0184bc;
+  --accent-hover: #0a9dd9;
+  --accent-soft: #bfe3f5;
+  --success: #1a7f37;
+  --warning: #b08800;
+  --danger: #cf222e;
+  --danger-bg-subtle: #ffebe9;
+  --info: #0969da;
+
+  --severity-danger: #d1242f;
+  --severity-warning: #bf8700;
+  --severity-info: #0969da;
+  --severity-success: #1a7f37;
+  --severity-muted: #8a8f98;
+
+  --overlay: rgba(0, 0, 0, 0.45);
+  --shadow: rgba(0, 0, 0, 0.15);
+
+  --app-scrollbar-thumb: #b0b0b0;
+  --app-scrollbar-thumb-hover: #888;
 }
 
 #app {

@@ -3,6 +3,7 @@ import { Layout, Model, TabNode, TabSetNode, BorderNode, Actions, DockLocation, 
 import TerminalComponent, { TerminalRef } from '../Terminal/Terminal';
 import FilesPanel from '../Sidebar/FilesPanel';
 import { HighlightRule, TerminalConfig } from '../Terminal/highlightTypes';
+import { Theme } from '../appearanceTypes';
 import { SessionStatus, normalizeProtocol, PROTOCOL_LABEL } from '../../types';
 import { TimestampResult } from '../../utils/timestampParser';
 import { createInitialLayout } from './layoutConfig';
@@ -35,6 +36,7 @@ interface FlexLayoutAdapterProps {
     terminalConfig?: TerminalConfig;
     onTerminalFontSizeChange?: (fontSize: number) => void;
     highlightRules?: HighlightRule[];
+    theme?: Theme;
     onSelectionParsed?: (result: TimestampResult | null) => void;
 }
 
@@ -56,6 +58,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
     terminalConfig,
     onTerminalFontSizeChange,
     highlightRules,
+    theme,
     onSelectionParsed,
 }) => {
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
@@ -234,6 +237,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                 terminalConfig={terminalConfig}
                 onTerminalFontSizeChange={onTerminalFontSizeChange}
                 highlightRules={highlightRules}
+                theme={theme}
                 onSelectionParsed={onSelectionParsed}
                 node={node}
                 isBroadcastMode={isBroadcastMode}
@@ -241,7 +245,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                 onToggleTerminalBroadcast={onToggleTerminalBroadcast}
             />
         );
-    }, [activeTerminalId, terminals, onTerminalData, terminalRefs, completionDelay, terminalConfig, onTerminalFontSizeChange, highlightRules, onSelectionParsed, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast]);
+    }, [activeTerminalId, terminals, onTerminalData, terminalRefs, completionDelay, terminalConfig, onTerminalFontSizeChange, highlightRules, theme, onSelectionParsed, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast]);
 
     // --- Custom tab rendering ---
     const handleRenderTab = useCallback((node: TabNode, renderValues: ITabRenderValues) => {
@@ -522,6 +526,7 @@ interface TerminalWrapperProps {
     terminalConfig?: TerminalConfig;
     onTerminalFontSizeChange?: (fontSize: number) => void;
     highlightRules?: HighlightRule[];
+    theme?: Theme;
     onSelectionParsed?: (result: TimestampResult | null) => void;
     node: TabNode;
     isBroadcastMode?: boolean;
@@ -538,6 +543,7 @@ const TerminalWrapper: React.FC<TerminalWrapperProps> = ({
     terminalConfig,
     onTerminalFontSizeChange,
     highlightRules,
+    theme,
     onSelectionParsed,
     node,
     isBroadcastMode,
@@ -583,6 +589,7 @@ const TerminalWrapper: React.FC<TerminalWrapperProps> = ({
                 terminalConfig={terminalConfig}
                 onFontSizeChange={onTerminalFontSizeChange}
                 highlightRules={highlightRules}
+                theme={theme}
                 onSelectionParsed={onSelectionParsed}
                 ref={(el) => {
                     if (el) {

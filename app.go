@@ -1510,6 +1510,7 @@ func (a *App) initFeedbackStore() {
 
 func (a *App) SaveSettings(cfg config.AppConfig) string {
 	cfg.Terminal = config.NormalizeTerminalConfig(cfg.Terminal)
+	cfg.Appearance = config.NormalizeAppearanceConfig(cfg.Appearance)
 	cfg.PatchStore.Type = "git"
 	cfg.PatchStore.RemoteURL = strings.TrimSpace(cfg.PatchStore.RemoteURL)
 	cfg.PatchStore.Branch = strings.TrimSpace(cfg.PatchStore.Branch)

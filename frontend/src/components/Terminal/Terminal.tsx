@@ -13,6 +13,9 @@ import {
 import { parseTimestamp, TimestampResult } from '../../utils/timestampParser';
 import { SearchController } from './search/SearchController';
 import { RuleHighlightController } from './highlight/RuleHighlightController';
+import { Theme } from '../appearanceTypes';
+import { DEFAULT_THEME } from '../appearance';
+import { getTerminalTheme } from '../../themes/terminalSchemes';
 
 interface TerminalProps {
     id: string;
@@ -22,6 +25,8 @@ interface TerminalProps {
     terminalConfig?: TerminalConfig;
     onFontSizeChange?: (fontSize: number) => void;
     highlightRules?: HighlightRule[];
+    /** 主题模式，驱动终端配色方案切换 */
+    theme?: Theme;
     /** 选区解析回调，用于置顶栏展示时间戳等解析结果 */
     onSelectionParsed?: (result: TimestampResult | null) => void;
 }
@@ -32,9 +37,11 @@ export interface TerminalRef {
     prepareForExternalInput: () => void;
     getCursorScreenPosition: () => { x: number; y: number } | null;
     focus: () => void;
+    /** 运行时切换主题：更新 xterm theme 并刷新，已存在实例无需重建 */
+    applyTheme: (theme: Theme) => void;
 }
 
-const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionID, onData, completionDelay = 150, terminalConfig, onFontSizeChange, highlightRules, onSelectionParsed }, ref) => {
+const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionID, onData, completionDelay = 150, terminalConfig, onFontSizeChange, highlightRules, theme = DEFAULT_THEME, onSelectionParsed }, ref) => {
     const terminalRef = useRef<HTMLDivElement>(null);
     const xtermRef = useRef<Terminal | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
@@ -47,6 +54,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
     const pendingFontSizeRef = useRef(DEFAULT_TERMINAL_FONT_SIZE);
     const zoomIndicatorTimerRef = useRef<number | null>(null);
     const highlightRulesRef = useRef<HighlightRule[] | undefined>(undefined);
+    const themeRef = useRef<Theme>(theme);
 
     // Completion state
     const [completionVisible, setCompletionVisible] = useState(false);
@@ -118,7 +126,8 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         onFontSizeChangeRef.current = onFontSizeChange;
         pendingFontSizeRef.current = clampTerminalFontSize(terminalConfig?.font_size);
         highlightRulesRef.current = highlightRules;
-    }, [onData, onSelectionParsed, sessionID, completionDelay, terminalConfig, onFontSizeChange, highlightRules]);
+        themeRef.current = theme;
+    }, [onData, onSelectionParsed, sessionID, completionDelay, terminalConfig, onFontSizeChange, highlightRules, theme]);
 
     const getSearchEnabled = () => terminalConfigRef.current?.search_enabled ?? true;
 
@@ -543,7 +552,18 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             const x = containerRect.left + cursorX * cellWidth;
             const y = containerRect.top + actualRow * cellHeight + cellHeight;
             return { x, y };
-        }
+        },
+        applyTheme: (nextTheme: Theme) => {
+            themeRef.current = nextTheme;
+            const term = xtermRef.current;
+            if (!term) return;
+            // v6 正确姿势：直接赋值 options.theme + refresh。DOM renderer 无需 clearTextureAtlas。
+            term.options.theme = getTerminalTheme(nextTheme);
+            term.refresh(0, term.rows - 1);
+            // 规则高亮装饰器颜色在创建时固化，需重建以适配新背景（自动对比度补偿在 Phase 4 接入）
+            ruleHighlightControllerRef.current?.invalidate();
+            ruleHighlightControllerRef.current?.schedule('rules');
+        },
     }));
 
     useEffect(() => {
@@ -557,15 +577,8 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             fontSize: clampTerminalFontSize(terminalConfig?.font_size),
             fontWeight: '400',
             fontWeightBold: '700',
-            theme: {
-                background: '#1e1e1e',
-                scrollbarSliderBackground: '#444444',
-                scrollbarSliderHoverBackground: '#666666',
-                scrollbarSliderActiveBackground: '#666666',
-                // 双击选词/拖选选区背景色，沿用 VS Code 深色主题的深蓝，避免默认半透明色在深背景下不显眼（#43）
-                selectionBackground: '#264f78',
-                selectionInactiveBackground: '#1e3a5f',
-            },
+            // 完整配色方案（foreground/cursor/16 ANSI 等），随主题切换。详见 themes/terminalSchemes.ts
+            theme: getTerminalTheme(theme),
             // 扩展分隔符：加入终端常见分隔符 /:=| 等
             // 但不加 . 和 _，这样 sopuesr.iii_yuyu、my_var 等标识符保持为整体
             wordSeparator: ' ()[]{}\'\"`,;:/\\|=<>!@#$%^&*~',
@@ -958,6 +971,18 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         adjustTerminalFontSize,
     ]);
 
+    // 主题切换：更新 xterm 配色 + 重建规则高亮装饰器。
+    // 覆盖「主题变化后该组件实例的响应」；applyThemeAll 命令式调用走 useImperativeHandle。
+    useEffect(() => {
+        const term = xtermRef.current;
+        if (!term) return;
+        themeRef.current = theme;
+        term.options.theme = getTerminalTheme(theme);
+        term.refresh(0, term.rows - 1);
+        ruleHighlightControllerRef.current?.invalidate();
+        ruleHighlightControllerRef.current?.schedule('rules');
+    }, [theme]);
+
     useEffect(() => {
         const term = xtermRef.current;
         if (!term) return;
@@ -991,13 +1016,13 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
     }, [highlightRules, terminalConfig?.highlight_enabled]);
 
     return (
-        <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative', backgroundColor: '#1e1e1e' }}>
+        <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative', backgroundColor: 'var(--bg-primary)' }}>
             <div
                 id={`terminal-${id}`}
                 data-testid={`terminal-container-${id}`}
                 className="terminal-host"
                 ref={terminalRef}
-                style={{ width: '100%', height: '100%', overflow: 'hidden', backgroundColor: '#1e1e1e' }}
+                style={{ width: '100%', height: '100%', overflow: 'hidden', backgroundColor: 'var(--bg-primary)' }}
             />
             <SearchPanel
                 visible={searchVisible && getSearchEnabled()}
@@ -1072,33 +1097,33 @@ const zoomIndicatorStyles: Record<string, React.CSSProperties> = {
         gap: '9px',
         minHeight: '30px',
         padding: '0 10px',
-        border: '1px solid #4a4a4a',
+        border: `1px solid var(--border-strong)`,
         borderRadius: '5px',
-        backgroundColor: 'rgba(43, 43, 43, 0.96)',
-        boxShadow: '0 4px 14px rgba(0, 0, 0, 0.35)',
-        color: '#d4d4d4',
+        backgroundColor: 'var(--bg-tooltip)',
+        boxShadow: '0 4px 14px var(--shadow)',
+        color: 'var(--text-secondary)',
         fontSize: '12px',
         lineHeight: 1,
         userSelect: 'none',
     },
     current: {
-        color: '#f0f0f0',
+        color: 'var(--text-primary)',
         fontWeight: 500,
     },
     separator: {
         width: '1px',
         height: '14px',
-        backgroundColor: '#555555',
+        backgroundColor: 'var(--border-strong)',
     },
     defaultLabel: {
-        color: '#909090',
+        color: 'var(--text-tertiary)',
     },
     resetButton: {
         minHeight: '28px',
         padding: '0',
         border: 'none',
         background: 'transparent',
-        color: '#4aa3df',
+        color: 'var(--accent-hover)',
         font: 'inherit',
         cursor: 'pointer',
     },
