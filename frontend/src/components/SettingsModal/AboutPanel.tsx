@@ -617,12 +617,15 @@ const styles: Record<string, React.CSSProperties> = {
         border: `1px solid var(--danger-tint-border)`,
     },
     // 版本日志翻页容器：左右按钮 + 单张卡片
+    // 约束：卡片高度按窗口大小计算（100vh - 固定占位）——同一窗口下恒定，翻页/加载横幅
+    // 出现消失都不会改变高度，左右箭头（top:50% 定位）位置始终稳定
     releasePager: {
         position: 'relative',
         display: 'flex',
         alignItems: 'stretch',
         marginTop: '2px',
         minHeight: '304px',
+        height: 'calc(100vh - 295px)',
         padding: '0 42px',
     },
     pagerArrow: {
@@ -747,10 +750,10 @@ const styles: Record<string, React.CSSProperties> = {
     },
     releaseBody: {
         flex: 1,
+        minHeight: 0,
         color: colors.textSecondary,
         fontSize: font.sm,
         lineHeight: 1.6,
-        maxHeight: '206px',
         overflowY: 'auto',
         paddingRight: '6px',
     },

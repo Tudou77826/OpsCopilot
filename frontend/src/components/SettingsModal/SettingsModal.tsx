@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { TbRobot, TbPalette, TbKeyboard, TbLayoutGrid, TbBooks, TbShieldCheck, TbLock, TbSettings, TbInfoCircle, TbSearch, TbPlugConnected, TbTerminal2, TbMinus, TbPlus, TbRefresh, TbCheck, TbSun, TbMoon } from 'react-icons/tb';
+import { TbRobot, TbPalette, TbKeyboard, TbLayoutGrid, TbBooks, TbShieldCheck, TbLock, TbSettings, TbInfoCircle, TbSearch, TbPlugConnected, TbMinus, TbPlus, TbRefresh, TbCheck, TbSun, TbMoon } from 'react-icons/tb';
 import KeysMap from './KeysMap';
 import HighlightRulesModal from './HighlightRulesModal';
 import CommandWhitelistPanel from './CommandWhitelist/CommandWhitelistPanel';
@@ -16,7 +16,7 @@ import {
     clampTerminalFontSize,
     normalizeTerminalConfig,
 } from '../Terminal/terminalAppearance';
-import { colors, radius, font, inputStyle, btnSecondary, descStyle, labelStyle, sectionTitle } from './settingsStyles';
+import { colors, radius, font, inputStyle, btnSecondary, descStyle, labelStyle, pageContainer, settingsCard, cardTitle, settingRow, settingRowTop, settingRowLeft, settingRowRight, settingRowLabel, settingRowDesc, navGroupTitle, navItem, navItemActive, cardDivider, inputWide } from './settingsStyles';
 import Switch from './Switch';
 
 interface AppConfig {
@@ -83,6 +83,8 @@ interface NavItem {
     label: string;
     icon: React.ReactNode;
     category: string;
+    // 额外搜索关键词（如合并进其它页面的功能名），搜索时一并匹配
+    keywords?: string[];
 }
 
 const defaultPatchStore = {
@@ -133,7 +135,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
     const [activeTab, setActiveTab] = useState<TabId>('llm');
-    const [rulesModalOpen, setRulesModalOpen] = useState(false);
     const [importDir, setImportDir] = useState('');
     const [importLoading, setImportLoading] = useState(false);
     const [importMsg, setImportMsg] = useState('');
@@ -156,8 +157,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     // Navigation items structure
     const navItems: NavItem[] = [
         { id: 'llm', label: '模型服务', icon: TbRobot({}), category: 'AI' },
-        { id: 'appearance', label: '外观', icon: TbSun({}), category: '终端' },
-        { id: 'terminal', label: '终端外观', icon: TbTerminal2({}), category: '终端' },
+        { id: 'appearance', label: '外观', icon: TbSun({}), category: '终端', keywords: ['终端外观', '终端', '字体', '字号', 'theme', '主题'] },
         { id: 'highlight', label: '突出显示', icon: TbPalette({}), category: '终端' },
         { id: 'shortcuts', label: '快捷键', icon: TbKeyboard({}), category: '交互' },
         { id: 'broadcast', label: '多窗口', icon: TbLayoutGrid({}), category: '交互' },
@@ -178,9 +178,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         return navItems.filter(item =>
             item.label.toLowerCase().includes(query) ||
             item.category.toLowerCase().includes(query) ||
-            item.id.toLowerCase().includes(query)
+            item.id.toLowerCase().includes(query) ||
+            (item.keywords || []).some(k => k.toLowerCase().includes(query))
         );
     }, [searchQuery, navItems]);
+
+    // 按 category 分组导航项（保持原有顺序，搜索时自动折叠为命中的组）
+    const groupedNavItems = useMemo(() => {
+        const groups: { category: string; items: NavItem[] }[] = [];
+        for (const item of filteredNavItems) {
+            const last = groups[groups.length - 1];
+            if (last && last.category === item.category) {
+                last.items.push(item);
+            } else {
+                groups.push({ category: item.category, items: [item] });
+            }
+        }
+        return groups;
+    }, [filteredNavItems]);
 
     useEffect(() => {
         if (isOpen) {
@@ -378,25 +393,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         }
     };
 
-    const handleHighlightRulesSave = async (rules: HighlightRule[]) => {
-        if (!config) return;
-        const newConfig = { ...config, highlight_rules: rules };
-        setConfig(newConfig);
-        try {
-            // @ts-ignore
-            const err = await window.go.main.App.SaveHighlightRules(rules);
-            if (err) {
-                setMsg('错误: ' + err);
-            } else {
-                if (onHighlightRulesChange) {
-                    onHighlightRulesChange(rules);
-                }
-            }
-        } catch (e: any) {
-            setMsg('错误: ' + e.toString());
-        }
-    };
-
     const handleClose = () => {
         onClose();
     };
@@ -561,16 +557,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         let message = '';
         let tone: 'warning' | 'accent' = 'accent';
         if (!skillDir) {
-            message = '尚未配置 skill 安装目录，AI Agent 暂时无法调用 OpsCopilot。请在下方填写目录后点击「检测状态」。';
+            message = '尚未配置 skill 目录，AI Agent 无法调用 OpsCopilot。请填写目录后点击「检测状态」。';
             tone = 'warning';
         } else if (skillState === 'not_installed') {
-            message = `目录「${skillDir}」下尚未安装 OpsCopilot skill，请点击下方「安装」。`;
+            message = '目录下尚未安装 OpsCopilot skill，请点击「安装」。';
             tone = 'warning';
         } else if (skillState === 'outdated') {
             const ver = skillInstalledVer && skillBuiltinVer
                 ? `（v${skillInstalledVer} → v${skillBuiltinVer}）`
                 : '';
-            message = `已安装的 skill 有新版本可更新${ver}，建议点击下方「更新」。`;
+            message = `skill 有新版本可更新${ver}，建议点击「更新」。`;
             tone = 'accent';
         }
         if (!message) return null;
@@ -587,206 +583,249 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         );
     };
 
+    // 终端外观卡片（收纳在「外观」页中，与主题设置同页展示）
+    const renderTerminalAppearance = () => {
+        const terminal = normalizeTerminalConfig(config.terminal);
+        const fontSize = clampTerminalFontSize(terminal.font_size);
+        const updateTerminal = (patch: Partial<TerminalConfig>) => {
+            setConfig({
+                ...config,
+                terminal: normalizeTerminalConfig({ ...terminal, ...patch }),
+            });
+        };
+        return (
+            <div style={styles.card}>
+                <div style={styles.cardTitle}>终端外观</div>
+                {/* 字体：独立区块占满卡片宽度，卡片 grid 自适应多列 */}
+                <div style={{ ...styles.row, ...styles.rowTop, paddingBottom: '8px' }}>
+                    <div style={styles.rowLeft}>
+                        <div style={styles.rowLabel} id="terminal-font-family-label">字体</div>
+                        <div style={styles.rowDesc}>
+                            选择终端使用的等宽字体，字体卡片中展示实际渲染效果
+                        </div>
+                    </div>
+                </div>
+                <div
+                    style={styles.fontPreviewList}
+                    role="radiogroup"
+                    aria-labelledby="terminal-font-family-label"
+                >
+                    {TERMINAL_FONT_OPTIONS.map(option => {
+                        const selected = terminal.font_family === option.value;
+                        return (
+                            <button
+                                key={option.value}
+                                type="button"
+                                className="terminal-font-card"
+                                role="radio"
+                                aria-checked={selected}
+                                aria-label={`${option.label}：${option.description}`}
+                                style={{
+                                    ...styles.fontPreviewCard,
+                                    ...(selected ? styles.fontPreviewCardSelected : {}),
+                                }}
+                                onClick={() => updateTerminal({ font_family: option.value })}
+                            >
+                                <span style={styles.fontPreviewHeader}>
+                                    <span>
+                                        <strong style={styles.fontPreviewName}>{option.label}</strong>
+                                        <span style={styles.fontPreviewDescription}>{option.description}</span>
+                                    </span>
+                                    <span style={{
+                                        ...styles.fontSelectedIndicator,
+                                        opacity: selected ? 1 : 0,
+                                    }} aria-hidden="true">
+                                        {TbCheck({ size: 14 })}
+                                    </span>
+                                </span>
+                                <span style={{ ...styles.fontPreviewSample, fontFamily: option.stack }}>
+                                    ops@node:~$ ls -la&nbsp;&nbsp;01Il0O&nbsp;&nbsp;()[]
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+                <div style={styles.cardDivider} />
+                <div style={styles.row}>
+                    <div style={styles.rowLeft}>
+                        <label style={styles.rowLabel} htmlFor="terminal-font-size">字号</label>
+                        <div style={styles.rowDesc}>
+                            支持 {MIN_TERMINAL_FONT_SIZE}–{MAX_TERMINAL_FONT_SIZE}px；终端内可使用 Ctrl + 滚轮、Ctrl +/− 和 Ctrl + 0 快速调整。
+                        </div>
+                    </div>
+                    <div style={styles.rowRight}>
+                        <div style={styles.fontSizeRow}>
+                            <button
+                                type="button"
+                                style={styles.fontSizeButton}
+                                onClick={() => updateTerminal({ font_size: fontSize - 1 })}
+                                disabled={fontSize <= MIN_TERMINAL_FONT_SIZE}
+                                aria-label="减小终端字号"
+                            >
+                                {TbMinus({ size: 16 })}
+                            </button>
+                            <div style={styles.fontSizeInputWrap}>
+                                <input
+                                    id="terminal-font-size"
+                                    className="terminal-font-size-input"
+                                    type="number"
+                                    min={MIN_TERMINAL_FONT_SIZE}
+                                    max={MAX_TERMINAL_FONT_SIZE}
+                                    style={styles.fontSizeInput}
+                                    value={fontSize}
+                                    onChange={(event) => updateTerminal({ font_size: Number(event.target.value) })}
+                                />
+                                <span style={styles.fontSizeUnit}>px</span>
+                            </div>
+                            <button
+                                type="button"
+                                style={styles.fontSizeButton}
+                                onClick={() => updateTerminal({ font_size: fontSize + 1 })}
+                                disabled={fontSize >= MAX_TERMINAL_FONT_SIZE}
+                                aria-label="增大终端字号"
+                            >
+                                {TbPlus({ size: 16 })}
+                            </button>
+                            <button
+                                type="button"
+                                style={styles.resetAppearanceButton}
+                                onClick={() => updateTerminal({ font_family: 'JetBrains Mono', font_size: DEFAULT_TERMINAL_FONT_SIZE })}
+                            >
+                                {TbRefresh({ size: 15 })}
+                                恢复默认
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     // Render tab content
     const renderTabContent = () => {
         switch (activeTab) {
             case 'llm':
                 return (
                     <div style={styles.settingsGroup}>
-                        <div style={styles.groupTitle}>基础配置</div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>API 地址 (Base URL)</label>
-                            <input
-                                style={styles.input}
-                                value={config.llm.BaseURL}
-                                onChange={(e) => handleChange('llm', 'BaseURL', e.target.value)}
-                                placeholder="https://api.openai.com/v1"
-                            />
-                        </div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>API 密钥 (API Key)</label>
-                            <input
-                                style={styles.input}
-                                type="password"
-                                value={config.llm.APIKey}
-                                onChange={(e) => handleChange('llm', 'APIKey', e.target.value)}
-                            />
-                        </div>
-                        <div style={styles.groupTitle}>模型选择</div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>快速模型（简单任务）</label>
-                            <input
-                                style={styles.input}
-                                value={config.llm.FastModel}
-                                onChange={(e) => handleChange('llm', 'FastModel', e.target.value)}
-                                placeholder="deepseek-chat"
-                            />
-                        </div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>复杂模型（长上下文任务）</label>
-                            <input
-                                style={styles.input}
-                                value={config.llm.ComplexModel}
-                                onChange={(e) => handleChange('llm', 'ComplexModel', e.target.value)}
-                                placeholder="glm46"
-                            />
-                        </div>
-                    </div>
-                );
-
-            case 'terminal': {
-                const terminal = normalizeTerminalConfig(config.terminal);
-                const fontSize = clampTerminalFontSize(terminal.font_size);
-                const updateTerminal = (patch: Partial<TerminalConfig>) => {
-                    setConfig({
-                        ...config,
-                        terminal: normalizeTerminalConfig({ ...terminal, ...patch }),
-                    });
-                };
-                return (
-                    <div style={styles.settingsGroup}>
-                        <div style={styles.groupTitle}>终端外观</div>
-                        <div style={styles.settingItem}>
-                            <div id="terminal-font-family-label" style={styles.settingLabel}>字体</div>
-                            <div
-                                style={styles.fontPreviewList}
-                                role="radiogroup"
-                                aria-labelledby="terminal-font-family-label"
-                            >
-                                {TERMINAL_FONT_OPTIONS.map(option => {
-                                    const selected = terminal.font_family === option.value;
-                                    return (
-                                        <button
-                                            key={option.value}
-                                            type="button"
-                                            className="terminal-font-card"
-                                            role="radio"
-                                            aria-checked={selected}
-                                            aria-label={`${option.label}：${option.description}`}
-                                            style={{
-                                                ...styles.fontPreviewCard,
-                                                ...(selected ? styles.fontPreviewCardSelected : {}),
-                                            }}
-                                            onClick={() => updateTerminal({ font_family: option.value })}
-                                        >
-                                            <span style={styles.fontPreviewHeader}>
-                                                <span>
-                                                    <strong style={styles.fontPreviewName}>{option.label}</strong>
-                                                    <span style={styles.fontPreviewDescription}>{option.description}</span>
-                                                </span>
-                                                <span style={{
-                                                    ...styles.fontSelectedIndicator,
-                                                    opacity: selected ? 1 : 0,
-                                                }} aria-hidden="true">
-                                                    {TbCheck({ size: 14 })}
-                                                </span>
-                                            </span>
-                                            <span style={{ ...styles.fontPreviewSample, fontFamily: option.stack }}>
-                                                ops@node:~$ ls -la&nbsp;&nbsp;01Il0O&nbsp;&nbsp;()[]
-                                            </span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                        <div style={styles.settingItem}>
-                            <label htmlFor="terminal-font-size" style={styles.settingLabel}>字号</label>
-                            <div style={styles.fontSizeRow}>
-                                <button
-                                    type="button"
-                                    style={styles.fontSizeButton}
-                                    onClick={() => updateTerminal({ font_size: fontSize - 1 })}
-                                    disabled={fontSize <= MIN_TERMINAL_FONT_SIZE}
-                                    aria-label="减小终端字号"
-                                >
-                                    {TbMinus({ size: 16 })}
-                                </button>
-                                <div style={styles.fontSizeInputWrap}>
-                                    <input
-                                        id="terminal-font-size"
-                                        className="terminal-font-size-input"
-                                        type="number"
-                                        min={MIN_TERMINAL_FONT_SIZE}
-                                        max={MAX_TERMINAL_FONT_SIZE}
-                                        style={styles.fontSizeInput}
-                                        value={fontSize}
-                                        onChange={(event) => updateTerminal({ font_size: Number(event.target.value) })}
-                                    />
-                                    <span style={styles.fontSizeUnit}>px</span>
+                        <div style={styles.card}>
+                            <div style={styles.cardTitle}>基础配置</div>
+                            <div style={styles.row}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>API 地址 (Base URL)</div>
+                                    <div style={styles.rowDesc}>模型服务的 API 端点地址</div>
                                 </div>
-                                <button
-                                    type="button"
-                                    style={styles.fontSizeButton}
-                                    onClick={() => updateTerminal({ font_size: fontSize + 1 })}
-                                    disabled={fontSize >= MAX_TERMINAL_FONT_SIZE}
-                                    aria-label="增大终端字号"
-                                >
-                                    {TbPlus({ size: 16 })}
-                                </button>
-                                <button
-                                    type="button"
-                                    style={styles.resetAppearanceButton}
-                                    onClick={() => updateTerminal({ font_family: 'JetBrains Mono', font_size: DEFAULT_TERMINAL_FONT_SIZE })}
-                                >
-                                    {TbRefresh({ size: 15 })}
-                                    恢复默认
-                                </button>
+                                <div style={styles.rowRight}>
+                                    <input
+                                        style={styles.inputWide}
+                                        value={config.llm.BaseURL}
+                                        onChange={(e) => handleChange('llm', 'BaseURL', e.target.value)}
+                                        placeholder="https://api.openai.com/v1"
+                                    />
+                                </div>
                             </div>
-                            <div style={styles.settingDescription}>
-                                支持 {MIN_TERMINAL_FONT_SIZE}–{MAX_TERMINAL_FONT_SIZE}px；终端内可使用 Ctrl + 滚轮、Ctrl +/− 和 Ctrl + 0 快速调整。
+                            <div style={styles.row}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>API 密钥 (API Key)</div>
+                                    <div style={styles.rowDesc}>用于调用模型服务的身份验证密钥</div>
+                                </div>
+                                <div style={styles.rowRight}>
+                                    <input
+                                        style={styles.inputWide}
+                                        type="password"
+                                        value={config.llm.APIKey}
+                                        onChange={(e) => handleChange('llm', 'APIKey', e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <div style={styles.card}>
+                            <div style={styles.cardTitle}>模型选择</div>
+                            <div style={styles.row}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>快速模型（简单任务）</div>
+                                    <div style={styles.rowDesc}>用于意图识别、命令补全等轻量任务</div>
+                                </div>
+                                <div style={styles.rowRight}>
+                                    <input
+                                        style={styles.inputWide}
+                                        value={config.llm.FastModel}
+                                        onChange={(e) => handleChange('llm', 'FastModel', e.target.value)}
+                                        placeholder="deepseek-chat"
+                                    />
+                                </div>
+                            </div>
+                            <div style={styles.row}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>复杂模型（长上下文任务）</div>
+                                    <div style={styles.rowDesc}>用于故障诊断、知识问答等复杂任务</div>
+                                </div>
+                                <div style={styles.rowRight}>
+                                    <input
+                                        style={styles.inputWide}
+                                        value={config.llm.ComplexModel}
+                                        onChange={(e) => handleChange('llm', 'ComplexModel', e.target.value)}
+                                        placeholder="glm46"
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>
                 );
-            }
 
             case 'appearance':
                 return (
                     <div style={styles.settingsGroup}>
-                        <div style={styles.groupTitle}>主题</div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>界面主题</label>
-                            <div style={styles.themeChoiceRow} role="radiogroup" aria-label="界面主题">
-                                <button
-                                    type="button"
-                                    role="radio"
-                                    aria-checked={theme === 'dark'}
-                                    style={{
-                                        ...styles.themeChoiceCard,
-                                        ...(theme === 'dark' ? styles.themeChoiceCardActive : {}),
-                                    }}
-                                    onClick={() => onThemeChange?.('dark')}
-                                >
-                                    {TbMoon({ size: 16 })}
-                                    <span>暗色</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    role="radio"
-                                    aria-checked={theme === 'light'}
-                                    style={{
-                                        ...styles.themeChoiceCard,
-                                        ...(theme === 'light' ? styles.themeChoiceCardActive : {}),
-                                    }}
-                                    onClick={() => onThemeChange?.('light')}
-                                >
-                                    {TbSun({ size: 16 })}
-                                    <span>亮色</span>
-                                </button>
-                            </div>
-                            <div style={styles.settingDescription}>
-                                切换后立即生效并保存到配置；终端配色、界面背景与文字颜色会同步适配。
+                        <div style={styles.card}>
+                            <div style={styles.cardTitle}>主题</div>
+                            <div style={styles.row}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>界面主题</div>
+                                    <div style={styles.rowDesc}>
+                                        切换后立即生效并保存到配置；终端配色、界面背景与文字颜色会同步适配。
+                                    </div>
+                                </div>
+                                <div style={styles.rowRight}>
+                                    <div style={styles.themeChoiceRow} role="radiogroup" aria-label="界面主题">
+                                        <button
+                                            type="button"
+                                            role="radio"
+                                            aria-checked={theme === 'dark'}
+                                            style={{
+                                                ...styles.themeChoiceCard,
+                                                ...(theme === 'dark' ? styles.themeChoiceCardActive : {}),
+                                            }}
+                                            onClick={() => onThemeChange?.('dark')}
+                                        >
+                                            {TbMoon({ size: 16 })}
+                                            <span>暗色</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            role="radio"
+                                            aria-checked={theme === 'light'}
+                                            style={{
+                                                ...styles.themeChoiceCard,
+                                                ...(theme === 'light' ? styles.themeChoiceCardActive : {}),
+                                            }}
+                                            onClick={() => onThemeChange?.('light')}
+                                        >
+                                            {TbSun({ size: 16 })}
+                                            <span>亮色</span>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
+                        {/* 终端外观已收纳在本页 */}
+                        {renderTerminalAppearance()}
                     </div>
                 );
 
             case 'highlight':
                 return (
                     <div style={styles.settingsGroup}>
-                        <div style={styles.groupTitle}>突出显示规则</div>
                         {highlightIssues.length > 0 && (
-                            <div style={{ ...styles.attentionBanner, borderLeftColor: colors.warning, marginBottom: '12px' }}>
+                            <div style={{ ...styles.attentionBanner, borderLeftColor: colors.warning, marginBottom: '4px' }}>
                                 <span style={{ color: colors.warning }}>{TbInfoCircle({ size: 16 })}</span>
                                 <div style={styles.attentionText}>
                                     <div style={{ marginBottom: '6px' }}>
@@ -802,17 +841,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 </div>
                             </div>
                         )}
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>管理突出显示集</label>
-                            <button
-                                onClick={() => setRulesModalOpen(true)}
-                                style={styles.secondaryButton}
-                            >
-                                打开突出显示设置
-                            </button>
-                            <div style={styles.settingDescription}>
-                                当前已启用 {config.highlight_rules?.filter(r => r.is_enabled).length || 0} 条规则
-                            </div>
+                        <div style={styles.card}>
+                            <div style={styles.cardTitle}>突出显示规则</div>
+                            {/* 规则编辑直接内嵌在本页，无需二层弹窗 */}
+                            <HighlightRulesModal
+                                isOpen={true}
+                                rules={config.highlight_rules || []}
+                                onChange={(rules) => {
+                                    setConfig({ ...config, highlight_rules: rules });
+                                }}
+                                onClose={() => {}}
+                                embedded
+                            />
                         </div>
                     </div>
                 );
@@ -820,48 +860,60 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             case 'shortcuts':
                 return (
                     <div style={styles.settingsGroup}>
-                        <div style={styles.groupTitle}>快捷键配置</div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>命令查询快捷键</label>
-                            <input
-                                style={styles.input}
-                                value={formatShortcutLabel(config.command_query_shortcut)}
-                                onChange={(e) => {
-                                    setConfig({
-                                        ...config,
-                                        command_query_shortcut: e.target.value
-                                    });
-                                }}
-                                placeholder="例如：Ctrl+K"
-                            />
-                            <div style={styles.settingDescription}>
-                                呼出命令查询弹窗的快捷键组合（支持 Ctrl+字母、Ctrl+Shift+字母 等格式）
+                        <div style={styles.card}>
+                            <div style={styles.cardTitle}>快捷键配置</div>
+                            <div style={styles.row}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>命令查询快捷键</div>
+                                    <div style={styles.rowDesc}>
+                                        呼出命令查询弹窗的快捷键组合（支持 Ctrl+字母、Ctrl+Shift+字母 等格式）
+                                    </div>
+                                </div>
+                                <div style={styles.rowRight}>
+                                    <input
+                                        style={styles.inputWide}
+                                        value={formatShortcutLabel(config.command_query_shortcut)}
+                                        onChange={(e) => {
+                                            setConfig({
+                                                ...config,
+                                                command_query_shortcut: e.target.value
+                                            });
+                                        }}
+                                        placeholder="例如：Ctrl+K"
+                                    />
+                                </div>
                             </div>
                         </div>
-                        <div style={styles.groupTitle}>快捷键说明</div>
-                        <KeysMap commandQueryShortcut={formatShortcutLabel(config.command_query_shortcut)} />
+                        <div style={styles.card}>
+                            <div style={styles.cardTitle}>快捷键说明</div>
+                            <KeysMap commandQueryShortcut={formatShortcutLabel(config.command_query_shortcut)} />
+                        </div>
                     </div>
                 );
 
             case 'broadcast':
                 return (
                     <div style={styles.settingsGroup}>
-                        <div style={styles.groupTitle}>多窗口广播模式</div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>启用广播模式</label>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <Switch
-                                    checked={!!isBroadcastMode}
-                                    onChange={(v) => {
-                                        if (onToggleBroadcast) onToggleBroadcast(v);
-                                    }}
-                                />
-                                <span style={{ color: colors.textSecondary, fontSize: font.base }}>
-                                    {isBroadcastMode ? '已开启' : '已关闭'}
-                                </span>
-                            </div>
-                            <div style={styles.settingDescription}>
-                                开启后，默认将当前所有打开的终端加入广播组。您可以在标签页上单独切换每个终端的广播状态。
+                        <div style={styles.card}>
+                            <div style={styles.cardTitle}>多窗口广播模式</div>
+                            <div style={styles.row}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>启用广播模式</div>
+                                    <div style={styles.rowDesc}>
+                                        开启后，默认将当前所有打开的终端加入广播组。您可以在标签页上单独切换每个终端的广播状态。
+                                    </div>
+                                </div>
+                                <div style={styles.rowRight}>
+                                    <Switch
+                                        checked={!!isBroadcastMode}
+                                        onChange={(v) => {
+                                            if (onToggleBroadcast) onToggleBroadcast(v);
+                                        }}
+                                    />
+                                    <span style={{ color: colors.textSecondary, fontSize: font.base }}>
+                                        {isBroadcastMode ? '已开启' : '已关闭'}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -870,81 +922,99 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             case 'knowledge':
                 return (
                     <div style={styles.settingsGroup}>
-                        <div style={styles.groupTitle}>知识共享</div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>启用补丁同步</label>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <Switch
-                                    checked={!!config.patch_store?.enabled}
-                                    onChange={(v) => handlePatchStoreChange('enabled', v)}
-                                />
-                                <span style={{ color: colors.textSecondary, fontSize: font.base }}>
-                                    {config.patch_store?.enabled ? '已开启' : '已关闭'}
-                                </span>
+                        <div style={styles.card}>
+                            <div style={styles.cardTitle}>知识共享</div>
+                            <div style={styles.row}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>启用补丁同步</div>
+                                    <div style={styles.rowDesc}>
+                                        归档后会将最新场景以补丁形式推送到共享 Git 仓库，保存后立即重载当前同步配置
+                                    </div>
+                                </div>
+                                <div style={styles.rowRight}>
+                                    <Switch
+                                        checked={!!config.patch_store?.enabled}
+                                        onChange={(v) => handlePatchStoreChange('enabled', v)}
+                                    />
+                                    <span style={{ color: colors.textSecondary, fontSize: font.base }}>
+                                        {config.patch_store?.enabled ? '已开启' : '已关闭'}
+                                    </span>
+                                </div>
                             </div>
-                            <div style={styles.settingDescription}>
-                                归档后会将最新场景以补丁形式推送到共享 Git 仓库，保存后立即重载当前同步配置
+                            <div style={styles.cardDivider} />
+                            <div style={styles.row}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>Git 仓库地址</div>
+                                    <div style={styles.rowDesc}>
+                                        支持本地路径、SSH 或 HTTPS 地址；认证依赖本机 Git 凭据、SSH Agent 或系统凭据管理
+                                    </div>
+                                </div>
+                                <div style={styles.rowRight}>
+                                    <input
+                                        style={styles.inputWide}
+                                        value={config.patch_store?.remote_url || ''}
+                                        onChange={(e) => handlePatchStoreChange('remote_url', e.target.value)}
+                                        placeholder="例如：git@github.com:team/opscopilot-patches.git"
+                                    />
+                                </div>
                             </div>
-                        </div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>Git 仓库地址</label>
-                            <input
-                                style={styles.input}
-                                value={config.patch_store?.remote_url || ''}
-                                onChange={(e) => handlePatchStoreChange('remote_url', e.target.value)}
-                                placeholder="例如：git@github.com:team/opscopilot-patches.git"
-                            />
-                            <div style={styles.settingDescription}>
-                                支持本地路径、SSH 或 HTTPS 地址；认证依赖本机 Git 凭据、SSH Agent 或系统凭据管理
-                            </div>
-                        </div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>同步分支</label>
-                            <input
-                                style={styles.input}
-                                value={config.patch_store?.branch || defaultPatchStore.branch}
-                                onChange={(e) => handlePatchStoreChange('branch', e.target.value)}
-                                placeholder="main"
-                            />
-                            <div style={styles.settingDescription}>
-                                作者名自动读取本机 `git config user.name`，无需再手动填写
-                            </div>
-                        </div>
-                        <div style={styles.groupTitle}>同步状态</div>
-                        <div style={styles.statusGrid}>
-                            <div style={styles.statusCard}>
-                                <div style={styles.statusCardLabel}>当前状态</div>
-                                <div style={styles.statusCardValue}>{renderPatchSyncState()}</div>
-                            </div>
-                            <div style={styles.statusCard}>
-                                <div style={styles.statusCardLabel}>待上传补丁</div>
-                                <div style={styles.statusCardValue}>{patchSyncStatus.pendingCount}</div>
-                            </div>
-                            <div style={styles.statusCard}>
-                                <div style={styles.statusCardLabel}>最近同步时间</div>
-                                <div style={styles.statusCardValue}>{patchSyncStatus.lastSyncAt || '暂无'}</div>
+                            <div style={styles.row}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>同步分支</div>
+                                    <div style={styles.rowDesc}>
+                                        作者名自动读取本机 `git config user.name`，无需再手动填写
+                                    </div>
+                                </div>
+                                <div style={styles.rowRight}>
+                                    <input
+                                        style={styles.inputWide}
+                                        value={config.patch_store?.branch || defaultPatchStore.branch}
+                                        onChange={(e) => handlePatchStoreChange('branch', e.target.value)}
+                                        placeholder="main"
+                                    />
+                                </div>
                             </div>
                         </div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>手动重试</label>
-                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' as const }}>
-                                <button
-                                    onClick={handleRetryPatchSync}
-                                    style={styles.secondaryButton}
-                                    disabled={patchSyncLoading || patchSyncStatus.running || !patchSyncStatus.enabled || !patchSyncStatus.configured}
-                                >
-                                    {patchSyncStatus.running ? '正在同步...' : '立即重试同步'}
-                                </button>
-                                <button
-                                    onClick={loadPatchSyncStatus}
-                                    style={styles.secondaryButton}
-                                    disabled={patchSyncLoading}
-                                >
-                                    刷新状态
-                                </button>
+                        <div style={styles.card}>
+                            <div style={styles.cardTitle}>同步状态</div>
+                            <div style={{ ...styles.statusGrid, maxWidth: '760px' }}>
+                                <div style={styles.statusCard}>
+                                    <div style={styles.statusCardLabel}>当前状态</div>
+                                    <div style={styles.statusCardValue}>{renderPatchSyncState()}</div>
+                                </div>
+                                <div style={styles.statusCard}>
+                                    <div style={styles.statusCardLabel}>待上传补丁</div>
+                                    <div style={styles.statusCardValue}>{patchSyncStatus.pendingCount}</div>
+                                </div>
+                                <div style={styles.statusCard}>
+                                    <div style={styles.statusCardLabel}>最近同步时间</div>
+                                    <div style={styles.statusCardValue}>{patchSyncStatus.lastSyncAt || '暂无'}</div>
+                                </div>
                             </div>
-                            <div style={styles.settingDescription}>
-                                {patchSyncStatus.lastSyncMessage || '保存配置后会自动刷新运行中的补丁同步实例'}
+                            <div style={styles.cardDivider} />
+                            <div style={styles.row}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>手动重试</div>
+                                    <div style={styles.rowDesc}>
+                                        {patchSyncStatus.lastSyncMessage || '保存配置后会自动刷新运行中的补丁同步实例'}
+                                    </div>
+                                </div>
+                                <div style={styles.rowRight}>
+                                    <button
+                                        onClick={handleRetryPatchSync}
+                                        style={styles.secondaryButton}
+                                        disabled={patchSyncLoading || patchSyncStatus.running || !patchSyncStatus.enabled || !patchSyncStatus.configured}
+                                    >
+                                        {patchSyncStatus.running ? '正在同步...' : '立即重试同步'}
+                                    </button>
+                                    <button
+                                        onClick={loadPatchSyncStatus}
+                                        style={styles.secondaryButton}
+                                        disabled={patchSyncLoading}
+                                    >
+                                        刷新状态
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -954,77 +1024,87 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 return (
                     <div style={styles.settingsGroup}>
                         {renderSkillAttentionBanner()}
-                        <div style={styles.groupTitle}>Skill 安装</div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>安装 Skill 到 AI Agent</label>
-                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' as const }}>
-                                <input
-                                    style={{ ...styles.input, flex: 1, minWidth: '320px' }}
-                                    value={skillDir}
-                                    onChange={(e) => {
-                                        setSkillDir(e.target.value);
-                                        // 改动目录后重置状态，避免显示陈旧的版本对比
-                                        setSkillState('unknown');
-                                        setSkillMsg('');
-                                    }}
-                                    placeholder="例如：C:\\Users\\xxx\\.claude\\skills"
-                                />
-                                <button
-                                    onClick={handleCheckSkill}
-                                    style={styles.secondaryButton}
-                                    disabled={skillLoading}
-                                >
-                                    {skillLoading ? '检测中...' : '检测状态'}
-                                </button>
-                                <button
-                                    onClick={handleInstallSkill}
-                                    style={styles.secondaryButton}
-                                    disabled={skillLoading}
-                                >
-                                    {skillState === 'not_installed' ? '安装'
-                                        : skillState === 'outdated' ? '更新'
-                                        : skillState === 'up_to_date' ? '重新安装'
-                                        : '安装/更新'}
-                                </button>
+                        <div style={styles.card}>
+                            <div style={styles.cardTitle}>Skill 安装</div>
+                            <div style={styles.rowTop}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>安装 Skill 到 AI Agent</div>
+                                    <div style={styles.rowDesc}>
+                                        以 Claude Code skill 格式安装到指定目录（opscopilot-ops/ 子目录），
+                                        AI Agent 即可调用 OpsCopilot 执行运维操作和故障诊断。
+                                    </div>
+                                </div>
+                                <div style={styles.rowRight}>
+                                    <input
+                                        style={styles.inputWide}
+                                        value={skillDir}
+                                        onChange={(e) => {
+                                            setSkillDir(e.target.value);
+                                            // 改动目录后重置状态，避免显示陈旧的版本对比
+                                            setSkillState('unknown');
+                                            setSkillMsg('');
+                                        }}
+                                        placeholder="例如：C:\\Users\\xxx\\.claude\\skills"
+                                    />
+                                    <button
+                                        onClick={handleCheckSkill}
+                                        style={styles.secondaryButton}
+                                        disabled={skillLoading}
+                                    >
+                                        {skillLoading ? '检测中...' : '检测状态'}
+                                    </button>
+                                    <button
+                                        onClick={handleInstallSkill}
+                                        style={styles.secondaryButton}
+                                        disabled={skillLoading}
+                                    >
+                                        {skillState === 'not_installed' ? '安装'
+                                            : skillState === 'outdated' ? '更新'
+                                            : skillState === 'up_to_date' ? '重新安装'
+                                            : '安装/更新'}
+                                    </button>
+                                </div>
                             </div>
                             {skillMsg ? (
                                 <div style={{
-                                    ...styles.settingDescription,
-                                    color: skillState === 'up_to_date' ? colors.success : colors.textSecondary
+                                    ...styles.rowDesc,
+                                    color: skillState === 'up_to_date' ? colors.success : colors.textSecondary,
+                                    marginLeft: '0',
                                 }}>
                                     {skillMsg}
                                 </div>
                             ) : (
-                                <div style={styles.settingDescription}>
-                                    将 OpsCopilot 的 CLI 能力以 Claude Code skill 格式安装到指定目录下的 opscopilot-ops/ 子目录。
-                                    安装后，AI Agent（如 Claude Code）即可通过该 skill 调用 OpsCopilot 执行运维操作和故障诊断。
+                                <div style={{ ...styles.rowDesc, marginLeft: '0' }}>
                                     命令路径会自动替换为本机 opscopilot.exe 的绝对路径。
                                 </div>
                             )}
                         </div>
-                        <div style={styles.groupTitle}>安全闸门</div>
-                        <div style={styles.settingItem}>
-                            <div style={styles.settingDescription}>
-                                AI Agent 通过 skill 调用 OpsCopilot 时，所有非交互式访问（CLI 等）都会强制经过以下两道安全闸门。
-                                请在下方对应页签中为 AI Agent 配置允许的操作范围——这两项是「AI 接入」能力的配套约束，缺一不可。
-                            </div>
-                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' as const, marginTop: '8px' }}>
-                                <button
-                                    onClick={() => setActiveTab('whitelist')}
-                                    style={styles.secondaryButton}
-                                >
-                                    {TbShieldCheck({})} 命令白名单 →
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab('fileaccess')}
-                                    style={styles.secondaryButton}
-                                >
-                                    {TbLock({})} 文件访问控制 →
-                                </button>
-                            </div>
-                            <div style={styles.settingDescription}>
-                                <strong>命令白名单</strong>：按服务器 IP 粒度限制 AI 可执行的命令；
-                                <strong>文件访问控制</strong>：限制 AI 可读写的远程路径和文件大小。
+                        <div style={styles.card}>
+                            <div style={styles.cardTitle}>安全闸门</div>
+                            <div style={styles.rowTop}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowDesc}>
+                                        AI Agent 通过 skill 调用时，非交互式访问均经过以下两道闸门：
+                                    </div>
+                                    <div style={{ ...styles.rowDesc, marginTop: '6px' }}>
+                                        <strong>命令白名单</strong>：按服务器 IP 粒度限制 AI 可执行的命令；
+                                        <strong>文件访问控制</strong>：限制 AI 可读写的远程路径和文件大小。
+                                    </div>
+                                </div>
+                                <div style={styles.rowRight}>
+                                    <button
+                                        onClick={() => setActiveTab('whitelist')}
+                                        style={styles.secondaryButton}
+                                    >
+                                        {TbShieldCheck({})} 命令白名单 →
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab('fileaccess')}
+                                        style={styles.secondaryButton}
+                                    >
+                                        {TbLock({})} 文件访问控制 →
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1039,78 +1119,90 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             case 'experimental':
                 return (
                     <div style={styles.settingsGroup}>
-                        <div style={styles.groupTitle}>目录设置</div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>日志目录</label>
-                            <input
-                                style={styles.input}
-                                value={config.log?.dir || ''}
-                                onChange={(e) => handleChange('log', 'dir', e.target.value)}
-                                placeholder="例如：C:\\Users\\xxx\\Logs"
-                            />
-                            <div style={styles.settingDescription}>
-                                日志文件存储目录，留空使用默认路径
-                            </div>
-                        </div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>知识库目录</label>
-                            <input
-                                style={styles.input}
-                                value={config.docs?.dir || ''}
-                                onChange={(e) => handleChange('docs', 'dir', e.target.value)}
-                                placeholder="例如：C:\\Users\\xxx\\Documents\\knowledge"
-                            />
-                            <div style={styles.settingDescription}>
-                                本地文档知识库目录，用于 AI 问答增强
-                            </div>
-                        </div>
-                        <div style={styles.groupTitle}>高级功能</div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>命令补全延迟时间 (毫秒)</label>
-                            <input
-                                style={styles.input}
-                                type="number"
-                                min="0"
-                                max="2000"
-                                step="50"
-                                value={config.completion_delay || 150}
-                                onChange={(e) => {
-                                    const value = parseInt(e.target.value) || 150;
-                                    setConfig({
-                                        ...config,
-                                        completion_delay: Math.max(0, Math.min(2000, value))
-                                    });
-                                }}
-                            />
-                            <div style={styles.settingDescription}>
-                                设置命令自动补全的触发延迟时间（毫秒）。设置为 0 表示立即触发，设置为 2000 表示延迟 2 秒触发
-                            </div>
-                        </div>
-                        <div style={styles.groupTitle}>配置管理</div>
-                        <div style={styles.settingItem}>
-                            <label style={styles.settingLabel}>导入旧版本配置</label>
-                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' as const }}>
-                                <input
-                                    style={{ ...styles.input, flex: 1, minWidth: '320px' }}
-                                    value={importDir}
-                                    onChange={(e) => setImportDir(e.target.value)}
-                                    placeholder="例如：C:\\Users\\xxx\\OldOpsCopilot"
-                                />
-                                <button
-                                    onClick={handleImportConfig}
-                                    style={styles.secondaryButton}
-                                    disabled={importLoading}
-                                >
-                                    {importLoading ? '正在导入...' : '开始导入'}
-                                </button>
-                            </div>
-                            {importMsg ? (
-                                <div style={styles.settingDescription}>{importMsg}</div>
-                            ) : (
-                                <div style={styles.settingDescription}>
-                                    支持导入 config.json / quick_commands.json / highlight_rules.json；导入前会自动备份当前配置到 .bak 文件
+                        <div style={styles.card}>
+                            <div style={styles.cardTitle}>目录设置</div>
+                            <div style={styles.row}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>日志目录</div>
+                                    <div style={styles.rowDesc}>日志文件存储目录，留空使用默认路径</div>
                                 </div>
-                            )}
+                                <div style={styles.rowRight}>
+                                    <input
+                                        style={styles.inputWide}
+                                        value={config.log?.dir || ''}
+                                        onChange={(e) => handleChange('log', 'dir', e.target.value)}
+                                        placeholder="例如：C:\\Users\\xxx\\Logs"
+                                    />
+                                </div>
+                            </div>
+                            <div style={styles.row}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>知识库目录</div>
+                                    <div style={styles.rowDesc}>本地文档知识库目录，用于 AI 问答增强</div>
+                                </div>
+                                <div style={styles.rowRight}>
+                                    <input
+                                        style={styles.inputWide}
+                                        value={config.docs?.dir || ''}
+                                        onChange={(e) => handleChange('docs', 'dir', e.target.value)}
+                                        placeholder="例如：C:\\Users\\xxx\\Documents\\knowledge"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <div style={styles.card}>
+                            <div style={styles.cardTitle}>高级功能</div>
+                            <div style={styles.row}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>命令补全延迟时间 (毫秒)</div>
+                                    <div style={styles.rowDesc}>
+                                        设置命令自动补全的触发延迟时间（毫秒）。设置为 0 表示立即触发，设置为 2000 表示延迟 2 秒触发
+                                    </div>
+                                </div>
+                                <div style={styles.rowRight}>
+                                    <input
+                                        style={styles.inputWide}
+                                        type="number"
+                                        min="0"
+                                        max="2000"
+                                        step="50"
+                                        value={config.completion_delay || 150}
+                                        onChange={(e) => {
+                                            const value = parseInt(e.target.value) || 150;
+                                            setConfig({
+                                                ...config,
+                                                completion_delay: Math.max(0, Math.min(2000, value))
+                                            });
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <div style={styles.card}>
+                            <div style={styles.cardTitle}>配置管理</div>
+                            <div style={styles.rowTop}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>导入旧版本配置</div>
+                                    <div style={styles.rowDesc}>
+                                        {importMsg || '支持导入 config.json / quick_commands.json / highlight_rules.json；导入前会自动备份当前配置到 .bak 文件'}
+                                    </div>
+                                </div>
+                                <div style={styles.rowRight}>
+                                    <input
+                                        style={styles.inputWide}
+                                        value={importDir}
+                                        onChange={(e) => setImportDir(e.target.value)}
+                                        placeholder="例如：C:\\Users\\xxx\\OldOpsCopilot"
+                                    />
+                                    <button
+                                        onClick={handleImportConfig}
+                                        style={styles.secondaryButton}
+                                        disabled={importLoading}
+                                    >
+                                        {importLoading ? '正在导入...' : '开始导入'}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 );
@@ -1121,12 +1213,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             default:
                 return null;
         }
-    };
-
-    // Get current breadcrumb path
-    const getBreadcrumb = () => {
-        const currentItem = navItems.find(item => item.id === activeTab);
-        return `系统设置 > ${currentItem?.label}`;
     };
 
     return (
@@ -1143,33 +1229,37 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     {/* Left Sidebar */}
                     <div style={styles.sidebar}>
                         <div style={styles.searchBox}>
-                            <span style={styles.searchIcon}>{TbSearch({})}</span>
-                            <input
-                                ref={searchInputRef}
-                                style={styles.searchInput}
-                                placeholder="搜索设置..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
+                            <div style={styles.searchInner}>
+                                <span style={styles.searchIcon}>{TbSearch({})}</span>
+                                <input
+                                    ref={searchInputRef}
+                                    style={styles.searchInput}
+                                    placeholder="搜索设置..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                            </div>
                         </div>
                         <nav style={styles.nav}>
-                            {filteredNavItems.length > 0 ? (
-                                filteredNavItems.map((item) => (
-                                    <div
-                                        key={item.id}
-                                        style={{
-                                            ...styles.navItem,
-                                            ...(activeTab === item.id ? styles.navItemActive : {})
-                                        }}
-                                        onClick={() => setActiveTab(item.id)}
-                                    >
-                                        <span style={styles.navIcon}>{item.icon}</span>
-                                        <span style={styles.navText}>{item.label}</span>
-                                        {((item.id === 'about' && updateAvailable) ||
-                                            (item.id === 'aiagent' && skillNeedsAttention) ||
-                                            (item.id === 'highlight' && highlightIssues.length > 0)) && (
-                                            <span style={styles.navBadge} />
-                                        )}
+                            {groupedNavItems.length > 0 ? (
+                                groupedNavItems.map((group) => (
+                                    <div key={group.category} style={styles.navGroup}>
+                                        <div style={navGroupTitle}>{group.category}</div>
+                                        {group.items.map((item) => (
+                                            <div
+                                                key={item.id}
+                                                style={activeTab === item.id ? navItemActive : navItem}
+                                                onClick={() => setActiveTab(item.id)}
+                                            >
+                                                <span style={styles.navIcon}>{item.icon}</span>
+                                                <span style={styles.navText}>{item.label}</span>
+                                                {((item.id === 'about' && updateAvailable) ||
+                                                    (item.id === 'aiagent' && skillNeedsAttention) ||
+                                                    (item.id === 'highlight' && highlightIssues.length > 0)) && (
+                                                    <span style={styles.navBadge} />
+                                                )}
+                                            </div>
+                                        ))}
                                     </div>
                                 ))
                             ) : (
@@ -1180,31 +1270,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
                     {/* Right Content Area */}
                     <div style={styles.contentArea}>
-                        {/* Breadcrumb */}
-                        <div style={styles.breadcrumb}>
-                            {getBreadcrumb()}
-                        </div>
-
-                        {/* Settings Content */}
-                        <div style={styles.settingsContent}>
-                            {renderTabContent()}
+                        <div style={styles.pageContent}>
+                            {/* Settings Content（页头大标题已移除：侧边栏已高亮当前页，避免标题冗余） */}
+                            <div style={styles.settingsContent}>
+                                {renderTabContent()}
+                            </div>
                         </div>
                     </div>
                 </div>
-
-                {/* Highlight Rules Modal */}
-                <HighlightRulesModal
-                    isOpen={rulesModalOpen}
-                    rules={config.highlight_rules || []}
-                    onChange={(rules) => {
-                        setConfig({
-                            ...config,
-                            highlight_rules: rules
-                        });
-                    }}
-                    onSave={handleHighlightRulesSave}
-                    onClose={() => setRulesModalOpen(false)}
-                />
 
                 {/* Footer */}
                 <div style={styles.footer}>
@@ -1236,26 +1309,25 @@ const styles = {
     },
     modal: {
         backgroundColor: colors.bgSecondary,
-        borderRadius: radius.lg,
-        width: '900px',
-        height: '650px',
+        width: '100vw',
+        height: '100vh',
         display: 'flex',
         flexDirection: 'column' as const,
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
         color: colors.textSecondary,
         overflow: 'hidden',
     },
     header: {
-        padding: '16px 24px',
+        padding: '12px 24px',
         borderBottom: `1px solid ${colors.borderPrimary}`,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         backgroundColor: colors.bgPrimary,
+        flexShrink: 0,
     },
     title: {
         margin: 0,
-        fontSize: '1.1rem',
+        fontSize: '1.05rem',
         color: colors.textPrimary,
         fontWeight: 600,
     },
@@ -1280,34 +1352,39 @@ const styles = {
         display: 'flex',
         flex: 1,
         overflow: 'hidden',
+        minHeight: 0,
     },
     sidebar: {
-        width: '220px',
+        width: '280px',
         backgroundColor: colors.bgSecondary,
         borderRight: `1px solid ${colors.borderPrimary}`,
         display: 'flex',
         flexDirection: 'column' as const,
-        padding: '12px 0',
+        padding: '16px 0',
+        flexShrink: 0,
     },
     searchBox: {
-        padding: '0 12px 12px',
+        padding: '0 16px 16px',
+    },
+    searchInner: {
         position: 'relative' as const,
     },
     searchIcon: {
         position: 'absolute' as const,
-        left: '24px',
+        left: '12px',
         top: '50%',
         transform: 'translateY(-50%)',
         color: colors.textTertiary,
         fontSize: font.lg,
         pointerEvents: 'none' as const,
+        display: 'flex',
     },
     searchInput: {
         width: '100%',
-        padding: '8px 12px 8px 32px',
+        padding: '8px 12px 8px 34px',
         backgroundColor: colors.bgHover,
         border: `1px solid ${colors.borderPrimary}`,
-        borderRadius: radius.sm,
+        borderRadius: radius.md,
         color: colors.textPrimary,
         fontSize: font.base,
         outline: 'none',
@@ -1319,38 +1396,30 @@ const styles = {
     nav: {
         flex: 1,
         overflowY: 'auto' as const,
-    },
-    navItem: {
-        position: 'relative' as const,
+        padding: '0 8px',
         display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        padding: '10px 12px',
-        cursor: 'pointer',
-        fontSize: font.base,
-        color: colors.textSecondary,
-        borderRadius: radius.sm,
-        margin: '0 8px',
-        ':hover': {
-            backgroundColor: colors.bgTertiary,
-        }
+        flexDirection: 'column' as const,
+        gap: '18px',
     },
-    navItemActive: {
-        backgroundColor: colors.bgTertiary,
-        color: colors.textPrimary,
-        fontWeight: 500,
+    navGroup: {
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '2px',
     },
     navIcon: {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        width: '20px',
-        height: '20px',
-        fontSize: '16px',
+        width: '18px',
+        height: '18px',
+        fontSize: '15px',
         flexShrink: 0,
     },
     navText: {
         flex: 1,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap' as const,
     },
     // 导航项右侧的更新提示红点，样式与设置按钮齿轮上的点一致
     navBadge: {
@@ -1390,21 +1459,17 @@ const styles = {
     },
     contentArea: {
         flex: 1,
-        padding: '20px 24px',
         overflowY: 'auto' as const,
         backgroundColor: colors.bgTertiary,
+        minWidth: 0,
     },
-    breadcrumb: {
-        fontSize: font.sm,
-        color: colors.textTertiary,
-        marginBottom: '16px',
-        paddingBottom: '8px',
-        borderBottom: `1px solid ${colors.borderPrimary}`,
+    pageContent: {
+        ...pageContainer,
     },
     settingsContent: {
         display: 'flex',
         flexDirection: 'column' as const,
-        gap: '8px',
+        gap: '24px',
     },
     settingsGroup: {
         display: 'flex',
@@ -1420,6 +1485,39 @@ const styles = {
         paddingBottom: '6px',
         borderBottom: `1px solid ${colors.borderPrimary}`,
     },
+    // Orca 风格：卡片容器
+    card: {
+        ...settingsCard,
+    },
+    cardTitle: {
+        ...cardTitle,
+    },
+    cardDivider: {
+        ...cardDivider,
+    },
+    // Orca 风格：两列设置行
+    row: {
+        ...settingRow,
+    },
+    rowTop: {
+        ...settingRowTop,
+    },
+    rowLeft: {
+        ...settingRowLeft,
+    },
+    rowRight: {
+        ...settingRowRight,
+    },
+    rowLabel: {
+        ...settingRowLabel,
+    },
+    rowDesc: {
+        ...settingRowDesc,
+    },
+    inputWide: {
+        ...inputWide,
+    },
+
     settingItem: {
         display: 'flex',
         flexDirection: 'column' as const,

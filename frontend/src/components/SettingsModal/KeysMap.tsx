@@ -84,7 +84,6 @@ const KeysMap: React.FC<KeysMapProps> = ({ commandQueryShortcut }) => {
 
     return (
         <div style={styles.container}>
-            <div style={styles.title}>快捷键说明（KeysMap）</div>
             <div style={styles.disclaimer}>{disclaimer}</div>
             <div style={styles.table}>
                 <div style={styles.rowHeader}>
@@ -114,6 +113,7 @@ const styles: Record<string, React.CSSProperties> = {
         display: 'flex',
         flexDirection: 'column',
         gap: '10px',
+        maxWidth: '820px',
     },
     title: {
         color: colors.textPrimary,

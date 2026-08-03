@@ -182,3 +182,149 @@ export const modalCloseBtn: React.CSSProperties = {
   borderRadius: radius.sm,
 };
 
+// ---- Orca 风格设置页原语 ----
+// 全屏设置页：内容区限宽容器
+export const pageContainer: React.CSSProperties = {
+  width: '100%',
+  maxWidth: '1100px',
+  margin: '0 auto',
+  padding: '20px 40px 32px',
+  boxSizing: 'border-box' as const,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '24px',
+};
+
+// 页面顶部大标题 + 描述 + 分隔线（orca SettingsSection 头部）
+export const pageHeader: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+  paddingBottom: '18px',
+  borderBottom: `1px solid ${colors.borderPrimary}`,
+};
+
+export const pageTitle: React.CSSProperties = {
+  margin: 0,
+  fontSize: '1.6rem',
+  fontWeight: 600,
+  color: colors.textPrimary,
+  lineHeight: 1.3,
+  display: 'flex',
+  alignItems: 'center',
+  gap: '10px',
+};
+
+export const pageDesc: React.CSSProperties = {
+  ...descStyle,
+  fontSize: font.base,
+  maxWidth: '720px',
+};
+
+// 内容区圆角卡片（orca SettingsSection body）
+export const settingsCard: React.CSSProperties = {
+  backgroundColor: colors.bgTertiary,
+  borderRadius: radius.lg,
+  border: `1px solid ${colors.borderPrimary}`,
+  padding: '24px 28px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+};
+
+// 卡片内小标题
+export const cardTitle: React.CSSProperties = {
+  ...sectionTitle,
+  fontSize: font.lg,
+  marginBottom: '6px',
+};
+
+// 两列设置行：左 label+desc（固定宽度），右 control（自适应填充）
+// 固定左列宽度保证所有行控件起点一致；输入框 flex 填充保证右缘一致
+export const settingRow: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '24px',
+  padding: '12px 0',
+};
+
+export const settingRowTop: React.CSSProperties = {
+  ...settingRow,
+  alignItems: 'flex-start',
+};
+
+export const settingRowLeft: React.CSSProperties = {
+  width: '320px',
+  flexShrink: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+};
+
+export const settingRowRight: React.CSSProperties = {
+  flex: '1 1 0',
+  minWidth: 0,
+  display: 'flex',
+  alignItems: 'center',
+  gap: '10px',
+  flexWrap: 'wrap' as const,
+};
+
+export const settingRowLabel: React.CSSProperties = {
+  ...labelStyle,
+};
+
+export const settingRowDesc: React.CSSProperties = {
+  ...descStyle,
+};
+
+// ---- 侧边栏导航 ----
+// 分组小标题（orca：11px uppercase 字母间距 muted）
+export const navGroupTitle: React.CSSProperties = {
+  margin: '0 12px 6px',
+  fontSize: font.xs,
+  fontWeight: 600,
+  color: colors.textTertiary,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase' as const,
+};
+
+export const navItem: React.CSSProperties = {
+  position: 'relative' as const,
+  display: 'flex',
+  alignItems: 'center',
+  gap: '10px',
+  width: '100%',
+  padding: '8px 12px',
+  cursor: 'pointer',
+  fontSize: font.base,
+  color: colors.textSecondary,
+  borderRadius: radius.md,
+  margin: '0',
+  boxSizing: 'border-box' as const,
+  transition: 'background-color 140ms ease, color 140ms ease',
+};
+
+export const navItemActive: React.CSSProperties = {
+  ...navItem,
+  backgroundColor: 'var(--bg-active)',
+  color: colors.textPrimary,
+  fontWeight: 500,
+};
+
+// 卡片分隔线
+export const cardDivider: React.CSSProperties = {
+  height: 1,
+  backgroundColor: colors.borderSubtle,
+  margin: '8px 0',
+};
+
+// 两列行内的输入框：flex 填充右列（左缘/右缘与其它行完全对齐），大屏封顶 520px
+export const inputWide: React.CSSProperties = {
+  ...inputStyle,
+  boxSizing: 'border-box' as const,
+  flex: '1 1 0',
+  minWidth: '240px',
+  maxWidth: '520px',
+};
+

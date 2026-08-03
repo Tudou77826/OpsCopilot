@@ -464,9 +464,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: font.lg,
   },
   section: {
-    padding: '16px',
-    backgroundColor: colors.bgPrimary,
-    borderRadius: radius.md,
+    padding: '20px 24px',
+    backgroundColor: colors.bgTertiary,
+    borderRadius: radius.lg,
     border: `1px solid ${colors.borderPrimary}`,
   },
   sectionTitle: {

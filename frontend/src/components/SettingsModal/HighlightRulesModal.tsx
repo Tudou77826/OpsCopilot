@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { HighlightRule } from '../Terminal/highlightTypes';
 import { assessPattern } from '../Terminal/highlight/regexSafety';
 import { colors, radius, font } from './settingsStyles';
@@ -10,6 +10,8 @@ interface HighlightRulesModalProps {
     onChange: (rules: HighlightRule[]) => void;
     onSave?: (rules: HighlightRule[]) => Promise<void>;
     onClose: () => void;
+    /** 内嵌模式：直接渲染在设置页卡片内（无弹窗外壳/无二级保存），改动实时同步到父级 */
+    embedded?: boolean;
 }
 
 function newId() {
@@ -68,21 +70,28 @@ function UnsavedChangesModal({ isOpen, changedCount, onSave, onDiscard, onCancel
     );
 }
 
-export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, onClose }: HighlightRulesModalProps) {
+export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, onClose, embedded = false }: HighlightRulesModalProps) {
     const [draft, setDraft] = useState<HighlightRule[]>(rules);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [hoveredBgOption, setHoveredBgOption] = useState<string | null>(null);
     const [isDirty, setIsDirty] = useState(false);
     const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
     const [riskAcknowledged, setRiskAcknowledged] = useState<Record<string, boolean>>({});
+    // 规则列表滚动容器：新建规则后滚动到新条目，避免出现在屏幕外
+    const listRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        // 内嵌模式：跟随父级配置变化，但保留 editingId（新建规则自动展开）
+        if (embedded) {
+            setDraft(rules);
+            return;
+        }
         if (isOpen) {
             setDraft(rules);
             setEditingId(null);
             setRiskAcknowledged({});
         }
-    }, [isOpen, rules]);
+    }, [isOpen, rules, embedded]);
 
     useEffect(() => {
         const hasChanges = !areRulesEqual(draft, rules);
@@ -97,6 +106,10 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
 
     const update = (next: HighlightRule[]) => {
         setDraft(next);
+        // 内嵌模式：改动实时同步到父级配置（由设置页统一保存）
+        if (embedded) {
+            onChange(next);
+        }
     };
 
     const applyChanges = async () => {
@@ -143,7 +156,24 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
             style: { background_color: '#1d3a5a', color: '#ffffff' }
         };
         setDraft([...sorted, r]);
+        if (embedded) {
+            onChange([...sorted, r]);
+        }
         setEditingId(r.id);
+        // 新条目追加在列表末尾且自动展开编辑，滚动使其可见
+        requestAnimationFrame(() => {
+            const list = listRef.current;
+            if (!list) return;
+            if (embedded) {
+                // 内嵌模式列表随页面滚动：把新条目滚进可视区
+                const last = list.lastElementChild;
+                if (last) {
+                    last.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            } else {
+                list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' });
+            }
+        });
     };
 
     const removeRule = (id: string) => {
@@ -215,36 +245,23 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
         return count;
     };
 
-    return (
-        <>
-            <div style={styles.overlay}>
-                <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-                    {/* Header */}
-                    <div style={styles.header}>
-                        <div style={styles.titleContainer}>
-                            <h2 style={styles.title}>突出显示集</h2>
-                            {isDirty && <span style={styles.unsavedIndicator}>● 未保存</span>}
-                        </div>
-                        <button onClick={handleXClick} style={styles.closeBtn}>×</button>
-                    </div>
+    // 工具栏 + 规则列表（弹窗与内嵌模式共用）
+    const toolbarContent = (
+        <div style={embedded ? styles.embeddedToolbar : styles.toolbar}>
+            <button style={styles.primaryButton} onClick={addRule}>+ 新建规则</button>
+            <div style={styles.hint}>
+                {!embedded && isDirty ? `提示: 有 ${getChangedCount()} 条未保存更改` : '优先级越小越先匹配'}
+            </div>
+        </div>
+    );
 
-                    {/* Body */}
-                    <div style={styles.body}>
-                        {/* Toolbar */}
-                        <div style={styles.toolbar}>
-                            <button style={styles.primaryButton} onClick={addRule}>+ 新建规则</button>
-                            <div style={styles.hint}>
-                                {isDirty ? `提示: 有 ${getChangedCount()} 条未保存更改` : '优先级越小越先匹配'}
-                            </div>
-                        </div>
-
-                        {/* Rules List */}
-                        <div style={styles.list}>
-                            {sorted.length === 0 && <div style={styles.empty}>暂无规则，点击上方按钮添加</div>}
-                            {sorted.map((r, i) => {
-                                const risk = assessPattern(r.pattern);
-                                const canEnable = risk.canEnable && (risk.level === 'safe' || riskAcknowledged[r.id]);
-                                const editing = isEditing(r.id);
+    const listContent = (
+        <div style={embedded ? styles.embeddedList : styles.list} ref={listRef}>
+            {sorted.length === 0 && <div style={styles.empty}>暂无规则，点击上方按钮添加</div>}
+            {sorted.map((r, i) => {
+                const risk = assessPattern(r.pattern);
+                const canEnable = risk.canEnable && (risk.level === 'safe' || riskAcknowledged[r.id]);
+                const editing = isEditing(r.id);
 
                                 return (
                                     <div key={r.id} style={styles.item}>
@@ -478,6 +495,35 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
                                 );
                             })}
                         </div>
+                    );
+
+    // 内嵌模式：直接渲染工具栏 + 列表，无弹窗外壳、无二级保存
+    if (embedded) {
+        return (
+            <div style={styles.embeddedContainer}>
+                {toolbarContent}
+                {listContent}
+            </div>
+        );
+    }
+
+    return (
+        <>
+            <div style={styles.overlay}>
+                <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+                    {/* Header */}
+                    <div style={styles.header}>
+                        <div style={styles.titleContainer}>
+                            <h2 style={styles.title}>突出显示集</h2>
+                            {isDirty && <span style={styles.unsavedIndicator}>● 未保存</span>}
+                        </div>
+                        <button onClick={handleXClick} style={styles.closeBtn}>×</button>
+                    </div>
+
+                    {/* Body */}
+                    <div style={styles.body}>
+                        {toolbarContent}
+                        {listContent}
                     </div>
 
                     {/* Footer */}
@@ -512,6 +558,31 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
 }
 
 const styles = {
+    // 内嵌模式：无弹窗外壳，直接铺在设置页卡片内
+    embeddedContainer: {
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '12px',
+    },
+    embeddedToolbar: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: '12px',
+        // 固定在卡片顶部：规则很多滚动时「+ 新建规则」仍可见可用
+        position: 'sticky' as const,
+        top: 0,
+        zIndex: 2,
+        backgroundColor: colors.bgTertiary,
+        padding: '8px 0',
+        margin: '-8px 0 0',
+    },
+    embeddedList: {
+        display: 'flex',
+        flexDirection: 'column' as const,
+        gap: '12px',
+        minHeight: 0,
+    },
     overlay: {
         position: 'fixed' as const,
         top: 0,
@@ -528,9 +599,10 @@ const styles = {
     modal: {
         backgroundColor: colors.bgSecondary,
         borderRadius: radius.lg,
-        width: '900px',
-        maxHeight: '650px',
-        height: '650px',
+        width: '92vw',
+        maxWidth: '1280px',
+        maxHeight: '88vh',
+        height: '88vh',
         display: 'flex',
         flexDirection: 'column' as const,
         boxShadow: '0 4px 12px var(--shadow)',
@@ -705,6 +777,7 @@ const styles = {
         flexDirection: 'column' as const,
         gap: '12px',
         backgroundColor: colors.bgSecondary,
+        maxWidth: '900px',
     },
     row: {
         display: 'flex',
