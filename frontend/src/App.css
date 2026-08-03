@@ -74,6 +74,22 @@
   --severity-success: #6ecf8a;
   --severity-muted: #888;
 
+  /* —— 状态徽章实心背景（badge 查找表：bug/high、outdated/medium/open、resolved/sop、archive 等）—— */
+  --status-danger-bg: #e74c3c;
+  --status-warning-bg: #f39c12;
+  --status-warning-fg: #000;
+  --status-info-bg: #3498db;
+  --status-success-bg: #27ae60;
+  --status-teal-bg: #00b894;
+  --status-purple-bg: #6c5ce7;
+  --status-muted-bg: #888;
+
+  /* —— 评分星星（亮暗两套可读金）—— */
+  --star-active: #f1c40f;
+
+  /* —— 信息标签底（service/keyword chip 蓝底）—— */
+  --chip-info-bg: #1a3a5a;
+
   /* —— 文件类型图标（FilesPanel）—— */
   --icon-folder-fg: #f0c04f;
   --icon-folder-bg: #282315;
@@ -165,6 +181,19 @@
   --severity-info: #0969da;
   --severity-success: #1a7f37;
   --severity-muted: #8a8f98;
+
+  --status-danger-bg: #d1242f;
+  --status-warning-bg: #bf8700;
+  --status-warning-fg: #fff;
+  --status-info-bg: #0969da;
+  --status-success-bg: #1a7f37;
+  --status-teal-bg: #0a6640;
+  --status-purple-bg: #8250df;
+  --status-muted-bg: #6a737d;
+
+  --star-active: #bf8700;
+
+  --chip-info-bg: #ddf4ff;
 
   --icon-folder-fg: #9a6700;
   --icon-folder-bg: #fff8c5;

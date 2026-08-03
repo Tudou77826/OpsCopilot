@@ -106,9 +106,9 @@ const formatDate = (ts: string): string => {
 
 const TypeBadge: React.FC<{ type: string }> = ({ type }) => {
     const colors: Record<string, string> = {
-        bug: '#e74c3c',
-        outdated: '#f39c12',
-        suggestion: '#3498db',
+        bug: 'var(--status-danger-bg)',
+        outdated: 'var(--status-warning-bg)',
+        suggestion: 'var(--status-info-bg)',
     };
     const labels: Record<string, string> = {
         bug: '错误',
@@ -118,7 +118,7 @@ const TypeBadge: React.FC<{ type: string }> = ({ type }) => {
     return (
         <span style={{
             ...styles.badge,
-            backgroundColor: colors[type] || '#666',
+            backgroundColor: colors[type] || 'var(--status-muted-bg)',
         }}>
             {labels[type] || type}
         </span>
@@ -127,9 +127,9 @@ const TypeBadge: React.FC<{ type: string }> = ({ type }) => {
 
 const PriorityBadge: React.FC<{ priority: string }> = ({ priority }) => {
     const colors: Record<string, string> = {
-        high: '#e74c3c',
-        medium: '#f39c12',
-        low: '#888',
+        high: 'var(--status-danger-bg)',
+        medium: 'var(--status-warning-bg)',
+        low: 'var(--status-muted-bg)',
     };
     const labels: Record<string, string> = {
         high: '高',
@@ -139,7 +139,7 @@ const PriorityBadge: React.FC<{ priority: string }> = ({ priority }) => {
     return (
         <span style={{
             ...styles.badge,
-            backgroundColor: colors[priority] || '#666',
+            backgroundColor: colors[priority] || 'var(--status-muted-bg)',
         }}>
             {labels[priority] || priority}
         </span>
@@ -148,9 +148,9 @@ const PriorityBadge: React.FC<{ priority: string }> = ({ priority }) => {
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     const colors: Record<string, string> = {
-        open: '#f39c12',
-        resolved: '#27ae60',
-        wontfix: '#888',
+        open: 'var(--status-warning-bg)',
+        resolved: 'var(--status-success-bg)',
+        wontfix: 'var(--status-muted-bg)',
     };
     const labels: Record<string, string> = {
         open: '待处理',
@@ -160,7 +160,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     return (
         <span style={{
             ...styles.badge,
-            backgroundColor: colors[status] || '#666',
+            backgroundColor: colors[status] || 'var(--status-muted-bg)',
         }}>
             {labels[status] || status}
         </span>
@@ -171,7 +171,7 @@ const DocTypeBadge: React.FC<{ type: string }> = ({ type }) => {
     return (
         <span style={{
             ...styles.badge,
-            backgroundColor: type === 'archive' ? '#6c5ce7' : '#00b894',
+            backgroundColor: type === 'archive' ? 'var(--status-purple-bg)' : 'var(--status-teal-bg)',
             fontSize: '10px',
             padding: '1px 6px',
         }}>
@@ -204,7 +204,7 @@ const StarRating: React.FC<{
                     {TbStarFilled({
                         size: size,
                         style: {
-                            color: i <= (hover || score) ? '#f1c40f' : '#555',
+                            color: i <= (hover || score) ? 'var(--star-active)' : 'var(--text-disabled)',
                         },
                     })}
                 </span>
@@ -402,7 +402,7 @@ const KnowledgeBrowser: React.FC = () => {
     // --- Render: Tree View ---
     const renderTree = () => {
         if (loading) return <div style={styles.emptyState}>加载中...</div>;
-        if (error && !catalog) return <div style={{ ...styles.emptyState, color: '#e74c3c' }}>{error}</div>;
+        if (error && !catalog) return <div style={{ ...styles.emptyState, color: 'var(--severity-danger)' }}>{error}</div>;
         if (!catalog || !catalog.services?.length) {
             return <div style={styles.emptyState}>知识库为空，请先归档排查记录</div>;
         }
@@ -650,7 +650,7 @@ const KnowledgeBrowser: React.FC = () => {
                                     </button>
                                 </div>
                             ) : (
-                                <div style={{ color: '#27ae60', fontSize: '12px', padding: '4px 0' }}>评分已提交</div>
+                                <div style={{ color: 'var(--status-success-bg)', fontSize: '12px', padding: '4px 0' }}>评分已提交</div>
                             )}
 
                             <div style={styles.ratingList}>
@@ -782,29 +782,29 @@ const KnowledgeBrowser: React.FC = () => {
         <div style={styles.container}>
             <style>{`
                 .kb-scenario-card:hover {
-                    border-color: #007acc !important;
-                    background-color: #2d2d3a !important;
+                    border-color: var(--accent) !important;
+                    background-color: var(--bg-hover) !important;
                 }
                 .kb-tree-node:hover {
-                    background-color: #2a2a2a !important;
+                    background-color: var(--bg-elevated) !important;
                 }
                 .kb-sub-tab:hover {
-                    color: #bbb !important;
+                    color: var(--text-secondary) !important;
                 }
                 .kb-back-btn:hover {
-                    background-color: #383838 !important;
-                    border-color: #555 !important;
-                    color: #fff !important;
+                    background-color: var(--bg-hover) !important;
+                    border-color: var(--border-strong) !important;
+                    color: var(--text-on-accent) !important;
                 }
                 .kb-issue-action:hover {
-                    background-color: #27ae60 !important;
-                    color: #fff !important;
+                    background-color: var(--status-success-bg) !important;
+                    color: var(--text-on-accent) !important;
                 }
                 .kb-new-issue-btn:hover {
-                    background-color: rgba(0, 122, 204, 0.1) !important;
+                    background-color: var(--info-tint) !important;
                 }
                 .kb-rate-submit:hover:not(:disabled) {
-                    background-color: #0098ff !important;
+                    background-color: var(--accent-hover) !important;
                 }
             `}</style>
             {error && view === 'tree' && (
@@ -828,14 +828,14 @@ const styles: Record<string, React.CSSProperties> = {
     },
     emptyState: {
         padding: '20px',
-        color: '#888',
+        color: 'var(--text-muted)',
         textAlign: 'center' as const,
         fontSize: '13px',
     },
     errorBar: {
         padding: '8px 12px',
-        backgroundColor: '#3a1a1a',
-        color: '#e74c3c',
+        backgroundColor: 'var(--danger-bg-subtle)',
+        color: 'var(--severity-danger)',
         fontSize: '12px',
         borderRadius: '4px',
         margin: '8px',
@@ -853,8 +853,8 @@ const styles: Record<string, React.CSSProperties> = {
         display: 'flex',
         alignItems: 'center',
         margin: '8px 10px 6px',
-        backgroundColor: '#2a2a2a',
-        border: '1px solid #3c3c3c',
+        backgroundColor: 'var(--bg-elevated)',
+        border: '1px solid var(--border)',
         borderRadius: '6px',
         padding: '0 8px',
         gap: '6px',
@@ -867,7 +867,7 @@ const styles: Record<string, React.CSSProperties> = {
         flex: 1,
         backgroundColor: 'transparent',
         border: 'none',
-        color: '#ccc',
+        color: 'var(--text-secondary)',
         fontSize: '13px',
         padding: '7px 0',
         outline: 'none',
@@ -875,7 +875,7 @@ const styles: Record<string, React.CSSProperties> = {
     searchClear: {
         background: 'none',
         border: 'none',
-        color: '#666',
+        color: 'var(--text-disabled)',
         cursor: 'pointer',
         fontSize: '12px',
         padding: '2px',
@@ -886,31 +886,31 @@ const styles: Record<string, React.CSSProperties> = {
         gap: '6px',
         padding: '6px 16px 10px',
         fontSize: '11px',
-        color: '#777',
-        borderBottom: '1px solid #333',
+        color: 'var(--text-muted)',
+        borderBottom: '1px solid var(--border)',
     },
     statsDot: {
-        color: '#555',
+        color: 'var(--text-disabled)',
     },
     searchResults: {
         padding: '0 10px',
     },
     searchResultCount: {
         fontSize: '11px',
-        color: '#888',
+        color: 'var(--text-muted)',
         padding: '4px 0',
     },
     scenarioServiceTag: {
         fontSize: '10px',
-        backgroundColor: '#1a3a5a',
-        color: '#4a9eff',
+        backgroundColor: 'var(--chip-info-bg)',
+        color: 'var(--severity-info)',
         padding: '1px 6px',
         borderRadius: '3px',
     },
     scenarioModTag: {
         fontSize: '10px',
-        backgroundColor: '#2a2a3a',
-        color: '#888',
+        backgroundColor: 'var(--bg-elevated)',
+        color: 'var(--text-muted)',
         padding: '1px 6px',
         borderRadius: '3px',
     },
@@ -926,12 +926,12 @@ const styles: Record<string, React.CSSProperties> = {
         cursor: 'pointer',
         gap: '6px',
         fontSize: '13px',
-        color: '#ccc',
+        color: 'var(--text-secondary)',
         userSelect: 'none' as const,
     },
     expandIcon: {
         fontSize: '10px',
-        color: '#888',
+        color: 'var(--text-muted)',
         width: '12px',
         flexShrink: 0,
     },
@@ -941,12 +941,12 @@ const styles: Record<string, React.CSSProperties> = {
     },
     moduleName: {
         flex: 1,
-        color: '#aaa',
+        color: 'var(--text-tertiary)',
     },
     countBadge: {
         fontSize: '10px',
-        backgroundColor: '#333',
-        color: '#888',
+        backgroundColor: 'var(--bg-input)',
+        color: 'var(--text-muted)',
         padding: '1px 6px',
         borderRadius: '10px',
         minWidth: '18px',
@@ -955,10 +955,10 @@ const styles: Record<string, React.CSSProperties> = {
     scenarioCard: {
         margin: '2px 12px 2px 40px',
         padding: '8px 10px',
-        backgroundColor: '#2a2a2a',
+        backgroundColor: 'var(--bg-elevated)',
         borderRadius: '4px',
         cursor: 'pointer',
-        border: '1px solid #333',
+        border: '1px solid var(--border)',
         transition: 'border-color 0.2s',
     },
     scenarioHeader: {
@@ -969,12 +969,12 @@ const styles: Record<string, React.CSSProperties> = {
     },
     scenarioTitle: {
         fontSize: '13px',
-        color: '#ddd',
+        color: 'var(--text-primary)',
         fontWeight: 500,
     },
     scenarioPhenomena: {
         fontSize: '11px',
-        color: '#999',
+        color: 'var(--text-tertiary)',
         marginBottom: '4px',
         lineHeight: 1.4,
     },
@@ -985,14 +985,14 @@ const styles: Record<string, React.CSSProperties> = {
     },
     keyword: {
         fontSize: '10px',
-        backgroundColor: '#1a3a5a',
-        color: '#4a9eff',
+        backgroundColor: 'var(--chip-info-bg)',
+        color: 'var(--severity-info)',
         padding: '1px 5px',
         borderRadius: '3px',
     },
     keywordMore: {
         fontSize: '10px',
-        color: '#666',
+        color: 'var(--text-disabled)',
         padding: '1px 3px',
     },
 
@@ -1008,16 +1008,16 @@ const styles: Record<string, React.CSSProperties> = {
         alignItems: 'center',
         gap: '8px',
         padding: '10px 12px',
-        borderBottom: '1px solid #333',
-        backgroundColor: '#252526',
+        borderBottom: '1px solid var(--border)',
+        backgroundColor: 'var(--bg-secondary)',
     },
     backButton: {
         display: 'inline-flex',
         alignItems: 'center',
         gap: '4px',
-        background: '#2d2d2d',
-        border: '1px solid #444',
-        color: '#ccc',
+        background: 'var(--bg-tertiary)',
+        border: '1px solid var(--border-strong)',
+        color: 'var(--text-secondary)',
         cursor: 'pointer',
         fontSize: '12px',
         padding: '4px 10px',
@@ -1027,7 +1027,7 @@ const styles: Record<string, React.CSSProperties> = {
     detailTitle: {
         fontSize: '14px',
         fontWeight: 600,
-        color: '#ddd',
+        color: 'var(--text-primary)',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap' as const,
@@ -1039,25 +1039,25 @@ const styles: Record<string, React.CSSProperties> = {
         gap: '10px',
         padding: '8px 12px 10px',
         fontSize: '12px',
-        color: '#999',
-        borderBottom: '1px solid #3c3c3c',
+        color: 'var(--text-tertiary)',
+        borderBottom: '1px solid var(--border)',
         flexWrap: 'wrap' as const,
     },
     metaItem: {},
     metaLabel: {
-        color: '#777',
+        color: 'var(--text-muted)',
     },
     metaRating: {
         display: 'flex',
         alignItems: 'center',
         gap: '3px',
         fontSize: '12px',
-        color: '#f1c40f',
+        color: 'var(--star-active)',
     },
     metaIssueCount: {
         fontSize: '11px',
-        backgroundColor: '#f39c12',
-        color: '#000',
+        backgroundColor: 'var(--status-warning-bg)',
+        color: 'var(--status-warning-fg)',
         padding: '1px 6px',
         borderRadius: '10px',
         fontWeight: 500,
@@ -1066,7 +1066,7 @@ const styles: Record<string, React.CSSProperties> = {
     // Sub tabs
     subTabBar: {
         display: 'flex',
-        borderBottom: '1px solid #333',
+        borderBottom: '1px solid var(--border)',
         flexShrink: 0,
     },
     subTab: {
@@ -1074,7 +1074,7 @@ const styles: Record<string, React.CSSProperties> = {
         padding: '8px 0',
         textAlign: 'center' as const,
         fontSize: '12px',
-        color: '#888',
+        color: 'var(--text-muted)',
         background: 'none',
         border: 'none',
         borderBottom: '2px solid transparent',
@@ -1082,8 +1082,8 @@ const styles: Record<string, React.CSSProperties> = {
         transition: 'color 0.2s, border-color 0.2s',
     },
     subTabActive: {
-        color: '#ddd',
-        borderBottomColor: '#007acc',
+        color: 'var(--text-primary)',
+        borderBottomColor: 'var(--accent)',
         fontWeight: 600,
     },
     tabContentArea: {
@@ -1091,7 +1091,7 @@ const styles: Record<string, React.CSSProperties> = {
         overflowY: 'auto' as const,
         padding: '12px',
         fontSize: '13px',
-        color: '#ccc',
+        color: 'var(--text-secondary)',
         lineHeight: 1.6,
     },
     tabInner: {
@@ -1106,21 +1106,21 @@ const styles: Record<string, React.CSSProperties> = {
         alignItems: 'center',
         gap: '6px',
         padding: '8px 0',
-        borderBottom: '1px solid #2a2a2a',
+        borderBottom: '1px solid var(--border-subtle)',
         marginBottom: '4px',
     },
     ratingBig: {
         fontSize: '24px',
         fontWeight: 700,
-        color: '#f1c40f',
+        color: 'var(--star-active)',
     },
     ratingOutOf: {
         fontSize: '14px',
-        color: '#888',
+        color: 'var(--text-muted)',
     },
     ratingCount: {
         fontSize: '12px',
-        color: '#888',
+        color: 'var(--text-muted)',
         marginLeft: '4px',
     },
     ratingList: {
@@ -1130,15 +1130,15 @@ const styles: Record<string, React.CSSProperties> = {
     },
     ratingSummary: {
         fontSize: '12px',
-        color: '#999',
+        color: 'var(--text-tertiary)',
         display: 'flex',
         alignItems: 'center',
         gap: '4px',
     },
     newIssueBtnFull: {
         background: 'none',
-        border: '1px solid #007acc',
-        color: '#007acc',
+        border: '1px solid var(--accent)',
+        color: 'var(--accent)',
         borderRadius: '4px',
         padding: '6px 12px',
         fontSize: '12px',
@@ -1154,7 +1154,7 @@ const styles: Record<string, React.CSSProperties> = {
         gap: '8px',
     },
     rateScoreLabel: {
-        color: '#007acc',
+        color: 'var(--accent)',
         fontSize: '13px',
         fontWeight: 500,
     },
@@ -1165,18 +1165,18 @@ const styles: Record<string, React.CSSProperties> = {
         marginBottom: '6px',
     },
     rateComment: {
-        backgroundColor: '#2a2a2a',
-        border: '1px solid #3c3c3c',
+        backgroundColor: 'var(--bg-elevated)',
+        border: '1px solid var(--border)',
         borderRadius: '4px',
         padding: '6px 8px',
-        color: '#ccc',
+        color: 'var(--text-secondary)',
         fontSize: '12px',
         outline: 'none',
         minHeight: '28px',
     },
     submitBtn: {
-        backgroundColor: '#007acc',
-        color: '#fff',
+        backgroundColor: 'var(--accent)',
+        color: 'var(--text-on-accent)',
         border: 'none',
         borderRadius: '4px',
         padding: '6px 12px',
@@ -1184,11 +1184,12 @@ const styles: Record<string, React.CSSProperties> = {
         cursor: 'pointer',
     },
     submitBtnDisabled: {
-        backgroundColor: '#444',
+        backgroundColor: 'var(--bg-input)',
+        color: 'var(--text-disabled)',
         cursor: 'not-allowed',
     },
     submitBtnActive: {
-        backgroundColor: '#007acc',
+        backgroundColor: 'var(--accent)',
         cursor: 'pointer',
     },
     ratingItem: {
@@ -1199,36 +1200,36 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: '12px',
     },
     ratingUser: {
-        color: '#007acc',
+        color: 'var(--accent)',
         fontWeight: 500,
     },
     ratingComment: {
-        color: '#999',
+        color: 'var(--text-tertiary)',
         flex: 1,
     },
 
     // Issues
     newIssueBtn: {
         background: 'none',
-        border: '1px solid #007acc',
-        color: '#007acc',
+        border: '1px solid var(--accent)',
+        color: 'var(--accent)',
         borderRadius: '4px',
         padding: '2px 10px',
         fontSize: '12px',
         cursor: 'pointer',
     },
     emptyHint: {
-        color: '#666',
+        color: 'var(--text-disabled)',
         fontSize: '12px',
         textAlign: 'center' as const,
         padding: '8px',
     },
     issueCard: {
-        backgroundColor: '#2a2a2a',
+        backgroundColor: 'var(--bg-elevated)',
         borderRadius: '4px',
         padding: '8px 10px',
         marginBottom: '6px',
-        border: '1px solid #333',
+        border: '1px solid var(--border)',
     },
     issueHeader: {
         display: 'flex',
@@ -1238,13 +1239,13 @@ const styles: Record<string, React.CSSProperties> = {
     },
     issueTitle: {
         fontSize: '13px',
-        color: '#ddd',
+        color: 'var(--text-primary)',
         fontWeight: 500,
         flex: 1,
     },
     issueDesc: {
         fontSize: '12px',
-        color: '#999',
+        color: 'var(--text-tertiary)',
         marginBottom: '6px',
         lineHeight: 1.4,
     },
@@ -1255,15 +1256,15 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: '11px',
     },
     issueReporter: {
-        color: '#007acc',
+        color: 'var(--accent)',
     },
     issueDate: {
-        color: '#666',
+        color: 'var(--text-disabled)',
     },
     issueAction: {
         background: 'none',
-        border: '1px solid #27ae60',
-        color: '#27ae60',
+        border: '1px solid var(--status-success-bg)',
+        color: 'var(--status-success-bg)',
         borderRadius: '3px',
         padding: '1px 8px',
         fontSize: '11px',
@@ -1274,7 +1275,7 @@ const styles: Record<string, React.CSSProperties> = {
     // Badge
     badge: {
         fontSize: '11px',
-        color: '#fff',
+        color: 'var(--text-on-accent)',
         padding: '1px 6px',
         borderRadius: '3px',
         fontWeight: 500,
@@ -1289,44 +1290,44 @@ const styles: Record<string, React.CSSProperties> = {
     formLabel: {
         display: 'block',
         fontSize: '12px',
-        color: '#999',
+        color: 'var(--text-tertiary)',
         marginBottom: '4px',
     },
     formSelect: {
         width: '100%',
-        backgroundColor: '#2a2a2a',
-        border: '1px solid #3c3c3c',
+        backgroundColor: 'var(--bg-elevated)',
+        border: '1px solid var(--border)',
         borderRadius: '4px',
         padding: '6px 8px',
-        color: '#ccc',
+        color: 'var(--text-secondary)',
         fontSize: '13px',
         outline: 'none',
     },
     formInput: {
         width: '100%',
-        backgroundColor: '#2a2a2a',
-        border: '1px solid #3c3c3c',
+        backgroundColor: 'var(--bg-elevated)',
+        border: '1px solid var(--border)',
         borderRadius: '4px',
         padding: '6px 8px',
-        color: '#ccc',
+        color: 'var(--text-secondary)',
         fontSize: '13px',
         outline: 'none',
         boxSizing: 'border-box' as const,
     },
     formTextarea: {
         width: '100%',
-        backgroundColor: '#2a2a2a',
-        border: '1px solid #3c3c3c',
+        backgroundColor: 'var(--bg-elevated)',
+        border: '1px solid var(--border)',
         borderRadius: '4px',
         padding: '6px 8px',
-        color: '#ccc',
+        color: 'var(--text-secondary)',
         fontSize: '13px',
         outline: 'none',
         resize: 'vertical' as const,
         boxSizing: 'border-box' as const,
     },
     formError: {
-        color: '#e74c3c',
+        color: 'var(--severity-danger)',
         fontSize: '12px',
         padding: '4px 12px',
     },
@@ -1338,8 +1339,8 @@ const styles: Record<string, React.CSSProperties> = {
     },
     cancelBtn: {
         background: 'none',
-        border: '1px solid #555',
-        color: '#999',
+        border: '1px solid var(--border-strong)',
+        color: 'var(--text-tertiary)',
         borderRadius: '4px',
         padding: '6px 16px',
         fontSize: '13px',
