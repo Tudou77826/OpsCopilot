@@ -74,6 +74,23 @@
   --severity-success: #6ecf8a;
   --severity-muted: #888;
 
+  /* —— 文件类型图标（FilesPanel）—— */
+  --icon-folder-fg: #f0c04f;
+  --icon-folder-bg: #282315;
+  --icon-folder-border: #594820;
+  --icon-code-fg: #7dd3fc;
+  --icon-code-bg: #122633;
+  --icon-code-border: #21475f;
+  --icon-archive-fg: #c4b5fd;
+  --icon-archive-bg: #251f36;
+  --icon-archive-border: #40345e;
+
+  /* —— 拖放遮罩（FilesPanel drop overlay）—— */
+  --drop-ready-bg: rgba(17, 48, 73, 0.86);
+  --drop-ready-border: #5fb3ff;
+  --drop-blocked-bg: rgba(73, 24, 24, 0.88);
+  --drop-blocked-border: #ef8c8c;
+
   /* —— 遮罩与阴影 —— */
   --overlay: rgba(0, 0, 0, 0.7);
   --shadow: rgba(0, 0, 0, 0.4);
@@ -148,6 +165,21 @@
   --severity-info: #0969da;
   --severity-success: #1a7f37;
   --severity-muted: #8a8f98;
+
+  --icon-folder-fg: #9a6700;
+  --icon-folder-bg: #fff8c5;
+  --icon-folder-border: #d4a72c;
+  --icon-code-fg: #0969da;
+  --icon-code-bg: #ddf4ff;
+  --icon-code-border: #54aeff;
+  --icon-archive-fg: #8250df;
+  --icon-archive-bg: #fbefff;
+  --icon-archive-border: #d8b5ff;
+
+  --drop-ready-bg: rgba(221, 244, 255, 0.92);
+  --drop-ready-border: #0969da;
+  --drop-blocked-bg: rgba(255, 235, 233, 0.92);
+  --drop-blocked-border: #cf222e;
 
   --overlay: rgba(0, 0, 0, 0.45);
   --shadow: rgba(0, 0, 0, 0.15);

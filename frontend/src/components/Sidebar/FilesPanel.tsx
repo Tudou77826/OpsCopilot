@@ -1658,7 +1658,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                 </div>
             ) : null}
 
-            {msg ? <div style={{ color: '#aaa', fontSize: '12px' }}>{msg}</div> : null}
+            {msg ? <div style={{ color: 'var(--text-tertiary)', fontSize: '12px' }}>{msg}</div> : null}
 
             {isRootRelay() ? (
                 <div style={styles.relayBanner}>
@@ -1667,7 +1667,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
             ) : null}
 
             {!isSFTPSupported() && protocol.startsWith('scp') && !isRootRelay() ? (
-                <div style={{ color: '#aaa', fontSize: '12px' }}>
+                <div style={{ color: 'var(--text-tertiary)', fontSize: '12px' }}>
                     当前为 SCP 降级模式，仅支持上传/下载，不支持远端浏览与管理。
                 </div>
             ) : null}
@@ -1740,7 +1740,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                         ) : null}
                         <div style={styles.paneHeader}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <div style={{ color: '#fff', fontSize: '12px', fontWeight: 600 }}>远端（SCP）</div>
+                                <div style={{ color: 'var(--text-primary)', fontSize: '12px', fontWeight: 600 }}>远端（SCP）</div>
                                 <div style={styles.badge}>{protocol}</div>
                             </div>
                         </div>
@@ -1806,7 +1806,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
             {showQueue ? (
                 <div style={styles.drawer}>
                     <div style={styles.drawerHeader}>
-                        <div style={{ color: '#fff', fontSize: '13px', fontWeight: 600 }}>传输队列</div>
+                        <div style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600 }}>传输队列</div>
                         <div style={{ flex: 1 }} />
                         <button style={styles.btnSecondary} onClick={() => {
                             setDrawerOpen(false);
@@ -1815,15 +1815,15 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                     </div>
                     <div style={styles.drawerBody}>
                         {taskList.length === 0 ? (
-                            <div style={{ color: '#888', fontSize: '12px' }}>暂无任务</div>
+                            <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>暂无任务</div>
                         ) : (
                             taskList.map(t => (
                                 <div key={t.taskId} style={styles.taskRow}>
                                     <div style={styles.taskId} title={t.taskId}>{t.taskId.slice(0, 8)}</div>
                                     {t.status === 'done' ? (
-                                        <span style={{ color: '#4ade80', fontSize: '11px' }}>✓ 完成</span>
+                                        <span style={{ color: 'var(--success)', fontSize: '11px' }}>✓ 完成</span>
                                     ) : t.status === 'error' || t.status === 'cancelled' ? (
-                                        <span style={{ color: '#f87171', fontSize: '11px' }}>✗ {t.status}</span>
+                                        <span style={{ color: 'var(--severity-danger)', fontSize: '11px' }}>✗ {t.status}</span>
                                     ) : (
                                         <span style={styles.taskStatus}>{t.status}</span>
                                     )}
@@ -1852,7 +1852,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                 <div style={styles.modalOverlay}>
                     <div style={styles.modal}>
                         <div style={styles.modalHeader}>
-                            <div style={{ color: '#fff', fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{editPath}</div>
+                            <div style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{editPath}</div>
                             <button style={styles.btnSecondary} onClick={() => !editSaving && setEditOpen(false)} disabled={editSaving}>×</button>
                         </div>
                         <div style={styles.modalBody}>
@@ -1878,14 +1878,14 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
 const styles: Record<string, React.CSSProperties> = {
     root: {
         padding: '10px',
-        color: '#ddd',
+        color: 'var(--text-secondary)',
         display: 'flex',
         flexDirection: 'column',
         gap: '8px',
         height: '100%',
         minHeight: 0,
         overflow: 'hidden',
-        backgroundColor: '#15181c'
+        backgroundColor: 'var(--bg-secondary)'
     },
     rootNarrow: {
         padding: '8px',
@@ -1898,14 +1898,14 @@ const styles: Record<string, React.CSSProperties> = {
         flexWrap: 'wrap' as const,
         flexShrink: 0,
         padding: '7px 8px',
-        border: '1px solid #303844',
+        border: '1px solid var(--border-subtle)',
         borderRadius: '6px',
-        backgroundColor: '#1a1e23',
+        backgroundColor: 'var(--bg-tertiary)',
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)'
     },
     segmented: {
         display: 'flex',
-        border: '1px solid #333',
+        border: '1px solid var(--border)',
         borderRadius: '6px',
         overflow: 'hidden',
         flexShrink: 0
@@ -1914,9 +1914,9 @@ const styles: Record<string, React.CSSProperties> = {
         flex: 1,
         padding: '6px 8px',
         border: 'none',
-        borderRight: '1px solid #333',
-        backgroundColor: '#1e1e1e',
-        color: '#aaa',
+        borderRight: '1px solid var(--border)',
+        backgroundColor: 'var(--bg-primary)',
+        color: 'var(--text-tertiary)',
         cursor: 'pointer',
         fontSize: '12px'
     },
@@ -1924,9 +1924,9 @@ const styles: Record<string, React.CSSProperties> = {
         flex: 1,
         padding: '6px 8px',
         border: 'none',
-        borderRight: '1px solid #333',
-        backgroundColor: '#094771',
-        color: '#fff',
+        borderRight: '1px solid var(--border)',
+        backgroundColor: 'var(--bg-active)',
+        color: 'var(--text-on-accent)',
         cursor: 'pointer',
         fontSize: '12px',
         fontWeight: 600
@@ -1934,9 +1934,9 @@ const styles: Record<string, React.CSSProperties> = {
     select: {
         padding: '5px 8px',
         borderRadius: '4px',
-        border: '1px solid #3b4652',
-        backgroundColor: '#111419',
-        color: '#fff',
+        border: '1px solid var(--border)',
+        backgroundColor: 'var(--bg-primary)',
+        color: 'var(--text-primary)',
         outline: 'none',
         minWidth: '180px',
         maxWidth: '100%',
@@ -1946,9 +1946,9 @@ const styles: Record<string, React.CSSProperties> = {
     badge: {
         padding: '2px 7px',
         borderRadius: '999px',
-        border: '1px solid #35404c',
-        backgroundColor: '#161b20',
-        color: '#b9c6d3',
+        border: '1px solid var(--border-subtle)',
+        backgroundColor: 'var(--bg-secondary)',
+        color: 'var(--text-secondary)',
         fontSize: '11px',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
@@ -1958,17 +1958,17 @@ const styles: Record<string, React.CSSProperties> = {
     badgeMuted: {
         padding: '4px 8px',
         borderRadius: '999px',
-        border: '1px solid #3c3c3c',
-        backgroundColor: '#1e1e1e',
-        color: '#888',
+        border: '1px solid var(--border)',
+        backgroundColor: 'var(--bg-primary)',
+        color: 'var(--text-muted)',
         fontSize: '12px'
     },
     btn: {
         padding: '5px 10px',
         borderRadius: '4px',
-        border: '1px solid #1f6ea5',
-        backgroundColor: '#0b74b8',
-        color: '#fff',
+        border: '1px solid var(--accent-hover)',
+        backgroundColor: 'var(--accent)',
+        color: 'var(--text-on-accent)',
         cursor: 'pointer',
         fontSize: '11px',
         minWidth: '58px',
@@ -1978,9 +1978,9 @@ const styles: Record<string, React.CSSProperties> = {
     btnSecondary: {
         padding: '5px 9px',
         borderRadius: '4px',
-        border: '1px solid #343d47',
-        backgroundColor: '#171c21',
-        color: '#cbd5df',
+        border: '1px solid var(--border-subtle)',
+        backgroundColor: 'var(--bg-primary)',
+        color: 'var(--text-secondary)',
         cursor: 'pointer',
         fontSize: '11px',
         height: '28px'
@@ -1988,9 +1988,9 @@ const styles: Record<string, React.CSSProperties> = {
     btnDanger: {
         padding: '5px 9px',
         borderRadius: '4px',
-        border: '1px solid #663337',
-        backgroundColor: '#2a171a',
-        color: '#f4b8bd',
+        border: '1px solid var(--danger-border)',
+        backgroundColor: 'var(--danger-bg-subtle)',
+        color: 'var(--severity-danger)',
         cursor: 'pointer',
         fontSize: '11px',
         height: '28px'
@@ -1998,9 +1998,9 @@ const styles: Record<string, React.CSSProperties> = {
     iconBtn: {
         padding: '4px 7px',
         borderRadius: '4px',
-        border: '1px solid #343d47',
-        backgroundColor: '#151a1f',
-        color: '#cbd5df',
+        border: '1px solid var(--border-subtle)',
+        backgroundColor: 'var(--bg-primary)',
+        color: 'var(--text-secondary)',
         cursor: 'pointer',
         fontSize: '11px',
         minWidth: '30px',
@@ -2023,14 +2023,14 @@ const styles: Record<string, React.CSSProperties> = {
     },
     pane: {
         flex: 1,
-        border: '1px solid #2f3842',
+        border: '1px solid var(--border-subtle)',
         borderRadius: '6px',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
         minHeight: 0,
         minWidth: 0,
-        backgroundColor: '#11161c',
+        backgroundColor: 'var(--bg-primary)',
         boxShadow: '0 1px 0 rgba(255,255,255,0.03)'
     },
     paneTitleGroup: {
@@ -2041,7 +2041,7 @@ const styles: Record<string, React.CSSProperties> = {
         overflow: 'hidden'
     },
     paneTitle: {
-        color: '#f4f7fb',
+        color: 'var(--text-primary)',
         fontSize: '12px',
         fontWeight: 700,
         letterSpacing: 0
@@ -2055,8 +2055,8 @@ const styles: Record<string, React.CSSProperties> = {
     },
     paneHeader: {
         padding: '7px 8px',
-        borderBottom: '1px solid #2d3540',
-        backgroundColor: '#1d232a',
+        borderBottom: '1px solid var(--border-subtle)',
+        backgroundColor: 'var(--bg-tertiary)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -2064,20 +2064,20 @@ const styles: Record<string, React.CSSProperties> = {
     },
     pathBar: {
         padding: '6px 8px',
-        borderBottom: '1px solid #2b333d',
+        borderBottom: '1px solid var(--border-subtle)',
         display: 'flex',
         gap: '6px',
         alignItems: 'center',
-        backgroundColor: '#161b21',
+        backgroundColor: 'var(--bg-secondary)',
         flexWrap: 'wrap' as const
     },
     pathInput: {
         flex: 1,
         padding: '4px 8px',
         borderRadius: '4px',
-        border: '1px solid #323c47',
-        backgroundColor: '#0f1318',
-        color: '#f4f7fb',
+        border: '1px solid var(--border)',
+        backgroundColor: 'var(--bg-primary)',
+        color: 'var(--text-primary)',
         outline: 'none',
         fontSize: '11px',
         height: '28px',
@@ -2092,7 +2092,7 @@ const styles: Record<string, React.CSSProperties> = {
     fileTableWrap: {
         flex: 1,
         overflow: 'auto',
-        backgroundColor: '#11161c'
+        backgroundColor: 'var(--bg-primary)'
     },
     table: {
         width: '100%',
@@ -2104,7 +2104,7 @@ const styles: Record<string, React.CSSProperties> = {
         textAlign: 'left',
         fontWeight: 700,
         fontSize: '10px',
-        color: '#8794a3',
+        color: 'var(--text-muted)',
         padding: '0 8px',
         position: 'sticky' as const,
         top: 0,
@@ -2112,8 +2112,8 @@ const styles: Record<string, React.CSSProperties> = {
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         userSelect: 'none' as const,
-        backgroundColor: '#1b222a',
-        borderBottom: '1px solid #2d3540',
+        backgroundColor: 'var(--bg-tertiary)',
+        borderBottom: '1px solid var(--border-subtle)',
         boxSizing: 'border-box' as const,
         height: '28px',
         zIndex: 2
@@ -2127,21 +2127,21 @@ const styles: Record<string, React.CSSProperties> = {
     },
     td: {
         fontSize: '11px',
-        color: '#d8dee6',
+        color: 'var(--text-secondary)',
         padding: '5px 8px',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         height: '28px',
-        borderBottom: '1px solid #202831',
+        borderBottom: '1px solid var(--border-subtle)',
         boxSizing: 'border-box' as const
     },
     fileRow: {
         backgroundColor: 'transparent'
     },
     fileRowSelected: {
-        backgroundColor: '#213244',
-        boxShadow: 'inset 3px 0 0 #2f9bf4'
+        backgroundColor: 'var(--bg-active-soft)',
+        boxShadow: 'inset 3px 0 0 var(--accent)'
     },
     cellName: {
         display: 'flex',
@@ -2150,14 +2150,14 @@ const styles: Record<string, React.CSSProperties> = {
         minWidth: 0
     },
     cellOwner: {
-        color: '#9fb3c8'
+        color: 'var(--text-secondary)'
     },
     cellSize: {
         textAlign: 'right' as const,
-        color: '#c8d1dc'
+        color: 'var(--text-secondary)'
     },
     cellTime: {
-        color: '#9aa4af'
+        color: 'var(--text-tertiary)'
     },
     colResizeHandle: {
         position: 'absolute' as const,
@@ -2166,7 +2166,7 @@ const styles: Record<string, React.CSSProperties> = {
         width: '10px',
         height: '100%',
         cursor: 'col-resize',
-        borderRight: '1px solid #344150',
+        borderRight: '1px solid var(--border-subtle)',
         opacity: 0.75,
         boxSizing: 'border-box' as const
     },
@@ -2177,7 +2177,7 @@ const styles: Record<string, React.CSSProperties> = {
         minHeight: 0
     },
     compactRow: {
-        borderBottom: '1px solid #202831',
+        borderBottom: '1px solid var(--border-subtle)',
         padding: '7px 8px',
         display: 'flex',
         flexDirection: 'column' as const,
@@ -2185,8 +2185,8 @@ const styles: Record<string, React.CSSProperties> = {
         backgroundColor: 'transparent'
     },
     compactRowSelected: {
-        backgroundColor: '#213244',
-        boxShadow: 'inset 3px 0 0 #2f9bf4'
+        backgroundColor: 'var(--bg-active-soft)',
+        boxShadow: 'inset 3px 0 0 var(--accent)'
     },
     compactMain: {
         display: 'flex',
@@ -2199,11 +2199,11 @@ const styles: Record<string, React.CSSProperties> = {
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap',
         minWidth: 0,
-        color: '#ddd',
+        color: 'var(--text-secondary)',
         fontSize: '12px'
     },
     compactMeta: {
-        color: '#8f9aaa',
+        color: 'var(--text-tertiary)',
         fontSize: '10px',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
@@ -2211,7 +2211,7 @@ const styles: Record<string, React.CSSProperties> = {
         paddingLeft: '30px'
     },
     emptyState: {
-        color: '#888',
+        color: 'var(--text-muted)',
         fontSize: '12px',
         padding: '10px 8px'
     },
@@ -2223,26 +2223,26 @@ const styles: Record<string, React.CSSProperties> = {
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        border: '1px solid #313b45',
-        backgroundColor: '#171d24'
+        border: '1px solid var(--border-subtle)',
+        backgroundColor: 'var(--bg-primary)'
     },
     fileIconFolder: {
-        color: '#f0c04f',
-        backgroundColor: '#282315',
-        borderColor: '#594820'
+        color: 'var(--icon-folder-fg)',
+        backgroundColor: 'var(--icon-folder-bg)',
+        borderColor: 'var(--icon-folder-border)'
     },
     fileIconFile: {
-        color: '#a6b3c2'
+        color: 'var(--text-tertiary)'
     },
     fileIconCode: {
-        color: '#7dd3fc',
-        backgroundColor: '#122633',
-        borderColor: '#21475f'
+        color: 'var(--icon-code-fg)',
+        backgroundColor: 'var(--icon-code-bg)',
+        borderColor: 'var(--icon-code-border)'
     },
     fileIconArchive: {
-        color: '#c4b5fd',
-        backgroundColor: '#251f36',
-        borderColor: '#40345e'
+        color: 'var(--icon-archive-fg)',
+        backgroundColor: 'var(--icon-archive-bg)',
+        borderColor: 'var(--icon-archive-border)'
     },
     dropOverlay: {
         position: 'absolute' as const,
@@ -2260,20 +2260,20 @@ const styles: Record<string, React.CSSProperties> = {
         padding: '18px'
     },
     dropOverlayReady: {
-        border: '1px dashed #5fb3ff',
-        backgroundColor: 'rgba(17, 48, 73, 0.86)'
+        border: '1px dashed var(--drop-ready-border)',
+        backgroundColor: 'var(--drop-ready-bg)'
     },
     dropOverlayBlocked: {
-        border: '1px dashed #ef8c8c',
-        backgroundColor: 'rgba(73, 24, 24, 0.88)'
+        border: '1px dashed var(--drop-blocked-border)',
+        backgroundColor: 'var(--drop-blocked-bg)'
     },
     dropOverlayTitle: {
-        color: '#fff',
+        color: 'var(--text-primary)',
         fontSize: '14px',
         fontWeight: 700
     },
     dropOverlayDetail: {
-        color: '#c8d1dc',
+        color: 'var(--text-secondary)',
         fontSize: '12px',
         maxWidth: '80%',
         overflow: 'hidden',
@@ -2282,7 +2282,7 @@ const styles: Record<string, React.CSSProperties> = {
     },
     scpPane: {
         flex: 1,
-        border: '1px solid #333',
+        border: '1px solid var(--border)',
         borderRadius: '8px',
         overflow: 'hidden',
         display: 'flex',
@@ -2299,31 +2299,31 @@ const styles: Record<string, React.CSSProperties> = {
         overflow: 'auto'
     },
     scpGroup: {
-        border: '1px solid #333',
+        border: '1px solid var(--border)',
         borderRadius: '8px',
         padding: '12px 12px',
-        backgroundColor: '#1e1e1e',
+        backgroundColor: 'var(--bg-primary)',
         display: 'flex',
         flexDirection: 'column' as const,
         gap: '10px'
     },
     scpLabel: {
-        color: '#aaa',
+        color: 'var(--text-tertiary)',
         fontSize: '12px'
     },
     scpHint: {
-        color: '#888',
+        color: 'var(--text-muted)',
         fontSize: '12px'
     },
     drawer: {
-        border: '1px solid #333',
+        border: '1px solid var(--border)',
         borderRadius: '8px',
         overflow: 'hidden'
     },
     drawerHeader: {
         padding: '10px 12px',
-        backgroundColor: '#252526',
-        borderBottom: '1px solid #333',
+        backgroundColor: 'var(--bg-secondary)',
+        borderBottom: '1px solid var(--border)',
         display: 'flex',
         alignItems: 'center',
         gap: '10px'
@@ -2342,17 +2342,17 @@ const styles: Record<string, React.CSSProperties> = {
         alignItems: 'center'
     },
     taskId: {
-        color: '#aaa',
+        color: 'var(--text-tertiary)',
         fontSize: '12px',
         minWidth: '80px'
     },
     taskStatus: {
-        color: '#aaa',
+        color: 'var(--text-tertiary)',
         fontSize: '12px',
         minWidth: '70px'
     },
     taskStep: {
-        color: '#58a6ff',
+        color: 'var(--severity-info)',
         fontSize: '11px',
         flex: '1 1 80px',
         maxWidth: '200px',
@@ -2361,17 +2361,17 @@ const styles: Record<string, React.CSSProperties> = {
         whiteSpace: 'nowrap',
     },
     taskProgress: {
-        color: '#aaa',
+        color: 'var(--text-tertiary)',
         fontSize: '12px',
         minWidth: '140px'
     },
     taskSpeed: {
-        color: '#aaa',
+        color: 'var(--text-tertiary)',
         fontSize: '12px',
         minWidth: '110px'
     },
     taskMsg: {
-        color: '#aaa',
+        color: 'var(--text-tertiary)',
         fontSize: '12px',
         flex: 1
     },
@@ -2381,7 +2381,7 @@ const styles: Record<string, React.CSSProperties> = {
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.65)',
+        backgroundColor: 'var(--overlay)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -2390,21 +2390,21 @@ const styles: Record<string, React.CSSProperties> = {
     modal: {
         width: '720px',
         height: '520px',
-        backgroundColor: '#252526',
+        backgroundColor: 'var(--bg-secondary)',
         borderRadius: '8px',
-        border: '1px solid #333',
+        border: '1px solid var(--border)',
         display: 'flex',
         flexDirection: 'column' as const,
         overflow: 'hidden'
     },
     modalHeader: {
         padding: '10px 12px',
-        borderBottom: '1px solid #333',
+        borderBottom: '1px solid var(--border)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: '10px',
-        backgroundColor: '#1e1e1e'
+        backgroundColor: 'var(--bg-primary)'
     },
     modalBody: {
         flex: 1,
@@ -2412,20 +2412,20 @@ const styles: Record<string, React.CSSProperties> = {
     },
     modalFooter: {
         padding: '10px 12px',
-        borderTop: '1px solid #333',
+        borderTop: '1px solid var(--border)',
         display: 'flex',
         justifyContent: 'flex-end',
         gap: '10px',
-        backgroundColor: '#1e1e1e'
+        backgroundColor: 'var(--bg-primary)'
     },
     textarea: {
         width: '100%',
         height: '100%',
         padding: '10px 12px',
         borderRadius: '6px',
-        border: '1px solid #3c3c3c',
-        backgroundColor: '#1e1e1e',
-        color: '#fff',
+        border: '1px solid var(--border)',
+        backgroundColor: 'var(--bg-primary)',
+        color: 'var(--text-primary)',
         outline: 'none',
         fontFamily: 'var(--font-mono)',
         fontSize: '12px',
@@ -2452,32 +2452,32 @@ const styles: Record<string, React.CSSProperties> = {
         alignItems: 'center',
         gap: '6px',
         padding: '4px 8px',
-        border: '1px solid #303844',
+        border: '1px solid var(--border-subtle)',
         borderRadius: '999px',
-        backgroundColor: '#15181c',
+        backgroundColor: 'var(--bg-secondary)',
         fontSize: '11px',
         maxWidth: '260px'
     },
     infoLabel: {
-        color: '#7d8794',
+        color: 'var(--text-muted)',
         whiteSpace: 'nowrap' as const
     },
     infoValue: {
-        color: '#ddd',
+        color: 'var(--text-secondary)',
         whiteSpace: 'nowrap' as const,
         overflow: 'hidden',
         textOverflow: 'ellipsis'
     },
     infoValueMuted: {
-        color: '#666',
+        color: 'var(--text-disabled)',
         whiteSpace: 'nowrap' as const
     },
     relayBanner: {
         padding: '8px 10px',
         borderRadius: '6px',
-        border: '1px solid #5a4a1a',
-        backgroundColor: '#2a2510',
-        color: '#d4c87a',
+        border: '1px solid var(--warning-tint-border)',
+        backgroundColor: 'var(--warning-bg-subtle)',
+        color: 'var(--severity-warning)',
         fontSize: '11px',
         lineHeight: '1.6'
     }
