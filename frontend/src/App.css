@@ -39,7 +39,33 @@
   --warning: #ff9800;           /* 警告 */
   --danger: #f44336;            /* 危险/错误 */
   --danger-bg-subtle: #3a2d2d;  /* 危险柔和底（如断连 tab） */
+  --danger-border: #5a3a3a;     /* 危险按钮边框（透明底场景） */
+  --success-bg-subtle: #2e5a3a; /* 成功柔和底（badge/toast） */
+  --warning-bg-subtle: #5a4a2e; /* 警告柔和底（badge/toast） */
+  --info-bg-subtle: #2d3a4a;    /* 信息柔和底（tag/保存中） */
   --info: #2196f3;              /* 信息 */
+
+  /* —— 状态色微底/边框（半透明版本卡片、徽章）—— */
+  --info-tint: rgba(0, 122, 204, 0.12);
+  --info-tint-border: rgba(0, 122, 204, 0.28);
+  --warning-tint: rgba(255, 152, 0, 0.08);
+  --warning-tint-border: rgba(255, 152, 0, 0.22);
+  --success-tint: rgba(76, 175, 80, 0.08);
+  --success-tint-border: rgba(76, 175, 80, 0.25);
+  --danger-tint: rgba(244, 67, 54, 0.08);
+  --danger-tint-border: rgba(244, 67, 54, 0.25);
+
+  /* —— 正则风险等级（HighlightRulesModal 三档）—— */
+  --risk-moderate-bg: #7a5c2e;
+  --risk-moderate-fg: #ffcc80;
+  --risk-high-bg: #5c2e2e;
+  --risk-high-fg: #ff9980;
+  --risk-high-tint: rgba(255, 87, 34, 0.1);
+  --risk-high-border: #ff5722;
+  --risk-critical-bg: #4a1a1a;
+  --risk-critical-fg: #ff8080;
+  --risk-critical-tint: rgba(211, 47, 47, 0.1);
+  --risk-critical-border: #d32f2f;
 
   /* —— 危险/状态文字（用于 badge）—— */
   --severity-danger: #e06060;
@@ -91,7 +117,31 @@
   --warning: #b08800;
   --danger: #cf222e;
   --danger-bg-subtle: #ffebe9;
+  --danger-border: #e8b7b7;
+  --success-bg-subtle: #dafbe1;
+  --warning-bg-subtle: #fff8c5;
+  --info-bg-subtle: #ddf4ff;
   --info: #0969da;
+
+  --info-tint: #ddf4ff;
+  --info-tint-border: #54aeff;
+  --warning-tint: #fff8c5;
+  --warning-tint-border: #d4a72c;
+  --success-tint: #dafbe1;
+  --success-tint-border: #4ac26b;
+  --danger-tint: #ffebe9;
+  --danger-tint-border: #ff8182;
+
+  --risk-moderate-bg: #fff8c5;
+  --risk-moderate-fg: #9a6700;
+  --risk-high-bg: #ffebe9;
+  --risk-high-fg: #cf222e;
+  --risk-high-tint: #ffebe9;
+  --risk-high-border: #cf222e;
+  --risk-critical-bg: #ffd7d5;
+  --risk-critical-fg: #82071e;
+  --risk-critical-tint: #ffd7d5;
+  --risk-critical-border: #82071e;
 
   --severity-danger: #d1242f;
   --severity-warning: #bf8700;

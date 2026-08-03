@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { TbRobot, TbPalette, TbKeyboard, TbLayoutGrid, TbBooks, TbShieldCheck, TbLock, TbSettings, TbInfoCircle, TbSearch, TbPlugConnected, TbTerminal2, TbMinus, TbPlus, TbRefresh, TbCheck } from 'react-icons/tb';
+import { TbRobot, TbPalette, TbKeyboard, TbLayoutGrid, TbBooks, TbShieldCheck, TbLock, TbSettings, TbInfoCircle, TbSearch, TbPlugConnected, TbTerminal2, TbMinus, TbPlus, TbRefresh, TbCheck, TbSun, TbMoon } from 'react-icons/tb';
 import KeysMap from './KeysMap';
 import HighlightRulesModal from './HighlightRulesModal';
 import CommandWhitelistPanel from './CommandWhitelist/CommandWhitelistPanel';
 import FileAccessPanel from './FileAccess/FileAccessPanel';
 import AboutPanel from './AboutPanel';
 import { HighlightRule, TerminalConfig } from '../Terminal/highlightTypes';
+import { Theme } from '../appearanceTypes';
 import { assessPattern } from '../Terminal/highlight/regexSafety';
 import {
     DEFAULT_TERMINAL_FONT_SIZE,
@@ -58,6 +59,8 @@ interface SettingsModalProps {
     onCompletionDelayChange?: (delay: number) => void;
     onHighlightRulesChange?: (rules: HighlightRule[]) => void;
     onTerminalConfigChange?: (config: TerminalConfig) => void;
+    theme?: Theme;
+    onThemeChange?: (theme: Theme) => void;
     updateAvailable?: boolean;
 }
 
@@ -73,7 +76,7 @@ interface PatchSyncStatus {
     branch?: string;
 }
 
-type TabId = 'llm' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'knowledge' | 'aiagent' | 'whitelist' | 'fileaccess' | 'experimental' | 'about';
+type TabId = 'llm' | 'appearance' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'knowledge' | 'aiagent' | 'whitelist' | 'fileaccess' | 'experimental' | 'about';
 
 interface NavItem {
     id: TabId;
@@ -122,6 +125,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     onCompletionDelayChange,
     onHighlightRulesChange,
     onTerminalConfigChange,
+    theme = 'dark',
+    onThemeChange,
     updateAvailable
 }) => {
     const [config, setConfig] = useState<AppConfig | null>(null);
@@ -151,6 +156,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     // Navigation items structure
     const navItems: NavItem[] = [
         { id: 'llm', label: '模型服务', icon: TbRobot({}), category: 'AI' },
+        { id: 'appearance', label: '外观', icon: TbSun({}), category: '终端' },
         { id: 'terminal', label: '终端外观', icon: TbTerminal2({}), category: '终端' },
         { id: 'highlight', label: '突出显示', icon: TbPalette({}), category: '终端' },
         { id: 'shortcuts', label: '快捷键', icon: TbKeyboard({}), category: '交互' },
@@ -733,6 +739,47 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                 );
             }
+
+            case 'appearance':
+                return (
+                    <div style={styles.settingsGroup}>
+                        <div style={styles.groupTitle}>主题</div>
+                        <div style={styles.settingItem}>
+                            <label style={styles.settingLabel}>界面主题</label>
+                            <div style={styles.themeChoiceRow} role="radiogroup" aria-label="界面主题">
+                                <button
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={theme === 'dark'}
+                                    style={{
+                                        ...styles.themeChoiceCard,
+                                        ...(theme === 'dark' ? styles.themeChoiceCardActive : {}),
+                                    }}
+                                    onClick={() => onThemeChange?.('dark')}
+                                >
+                                    {TbMoon({ size: 16 })}
+                                    <span>暗色</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={theme === 'light'}
+                                    style={{
+                                        ...styles.themeChoiceCard,
+                                        ...(theme === 'light' ? styles.themeChoiceCardActive : {}),
+                                    }}
+                                    onClick={() => onThemeChange?.('light')}
+                                >
+                                    {TbSun({ size: 16 })}
+                                    <span>亮色</span>
+                                </button>
+                            </div>
+                            <div style={styles.settingDescription}>
+                                切换后立即生效并保存到配置；终端配色、界面背景与文字颜色会同步适配。
+                            </div>
+                        </div>
+                    </div>
+                );
 
             case 'highlight':
                 return (
@@ -1415,7 +1462,7 @@ const styles = {
     },
     fontPreviewCardSelected: {
         border: `1px solid ${colors.accent}`,
-        backgroundColor: '#202f3a',
+        backgroundColor: 'var(--bg-active-soft)',
     },
     fontPreviewHeader: {
         display: 'flex',
@@ -1438,19 +1485,46 @@ const styles = {
         height: '20px',
         borderRadius: '50%',
         backgroundColor: colors.accent,
-        color: '#ffffff',
+        color: 'var(--text-on-accent)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         flexShrink: 0,
     },
     fontPreviewSample: {
-        color: '#d7d7d7',
+        color: 'var(--text-secondary)',
         fontSize: '13px',
         lineHeight: 1.45,
         whiteSpace: 'nowrap' as const,
         overflow: 'hidden',
         textOverflow: 'ellipsis',
+    },
+    themeChoiceRow: {
+        display: 'flex',
+        gap: '10px',
+        flexWrap: 'wrap' as const,
+        marginTop: '4px',
+    },
+    themeChoiceCard: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+        minWidth: '130px',
+        padding: '11px 18px',
+        border: `1px solid ${colors.borderPrimary}`,
+        borderRadius: radius.md,
+        backgroundColor: colors.bgSecondary,
+        color: colors.textSecondary,
+        fontSize: font.base,
+        fontWeight: 500,
+        cursor: 'pointer',
+        transition: 'border-color 160ms ease, background-color 160ms ease',
+    },
+    themeChoiceCardActive: {
+        border: `1px solid ${colors.accent}`,
+        backgroundColor: 'var(--bg-active-soft)',
+        color: colors.textPrimary,
     },
     fontSizeButton: {
         width: '34px',
@@ -1556,7 +1630,7 @@ const styles = {
         fontWeight: 500,
         fontSize: font.base,
         ':hover': {
-            backgroundColor: '#005a9e',
+            backgroundColor: 'var(--accent-hover)',
         }
     },
     cancelBtn: {

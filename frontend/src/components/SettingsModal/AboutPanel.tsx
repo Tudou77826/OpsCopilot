@@ -505,8 +505,8 @@ const styles: Record<string, React.CSSProperties> = {
         color: colors.accent,
         fontSize: font.xs,
         fontFamily: 'monospace',
-        backgroundColor: 'rgba(0, 122, 204, 0.12)',
-        border: '1px solid rgba(0, 122, 204, 0.28)',
+        backgroundColor: 'var(--info-tint)',
+        border: '1px solid var(--info-tint-border)',
         borderRadius: radius.full,
         padding: '2px 8px',
     },
@@ -558,8 +558,8 @@ const styles: Record<string, React.CSSProperties> = {
     },
     updateMiniWarning: {
         color: colors.warning,
-        backgroundColor: 'rgba(255, 152, 0, 0.08)',
-        border: '1px solid rgba(255, 152, 0, 0.22)',
+        backgroundColor: 'var(--warning-tint)',
+        border: '1px solid var(--warning-tint-border)',
         borderRadius: radius.full,
         padding: '1px 7px',
     },
@@ -601,9 +601,9 @@ const styles: Record<string, React.CSSProperties> = {
         padding: '9px 12px',
         color: colors.success,
         fontSize: font.sm,
-        backgroundColor: 'rgba(76, 175, 80, 0.08)',
+        backgroundColor: 'var(--success-tint)',
         borderRadius: radius.md,
-        border: `1px solid rgba(76, 175, 80, 0.25)`,
+        border: `1px solid var(--success-tint-border)`,
     },
     statusBannerError: {
         display: 'flex',
@@ -612,9 +612,9 @@ const styles: Record<string, React.CSSProperties> = {
         padding: '9px 12px',
         color: colors.danger,
         fontSize: font.sm,
-        backgroundColor: 'rgba(244, 67, 54, 0.08)',
+        backgroundColor: 'var(--danger-tint)',
         borderRadius: radius.md,
-        border: `1px solid rgba(244, 67, 54, 0.25)`,
+        border: `1px solid var(--danger-tint-border)`,
     },
     // 版本日志翻页容器：左右按钮 + 单张卡片
     releasePager: {
@@ -695,11 +695,11 @@ const styles: Record<string, React.CSSProperties> = {
         // 普通（历史）版本卡片
     },
     releaseCardCurrent: {
-        borderColor: 'rgba(76, 175, 80, 0.4)',
-        backgroundColor: 'rgba(76, 175, 80, 0.04)',
+        borderColor: 'var(--success-tint-border)',
+        backgroundColor: 'var(--success-tint)',
     },
     releaseCardNew: {
-        borderColor: 'rgba(0, 122, 204, 0.32)',
+        borderColor: 'var(--info-tint-border)',
         backgroundColor: colors.bgPrimary,
     },
     releaseContent: {
@@ -726,11 +726,11 @@ const styles: Record<string, React.CSSProperties> = {
     badgeCurrent: {
         color: colors.success,
         fontSize: font.xs,
-        backgroundColor: 'rgba(76, 175, 80, 0.15)',
+        backgroundColor: 'var(--success-tint)',
         padding: '2px 8px',
         borderRadius: radius.full,
         fontWeight: 600,
-        border: '1px solid rgba(76, 175, 80, 0.3)',
+        border: '1px solid var(--success-tint-border)',
     },
     badgeNew: {
         color: colors.textPrimary,
@@ -820,8 +820,8 @@ const styles: Record<string, React.CSSProperties> = {
         padding: '9px 12px',
         color: colors.warning,
         fontSize: font.sm,
-        backgroundColor: 'rgba(255, 152, 0, 0.08)',
-        border: '1px solid rgba(255, 152, 0, 0.25)',
+        backgroundColor: 'var(--warning-tint)',
+        border: '1px solid var(--warning-tint-border)',
         borderRadius: radius.md,
     },
     btnRow: {

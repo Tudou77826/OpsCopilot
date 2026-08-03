@@ -938,6 +938,8 @@ function App() {
                 onCompletionDelayChange={setCompletionDelay}
                 onHighlightRulesChange={setHighlightRules}
                 onTerminalConfigChange={handleTerminalConfigChange}
+                theme={theme}
+                onThemeChange={handleThemeChange}
                 updateAvailable={updateAvailable}
             />
 

@@ -177,7 +177,7 @@ const CommandWhitelistPanel: React.FC<CommandWhitelistPanelProps> = ({ onSave })
   };
 
   const getCategoryColor = (category: string) => {
-    return category === 'read_only' ? '#4caf50' : '#ff9800';
+    return category === 'read_only' ? 'var(--success)' : 'var(--warning)';
   };
 
   if (loading) {
@@ -509,8 +509,8 @@ const PolicyEditor: React.FC<{
                     <code style={editorStyles.commandPattern}>{cmd.pattern}</code>
                     <span style={{
                       ...editorStyles.categoryBadge,
-                      backgroundColor: cmd.category === 'read_only' ? '#2e5a3a' : '#5a4a2e',
-                      color: cmd.category === 'read_only' ? '#8fdf9a' : '#f0c060',
+                      backgroundColor: cmd.category === 'read_only' ? 'var(--success-bg-subtle)' : 'var(--warning-bg-subtle)',
+                      color: cmd.category === 'read_only' ? 'var(--severity-success)' : 'var(--severity-warning)',
                     }}>
                       {cmd.category === 'read_only' ? '只读' : '写入'}
                     </span>
@@ -809,7 +809,7 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: 0,
   },
   commandPattern: {
-    color: '#9cdcfe',
+    color: 'var(--accent)',
     fontSize: font.sm,
     fontFamily: 'var(--font-mono)',
   },
@@ -841,15 +841,15 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'opacity 0.3s',
   },
   saveStatusSaving: {
-    backgroundColor: '#2d3a4a',
-    color: '#9cdcfe',
+    backgroundColor: 'var(--info-bg-subtle)',
+    color: 'var(--accent)',
   },
   saveStatusSaved: {
-    backgroundColor: '#1a2a24',
+    backgroundColor: 'var(--success-bg-subtle)',
     color: colors.success,
   },
   saveStatusError: {
-    backgroundColor: '#2a1818',
+    backgroundColor: 'var(--danger-bg-subtle)',
     color: colors.danger,
   },
 };
@@ -1008,7 +1008,7 @@ const editorStyles: Record<string, React.CSSProperties> = {
     whiteSpace: 'nowrap',
   },
   addBtnDisabled: {
-    backgroundColor: '#444',
+    backgroundColor: 'var(--border-strong)',
     cursor: 'not-allowed',
   },
   tagList: {
@@ -1019,9 +1019,9 @@ const editorStyles: Record<string, React.CSSProperties> = {
   },
   tag: {
     padding: '4px 8px',
-    backgroundColor: '#2d3a4a',
+    backgroundColor: 'var(--info-bg-subtle)',
     borderRadius: radius.sm,
-    color: '#9cdcfe',
+    color: 'var(--accent)',
     fontSize: font.sm,
     display: 'flex',
     alignItems: 'center',
@@ -1059,7 +1059,7 @@ const editorStyles: Record<string, React.CSSProperties> = {
     minWidth: 0,
   },
   commandPattern: {
-    color: '#9cdcfe',
+    color: 'var(--accent)',
     fontSize: font.xs,
     fontFamily: 'var(--font-mono)',
   },

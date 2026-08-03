@@ -3,22 +3,24 @@
 // ============================================================
 
 // ---- Colors ----
+// 值全部映射到 App.css 的语义 token(暗色下与原值视觉一致,亮色下自动切换)
 export const colors = {
-  bgPrimary: '#1e1e1e',
-  bgSecondary: '#252526',
-  bgTertiary: '#2d2d2d',
-  bgHover: '#3c3c3c',
-  borderPrimary: '#3c3c3c',
-  borderSubtle: '#2d2d2d',
-  textPrimary: '#ffffff',
-  textSecondary: '#cccccc',
-  textTertiary: '#888888',
-  textMuted: '#666666',
-  accent: '#007acc',
-  success: '#4caf50',
-  danger: '#f44336',
-  warning: '#ff9800',
-  overlay: 'rgba(0, 0, 0, 0.7)',
+  bgPrimary: 'var(--bg-primary)',
+  bgSecondary: 'var(--bg-secondary)',
+  bgTertiary: 'var(--bg-tertiary)',
+  bgHover: 'var(--bg-hover)',
+  borderPrimary: 'var(--border)',
+  borderSubtle: 'var(--border-subtle)',
+  textPrimary: 'var(--text-primary)',
+  textSecondary: 'var(--text-secondary)',
+  // 历史值 #888 对应 muted 档; #666 对应 disabled 档(暗色下值完全一致)
+  textTertiary: 'var(--text-muted)',
+  textMuted: 'var(--text-disabled)',
+  accent: 'var(--accent)',
+  success: 'var(--success)',
+  danger: 'var(--danger)',
+  warning: 'var(--warning)',
+  overlay: 'var(--overlay)',
 } as const;
 
 // ---- Border Radius ----
@@ -85,7 +87,7 @@ export const btnSmall: React.CSSProperties = {
 export const btnDanger: React.CSSProperties = {
   padding: '4px 10px',
   borderRadius: radius.sm,
-  border: '1px solid #5a3a3a',
+  border: '1px solid var(--danger-border)',
   backgroundColor: 'transparent',
   color: colors.danger,
   cursor: 'pointer',
@@ -95,9 +97,9 @@ export const btnDanger: React.CSSProperties = {
 export const btnGhost: React.CSSProperties = {
   padding: '6px 12px',
   borderRadius: radius.sm,
-  border: '1px solid #444444',
+  border: '1px solid var(--border-strong)',
   backgroundColor: 'transparent',
-  color: '#aaaaaa',
+  color: 'var(--text-tertiary)',
   cursor: 'pointer',
   fontSize: font.sm,
 };
@@ -145,7 +147,7 @@ export const modalContainer: React.CSSProperties = {
   borderRadius: radius.lg,
   display: 'flex',
   flexDirection: 'column',
-  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+  boxShadow: '0 4px 12px var(--shadow)',
   overflow: 'hidden',
 };
 

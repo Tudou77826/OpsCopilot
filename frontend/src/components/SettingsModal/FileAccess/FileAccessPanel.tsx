@@ -216,7 +216,7 @@ const FileAccessPanel: React.FC = () => {
                       ) : (
                         <div style={styles.pathList}>
                           {policy.denied_paths.map((p, i) => (
-                            <code key={i} style={{ ...styles.pathTag, backgroundColor: '#3a2020', color: '#f06060' }}>{p}</code>
+                            <code key={i} style={{ ...styles.pathTag, backgroundColor: 'var(--danger-bg-subtle)', color: 'var(--severity-danger)' }}>{p}</code>
                           ))}
                         </div>
                       )}
@@ -335,8 +335,8 @@ const FileAccessPolicyEditor: React.FC<{
             onAdd={(v) => addTag('write_paths', v, setNewWritePath)}
             onRemove={(i) => removeTag('write_paths', i)}
             placeholder="/tmp/"
-            tagColor="#5a4a2e"
-            tagTextColor="#f0c060"
+            tagColor="var(--warning-bg-subtle)"
+            tagTextColor="var(--severity-warning)"
           />
 
           {/* 拒绝路径 */}
@@ -350,8 +350,8 @@ const FileAccessPolicyEditor: React.FC<{
             onAdd={(v) => addTag('denied_paths', v, setNewDeniedPath)}
             onRemove={(i) => removeTag('denied_paths', i)}
             placeholder="/etc/shadow"
-            tagColor="#3a2020"
-            tagTextColor="#f06060"
+            tagColor="var(--danger-bg-subtle)"
+            tagTextColor="var(--severity-danger)"
           />
 
           {/* 大小限制 */}
@@ -598,9 +598,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   pathTag: {
     padding: '2px 8px',
-    backgroundColor: '#2d3a4a',
+    backgroundColor: 'var(--info-bg-subtle)',
     borderRadius: '3px',
-    color: '#9cdcfe',
+    color: 'var(--accent)',
     fontSize: font.sm,
     fontFamily: 'var(--font-mono)',
   },
@@ -620,15 +620,15 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'opacity 0.3s',
   },
   saveStatusSaving: {
-    backgroundColor: '#2d3a4a',
-    color: '#9cdcfe',
+    backgroundColor: 'var(--info-bg-subtle)',
+    color: 'var(--accent)',
   },
   saveStatusSaved: {
-    backgroundColor: '#1a2a24',
+    backgroundColor: 'var(--success-bg-subtle)',
     color: colors.success,
   },
   saveStatusError: {
-    backgroundColor: '#2a1818',
+    backgroundColor: 'var(--danger-bg-subtle)',
     color: colors.danger,
   },
 };
@@ -641,39 +641,39 @@ const editorStyles: Record<string, React.CSSProperties> = {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'var(--overlay)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 2100,
   },
   modal: {
-    backgroundColor: '#252526',
+    backgroundColor: 'var(--bg-secondary)',
     borderRadius: '8px',
     width: '580px',
     maxHeight: '80vh',
     display: 'flex',
     flexDirection: 'column',
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+    boxShadow: '0 4px 12px var(--shadow)',
   },
   header: {
     padding: '16px 20px',
-    borderBottom: '1px solid #3c3c3c',
+    borderBottom: '1px solid var(--border)',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1e1e1e',
+    backgroundColor: 'var(--bg-primary)',
   },
   title: {
     margin: 0,
     fontSize: '15px',
-    color: '#fff',
+    color: 'var(--text-primary)',
     fontWeight: 600,
   },
   closeBtn: {
     background: 'none',
     border: 'none',
-    color: '#ccc',
+    color: 'var(--text-secondary)',
     fontSize: '20px',
     cursor: 'pointer',
     padding: '0',
@@ -702,7 +702,7 @@ const editorStyles: Record<string, React.CSSProperties> = {
     gap: '16px',
   },
   label: {
-    color: '#ccc',
+    color: 'var(--text-secondary)',
     fontSize: '13px',
     fontWeight: 500,
   },
@@ -715,9 +715,9 @@ const editorStyles: Record<string, React.CSSProperties> = {
     width: '16px',
     height: '16px',
     borderRadius: '50%',
-    border: '1px solid #4a4a4a',
-    backgroundColor: '#2d2d30',
-    color: '#aaa',
+    border: '1px solid var(--border-strong)',
+    backgroundColor: 'var(--bg-tertiary)',
+    color: 'var(--text-tertiary)',
     cursor: 'help',
     fontSize: '11px',
     lineHeight: '14px',
@@ -725,15 +725,15 @@ const editorStyles: Record<string, React.CSSProperties> = {
     textAlign: 'center',
   },
   hint: {
-    color: '#888',
+    color: 'var(--text-muted)',
     fontSize: '11px',
   },
   input: {
     padding: '8px 12px',
     borderRadius: '4px',
-    border: '1px solid #3c3c3c',
-    backgroundColor: '#1e1e1e',
-    color: '#fff',
+    border: '1px solid var(--border)',
+    backgroundColor: 'var(--bg-primary)',
+    color: 'var(--text-primary)',
     outline: 'none',
     fontSize: '13px',
   },
@@ -745,8 +745,8 @@ const editorStyles: Record<string, React.CSSProperties> = {
     padding: '8px 16px',
     borderRadius: '4px',
     border: 'none',
-    backgroundColor: '#007acc',
-    color: '#fff',
+    backgroundColor: 'var(--accent)',
+    color: 'var(--text-primary)',
     cursor: 'pointer',
     fontSize: '13px',
     whiteSpace: 'nowrap',
@@ -759,9 +759,9 @@ const editorStyles: Record<string, React.CSSProperties> = {
   },
   tag: {
     padding: '4px 8px',
-    backgroundColor: '#2d3a4a',
+    backgroundColor: 'var(--info-bg-subtle)',
     borderRadius: '4px',
-    color: '#9cdcfe',
+    color: 'var(--accent)',
     fontSize: '12px',
     display: 'flex',
     alignItems: 'center',
@@ -770,7 +770,7 @@ const editorStyles: Record<string, React.CSSProperties> = {
   tagRemove: {
     background: 'none',
     border: 'none',
-    color: '#888',
+    color: 'var(--text-muted)',
     cursor: 'pointer',
     fontSize: '14px',
     padding: '0',
@@ -778,18 +778,18 @@ const editorStyles: Record<string, React.CSSProperties> = {
   },
   footer: {
     padding: '16px 20px',
-    borderTop: '1px solid #3c3c3c',
+    borderTop: '1px solid var(--border)',
     display: 'flex',
     justifyContent: 'flex-end',
     gap: '12px',
-    backgroundColor: '#1e1e1e',
+    backgroundColor: 'var(--bg-primary)',
   },
   cancelBtn: {
     padding: '8px 20px',
     borderRadius: '4px',
-    border: '1px solid #5a5a5a',
+    border: '1px solid var(--border-strong)',
     backgroundColor: 'transparent',
-    color: '#ccc',
+    color: 'var(--text-secondary)',
     cursor: 'pointer',
     fontSize: '13px',
   },
@@ -797,8 +797,8 @@ const editorStyles: Record<string, React.CSSProperties> = {
     padding: '8px 20px',
     borderRadius: '4px',
     border: 'none',
-    backgroundColor: '#007acc',
-    color: '#fff',
+    backgroundColor: 'var(--accent)',
+    color: 'var(--text-primary)',
     cursor: 'pointer',
     fontSize: '13px',
     fontWeight: 500,

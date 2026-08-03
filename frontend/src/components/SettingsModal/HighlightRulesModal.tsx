@@ -264,12 +264,12 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
                                                     {risk.level !== 'safe' && (
                                                         <span style={{
                                                             ...styles.riskBadge,
-                                                            backgroundColor: risk.level === 'moderate' ? '#7a5c2e' :
-                                                                           risk.level === 'high' ? '#5c2e2e' :
-                                                                           '#4a1a1a',
-                                                            color: risk.level === 'moderate' ? '#ffcc80' :
-                                                                   risk.level === 'high' ? '#ff9980' :
-                                                                   '#ff8080'
+                                                            backgroundColor: risk.level === 'moderate' ? 'var(--risk-moderate-bg)' :
+                                                                           risk.level === 'high' ? 'var(--risk-high-bg)' :
+                                                                           'var(--risk-critical-bg)',
+                                                            color: risk.level === 'moderate' ? 'var(--risk-moderate-fg)' :
+                                                                   risk.level === 'high' ? 'var(--risk-high-fg)' :
+                                                                   'var(--risk-critical-fg)'
                                                         }}>
                                                             {risk.level === 'moderate' ? '中等风险' :
                                                              risk.level === 'high' ? '高风险' :
@@ -342,12 +342,12 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
                                                     {risk.level !== 'safe' && (
                                                         <div style={{
                                                             ...styles.warningBox,
-                                                            backgroundColor: risk.level === 'moderate' ? 'rgba(255, 152, 0, 0.1)' :
-                                                                             risk.level === 'high' ? 'rgba(255, 87, 34, 0.1)' :
-                                                                             'rgba(211, 47, 47, 0.1)',
-                                                            borderColor: risk.level === 'moderate' ? '#ff9800' :
-                                                                          risk.level === 'high' ? '#ff5722' :
-                                                                          '#d32f2f'
+                                                            backgroundColor: risk.level === 'moderate' ? 'var(--warning-tint)' :
+                                                                             risk.level === 'high' ? 'var(--risk-high-tint)' :
+                                                                             'var(--risk-critical-tint)',
+                                                            borderColor: risk.level === 'moderate' ? 'var(--warning)' :
+                                                                          risk.level === 'high' ? 'var(--risk-high-border)' :
+                                                                          'var(--risk-critical-border)'
                                                         }}>
                                                             <div style={styles.warningHeader}>
                                                                 <span style={styles.warningIcon}>
@@ -357,9 +357,9 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
                                                                 </span>
                                                                 <span style={{
                                                                     ...styles.warningTitle,
-                                                                    color: risk.level === 'moderate' ? '#ff9800' :
-                                                                           risk.level === 'high' ? '#ff5722' :
-                                                                           '#d32f2f'
+                                                                    color: risk.level === 'moderate' ? 'var(--warning)' :
+                                                                           risk.level === 'high' ? 'var(--risk-high-border)' :
+                                                                           'var(--risk-critical-border)'
                                                                 }}>
                                                                     {risk.level === 'moderate' ? '中等风险' :
                                                                      risk.level === 'high' ? '高风险' :
@@ -400,7 +400,7 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
                                                         <label
                                                             style={{
                                                                 ...styles.bgOption,
-                                                                color: hoveredBgOption === r.id ? '#fff' : '#ccc'
+                                                                color: hoveredBgOption === r.id ? 'var(--text-primary)' : 'var(--text-secondary)'
                                                             }}
                                                             onMouseEnter={() => setHoveredBgOption(r.id)}
                                                             onMouseLeave={() => setHoveredBgOption(null)}
@@ -413,8 +413,8 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
                                                             />
                                                             <span style={{
                                                                 ...styles.customCheckbox,
-                                                                borderColor: !r.style?.background_color ? '#5a8a6a' : (hoveredBgOption === r.id ? '#666' : '#555'),
-                                                                backgroundColor: !r.style?.background_color ? '#1a2a24' : (hoveredBgOption === r.id ? '#2a2a2a' : '#1e1e1e'),
+                                                                borderColor: !r.style?.background_color ? 'var(--success-tint-border)' : (hoveredBgOption === r.id ? 'var(--text-disabled)' : 'var(--border-strong)'),
+                                                                backgroundColor: !r.style?.background_color ? 'var(--success-bg-subtle)' : (hoveredBgOption === r.id ? 'var(--bg-elevated)' : 'var(--bg-primary)'),
                                                             }}>
                                                                 {!r.style?.background_color && <span style={styles.checkmark}>✓</span>}
                                                             </span>
@@ -533,7 +533,7 @@ const styles = {
         height: '650px',
         display: 'flex',
         flexDirection: 'column' as const,
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+        boxShadow: '0 4px 12px var(--shadow)',
         overflow: 'hidden',
         alignSelf: 'center' as const,
     },
@@ -678,7 +678,7 @@ const styles = {
         alignItems: 'center',
         gap: '4px',
         ':hover': {
-            backgroundColor: '#4C4C4C',
+            backgroundColor: 'var(--border-strong)',
         }
     },
     iconBtn: {
@@ -695,7 +695,7 @@ const styles = {
         alignItems: 'center',
         justifyContent: 'center',
         ':hover': {
-            backgroundColor: '#4C4C4C',
+            backgroundColor: 'var(--border-strong)',
         }
     },
     expanded: {
@@ -784,7 +784,7 @@ const styles = {
         backgroundColor: colors.bgPrimary,
     },
     checkmark: {
-        color: '#7aaa88',
+        color: 'var(--severity-success)',
         fontSize: font.sm,
         fontWeight: 'bold',
         lineHeight: 1,
@@ -846,7 +846,7 @@ const styles = {
         marginTop: '8px',
     },
     previewBg: {
-        backgroundColor: '#0d0d0d',
+        backgroundColor: 'var(--bg-primary)',
         padding: '12px',
         borderRadius: radius.sm,
         border: `1px solid ${colors.borderPrimary}`,
@@ -877,7 +877,7 @@ const styles = {
         fontWeight: 500,
         fontSize: font.base,
         ':hover': {
-            backgroundColor: '#005a9e',
+            backgroundColor: 'var(--accent-hover)',
         }
     },
     cancelBtn: {
@@ -903,7 +903,7 @@ const styles = {
         fontWeight: 500,
         fontSize: font.base,
         ':hover': {
-            backgroundColor: '#005a9e',
+            backgroundColor: 'var(--accent-hover)',
         }
     },
 };
@@ -926,7 +926,7 @@ const unsavedStyles = {
         borderRadius: radius.lg,
         padding: '24px',
         width: '400px',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+        boxShadow: '0 4px 12px var(--shadow)',
     },
     title: {
         color: colors.textPrimary,
@@ -957,8 +957,8 @@ const unsavedStyles = {
     discardBtn: {
         padding: '8px 16px',
         borderRadius: radius.sm,
-        border: '1px solid #6c4a4a',
-        backgroundColor: '#5c3a3a',
+        border: '1px solid var(--danger-border)',
+        backgroundColor: 'var(--danger-bg-subtle)',
         color: colors.danger,
         cursor: 'pointer',
         fontSize: font.base,
