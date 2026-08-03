@@ -290,8 +290,8 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                         style={{
                             ...styles.nodeRow,
                             paddingLeft,
-                            backgroundColor: isDragOver ? '#094771' : (isHovered ? '#2a2d2e' : 'transparent'),
-                            outline: isDragOver ? '1px dashed #007acc' : 'none',
+                            backgroundColor: isDragOver ? 'var(--bg-active)' : (isHovered ? 'var(--bg-elevated)' : 'transparent'),
+                            outline: isDragOver ? '1px dashed var(--accent)' : 'none',
                             outlineOffset: '-1px',
                         }}
                         draggable={!isFolder}
@@ -306,7 +306,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                         onClick={() => isFolder ? handleToggleFolder(node.id) : null}
                         onDoubleClick={() => !isFolder && node.config && onConnect(node.config)}
                     >
-                        <span style={{marginRight: '8px', userSelect: 'none', display: 'inline-flex', alignItems: 'center', color: isFolder ? '#dcb56a' : '#8f8f8f'}}>{isFolder ? (isExpanded ? TbFolderOpen({size: 16}) : TbFolder({size: 16})) : TbTerminal2({size: 16})}</span>
+                        <span style={{marginRight: '8px', userSelect: 'none', display: 'inline-flex', alignItems: 'center', color: isFolder ? 'var(--icon-folder-fg)' : 'var(--text-muted)'}}>{isFolder ? (isExpanded ? TbFolderOpen({size: 16}) : TbFolder({size: 16})) : TbTerminal2({size: 16})}</span>
 
                         {isEditing ? (
                             <input
@@ -326,7 +326,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                                 <span style={{
                                     ...styles.nodeName,
                                     fontWeight: isFolder ? 600 : 400,
-                                    color: isFolder ? '#e0e0e0' : '#bbb',
+                                    color: isFolder ? 'var(--text-primary)' : 'var(--text-secondary)',
                                 }}>{node.name}</span>
                                 {/* 协议 chip:仅非默认协议(telnet)显示,避免全 SSH 环境噪声 */}
                                 {!isFolder && normalizeProtocol(node.config?.protocol) === 'telnet' && (
@@ -419,8 +419,8 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                     <div
                         style={{
                             ...styles.menuItem,
-                            backgroundColor: hoveredMenuItem === 'newfolder' ? '#094771' : 'transparent',
-                            color: hoveredMenuItem === 'newfolder' ? '#fff' : '#ccc'
+                            backgroundColor: hoveredMenuItem === 'newfolder' ? 'var(--bg-active)' : 'transparent',
+                            color: hoveredMenuItem === 'newfolder' ? 'var(--text-on-accent)' : 'var(--text-secondary)'
                         }}
                         onMouseEnter={() => setHoveredMenuItem('newfolder')}
                         onMouseLeave={() => setHoveredMenuItem(null)}
@@ -439,8 +439,8 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                         <div
                             style={{
                                 ...styles.menuItem,
-                                backgroundColor: hoveredMenuItem === 'connect' ? '#094771' : 'transparent',
-                                color: hoveredMenuItem === 'connect' ? '#fff' : '#ccc'
+                                backgroundColor: hoveredMenuItem === 'connect' ? 'var(--bg-active)' : 'transparent',
+                                color: hoveredMenuItem === 'connect' ? 'var(--text-on-accent)' : 'var(--text-secondary)'
                             }}
                             onMouseEnter={() => setHoveredMenuItem('connect')}
                             onMouseLeave={() => setHoveredMenuItem(null)}
@@ -454,8 +454,8 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                         <div
                             style={{
                                 ...styles.menuItem,
-                                backgroundColor: hoveredMenuItem === 'edit' ? '#094771' : 'transparent',
-                                color: hoveredMenuItem === 'edit' ? '#fff' : '#ccc'
+                                backgroundColor: hoveredMenuItem === 'edit' ? 'var(--bg-active)' : 'transparent',
+                                color: hoveredMenuItem === 'edit' ? 'var(--text-on-accent)' : 'var(--text-secondary)'
                             }}
                             onMouseEnter={() => setHoveredMenuItem('edit')}
                             onMouseLeave={() => setHoveredMenuItem(null)}
@@ -471,8 +471,8 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                         <div
                             style={{
                                 ...styles.menuItem,
-                                backgroundColor: hoveredMenuItem === 'ungroup' ? '#094771' : 'transparent',
-                                color: hoveredMenuItem === 'ungroup' ? '#fff' : '#ccc'
+                                backgroundColor: hoveredMenuItem === 'ungroup' ? 'var(--bg-active)' : 'transparent',
+                                color: hoveredMenuItem === 'ungroup' ? 'var(--text-on-accent)' : 'var(--text-secondary)'
                             }}
                             onMouseEnter={() => setHoveredMenuItem('ungroup')}
                             onMouseLeave={() => setHoveredMenuItem(null)}
@@ -486,8 +486,8 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                         <div
                             style={{
                                 ...styles.menuItem,
-                                backgroundColor: hoveredMenuItem === 'connectall' ? '#094771' : 'transparent',
-                                color: hoveredMenuItem === 'connectall' ? '#fff' : '#ccc'
+                                backgroundColor: hoveredMenuItem === 'connectall' ? 'var(--bg-active)' : 'transparent',
+                                color: hoveredMenuItem === 'connectall' ? 'var(--text-on-accent)' : 'var(--text-secondary)'
                             }}
                             onMouseEnter={() => setHoveredMenuItem('connectall')}
                             onMouseLeave={() => setHoveredMenuItem(null)}
@@ -501,8 +501,8 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                     <div
                         style={{
                             ...styles.menuItem,
-                            backgroundColor: hoveredMenuItem === 'rename' ? '#094771' : 'transparent',
-                            color: hoveredMenuItem === 'rename' ? '#fff' : '#ccc'
+                            backgroundColor: hoveredMenuItem === 'rename' ? 'var(--bg-active)' : 'transparent',
+                            color: hoveredMenuItem === 'rename' ? 'var(--text-on-accent)' : 'var(--text-secondary)'
                         }}
                         onMouseEnter={() => setHoveredMenuItem('rename')}
                         onMouseLeave={() => setHoveredMenuItem(null)}
@@ -517,8 +517,8 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                     <div
                         style={{
                             ...styles.menuItem,
-                            backgroundColor: hoveredMenuItem === 'delete' ? '#094771' : 'transparent',
-                            color: hoveredMenuItem === 'delete' ? '#fff' : '#ccc'
+                            backgroundColor: hoveredMenuItem === 'delete' ? 'var(--bg-active)' : 'transparent',
+                            color: hoveredMenuItem === 'delete' ? 'var(--text-on-accent)' : 'var(--text-secondary)'
                         }}
                         onMouseEnter={() => setHoveredMenuItem('delete')}
                         onMouseLeave={() => setHoveredMenuItem(null)}
@@ -546,16 +546,16 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
 
 // protocolChipStyle:telnet 协议标识 chip。
 // 风格对齐 FilesPanel 的 infoChip(胶囊形 999px + 冷调深底),仅文字色
-// 用低饱和橙(#d08a3e)区分协议,避免强对比暖色块在侧栏里突兀。
+// 用低饱和橙(var(--stage-orange))区分协议,避免强对比暖色块在侧栏里突兀。
 const protocolChipStyle: React.CSSProperties = {
     display: 'inline-block',
     marginLeft: '6px',
     padding: '1px 7px',
     fontSize: '10px',
     lineHeight: '1.5',
-    color: '#d08a3e',
-    backgroundColor: '#1a1a1a',
-    border: '1px solid #3a3a3a',
+    color: 'var(--stage-orange)',
+    backgroundColor: 'var(--bg-primary)',
+    border: '1px solid var(--border)',
     borderRadius: '999px',
     userSelect: 'none',
     verticalAlign: 'middle',
@@ -566,20 +566,20 @@ const styles = {
         display: 'flex',
         flexDirection: 'column' as const,
         height: '100%',
-        color: '#ccc',
-        backgroundColor: '#252526',
+        color: 'var(--text-secondary)',
+        backgroundColor: 'var(--bg-secondary)',
     },
     searchBar: {
         padding: '10px',
-        borderBottom: '1px solid #333',
+        borderBottom: '1px solid var(--border)',
     },
     searchInput: {
         width: '100%',
         padding: '6px',
         borderRadius: '4px',
-        border: '1px solid #3c3c3c',
-        backgroundColor: '#3c3c3c',
-        color: '#fff',
+        border: '1px solid var(--border)',
+        backgroundColor: 'var(--bg-input)',
+        color: 'var(--text-primary)',
         outline: 'none',
         boxSizing: 'border-box' as const,
     },
@@ -600,9 +600,9 @@ const styles = {
         userSelect: 'none' as const,
     },
     renameInput: {
-        backgroundColor: '#3c3c3c',
-        color: '#fff',
-        border: '1px solid #007acc',
+        backgroundColor: 'var(--bg-input)',
+        color: 'var(--text-primary)',
+        border: '1px solid var(--accent)',
         outline: 'none',
         padding: '2px 4px',
         fontSize: '14px',
@@ -610,13 +610,13 @@ const styles = {
     },
     empty: {
         textAlign: 'center' as const,
-        color: '#666',
+        color: 'var(--text-disabled)',
         marginTop: '20px',
     },
     contextMenu: {
         position: 'fixed' as const,
-        backgroundColor: '#252526',
-        border: '1px solid #454545',
+        backgroundColor: 'var(--bg-secondary)',
+        border: '1px solid var(--border)',
         boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
         borderRadius: '4px',
         zIndex: 1000,
