@@ -30,7 +30,7 @@ interface TerminalSession {
 }
 
 const DAILY_UPDATE_CHECK_HOUR = 8;
-const ATTENTION_DOT_COLOR = '#f44336';
+const ATTENTION_DOT_COLOR = 'var(--danger)';
 
 const getDelayUntilNextDailyUpdateCheck = (now = new Date()) => {
     const next = new Date(now);
@@ -732,9 +732,9 @@ function App() {
         <div id="app" style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
             <div style={{
                 padding: '6px 12px',
-                background: '#2b2b2b',
-                borderBottom: '1px solid #1e1e1e',
-                color: '#fff',
+                background: 'var(--bg-elevated)',
+                borderBottom: '1px solid var(--bg-primary)',
+                color: 'var(--text-primary)',
                 display: 'flex',
                 gap: '12px',
                 alignItems: 'center',
@@ -747,7 +747,7 @@ function App() {
                     {status !== '就绪' && status !== '已连接' && status !== '已重连' && (
                         <div style={{
                             ...styles.loadingIndicator,
-                            color: (status.includes('失败') || status.includes('请先')) ? '#f44336' : '#888',
+                            color: (status.includes('失败') || status.includes('请先')) ? 'var(--danger)' : 'var(--text-muted)',
                         }}>
                             {!status.includes('失败') && !status.includes('请先') && (
                                 <svg className="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -786,7 +786,7 @@ function App() {
                                 height: '8px',
                                 borderRadius: '50%',
                                 backgroundColor: ATTENTION_DOT_COLOR,
-                                border: '1px solid #1e1e1e',
+                                border: '1px solid var(--bg-primary)',
                             }} />
                         )}
                     </button>
@@ -796,12 +796,12 @@ function App() {
                             alignItems: 'center',
                             gap: '4px',
                             padding: '2px 8px',
-                            background: '#3c3c3c',
+                            background: 'var(--bg-input)',
                             borderRadius: '4px',
                             fontSize: '0.75rem',
                         }}>
-                            <span style={{ color: '#888' }}>{TbClock({ size: 12 })}</span>
-                            <span style={{ color: '#ccc' }}>{parsedTimestamp.local}</span>
+                            <span style={{ color: 'var(--text-muted)' }}>{TbClock({ size: 12 })}</span>
+                            <span style={{ color: 'var(--text-secondary)' }}>{parsedTimestamp.local}</span>
                         </div>
                     )}
                 </div>
@@ -853,8 +853,8 @@ function App() {
                     <div
                         style={{
                             ...styles.navIcon,
-                            backgroundColor: (isSidebarOpen && sidebarTab === 'sessions') ? '#333' : 'transparent',
-                            borderRight: (isSidebarOpen && sidebarTab === 'sessions') ? '2px solid #007acc' : '2px solid transparent'
+                            backgroundColor: (isSidebarOpen && sidebarTab === 'sessions') ? 'var(--bg-elevated)' : 'transparent',
+                            borderRight: (isSidebarOpen && sidebarTab === 'sessions') ? '2px solid var(--accent)' : '2px solid transparent'
                         }}
                         onClick={() => toggleSidebar('sessions')}
                         title="会话管理"
@@ -864,8 +864,8 @@ function App() {
                     <div
                         style={{
                             ...styles.navIcon,
-                            backgroundColor: (isSidebarOpen && sidebarTab === 'troubleshoot') ? '#333' : 'transparent',
-                            borderRight: (isSidebarOpen && sidebarTab === 'troubleshoot') ? '2px solid #007acc' : '2px solid transparent'
+                            backgroundColor: (isSidebarOpen && sidebarTab === 'troubleshoot') ? 'var(--bg-elevated)' : 'transparent',
+                            borderRight: (isSidebarOpen && sidebarTab === 'troubleshoot') ? '2px solid var(--accent)' : '2px solid transparent'
                         }}
                         onClick={() => toggleSidebar('troubleshoot')}
                         title="定位助手"
@@ -875,8 +875,8 @@ function App() {
                     <div
                         style={{
                             ...styles.navIcon,
-                            backgroundColor: (isSidebarOpen && sidebarTab === 'chat') ? '#333' : 'transparent',
-                            borderRight: (isSidebarOpen && sidebarTab === 'chat') ? '2px solid #007acc' : '2px solid transparent'
+                            backgroundColor: (isSidebarOpen && sidebarTab === 'chat') ? 'var(--bg-elevated)' : 'transparent',
+                            borderRight: (isSidebarOpen && sidebarTab === 'chat') ? '2px solid var(--accent)' : '2px solid transparent'
                         }}
                         onClick={() => toggleSidebar('chat')}
                         title="AI 问答"
@@ -886,8 +886,8 @@ function App() {
                     <div
                         style={{
                             ...styles.navIcon,
-                            backgroundColor: (isSidebarOpen && sidebarTab === 'knowledge') ? '#333' : 'transparent',
-                            borderRight: (isSidebarOpen && sidebarTab === 'knowledge') ? '2px solid #007acc' : '2px solid transparent'
+                            backgroundColor: (isSidebarOpen && sidebarTab === 'knowledge') ? 'var(--bg-elevated)' : 'transparent',
+                            borderRight: (isSidebarOpen && sidebarTab === 'knowledge') ? '2px solid var(--accent)' : '2px solid transparent'
                         }}
                         onClick={() => toggleSidebar('knowledge')}
                         title="知识库"
@@ -897,8 +897,8 @@ function App() {
                     <div
                         style={{
                             ...styles.navIcon,
-                            backgroundColor: (isSidebarOpen && sidebarTab === 'script') ? '#333' : 'transparent',
-                            borderRight: (isSidebarOpen && sidebarTab === 'script') ? '2px solid #007acc' : '2px solid transparent'
+                            backgroundColor: (isSidebarOpen && sidebarTab === 'script') ? 'var(--bg-elevated)' : 'transparent',
+                            borderRight: (isSidebarOpen && sidebarTab === 'script') ? '2px solid var(--accent)' : '2px solid transparent'
                         }}
                         onClick={() => toggleSidebar('script')}
                         title="脚本录制"
@@ -909,8 +909,8 @@ function App() {
                     <div
                         style={{
                             ...styles.navIcon,
-                            backgroundColor: isQuickCommandOpen ? '#333' : 'transparent',
-                            borderRight: isQuickCommandOpen ? '2px solid #007acc' : '2px solid transparent',
+                            backgroundColor: isQuickCommandOpen ? 'var(--bg-elevated)' : 'transparent',
+                            borderRight: isQuickCommandOpen ? '2px solid var(--accent)' : '2px solid transparent',
                         }}
                         onClick={() => setIsQuickCommandOpen(!isQuickCommandOpen)}
                         title="快捷命令"
@@ -986,10 +986,10 @@ const styles = {
         justifyContent: 'center',
         gap: '4px',
         padding: '0 12px',
-        backgroundColor: '#0e639c',
+        backgroundColor: 'var(--accent)',
         border: 'none',
         borderRadius: '4px',
-        color: '#fff',
+        color: 'var(--text-on-accent)',
         cursor: 'pointer',
         fontSize: '0.82rem',
         fontWeight: 500 as const,
@@ -1002,7 +1002,7 @@ const styles = {
         backgroundColor: 'transparent',
         border: 'none',
         borderRadius: '4px',
-        color: '#aaa',
+        color: 'var(--text-tertiary)',
         cursor: 'pointer',
         padding: '4px',
         transition: 'color 0.15s',
@@ -1015,11 +1015,11 @@ const styles = {
     },
     rightNav: {
         width: '40px',
-        backgroundColor: '#252526',
+        backgroundColor: 'var(--bg-secondary)',
         display: 'flex',
         flexDirection: 'column' as const,
         alignItems: 'center',
-        borderLeft: '1px solid #333',
+        borderLeft: '1px solid var(--border)',
         paddingTop: '10px',
         paddingBottom: '10px',
     },
