@@ -26,17 +26,17 @@ interface AgentStatusEvent {
 
 // Stage display configuration: maps backend stage names to user-friendly labels, icons, and colors
 const STAGE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-    thinking:       { label: '分析中',   icon: TbBrain({size: 14}), color: '#8b9cf7' },
-    catalog_match:  { label: '匹配知识库', icon: TbTarget({size: 14}), color: '#7ac5d8' },
-    grepping:       { label: '搜索关键词', icon: TbSearch({size: 14}), color: '#d4a843' },
-    reading:        { label: '查阅文档', icon: TbBook({size: 14}), color: '#7ac5d8' },
-    answering:      { label: '生成回答', icon: TbWriting({size: 14}), color: '#6ecf8a' },
-    retrying:       { label: '重试中',   icon: TbRefresh({size: 14}), color: '#e0a050' },
-    error:          { label: '出错',     icon: TbAlertTriangle({size: 14}), color: '#e06060' },
+    thinking:       { label: '分析中',   icon: TbBrain({size: 14}), color: 'var(--stage-purple)' },
+    catalog_match:  { label: '匹配知识库', icon: TbTarget({size: 14}), color: 'var(--stage-blue)' },
+    grepping:       { label: '搜索关键词', icon: TbSearch({size: 14}), color: 'var(--severity-warning)' },
+    reading:        { label: '查阅文档', icon: TbBook({size: 14}), color: 'var(--stage-blue)' },
+    answering:      { label: '生成回答', icon: TbWriting({size: 14}), color: 'var(--severity-success)' },
+    retrying:       { label: '重试中',   icon: TbRefresh({size: 14}), color: 'var(--stage-orange)' },
+    error:          { label: '出错',     icon: TbAlertTriangle({size: 14}), color: 'var(--severity-danger)' },
 };
 
 function getStageConfig(stage: string) {
-    return STAGE_CONFIG[stage] || { label: stage, icon: TbSettings({size: 14}), color: '#888' };
+    return STAGE_CONFIG[stage] || { label: stage, icon: TbSettings({size: 14}), color: 'var(--text-muted)' };
 }
 
 const TroubleshootingPanel: React.FC = () => {
@@ -453,10 +453,10 @@ const TroubleshootingPanel: React.FC = () => {
                                                 ol: ({node, ...props}) => <ol style={{...props.style, paddingLeft: '1.5em', marginBottom: '0.6em'}} {...props} />,
                                                 li: ({node, ...props}) => <li style={{...props.style, marginBottom: '0.25em'}} {...props} />,
                                                 code: ({node, inline, ...props}: any) => inline
-                                                    ? <code style={{backgroundColor: '#2a2a2a', padding: '2px 6px', borderRadius: '3px', fontSize: '0.9em'}} {...props} />
-                                                    : <code style={{display: 'block', backgroundColor: '#1a1a1a', padding: '10px', borderRadius: '4px', overflowX: 'auto', marginBottom: '0.6em', fontSize: '0.85em'}} {...props} />,
+                                                    ? <code style={{backgroundColor: 'var(--bg-elevated)', padding: '2px 6px', borderRadius: '3px', fontSize: '0.9em'}} {...props} />
+                                                    : <code style={{display: 'block', backgroundColor: 'var(--bg-primary)', padding: '10px', borderRadius: '4px', overflowX: 'auto', marginBottom: '0.6em', fontSize: '0.85em'}} {...props} />,
                                                 strong: ({node, ...props}) => <strong style={{fontWeight: 'bold'}} {...props} />,
-                                                blockquote: ({node, ...props}) => <blockquote style={{borderLeft: '3px solid #555', paddingLeft: '0.8em', fontStyle: 'italic', color: '#999', marginBottom: '0.6em'}} {...props} />,
+                                                blockquote: ({node, ...props}) => <blockquote style={{borderLeft: '3px solid var(--border-strong)', paddingLeft: '0.8em', fontStyle: 'italic', color: 'var(--text-tertiary)', marginBottom: '0.6em'}} {...props} />,
                                             }}
                                         >
                                             {data.summary}
@@ -510,10 +510,10 @@ const TroubleshootingPanel: React.FC = () => {
                         ol: ({node, ...props}) => <ol style={{...props.style, paddingLeft: '1.5em', marginBottom: '0.8em'}} {...props} />,
                         li: ({node, ...props}) => <li style={{...props.style, marginBottom: '0.3em'}} {...props} />,
                         code: ({node, inline, ...props}: any) => inline
-                            ? <code style={{backgroundColor: '#2a2a2a', padding: '2px 6px', borderRadius: '3px', fontSize: '0.9em'}} {...props} />
-                            : <code style={{display: 'block', backgroundColor: '#1a1a1a', padding: '12px', borderRadius: '6px', overflowX: 'auto', marginBottom: '1em'}} {...props} />,
+                            ? <code style={{backgroundColor: 'var(--bg-elevated)', padding: '2px 6px', borderRadius: '3px', fontSize: '0.9em'}} {...props} />
+                            : <code style={{display: 'block', backgroundColor: 'var(--bg-primary)', padding: '12px', borderRadius: '6px', overflowX: 'auto', marginBottom: '1em'}} {...props} />,
                         strong: ({node, ...props}) => <strong style={{fontWeight: 'bold'}} {...props} />,
-                        blockquote: ({node, ...props}) => <blockquote style={{borderLeft: '3px solid #555', paddingLeft: '1em', fontStyle: 'italic', color: '#999', marginBottom: '0.8em'}} {...props} />,
+                        blockquote: ({node, ...props}) => <blockquote style={{borderLeft: '3px solid var(--border-strong)', paddingLeft: '1em', fontStyle: 'italic', color: 'var(--text-tertiary)', marginBottom: '0.8em'}} {...props} />,
                     }}
                 >
                     {content}
@@ -548,7 +548,7 @@ const TroubleshootingPanel: React.FC = () => {
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             placeholder="例如：服务器 CPU 占用率过高..."
-                            style={{...styles.textarea, minHeight: '80px', backgroundColor: '#333'}}
+                            style={{...styles.textarea, minHeight: '80px', backgroundColor: 'var(--bg-input)'}}
                         />
 
                         <button onClick={handleStart} style={styles.primaryButton}>
@@ -563,7 +563,8 @@ const TroubleshootingPanel: React.FC = () => {
                                 <div key={idx} style={{
                                     ...styles.messageItem,
                                     alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                                    backgroundColor: msg.role === 'user' ? '#007acc' : '#333',
+                                    backgroundColor: msg.role === 'user' ? 'var(--accent)' : 'var(--bg-tertiary)',
+                                    color: msg.role === 'user' ? 'var(--text-on-accent)' : 'var(--text-primary)',
                                     maxWidth: msg.role === 'user' ? '85%' : '95%'
                                 }}>
                                     {msg.role === 'ai' ? renderMessageContent(msg.content) : (
@@ -598,7 +599,7 @@ const TroubleshootingPanel: React.FC = () => {
                                         <div style={{
                                             ...styles.contextBarFill,
                                             width: `${pct}%`,
-                                            backgroundColor: ratio > 0.8 ? '#e06060' : '#4a9eda',
+                                            backgroundColor: ratio > 0.8 ? 'var(--severity-danger)' : 'var(--severity-info)',
                                         }} />
                                     </div>
                                     <span style={styles.contextBarLabel}>
@@ -647,7 +648,7 @@ const TroubleshootingPanel: React.FC = () => {
                                                     <span key={pi}>
                                                         {pi > 0 && <span style={styles.catalogPathSep}> / </span>}
                                                         <span style={{
-                                                            color: pi === parts.length - 1 ? '#ccc' : '#777',
+                                                            color: pi === parts.length - 1 ? 'var(--text-secondary)' : 'var(--text-muted)',
                                                             fontWeight: pi === parts.length - 1 ? 500 : 400,
                                                         }}>{part}</span>
                                                     </span>
@@ -739,7 +740,7 @@ const styles = {
         display: 'flex',
         flexDirection: 'column' as const,
         height: '100%',
-        color: '#ccc',
+        color: 'var(--text-secondary)',
     },
     emptyState: {
         flex: 1,
@@ -748,7 +749,7 @@ const styles = {
         alignItems: 'center',
         justifyContent: 'center',
         padding: '20px',
-        color: '#888',
+        color: 'var(--text-muted)',
     },
     icon: {
         fontSize: '48px',
@@ -759,17 +760,17 @@ const styles = {
     },
     primaryButton: {
         padding: '8px 16px',
-        backgroundColor: '#007acc',
-        color: 'white',
+        backgroundColor: 'var(--accent)',
+        color: 'var(--text-on-accent)',
         border: 'none',
         borderRadius: '4px',
         cursor: 'pointer',
     },
     secondaryButton: {
         padding: '4px 8px',
-        backgroundColor: '#333',
-        color: '#ccc',
-        border: '1px solid #555',
+        backgroundColor: 'var(--bg-input)',
+        color: 'var(--text-secondary)',
+        border: '1px solid var(--border-strong)',
         borderRadius: '4px',
         cursor: 'pointer',
         fontSize: '12px',
@@ -779,8 +780,8 @@ const styles = {
         alignItems: 'center',
         gap: '6px',
         padding: '8px 14px',
-        backgroundColor: '#007acc',
-        color: '#fff',
+        backgroundColor: 'var(--accent)',
+        color: 'var(--text-on-accent)',
         border: 'none',
         borderRadius: '6px',
         cursor: 'pointer',
@@ -803,8 +804,8 @@ const styles = {
         alignItems: 'center',
         gap: '6px',
         padding: '8px 14px',
-        backgroundColor: '#f44336',
-        color: '#fff',
+        backgroundColor: 'var(--danger)',
+        color: 'var(--text-on-accent)',
         border: 'none',
         borderRadius: '6px',
         cursor: 'pointer',
@@ -841,7 +842,7 @@ const styles = {
         maxWidth: '85%',
         padding: '10px 14px',
         borderRadius: '8px',
-        color: '#fff',
+        color: 'var(--text-primary)',
         wordBreak: 'break-word' as const,
     },
     messageContent: {
@@ -850,8 +851,8 @@ const styles = {
     },
     footer: {
         padding: '10px',
-        backgroundColor: '#252526',
-        borderTop: '1px solid #333',
+        backgroundColor: 'var(--bg-secondary)',
+        borderTop: '1px solid var(--border)',
     },
     toolbar: {
         display: 'flex',
@@ -865,10 +866,10 @@ const styles = {
     },
     textarea: {
         flex: 1,
-        backgroundColor: '#3c3c3c',
+        backgroundColor: 'var(--bg-input)',
         border: 'none',
         borderRadius: '4px',
-        color: '#fff',
+        color: 'var(--text-primary)',
         padding: '8px',
         resize: 'none' as const,
         outline: 'none',
@@ -876,23 +877,23 @@ const styles = {
     },
     sendButton: {
         padding: '0 12px',
-        backgroundColor: '#007acc',
-        color: 'white',
+        backgroundColor: 'var(--accent)',
+        color: 'var(--text-on-accent)',
         border: 'none',
         borderRadius: '4px',
         cursor: 'pointer',
     },
     statusIndicator: {
         padding: '8px 12px',
-        color: '#888',
+        color: 'var(--text-muted)',
         fontSize: '12px',
         display: 'flex',
         alignItems: 'center',
         gap: '6px',
-        backgroundColor: '#1e1e1e',
+        backgroundColor: 'var(--bg-primary)',
         borderRadius: '6px',
         margin: '0 4px',
-        border: '1px solid #2a2a2a',
+        border: '1px solid var(--bg-elevated)',
     },
     stageIcon: {
         fontSize: '14px',
@@ -907,20 +908,20 @@ const styles = {
     },
     stageMessage: {
         fontSize: '12px',
-        color: '#999',
+        color: 'var(--text-tertiary)',
         whiteSpace: 'nowrap' as const,
         overflow: 'hidden',
         textOverflow: 'ellipsis',
     },
     stageBreadcrumb: {
         fontSize: '12px',
-        color: '#999',
+        color: 'var(--text-tertiary)',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
     },
     statusHistory: {
         padding: '4px 12px',
-        borderLeft: '2px solid #2a2a2a',
+        borderLeft: '2px solid var(--bg-elevated)',
         marginLeft: '14px',
         display: 'flex',
         flexDirection: 'column' as const,
@@ -942,32 +943,32 @@ const styles = {
     },
     historyDetail: {
         fontSize: '11px',
-        color: '#666',
+        color: 'var(--text-disabled)',
         marginLeft: '2px',
     },
     usedDocsBox: {
         padding: '10px 12px',
-        backgroundColor: '#1f1f1f',
-        border: '1px solid #333',
+        backgroundColor: 'var(--bg-primary)',
+        border: '1px solid var(--border)',
         borderRadius: '8px',
-        color: '#aaa',
+        color: 'var(--text-tertiary)',
         maxWidth: '95%',
     },
     catalogPathChip: {
         padding: '2px 8px',
         borderRadius: '999px',
-        backgroundColor: '#2a2a2a',
-        border: '1px solid #3a3a3a',
-        color: '#bbb',
+        backgroundColor: 'var(--bg-elevated)',
+        border: '1px solid var(--border)',
+        color: 'var(--text-secondary)',
         fontSize: '11px',
     },
     catalogPathSep: {
-        color: '#555',
+        color: 'var(--text-disabled)',
         margin: '0 1px',
     },
     usedDocsTitle: {
         fontSize: '12px',
-        color: '#888',
+        color: 'var(--text-muted)',
         marginBottom: '8px',
     },
     usedDocsList: {
@@ -978,9 +979,9 @@ const styles = {
     usedDocChip: {
         padding: '2px 8px',
         borderRadius: '999px',
-        backgroundColor: '#2a2a2a',
-        border: '1px solid #3a3a3a',
-        color: '#bbb',
+        backgroundColor: 'var(--bg-elevated)',
+        border: '1px solid var(--border)',
+        color: 'var(--text-secondary)',
         fontSize: '12px',
     },
     contextBar: {
@@ -994,7 +995,7 @@ const styles = {
         flex: 1,
         height: '4px',
         borderRadius: '2px',
-        backgroundColor: '#333',
+        backgroundColor: 'var(--bg-input)',
         overflow: 'hidden' as const,
     },
     contextBarFill: {
@@ -1004,7 +1005,7 @@ const styles = {
     },
     contextBarLabel: {
         fontSize: '10px',
-        color: '#666',
+        color: 'var(--text-disabled)',
         whiteSpace: 'nowrap' as const,
     },
     structuredResponse: {
@@ -1019,7 +1020,7 @@ const styles = {
     sectionTitle: {
         margin: '0 0 8px 0',
         fontSize: '12px',
-        color: '#aaa',
+        color: 'var(--text-tertiary)',
         textTransform: 'uppercase' as const,
         letterSpacing: '0.5px',
     },
@@ -1036,19 +1037,19 @@ const styles = {
     rootCauseInput: {
         flex: 1,
         padding: '8px',
-        backgroundColor: '#3c3c3c',
-        border: '1px solid #555',
+        backgroundColor: 'var(--bg-input)',
+        border: '1px solid var(--border-strong)',
         borderRadius: '4px',
-        color: '#fff',
+        color: 'var(--text-primary)',
         fontSize: '13px',
         outline: 'none',
         boxSizing: 'border-box' as const,
     },
     magicButton: {
         background: 'none',
-        border: '1px solid #555',
+        border: '1px solid var(--border-strong)',
         borderRadius: '4px',
-        color: '#ffd700',
+        color: 'var(--star-active)',
         cursor: 'pointer',
         fontSize: '16px',
         padding: '6px 10px',

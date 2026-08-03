@@ -96,6 +96,11 @@
   /* —— 代码 teal 文字（脚本变量高亮）—— */
   --teal-fg: #4ec9b0;
 
+  /* —— 排查阶段色（TroubleshootingPanel STAGE_CONFIG 前景）—— */
+  --stage-blue: #7ac5d8;
+  --stage-purple: #8b9cf7;
+  --stage-orange: #e0a050;
+
   /* —— 文件类型图标（FilesPanel）—— */
   --icon-folder-fg: #f0c04f;
   --icon-folder-bg: #282315;
@@ -204,6 +209,10 @@
   --chip-code-bg: #ddf4ff;
 
   --teal-fg: #0a6640;
+
+  --stage-blue: #067a94;
+  --stage-purple: #6a4fd8;
+  --stage-orange: #a05e00;
 
   --icon-folder-fg: #9a6700;
   --icon-folder-bg: #fff8c5;
