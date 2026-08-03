@@ -90,6 +90,12 @@
   /* —— 信息标签底（service/keyword chip 蓝底）—— */
   --chip-info-bg: #1a3a5a;
 
+  /* —— 代码 chip 底（脚本编辑器变量标签）—— */
+  --chip-code-bg: #264f78;
+
+  /* —— 代码 teal 文字（脚本变量高亮）—— */
+  --teal-fg: #4ec9b0;
+
   /* —— 文件类型图标（FilesPanel）—— */
   --icon-folder-fg: #f0c04f;
   --icon-folder-bg: #282315;
@@ -194,6 +200,10 @@
   --star-active: #bf8700;
 
   --chip-info-bg: #ddf4ff;
+
+  --chip-code-bg: #ddf4ff;
+
+  --teal-fg: #0a6640;
 
   --icon-folder-fg: #9a6700;
   --icon-folder-bg: #fff8c5;

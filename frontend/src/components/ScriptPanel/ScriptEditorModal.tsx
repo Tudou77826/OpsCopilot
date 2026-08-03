@@ -65,23 +65,23 @@ const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
                 from { opacity: 0; transform: translateY(20px) scale(0.98); }
                 to { opacity: 1; transform: translateY(0) scale(1); }
             }
-            .se-switch-slider { background-color: #424242; }
-            .se-switch-checkbox:checked + .se-switch-slider { background-color: #4ade80; }
+            .se-switch-slider { background-color: var(--bg-input); }
+            .se-switch-checkbox:checked + .se-switch-slider { background-color: var(--success); }
             .se-switch-checkbox:checked + .se-switch-slider::after { transform: translateX(16px); }
             .se-switch-slider::after {
                 content: ''; position: absolute; top: 2px; left: 2px;
-                width: 16px; height: 16px; background-color: white;
+                width: 16px; height: 16px; background-color: var(--text-on-accent);
                 border-radius: 50%; transition: transform 0.2s ease;
             }
-            .se-input:focus { outline: none; border-color: #007acc !important; box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2); }
+            .se-input:focus { outline: none; border-color: var(--accent) !important; box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2); }
             .se-btn:hover { transform: translateY(-1px); }
-            .se-btn-action:hover { background-color: #2d2d2d; color: #ffffff; }
-            .se-btn-close:hover { background-color: #2d2d2d; color: #ffffff; }
-            .se-btn-add:hover { background-color: #0069b4; box-shadow: 0 4px 12px rgba(0, 122, 204, 0.4); }
-            .se-btn-save:hover { background-color: #0069b4; box-shadow: 0 4px 12px rgba(0, 122, 204, 0.4); }
-            .se-btn-cancel:hover { background-color: #3e3e42; border-color: #5a5a5a; }
-            .se-command-card:hover { border-color: #5a5a5a; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
-            .se-meta-input:hover, .se-delay-group:hover { border-color: #5a5a5a; }
+            .se-btn-action:hover { background-color: var(--bg-tertiary); color: var(--text-primary); }
+            .se-btn-close:hover { background-color: var(--bg-tertiary); color: var(--text-primary); }
+            .se-btn-add:hover { background-color: var(--accent-hover); box-shadow: 0 4px 12px rgba(0, 122, 204, 0.4); }
+            .se-btn-save:hover { background-color: var(--accent-hover); box-shadow: 0 4px 12px rgba(0, 122, 204, 0.4); }
+            .se-btn-cancel:hover { background-color: var(--bg-input); border-color: var(--border-strong); }
+            .se-command-card:hover { border-color: var(--border-strong); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
+            .se-meta-input:hover, .se-delay-group:hover { border-color: var(--border-strong); }
         `;
         document.head.appendChild(style);
         return () => { try { document.head.removeChild(style); } catch {} };
@@ -335,7 +335,7 @@ const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
                                     <div style={styles.stepLeft}>
                                         <div style={{
                                             ...styles.stepIndex,
-                                            backgroundColor: step.enabled ? '#3e3e42' : '#2a2a2a',
+                                            backgroundColor: step.enabled ? 'var(--border)' : 'var(--bg-elevated)',
                                         }}>{idx + 1}</div>
                                         <label style={styles.switchLabel} title={step.enabled ? '已启用：回放时执行' : '已禁用：回放时跳过'}>
                                             <input type="checkbox" checked={step.enabled}
@@ -428,64 +428,64 @@ const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
 const styles: Record<string, React.CSSProperties> = {
     overlay: {
         position: 'fixed' as const, top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(4px)',
+        backgroundColor: 'var(--overlay)', backdropFilter: 'blur(4px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         zIndex: 5000, animation: 'scriptEditorFadeIn 0.2s ease-out',
     },
     modal: {
-        width: '960px', maxHeight: '85vh', backgroundColor: '#1e1e1e',
-        borderRadius: '12px', border: '1px solid #3e3e42',
+        width: '960px', maxHeight: '85vh', backgroundColor: 'var(--bg-primary)',
+        borderRadius: '12px', border: '1px solid var(--border)',
         boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
         display: 'flex', flexDirection: 'column' as const,
         animation: 'scriptEditorSlideUp 0.3s ease-out',
     },
     header: {
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '20px 24px', borderBottom: '1px solid #3e3e42',
+        padding: '20px 24px', borderBottom: '1px solid var(--border)',
     },
-    title: { margin: 0, fontSize: '18px', fontWeight: 600, color: '#ffffff' },
+    title: { margin: 0, fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)' },
     closeButton: {
         width: '36px', height: '36px', padding: 0, backgroundColor: 'transparent',
-        border: 'none', color: '#858585', fontSize: '24px', cursor: 'pointer',
+        border: 'none', color: 'var(--text-muted)', fontSize: '24px', cursor: 'pointer',
         borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center',
     },
     body: { flex: 1, overflowY: 'auto' as const, padding: '24px' },
-    loading: { textAlign: 'center', padding: '60px', color: '#858585', fontSize: '14px' },
+    loading: { textAlign: 'center', padding: '60px', color: 'var(--text-muted)', fontSize: '14px' },
     fieldGroup: { marginBottom: '20px' },
-    label: { display: 'block', fontSize: '13px', color: '#cccccc', marginBottom: '8px', fontWeight: 500 },
+    label: { display: 'block', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: 500 },
     input: {
-        width: '100%', padding: '10px 14px', backgroundColor: '#252526',
-        border: '1px solid #3e3e42', borderRadius: '6px', color: '#ffffff',
+        width: '100%', padding: '10px 14px', backgroundColor: 'var(--bg-secondary)',
+        border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)',
         fontSize: '14px', boxSizing: 'border-box' as const,
     },
 
     // 变量区
-    variablesSection: { marginTop: '20px', border: '1px solid #3e3e42', borderRadius: '8px', overflow: 'hidden' },
+    variablesSection: { marginTop: '20px', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' },
     varSectionHeader: {
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '12px 16px', backgroundColor: '#252526', cursor: 'pointer', userSelect: 'none' as const,
+        padding: '12px 16px', backgroundColor: 'var(--bg-secondary)', cursor: 'pointer', userSelect: 'none' as const,
     },
-    variablesContent: { padding: '12px 16px', backgroundColor: '#1e1e1e' },
+    variablesContent: { padding: '12px 16px', backgroundColor: 'var(--bg-primary)' },
     varHeader: {
         display: 'flex', gap: '6px', alignItems: 'center',
-        marginBottom: '8px', paddingBottom: '6px', borderBottom: '1px solid #333',
+        marginBottom: '8px', paddingBottom: '6px', borderBottom: '1px solid var(--border)',
     },
-    varHeaderCell: { fontSize: '11px', color: '#757575', fontWeight: 600, letterSpacing: '0.03em' },
+    varHeaderCell: { fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.03em' },
     varRow: { display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '6px' },
     varInput: {
-        padding: '6px 8px', backgroundColor: '#252526', border: '1px solid #3e3e42',
-        borderRadius: '4px', color: '#ffffff', fontSize: '12px', minWidth: 0,
+        padding: '6px 8px', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)',
+        borderRadius: '4px', color: 'var(--text-primary)', fontSize: '12px', minWidth: 0,
     },
-    varEmpty: { textAlign: 'center' as const, color: '#757575', fontSize: '12px', padding: '12px 0' },
-    varHint: { fontSize: '12px', color: '#858585', lineHeight: '1.6', marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid #333' },
-    varHintCode: { backgroundColor: '#2d2d2d', padding: '1px 5px', borderRadius: '3px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: '#4ec9b0' },
+    varEmpty: { textAlign: 'center' as const, color: 'var(--text-muted)', fontSize: '12px', padding: '12px 0' },
+    varHint: { fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.6', marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid var(--border)' },
+    varHintCode: { backgroundColor: 'var(--bg-tertiary)', padding: '1px 5px', borderRadius: '3px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--teal-fg)' },
     varDeleteBtn: {
         width: '24px', height: '24px', padding: 0, backgroundColor: 'transparent',
-        border: 'none', color: '#858585', cursor: 'pointer', fontSize: '14px',
+        border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '14px',
         borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center',
     },
     addVarButton: {
-        padding: '6px 12px', backgroundColor: '#007acc', color: '#ffffff',
+        padding: '6px 12px', backgroundColor: 'var(--accent)', color: 'var(--text-on-accent)',
         border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 500, marginTop: '4px',
     },
     switchLabel: { display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', userSelect: 'none' as const },
@@ -498,24 +498,24 @@ const styles: Record<string, React.CSSProperties> = {
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px',
     },
     sectionTitleGroup: { display: 'flex', alignItems: 'center', gap: '12px' },
-    sectionTitle: { fontSize: '15px', fontWeight: 600, color: '#ffffff' },
+    sectionTitle: { fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' },
     sectionSubtitle: {
-        fontSize: '12px', color: '#858585', backgroundColor: '#2d2d2d',
+        fontSize: '12px', color: 'var(--text-muted)', backgroundColor: 'var(--bg-tertiary)',
         padding: '2px 8px', borderRadius: '12px', fontWeight: 500,
     },
     addButtonStyle: {
-        padding: '8px 16px', backgroundColor: '#007acc', color: '#ffffff',
+        padding: '8px 16px', backgroundColor: 'var(--accent)', color: 'var(--text-on-accent)',
         border: 'none', borderRadius: '6px', cursor: 'pointer',
         fontSize: '13px', fontWeight: 500,
     },
     addFirstButton: {
-        width: '100%', padding: '24px', backgroundColor: '#252526',
-        color: '#007acc', border: '2px dashed #3e3e42', borderRadius: '8px',
+        width: '100%', padding: '24px', backgroundColor: 'var(--bg-secondary)',
+        color: 'var(--accent)', border: '2px dashed var(--border)', borderRadius: '8px',
         cursor: 'pointer', fontSize: '14px', fontWeight: 500, marginBottom: '8px',
     },
     insertButton: {
         width: '28px', height: '28px', padding: 0,
-        backgroundColor: '#007acc', color: '#ffffff',
+        backgroundColor: 'var(--accent)', color: 'var(--text-on-accent)',
         border: 'none', borderRadius: '4px', cursor: 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontWeight: 700,
@@ -524,8 +524,8 @@ const styles: Record<string, React.CSSProperties> = {
 
     // 命令卡片
     commandCard: {
-        display: 'flex', gap: '10px', padding: '12px 16px', backgroundColor: '#252526',
-        border: '1px solid #3e3e42', borderRadius: '8px', alignItems: 'flex-start',
+        display: 'flex', gap: '10px', padding: '12px 16px', backgroundColor: 'var(--bg-secondary)',
+        border: '1px solid var(--border)', borderRadius: '8px', alignItems: 'flex-start',
         transition: 'all 0.15s ease',
     },
     stepLeft: {
@@ -534,15 +534,15 @@ const styles: Record<string, React.CSSProperties> = {
     },
     stepIndex: {
         width: '24px', height: '24px', minWidth: '24px',
-        backgroundColor: '#3e3e42', borderRadius: '50%',
+        backgroundColor: 'var(--bg-input)', borderRadius: '50%',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: '11px', fontWeight: 700, color: '#b0b0b0',
+        fontSize: '11px', fontWeight: 700, color: 'var(--text-tertiary)',
     },
     commandContent: { flex: 1, display: 'flex', flexDirection: 'column' as const, gap: '6px', minWidth: 0 },
     commandInputRow: { position: 'relative' as const, display: 'flex', flexDirection: 'column' as const },
     commandInput: {
-        width: '100%', padding: '10px 14px', backgroundColor: '#1e1e1e',
-        border: '1px solid #3e3e42', borderRadius: '6px', color: '#ffffff',
+        width: '100%', padding: '10px 14px', backgroundColor: 'var(--bg-primary)',
+        border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)',
         fontSize: '14px', fontFamily: 'var(--font-mono)', boxSizing: 'border-box' as const,
     },
     varTags: {
@@ -550,53 +550,53 @@ const styles: Record<string, React.CSSProperties> = {
         display: 'flex', gap: '3px', pointerEvents: 'none' as const,
     },
     varTag: {
-        padding: '1px 6px', backgroundColor: '#264f78', color: '#4ec9b0',
+        padding: '1px 6px', backgroundColor: 'var(--chip-code-bg)', color: 'var(--teal-fg)',
         borderRadius: '3px', fontSize: '10px', fontFamily: 'var(--font-mono)',
         whiteSpace: 'nowrap' as const,
     },
     commandMetadata: { display: 'flex', gap: '10px', alignItems: 'center' },
     commentInput: {
-        flex: 1, padding: '6px 10px', backgroundColor: '#1e1e1e',
-        border: '1px solid #3e3e42', borderRadius: '4px', color: '#cccccc',
+        flex: 1, padding: '6px 10px', backgroundColor: 'var(--bg-primary)',
+        border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-secondary)',
         fontSize: '12px', boxSizing: 'border-box' as const,
     },
     delayInputGroup: {
-        display: 'flex', alignItems: 'center', backgroundColor: '#1e1e1e',
-        border: '1px solid #3e3e42', borderRadius: '4px', overflow: 'hidden',
+        display: 'flex', alignItems: 'center', backgroundColor: 'var(--bg-primary)',
+        border: '1px solid var(--border)', borderRadius: '4px', overflow: 'hidden',
         flexShrink: 0,
     },
-    delayLabel: { padding: '0 6px', fontSize: '11px', color: '#666' },
+    delayLabel: { padding: '0 6px', fontSize: '11px', color: 'var(--text-disabled)' },
     delayInput: {
         width: '48px', padding: '6px 4px', backgroundColor: 'transparent',
-        border: 'none', color: '#ffffff', fontSize: '12px', boxSizing: 'border-box' as const, outline: 'none',
+        border: 'none', color: 'var(--text-primary)', fontSize: '12px', boxSizing: 'border-box' as const, outline: 'none',
     },
-    delayUnit: { padding: '0 6px', fontSize: '11px', color: '#858585', backgroundColor: '#2d2d2d', height: '100%', display: 'flex', alignItems: 'center' },
+    delayUnit: { padding: '0 6px', fontSize: '11px', color: 'var(--text-muted)', backgroundColor: 'var(--bg-tertiary)', height: '100%', display: 'flex', alignItems: 'center' },
     metadataSpacer: { flex: 1 },
     commandActions: { display: 'flex', flexDirection: 'column' as const, gap: '6px', paddingTop: '4px', alignItems: 'center' },
     actionRow: { display: 'flex', gap: '2px' },
     moveButton: {
         width: '28px', height: '28px', padding: 0, backgroundColor: 'transparent',
-        border: 'none', color: '#666', borderRadius: '4px', cursor: 'pointer',
+        border: 'none', color: 'var(--text-disabled)', borderRadius: '4px', cursor: 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
     },
     actionButton: {
         width: '28px', height: '28px', padding: 0, backgroundColor: 'transparent',
-        border: 'none', color: '#858585', borderRadius: '4px', cursor: 'pointer',
+        border: 'none', color: 'var(--text-muted)', borderRadius: '4px', cursor: 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
     },
 
     // 底部
     footer: {
         display: 'flex', justifyContent: 'flex-end', gap: '12px',
-        padding: '20px 24px', borderTop: '1px solid #3e3e42',
+        padding: '20px 24px', borderTop: '1px solid var(--border)',
     },
     cancelButton: {
-        padding: '10px 20px', backgroundColor: 'transparent', color: '#cccccc',
-        border: '1px solid #4d4d4d', borderRadius: '6px', cursor: 'pointer',
+        padding: '10px 20px', backgroundColor: 'transparent', color: 'var(--text-secondary)',
+        border: '1px solid var(--border-strong)', borderRadius: '6px', cursor: 'pointer',
         fontSize: '14px', fontWeight: 500,
     },
     saveButton: {
-        padding: '10px 20px', backgroundColor: '#007acc', color: '#ffffff',
+        padding: '10px 20px', backgroundColor: 'var(--accent)', color: 'var(--text-on-accent)',
         border: 'none', borderRadius: '6px', cursor: 'pointer',
         fontSize: '14px', fontWeight: 500,
     },
