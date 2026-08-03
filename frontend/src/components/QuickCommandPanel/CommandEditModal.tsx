@@ -96,7 +96,7 @@ const CommandEditModal: React.FC<CommandEditModalProps> = ({
                             {availableGroups.map(g => (
                                 <option key={g} value={g}>{g}</option>
                             ))}
-                            <option value="__new__" style={{ color: '#007acc' }}>+ 新建分组...</option>
+                            <option value="__new__" style={{ color: 'var(--accent)' }}>+ 新建分组...</option>
                         </select>
                     )}
                 </div>
@@ -136,14 +136,14 @@ const styles = {
         zIndex: 1000,
     },
     modal: {
-        backgroundColor: '#252526',
+        backgroundColor: 'var(--bg-secondary)',
         padding: '20px',
         borderRadius: '8px',
         width: '320px',
-        border: '1px solid #454545',
+        border: '1px solid var(--border)',
     },
     title: {
-        color: '#fff',
+        color: 'var(--text-primary)',
         marginTop: 0,
         marginBottom: '16px',
         fontSize: '16px',
@@ -153,16 +153,16 @@ const styles = {
     },
     label: {
         display: 'block',
-        color: '#ccc',
+        color: 'var(--text-secondary)',
         marginBottom: '4px',
         fontSize: '12px',
     },
     input: {
         width: '100%',
         padding: '6px 8px',
-        backgroundColor: '#3c3c3c',
-        border: '1px solid #555',
-        color: '#fff',
+        backgroundColor: 'var(--border)',
+        border: '1px solid var(--border-strong)',
+        color: 'var(--text-primary)',
         borderRadius: '4px',
         boxSizing: 'border-box' as const,
         fontSize: '13px',
@@ -171,9 +171,9 @@ const styles = {
         width: '100%',
         height: '80px',
         padding: '6px 8px',
-        backgroundColor: '#3c3c3c',
-        border: '1px solid #555',
-        color: '#fff',
+        backgroundColor: 'var(--border)',
+        border: '1px solid var(--border-strong)',
+        color: 'var(--text-primary)',
         borderRadius: '4px',
         resize: 'none' as const,
         boxSizing: 'border-box' as const,
@@ -188,8 +188,8 @@ const styles = {
     },
     saveBtn: {
         padding: '6px 16px',
-        backgroundColor: '#007acc',
-        color: 'white',
+        backgroundColor: 'var(--accent)',
+        color: 'var(--text-on-accent)',
         border: 'none',
         borderRadius: '4px',
         cursor: 'pointer',
@@ -197,9 +197,9 @@ const styles = {
     },
     cancelBtn: {
         padding: '6px 16px',
-        backgroundColor: '#333',
-        color: '#ccc',
-        border: '1px solid #555',
+        backgroundColor: 'var(--bg-elevated)',
+        color: 'var(--text-secondary)',
+        border: '1px solid var(--border-strong)',
         borderRadius: '4px',
         cursor: 'pointer',
         fontSize: '13px',

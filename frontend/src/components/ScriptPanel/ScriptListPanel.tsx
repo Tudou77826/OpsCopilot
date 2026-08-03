@@ -240,7 +240,7 @@ const ScriptListPanel = forwardRef<{
                 <div style={styles.empty}>
                     {scripts.length === 0 ? (
                         <>
-                            <div style={{ color: '#555', marginBottom: '12px' }}>{TbFileText({ size: 36 })}</div>
+                            <div style={{ color: 'var(--text-disabled)', marginBottom: '12px' }}>{TbFileText({ size: 36 })}</div>
                             <div style={styles.emptyText}>还没有脚本</div>
                             <div style={styles.emptyHint}>点击上方 + 按钮手动创建，或使用录制功能</div>
                         </>
@@ -298,7 +298,7 @@ const ScriptListPanel = forwardRef<{
                                     {TbFileExport({ size: 14 })}
                                 </button>
                                 <button
-                                    style={{...styles.iconButton, color: '#ff6b6b'}}
+                                    style={{...styles.iconButton, color: 'var(--severity-danger)'}}
                                     onClick={() => handleDelete(script.id, script.name)}
                                     title="删除"
                                 >
@@ -325,7 +325,7 @@ ScriptListPanel.displayName = 'ScriptListPanel';
 const styles: Record<string, React.CSSProperties> = {
     container: {
         padding: '12px 16px',
-        backgroundColor: '#1e1e1e',
+        backgroundColor: 'var(--bg-primary)',
         flex: 1,
         overflow: 'hidden',
         display: 'flex',
@@ -341,30 +341,30 @@ const styles: Record<string, React.CSSProperties> = {
         margin: 0,
         fontSize: '13px',
         fontWeight: 600,
-        color: '#e0e0e0',
+        color: 'var(--text-primary)',
     },
     refreshButton: {
         padding: '4px 8px',
-        backgroundColor: '#424242',
-        color: '#e0e0e0',
-        border: '1px solid #555',
+        backgroundColor: 'var(--bg-input)',
+        color: 'var(--text-primary)',
+        border: '1px solid var(--border-strong)',
         borderRadius: '4px',
         cursor: 'pointer',
         fontSize: '12px',
     },
     addButton: {
         padding: '4px 8px',
-        backgroundColor: '#007acc',
-        color: '#ffffff',
-        border: '1px solid #007acc',
+        backgroundColor: 'var(--accent)',
+        color: 'var(--text-on-accent)',
+        border: '1px solid var(--accent)',
         borderRadius: '4px',
         cursor: 'pointer',
         fontSize: '12px',
     },
     createForm: {
         padding: '10px',
-        backgroundColor: '#252526',
-        border: '1px solid #3c3c3c',
+        backgroundColor: 'var(--bg-secondary)',
+        border: '1px solid var(--border)',
         borderRadius: '4px',
         marginBottom: '8px',
         display: 'flex',
@@ -374,10 +374,10 @@ const styles: Record<string, React.CSSProperties> = {
     createInput: {
         width: '100%',
         padding: '6px 10px',
-        backgroundColor: '#1e1e1e',
-        border: '1px solid #3c3c3c',
+        backgroundColor: 'var(--bg-primary)',
+        border: '1px solid var(--border)',
         borderRadius: '4px',
-        color: '#e0e0e0',
+        color: 'var(--text-primary)',
         fontSize: '12px',
         outline: 'none',
         boxSizing: 'border-box' as const,
@@ -385,16 +385,16 @@ const styles: Record<string, React.CSSProperties> = {
     createCancelBtn: {
         padding: '4px 10px',
         backgroundColor: 'transparent',
-        color: '#b0b0b0',
-        border: '1px solid #555',
+        color: 'var(--text-tertiary)',
+        border: '1px solid var(--border-strong)',
         borderRadius: '4px',
         cursor: 'pointer',
         fontSize: '11px',
     },
     createConfirmBtn: {
         padding: '4px 10px',
-        backgroundColor: '#007acc',
-        color: '#ffffff',
+        backgroundColor: 'var(--accent)',
+        color: 'var(--text-on-accent)',
         border: 'none',
         borderRadius: '4px',
         cursor: 'pointer',
@@ -404,21 +404,21 @@ const styles: Record<string, React.CSSProperties> = {
         width: '100%',
         padding: '6px 10px',
         marginBottom: '8px',
-        backgroundColor: '#252526',
-        border: '1px solid #3c3c3c',
+        backgroundColor: 'var(--bg-secondary)',
+        border: '1px solid var(--border)',
         borderRadius: '4px',
-        color: '#e0e0e0',
+        color: 'var(--text-primary)',
         fontSize: '12px',
         outline: 'none',
         boxSizing: 'border-box' as const,
     },
     searchInputFocus: {
-        borderColor: '#007acc',
+        borderColor: 'var(--accent)',
     },
     loading: {
         textAlign: 'center',
         padding: '40px',
-        color: '#b0b0b0',
+        color: 'var(--text-tertiary)',
         fontSize: '12px',
     },
     empty: {
@@ -427,12 +427,12 @@ const styles: Record<string, React.CSSProperties> = {
     },
     emptyText: {
         fontSize: '13px',
-        color: '#e0e0e0',
+        color: 'var(--text-primary)',
         marginBottom: '4px',
     },
     emptyHint: {
         fontSize: '11px',
-        color: '#757575',
+        color: 'var(--text-muted)',
     },
     scriptList: {
         flex: 1,
@@ -446,8 +446,8 @@ const styles: Record<string, React.CSSProperties> = {
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: '8px 10px',
-        backgroundColor: '#252526',
-        border: '1px solid #2d2d2d',
+        backgroundColor: 'var(--bg-secondary)',
+        border: '1px solid var(--bg-tertiary)',
         borderRadius: '4px',
         cursor: 'pointer',
         transition: 'background-color 0.15s',
@@ -459,7 +459,7 @@ const styles: Record<string, React.CSSProperties> = {
     scriptName: {
         fontSize: '13px',
         fontWeight: 500,
-        color: '#e0e0e0',
+        color: 'var(--text-primary)',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap' as const,
@@ -471,12 +471,12 @@ const styles: Record<string, React.CSSProperties> = {
     },
     metaText: {
         fontSize: '10px',
-        color: '#757575',
+        color: 'var(--text-muted)',
     },
     varBadge: {
         fontSize: '10px',
-        color: '#b39ddb',
-        backgroundColor: '#2d1b4e',
+        color: 'var(--chip-purple-fg)',
+        backgroundColor: 'var(--chip-purple-bg)',
         padding: '1px 5px',
         borderRadius: '8px',
     },
@@ -497,7 +497,7 @@ const styles: Record<string, React.CSSProperties> = {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#b0b0b0',
+        color: 'var(--text-tertiary)',
         transition: 'background-color 0.15s',
     },
 };

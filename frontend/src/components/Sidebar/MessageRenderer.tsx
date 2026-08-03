@@ -69,7 +69,7 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({ content, role }) => {
                 .message-markdown-content {
                     font-size: 13px;
                     line-height: 1.6;
-                    color: #fff;
+                    color: var(--text-primary);
                 }
 
                 .message-markdown-content h1,
@@ -81,7 +81,7 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({ content, role }) => {
                     margin: 0.8em 0 0.5em;
                     font-weight: 600;
                     line-height: 1.3;
-                    color: #fff;
+                    color: var(--text-primary);
                 }
 
                 .message-markdown-content h1 { font-size: 1.6em; }
@@ -114,7 +114,7 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({ content, role }) => {
 
                 .message-markdown-content strong {
                     font-weight: 600;
-                    color: #fff;
+                    color: var(--text-primary);
                 }
 
                 .message-markdown-content em {
@@ -141,25 +141,25 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({ content, role }) => {
                 .message-markdown-content blockquote {
                     margin: 0.5em 0;
                     padding: 0.5em 1em;
-                    border-left: 3px solid #555;
+                    border-left: 3px solid var(--border-strong);
                     background: rgba(255, 255, 255, 0.05);
-                    color: #ccc;
+                    color: var(--text-secondary);
                 }
 
                 .message-markdown-content hr {
                     border: none;
-                    border-top: 1px solid #444;
+                    border-top: 1px solid var(--border);
                     margin: 1em 0;
                 }
 
                 .message-markdown-content a {
-                    color: #4fc3f7;
+                    color: var(--accent);
                     text-decoration: none;
                     transition: color 0.2s;
                 }
 
                 .message-markdown-content a:hover {
-                    color: #81d4fa;
+                    color: var(--accent-hover);
                     text-decoration: underline;
                 }
 
@@ -169,20 +169,20 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({ content, role }) => {
                     border-radius: 3px;
                     font-family: var(--font-mono);
                     font-size: 0.9em;
-                    color: #f8f8f2;
+                    color: var(--text-primary);
                 }
 
                 .message-markdown-content .code-block-wrapper {
                     margin: 0.5em 0;
                     border-radius: 6px;
                     overflow: hidden;
-                    background: #282c34;
+                    background: var(--bg-primary);
                 }
 
                 .message-markdown-content .code-block-header {
-                    background: #21252b;
+                    background: var(--bg-secondary);
                     padding: 6px 12px;
-                    border-bottom: 1px solid #181a1f;
+                    border-bottom: 1px solid var(--border-subtle);
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
@@ -190,7 +190,7 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({ content, role }) => {
 
                 .message-markdown-content .code-language {
                     font-size: 11px;
-                    color: #abb2bf;
+                    color: var(--text-tertiary);
                     font-family: var(--font-mono);
                     text-transform: uppercase;
                     font-weight: 500;
@@ -200,7 +200,7 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({ content, role }) => {
                     margin: 0;
                     padding: 12px;
                     overflow-x: auto;
-                    background: #282c34;
+                    background: var(--bg-primary);
                     font-family: var(--font-mono);
                     font-size: 12px;
                     line-height: 1.5;
@@ -212,7 +212,7 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({ content, role }) => {
                     border-radius: 0;
                     font-family: inherit;
                     font-size: inherit;
-                    color: #abb2bf;
+                    color: var(--text-tertiary);
                 }
 
                 .message-markdown-content .table-wrapper {
@@ -228,7 +228,7 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({ content, role }) => {
 
                 .message-markdown-content th,
                 .message-markdown-content td {
-                    border: 1px solid #444;
+                    border: 1px solid var(--border);
                     padding: 6px 12px;
                     text-align: left;
                 }
@@ -236,7 +236,7 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({ content, role }) => {
                 .message-markdown-content th {
                     background: rgba(255, 255, 255, 0.05);
                     font-weight: 600;
-                    color: #fff;
+                    color: var(--text-primary);
                 }
 
                 .message-markdown-content tr:nth-child(even) {
@@ -255,7 +255,7 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({ content, role }) => {
                 }
 
                 .message-markdown-content del {
-                    color: #999;
+                    color: var(--text-tertiary);
                 }
 
                 /* 自定义滚动条 */
@@ -264,16 +264,16 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({ content, role }) => {
                 }
 
                 .message-markdown-content pre::-webkit-scrollbar-track {
-                    background: #21252b;
+                    background: var(--bg-secondary);
                 }
 
                 .message-markdown-content pre::-webkit-scrollbar-thumb {
-                    background: #3e4451;
+                    background: var(--app-scrollbar-thumb);
                     border-radius: 4px;
                 }
 
                 .message-markdown-content pre::-webkit-scrollbar-thumb:hover {
-                    background: #4e5561;
+                    background: var(--app-scrollbar-thumb-hover);
                 }
             `}</style>
         </div>

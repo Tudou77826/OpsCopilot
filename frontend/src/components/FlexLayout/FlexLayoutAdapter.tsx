@@ -252,7 +252,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
         if (node.getComponent() === 'fileTransfer') {
             renderValues.leading = (
                 <span style={{
-                    color: '#58a6ff',
+                    color: 'var(--severity-info)',
                     fontSize: '12px',
                     marginRight: '6px',
                     flexShrink: 0,
@@ -281,7 +281,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                 width: '8px',
                 height: '8px',
                 borderRadius: '50%',
-                backgroundColor: isConnected ? '#4caf50' : '#ff6b6b',
+                backgroundColor: isConnected ? 'var(--success)' : 'var(--severity-danger)',
                 marginRight: '6px',
                 flexShrink: 0,
             }} />
@@ -323,9 +323,9 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                         padding: '1px 7px',
                         fontSize: '10px',
                         lineHeight: '1.5',
-                        color: '#d08a3e',
-                        backgroundColor: '#1a1a1a',
-                        border: '1px solid #3a3a3a',
+                        color: 'var(--stage-orange)',
+                        backgroundColor: 'var(--bg-primary)',
+                        border: '1px solid var(--border)',
                         borderRadius: '999px',
                         flexShrink: 0,
                         userSelect: 'none',
@@ -348,8 +348,8 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                 <button
                     key="reconnect"
                     style={{
-                        backgroundColor: '#4caf50',
-                        color: 'white',
+                        backgroundColor: 'var(--success)',
+                        color: 'var(--text-on-accent)',
                         border: 'none',
                         padding: '1px 6px',
                         borderRadius: '3px',
@@ -377,7 +377,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                     cursor: 'pointer',
                     padding: '0 4px',
                     fontSize: '14px',
-                    color: '#999',
+                    color: 'var(--text-tertiary)',
                     lineHeight: 1,
                 }}
                 onClick={(e) => {
@@ -397,7 +397,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                     width: '8px',
                     height: '8px',
                     borderRadius: '50%',
-                    backgroundColor: '#ff6b6b',
+                    backgroundColor: 'var(--severity-danger)',
                     marginRight: '6px',
                     flexShrink: 0,
                 }} />
@@ -477,7 +477,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: '#666',
+                    color: 'var(--text-disabled)',
                 }}>
                     暂无活动连接。请点击右上角 "+ 新建连接" 开始使用。
                 </div>
@@ -608,7 +608,7 @@ const TerminalWrapper: React.FC<TerminalWrapperProps> = ({
                         right: '20px',
                         zIndex: 10,
                         backgroundColor: isActive ? 'rgba(76, 175, 80, 0.9)' : 'rgba(60, 60, 60, 0.8)',
-                        color: '#fff',
+                        color: 'var(--text-on-accent)',
                         padding: '4px 8px',
                         borderRadius: '4px',
                         fontSize: '12px',
@@ -617,7 +617,7 @@ const TerminalWrapper: React.FC<TerminalWrapperProps> = ({
                         alignItems: 'center',
                         gap: '4px',
                         boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                        border: isActive ? '1px solid #45a049' : '1px solid #555',
+                        border: isActive ? '1px solid var(--success)' : '1px solid var(--border-strong)',
                         userSelect: 'none',
                     }}
                     onClick={(e) => {
@@ -686,8 +686,8 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, terminalId, terminals, 
                 position: 'fixed',
                 top: y,
                 left: x,
-                backgroundColor: '#252526',
-                border: '1px solid #454545',
+                backgroundColor: 'var(--bg-secondary)',
+                border: '1px solid var(--border)',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
                 borderRadius: '4px',
                 zIndex: 2000,
@@ -712,7 +712,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, terminalId, terminals, 
                 <div
                     style={{
                         ...menuItemStyle,
-                        color: broadcastProps.disabled ? '#555' : '#ccc',
+                        color: broadcastProps.disabled ? 'var(--text-disabled)' : 'var(--text-secondary)',
                         cursor: broadcastProps.disabled ? 'default' : 'pointer',
                     }}
                     onClick={() => {
@@ -730,7 +730,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, terminalId, terminals, 
             </div>
             <div style={{
                 ...menuItemStyle,
-                color: terminals.length <= 1 ? '#555' : '#ccc',
+                color: terminals.length <= 1 ? 'var(--text-disabled)' : 'var(--text-secondary)',
                 cursor: terminals.length <= 1 ? 'default' : 'pointer',
             }} onClick={() => {
                 if (terminals.length > 1) {
@@ -744,7 +744,7 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, terminalId, terminals, 
             </div>
             <div style={{
                 ...menuItemStyle,
-                color: idx >= 0 && idx < terminals.length - 1 ? '#ccc' : '#555',
+                color: idx >= 0 && idx < terminals.length - 1 ? 'var(--text-secondary)' : 'var(--text-disabled)',
                 cursor: idx >= 0 && idx < terminals.length - 1 ? 'pointer' : 'default',
             }} onClick={() => {
                 if (idx >= 0 && idx < terminals.length - 1) {
@@ -784,12 +784,12 @@ const menuItemStyle: React.CSSProperties = {
     padding: '6px 12px',
     cursor: 'pointer',
     fontSize: '13px',
-    color: '#ccc',
+    color: 'var(--text-secondary)',
 };
 
 const menuSeparatorStyle: React.CSSProperties = {
     height: '1px',
-    backgroundColor: '#454545',
+    backgroundColor: 'var(--border)',
     margin: '4px 0',
 };
 

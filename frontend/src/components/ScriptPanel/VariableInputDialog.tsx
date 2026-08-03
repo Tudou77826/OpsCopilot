@@ -78,7 +78,7 @@ const VariableInputDialog: React.FC<VariableInputDialogProps> = ({
                             <input
                                 style={{
                                     ...styles.input,
-                                    borderColor: errors[v.name] ? '#f44336' : '#3e3e42',
+                                    borderColor: errors[v.name] ? 'var(--danger)' : 'var(--border)',
                                 }}
                                 type="text"
                                 value={values[v.name] || ''}
@@ -124,9 +124,9 @@ const styles: Record<string, React.CSSProperties> = {
     modal: {
         width: '480px',
         maxHeight: '70vh',
-        backgroundColor: '#1e1e1e',
+        backgroundColor: 'var(--bg-primary)',
         borderRadius: '12px',
-        border: '1px solid #3e3e42',
+        border: '1px solid var(--border)',
         boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
         display: 'flex',
         flexDirection: 'column' as const,
@@ -136,13 +136,13 @@ const styles: Record<string, React.CSSProperties> = {
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: '16px 20px',
-        borderBottom: '1px solid #3e3e42',
+        borderBottom: '1px solid var(--border)',
     },
     title: {
         margin: 0,
         fontSize: '16px',
         fontWeight: 600,
-        color: '#ffffff',
+        color: 'var(--text-primary)',
     },
     closeButton: {
         width: '32px',
@@ -150,7 +150,7 @@ const styles: Record<string, React.CSSProperties> = {
         padding: 0,
         backgroundColor: 'transparent',
         border: 'none',
-        color: '#858585',
+        color: 'var(--text-muted)',
         fontSize: '18px',
         cursor: 'pointer',
         borderRadius: '6px',
@@ -166,7 +166,7 @@ const styles: Record<string, React.CSSProperties> = {
     hint: {
         margin: '0 0 16px 0',
         fontSize: '13px',
-        color: '#858585',
+        color: 'var(--text-muted)',
     },
     fieldGroup: {
         marginBottom: '16px',
@@ -174,27 +174,27 @@ const styles: Record<string, React.CSSProperties> = {
     label: {
         display: 'block',
         fontSize: '13px',
-        color: '#cccccc',
+        color: 'var(--text-secondary)',
         marginBottom: '4px',
         fontWeight: 500,
     },
     required: {
-        color: '#f44336',
+        color: 'var(--danger)',
         marginLeft: '4px',
     },
     description: {
         display: 'block',
         fontSize: '11px',
-        color: '#757575',
+        color: 'var(--text-muted)',
         marginBottom: '4px',
     },
     input: {
         width: '100%',
         padding: '8px 12px',
-        backgroundColor: '#252526',
-        border: '1px solid #3e3e42',
+        backgroundColor: 'var(--bg-secondary)',
+        border: '1px solid var(--border)',
         borderRadius: '6px',
-        color: '#ffffff',
+        color: 'var(--text-primary)',
         fontSize: '13px',
         boxSizing: 'border-box' as const,
         outline: 'none',
@@ -202,7 +202,7 @@ const styles: Record<string, React.CSSProperties> = {
     error: {
         display: 'block',
         fontSize: '11px',
-        color: '#f44336',
+        color: 'var(--danger)',
         marginTop: '4px',
     },
     footer: {
@@ -210,21 +210,21 @@ const styles: Record<string, React.CSSProperties> = {
         justifyContent: 'flex-end',
         gap: '10px',
         padding: '16px 20px',
-        borderTop: '1px solid #3e3e42',
+        borderTop: '1px solid var(--border)',
     },
     cancelButton: {
         padding: '8px 16px',
         backgroundColor: 'transparent',
-        color: '#cccccc',
-        border: '1px solid #4d4d4d',
+        color: 'var(--text-secondary)',
+        border: '1px solid var(--border-strong)',
         borderRadius: '6px',
         cursor: 'pointer',
         fontSize: '13px',
     },
     submitButton: {
         padding: '8px 16px',
-        backgroundColor: '#007acc',
-        color: '#ffffff',
+        backgroundColor: 'var(--accent)',
+        color: 'var(--text-on-accent)',
         border: 'none',
         borderRadius: '6px',
         cursor: 'pointer',

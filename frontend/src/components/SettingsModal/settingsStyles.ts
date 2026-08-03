@@ -13,7 +13,7 @@ export const colors = {
   borderSubtle: 'var(--border-subtle)',
   textPrimary: 'var(--text-primary)',
   textSecondary: 'var(--text-secondary)',
-  // 历史值 #888 对应 muted 档; #666 对应 disabled 档(暗色下值完全一致)
+  // 历史值 var(--text-muted) 对应 muted 档; var(--text-disabled) 对应 disabled 档(暗色下值完全一致)
   textTertiary: 'var(--text-muted)',
   textMuted: 'var(--text-disabled)',
   accent: 'var(--accent)',

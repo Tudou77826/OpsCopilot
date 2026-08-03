@@ -109,11 +109,11 @@ const styles = {
         display: 'flex',
         flexDirection: 'column' as const,
         minHeight: '0px',
-        backgroundColor: '#1e1e1e',
+        backgroundColor: 'var(--bg-primary)',
         flexShrink: 0,
         overflow: 'hidden',
         transition: 'max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        borderTop: '1px solid #2a2a2a',
+        borderTop: '1px solid var(--bg-elevated)',
     },
     body: {
         display: 'flex',

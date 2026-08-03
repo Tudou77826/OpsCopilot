@@ -7,7 +7,7 @@ interface GroupStripProps {
     onAddGroup: () => void;
 }
 
-const ACTIVE_COLOR = '#007acc';
+const ACTIVE_COLOR = 'var(--accent)';
 
 const GroupStrip: React.FC<GroupStripProps> = ({ groups, selectedGroup, onSelectGroup, onAddGroup }) => {
     const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
@@ -41,7 +41,7 @@ const GroupStrip: React.FC<GroupStripProps> = ({ groups, selectedGroup, onSelect
                     style={{
                         ...styles.peek,
                         ...styles.peekTop,
-                        color: hoveredGroup === groups[idx - 1] ? '#888' : '#555',
+                        color: hoveredGroup === groups[idx - 1] ? 'var(--text-muted)' : 'var(--text-disabled)',
                     }}
                     onClick={() => onSelectGroup(groups[idx - 1])}
                     onMouseEnter={() => setHoveredGroup(groups[idx - 1])}
@@ -73,7 +73,7 @@ const GroupStrip: React.FC<GroupStripProps> = ({ groups, selectedGroup, onSelect
                     style={{
                         ...styles.peek,
                         ...styles.peekBottom,
-                        color: hoveredGroup === groups[idx + 1] ? '#888' : '#555',
+                        color: hoveredGroup === groups[idx + 1] ? 'var(--text-muted)' : 'var(--text-disabled)',
                     }}
                     onClick={() => onSelectGroup(groups[idx + 1])}
                     onMouseEnter={() => setHoveredGroup(groups[idx + 1])}
@@ -104,8 +104,8 @@ const styles = {
         justifyContent: 'center',
         gap: '4px',
         padding: '10px 6px',
-        backgroundColor: '#161616',
-        borderLeft: '1px solid #262626',
+        backgroundColor: 'var(--bg-primary)',
+        borderLeft: '1px solid var(--border-subtle)',
         userSelect: 'none' as const,
         flex: '0 0 64px',
     },
@@ -115,7 +115,7 @@ const styles = {
         borderRadius: '6px',
         fontSize: '10px',
         fontWeight: 600,
-        color: '#fff',
+        color: 'var(--text-primary)',
         textAlign: 'center' as const,
         cursor: 'default',
         transition: 'box-shadow 0.25s ease',
@@ -139,7 +139,7 @@ const styles = {
     peekBottom: {},
     addBtn: {
         marginTop: '4px',
-        color: '#444',
+        color: 'var(--text-disabled)',
         cursor: 'pointer',
         display: 'flex',
         alignItems: 'center',

@@ -14,7 +14,7 @@ interface CommandBlockProps {
 
 export default function CommandBlock({ title, result, defaultOpen = false }: CommandBlockProps) {
     const [open, setOpen] = useState(defaultOpen);
-    const tone = result.error ? '#ff8a8a' : '#8a8a8a';
+    const tone = result.error ? 'var(--severity-danger)' : 'var(--text-muted)';
     const content = result.error ? result.error : (result.output || '(no output)');
 
     const commandText = useMemo(() => {
@@ -34,7 +34,7 @@ export default function CommandBlock({ title, result, defaultOpen = false }: Com
                 <div style={{ ...styles.chev, color: tone }}>{open ? '▾' : '▸'}</div>
             </div>
             {open && (
-                <pre style={{ ...styles.pre, color: result.error ? '#ffb3b3' : '#d6d6d6' }}>
+                <pre style={{ ...styles.pre, color: result.error ? 'var(--severity-danger)' : 'var(--text-secondary)' }}>
                     {content}
                 </pre>
             )}
@@ -45,8 +45,8 @@ export default function CommandBlock({ title, result, defaultOpen = false }: Com
 const styles: Record<string, React.CSSProperties> = {
     container: {
         borderRadius: '10px',
-        border: '1px solid #2a2a2a',
-        backgroundColor: '#141414',
+        border: '1px solid var(--bg-elevated)',
+        backgroundColor: 'var(--bg-elevated)',
         overflow: 'hidden'
     },
     header: {
@@ -66,12 +66,12 @@ const styles: Record<string, React.CSSProperties> = {
     },
     title: {
         fontSize: '12px',
-        color: '#eaeaea',
+        color: 'var(--text-primary)',
         fontWeight: 700
     },
     cmd: {
         fontSize: '11px',
-        color: '#8a8a8a',
+        color: 'var(--text-muted)',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis'
@@ -83,12 +83,12 @@ const styles: Record<string, React.CSSProperties> = {
     pre: {
         margin: 0,
         padding: '10px 12px',
-        borderTop: '1px solid #2a2a2a',
+        borderTop: '1px solid var(--bg-elevated)',
         fontSize: '12px',
         whiteSpace: 'pre-wrap',
         wordBreak: 'break-word',
         fontFamily: 'var(--font-mono)',
-        backgroundColor: '#101010'
+        backgroundColor: 'var(--bg-primary)'
     }
 };
 

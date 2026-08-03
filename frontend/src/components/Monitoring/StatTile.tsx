@@ -37,8 +37,8 @@ export default function StatTile({ icon, label, value, sub, tone = 'neutral', on
 const styles: Record<string, React.CSSProperties> = {
     tile: {
         borderRadius: '10px',
-        border: '1px solid #2a2a2a',
-        backgroundColor: '#141414',
+        border: '1px solid var(--bg-elevated)',
+        backgroundColor: 'var(--bg-elevated)',
         padding: '10px',
         display: 'flex',
         flexDirection: 'column',
@@ -57,18 +57,18 @@ const styles: Record<string, React.CSSProperties> = {
         alignItems: 'center',
         justifyContent: 'center',
         fontSize: '16px',
-        backgroundColor: '#1f1f1f',
+        backgroundColor: 'var(--bg-primary)',
         borderRadius: '8px',
-        border: '1px solid #2a2a2a'
+        border: '1px solid var(--bg-elevated)'
     },
     label: {
         fontSize: '11px',
-        color: '#a8a8a8'
+        color: 'var(--text-tertiary)'
     },
     value: {
         fontSize: '16px',
         fontWeight: 800,
-        color: '#f2f2f2',
+        color: 'var(--text-primary)',
         letterSpacing: '0.2px',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
@@ -76,7 +76,7 @@ const styles: Record<string, React.CSSProperties> = {
     },
     sub: {
         fontSize: '11px',
-        color: '#8a8a8a',
+        color: 'var(--text-muted)',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis'
@@ -85,13 +85,13 @@ const styles: Record<string, React.CSSProperties> = {
         boxShadow: '0 0 0 rgba(0,0,0,0)'
     },
     good: {
-        borderColor: '#1f3a2a'
+        borderColor: 'var(--success-bg-subtle)'
     },
     warn: {
-        borderColor: '#3a2f1f'
+        borderColor: 'var(--warning-bg-subtle)'
     },
     bad: {
-        borderColor: '#3a1f1f'
+        borderColor: 'var(--danger-bg-subtle)'
     }
 };
 

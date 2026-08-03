@@ -93,6 +93,10 @@
   /* —— 代码 chip 底（脚本编辑器变量标签）—— */
   --chip-code-bg: #264f78;
 
+  /* —— 紫色 chip（脚本类型标签，ScriptListPanel）—— */
+  --chip-purple-bg: #2d1b4e;
+  --chip-purple-fg: #b39ddb;
+
   /* —— 代码 teal 文字（脚本变量高亮）—— */
   --teal-fg: #4ec9b0;
 
@@ -207,6 +211,9 @@
   --chip-info-bg: #ddf4ff;
 
   --chip-code-bg: #ddf4ff;
+
+  --chip-purple-bg: #fbefff;
+  --chip-purple-fg: #8250df;
 
   --teal-fg: #0a6640;
 

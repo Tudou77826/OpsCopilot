@@ -20,7 +20,7 @@ interface SparklineProps {
 export default function Sparkline({
     data,
     height = 44,
-    stroke = '#4da3ff',
+    stroke = 'var(--severity-info)',
     fill = 'rgba(77,163,255,0.18)',
     min,
     max,

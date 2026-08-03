@@ -160,11 +160,11 @@ const styles: Record<string, React.CSSProperties> = {
         left: 12,
         bottom: 12,
         zIndex: 20,
-        backgroundColor: '#141414',
-        border: '1px solid #2a2a2a',
+        backgroundColor: 'var(--bg-elevated)',
+        border: '1px solid var(--bg-elevated)',
         borderRadius: '10px',
         padding: '8px 10px',
-        color: '#ddd',
+        color: 'var(--text-primary)',
         minWidth: '420px',
         boxShadow: '0 6px 20px rgba(0,0,0,0.35)',
         display: 'flex',
@@ -181,7 +181,7 @@ const styles: Record<string, React.CSSProperties> = {
     dragIndicator: {
         width: '36px',
         height: '4px',
-        backgroundColor: '#3a3a3a',
+        backgroundColor: 'var(--border)',
         borderRadius: '2px'
     },
     row: {
@@ -200,41 +200,41 @@ const styles: Record<string, React.CSSProperties> = {
     },
     input: {
         flex: 1,
-        backgroundColor: '#202020',
-        color: '#ddd',
-        border: '1px solid #2a2a2a',
+        backgroundColor: 'var(--bg-input)',
+        color: 'var(--text-primary)',
+        border: '1px solid var(--bg-elevated)',
         borderRadius: '8px',
         padding: '8px 12px',
         outline: 'none',
         fontSize: '13px'
     },
     inputError: {
-        border: '1px solid #e05252'
+        border: '1px solid var(--severity-danger)'
     },
     errorText: {
-        color: '#e87979',
+        color: 'var(--severity-danger)',
         fontSize: '11px',
         marginLeft: 'auto'
     },
     counter: {
         fontSize: '11px',
-        color: '#8a8a8a',
+        color: 'var(--text-muted)',
         minWidth: '56px',
         textAlign: 'right'
     },
     btn: {
-        backgroundColor: '#202020',
-        color: '#ddd',
-        border: '1px solid #2a2a2a',
+        backgroundColor: 'var(--bg-input)',
+        color: 'var(--text-primary)',
+        border: '1px solid var(--bg-elevated)',
         borderRadius: '8px',
         padding: '4px 8px',
         cursor: 'pointer',
         fontSize: '12px'
     },
     btnClose: {
-        backgroundColor: '#202020',
-        color: '#ddd',
-        border: '1px solid #2a2a2a',
+        backgroundColor: 'var(--bg-input)',
+        color: 'var(--text-primary)',
+        border: '1px solid var(--bg-elevated)',
         borderRadius: '8px',
         padding: '4px 10px',
         cursor: 'pointer',
@@ -245,11 +245,11 @@ const styles: Record<string, React.CSSProperties> = {
         display: 'flex',
         alignItems: 'center',
         gap: '6px',
-        color: '#bbb',
+        color: 'var(--text-secondary)',
         fontSize: '12px'
     },
     optText: {
-        color: '#bbb',
+        color: 'var(--text-secondary)',
         fontSize: '12px'
     }
 };

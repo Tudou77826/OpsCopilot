@@ -126,7 +126,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onConnec
             width: isOpen ? width : 0,
             position: 'relative',
             // When closed, hide border and content but keep mounted
-            borderLeft: isOpen ? '1px solid #333' : 'none',
+            borderLeft: isOpen ? '1px solid var(--border)' : 'none',
         }}>
             <style>{`
                 .hide-scrollbar::-webkit-scrollbar {
@@ -212,8 +212,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onConnec
 
 const styles = {
     container: {
-        backgroundColor: '#252526',
-        borderLeft: '1px solid #333',
+        backgroundColor: 'var(--bg-secondary)',
+        borderLeft: '1px solid var(--border)',
         display: 'flex',
         flexDirection: 'column' as const,
         height: '100%',
@@ -230,11 +230,11 @@ const styles = {
     },
     header: {
         padding: '10px 16px',
-        backgroundColor: '#252526',
+        backgroundColor: 'var(--bg-secondary)',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        borderBottom: '1px solid #333',
+        borderBottom: '1px solid var(--border)',
     },
     mainArea: {
         display: 'flex',
@@ -245,12 +245,12 @@ const styles = {
     title: {
         margin: 0,
         fontSize: '14px',
-        color: '#fff',
+        color: 'var(--text-primary)',
     },
     closeButton: {
         background: 'none',
         border: 'none',
-        color: '#ccc',
+        color: 'var(--text-secondary)',
         cursor: 'pointer',
         fontSize: '18px',
     },

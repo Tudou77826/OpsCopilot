@@ -1362,7 +1362,7 @@ const styles = {
         height: '8px',
         borderRadius: '50%',
         backgroundColor: colors.danger,
-        border: '1px solid #1e1e1e',
+        border: '1px solid var(--bg-primary)',
         flexShrink: 0,
     },
     // tab 顶部状态横幅：左竖边框 + 浅底，醒目但不突兀

@@ -180,8 +180,8 @@ const FileTransferWindow: React.FC<FileTransferWindowProps> = ({ isOpen, onClose
 const styles: Record<string, React.CSSProperties> = {
     window: {
         position: 'fixed',
-        backgroundColor: '#1e1e1e',
-        border: '1px solid #333',
+        backgroundColor: 'var(--bg-primary)',
+        border: '1px solid var(--border)',
         borderRadius: '10px',
         overflow: 'hidden' as const,
         display: 'flex',
@@ -197,15 +197,15 @@ const styles: Record<string, React.CSSProperties> = {
         display: 'flex',
         alignItems: 'center',
         padding: '0 12px',
-        backgroundColor: '#252526',
-        borderBottom: '1px solid #333',
+        backgroundColor: 'var(--bg-secondary)',
+        borderBottom: '1px solid var(--border)',
         gap: '10px',
         cursor: 'move',
         userSelect: 'none'
     },
     title: {
         fontSize: '13px',
-        color: '#fff',
+        color: 'var(--text-primary)',
         fontWeight: 600
     },
     minBar: {
@@ -215,8 +215,8 @@ const styles: Record<string, React.CSSProperties> = {
         zIndex: 4000,
         height: '40px',
         width: '260px',
-        backgroundColor: '#252526',
-        border: '1px solid #333',
+        backgroundColor: 'var(--bg-secondary)',
+        border: '1px solid var(--border)',
         borderRadius: '10px',
         display: 'flex',
         alignItems: 'center',
@@ -228,9 +228,9 @@ const styles: Record<string, React.CSSProperties> = {
         width: '32px',
         height: '28px',
         borderRadius: '6px',
-        border: '1px solid #3c3c3c',
-        backgroundColor: '#1e1e1e',
-        color: '#ddd',
+        border: '1px solid var(--border)',
+        backgroundColor: 'var(--bg-primary)',
+        color: 'var(--text-primary)',
         cursor: 'pointer',
         fontSize: '18px',
         lineHeight: '18px'
@@ -238,9 +238,9 @@ const styles: Record<string, React.CSSProperties> = {
     minBtn: {
         height: '28px',
         borderRadius: '6px',
-        border: '1px solid #3c3c3c',
-        backgroundColor: '#1e1e1e',
-        color: '#ddd',
+        border: '1px solid var(--border)',
+        backgroundColor: 'var(--bg-primary)',
+        color: 'var(--text-primary)',
         cursor: 'pointer',
         fontSize: '12px',
         padding: '0 10px'
@@ -248,9 +248,9 @@ const styles: Record<string, React.CSSProperties> = {
     maxBtn: {
         height: '28px',
         borderRadius: '6px',
-        border: '1px solid #3c3c3c',
-        backgroundColor: '#1e1e1e',
-        color: '#ddd',
+        border: '1px solid var(--border)',
+        backgroundColor: 'var(--bg-primary)',
+        color: 'var(--text-primary)',
         cursor: 'pointer',
         fontSize: '12px',
         padding: '0 10px'

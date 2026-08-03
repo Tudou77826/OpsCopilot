@@ -137,8 +137,8 @@ const getTypeLabel = (type: string): string => {
 const styles = {
     container: {
         position: 'fixed' as const,
-        backgroundColor: '#252526',
-        border: '1px solid #454545',
+        backgroundColor: 'var(--bg-secondary)',
+        border: '1px solid var(--border)',
         borderRadius: '4px',
         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
         zIndex: 3000,
@@ -150,9 +150,9 @@ const styles = {
     },
     header: {
         padding: '6px 12px',
-        backgroundColor: '#1e1e1e',
-        borderBottom: '1px solid #333',
-        color: '#888',
+        backgroundColor: 'var(--bg-primary)',
+        borderBottom: '1px solid var(--border)',
+        color: 'var(--text-muted)',
         fontSize: '11px',
         borderTopLeftRadius: '4px',
         borderTopRightRadius: '4px',
@@ -162,7 +162,7 @@ const styles = {
     },
     headerHint: {
         fontSize: '10px',
-        color: '#666',
+        color: 'var(--text-disabled)',
         display: 'flex',
         alignItems: 'center',
         gap: '2px',
@@ -172,9 +172,9 @@ const styles = {
         padding: '1px 4px',
         fontSize: '10px',
         fontFamily: 'inherit',
-        color: '#aaa',
-        backgroundColor: '#333',
-        border: '1px solid #555',
+        color: 'var(--text-tertiary)',
+        backgroundColor: 'var(--bg-input)',
+        border: '1px solid var(--border-strong)',
         borderRadius: '2px',
         lineHeight: '1.2',
         marginLeft: '2px',
@@ -187,12 +187,12 @@ const styles = {
     item: {
         padding: '8px 12px',
         cursor: 'pointer',
-        borderBottom: '1px solid #2d2d2d',
+        borderBottom: '1px solid var(--bg-tertiary)',
         transition: 'background-color 0.1s',
     },
     selectedItem: {
-        backgroundColor: '#094771',
-        borderBottom: '1px solid #007acc',
+        backgroundColor: 'var(--bg-active)',
+        borderBottom: '1px solid var(--accent)',
     },
     itemMain: {
         display: 'flex',
@@ -201,7 +201,7 @@ const styles = {
         marginBottom: '2px',
     },
     itemText: {
-        color: '#fff',
+        color: 'var(--text-primary)',
         fontSize: '13px',
         fontFamily: 'var(--font-mono)',
         fontWeight: 500,
@@ -209,14 +209,14 @@ const styles = {
     },
     itemType: {
         fontSize: '10px',
-        color: '#888',
-        backgroundColor: '#333',
+        color: 'var(--text-muted)',
+        backgroundColor: 'var(--bg-input)',
         padding: '2px 6px',
         borderRadius: '2px',
         marginLeft: '8px',
     },
     itemDescription: {
-        color: '#aaa',
+        color: 'var(--text-tertiary)',
         fontSize: '11px',
         marginTop: '2px',
     },

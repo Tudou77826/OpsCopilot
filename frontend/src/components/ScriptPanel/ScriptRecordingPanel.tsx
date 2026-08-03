@@ -173,8 +173,8 @@ const ScriptRecordingPanel: React.FC<ScriptRecordingPanelProps> = ({ activeSessi
 const styles: Record<string, React.CSSProperties> = {
     container: {
         padding: '16px',
-        backgroundColor: '#1e1e1e',
-        borderBottom: '1px solid #333',
+        backgroundColor: 'var(--bg-primary)',
+        borderBottom: '1px solid var(--border)',
     },
     header: {
         display: 'flex',
@@ -186,7 +186,7 @@ const styles: Record<string, React.CSSProperties> = {
         margin: 0,
         fontSize: '14px',
         fontWeight: 600,
-        color: '#e0e0e0',
+        color: 'var(--text-primary)',
     },
     status: {
         flex: 1,
@@ -195,8 +195,8 @@ const styles: Record<string, React.CSSProperties> = {
     recordingBadge: {
         display: 'inline-block',
         padding: '4px 12px',
-        backgroundColor: '#d32f2f',
-        color: 'white',
+        backgroundColor: 'var(--danger)',
+        color: 'var(--text-on-accent)',
         borderRadius: '4px',
         fontSize: '12px',
         fontWeight: 500,
@@ -204,8 +204,8 @@ const styles: Record<string, React.CSSProperties> = {
     idleBadge: {
         display: 'inline-block',
         padding: '4px 12px',
-        backgroundColor: '#424242',
-        color: '#b0b0b0',
+        backgroundColor: 'var(--bg-input)',
+        color: 'var(--text-tertiary)',
         borderRadius: '4px',
         fontSize: '12px',
     },
@@ -215,8 +215,8 @@ const styles: Record<string, React.CSSProperties> = {
     },
     startButton: {
         padding: '8px 16px',
-        backgroundColor: '#1976d2',
-        color: 'white',
+        backgroundColor: 'var(--accent)',
+        color: 'var(--text-on-accent)',
         border: 'none',
         borderRadius: '4px',
         cursor: 'pointer',
@@ -225,8 +225,8 @@ const styles: Record<string, React.CSSProperties> = {
     },
     stopButton: {
         padding: '8px 16px',
-        backgroundColor: '#d32f2f',
-        color: 'white',
+        backgroundColor: 'var(--danger)',
+        color: 'var(--text-on-accent)',
         border: 'none',
         borderRadius: '4px',
         cursor: 'pointer',
@@ -236,25 +236,25 @@ const styles: Record<string, React.CSSProperties> = {
     recentCommands: {
         marginTop: '12px',
         padding: '12px',
-        backgroundColor: '#252526',
-        border: '1px solid #3c3c3c',
+        backgroundColor: 'var(--bg-secondary)',
+        border: '1px solid var(--border)',
         borderRadius: '4px',
     },
     recentTitle: {
         fontSize: '12px',
-        color: '#b0b0b0',
+        color: 'var(--text-tertiary)',
         marginBottom: '8px',
         fontWeight: 500,
     },
     commandItem: {
         fontSize: '12px',
-        color: '#e0e0e0',
+        color: 'var(--text-primary)',
         fontFamily: 'var(--font-mono)',
         padding: '2px 0',
     },
     moreIndicator: {
         fontSize: '12px',
-        color: '#757575',
+        color: 'var(--text-muted)',
         textAlign: 'center',
         marginTop: '4px',
     },

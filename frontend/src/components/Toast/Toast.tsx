@@ -21,10 +21,10 @@ interface ToastContextValue {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 const TYPE_CONFIG: Record<ToastType, { color: string; icon: string; defaultDuration: number }> = {
-    success: { color: '#4caf50', icon: '✓', defaultDuration: 3000 },
-    error: { color: '#d32f2f', icon: '✗', defaultDuration: 5000 },
-    info: { color: '#007acc', icon: 'i', defaultDuration: 3000 },
-    warning: { color: '#e8ab2c', icon: '!', defaultDuration: 4000 },
+    success: { color: 'var(--success)', icon: '✓', defaultDuration: 3000 },
+    error: { color: 'var(--danger)', icon: '✗', defaultDuration: 5000 },
+    info: { color: 'var(--accent)', icon: 'i', defaultDuration: 3000 },
+    warning: { color: 'var(--warning)', icon: '!', defaultDuration: 4000 },
 };
 
 const ToastItemComponent: React.FC<{ item: ToastItem; onClose: (id: number) => void }> = ({ item, onClose }) => {
@@ -121,10 +121,10 @@ const styles: Record<string, React.CSSProperties> = {
         alignItems: 'center',
         gap: 10,
         padding: '10px 14px',
-        backgroundColor: 'rgba(45, 45, 45, 0.95)',
+        backgroundColor: 'var(--bg-tooltip)',
         borderRadius: 6,
         boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
-        color: '#eee',
+        color: 'var(--text-on-accent)',
         fontSize: 13,
         lineHeight: 1.4,
         maxWidth: 380,
@@ -142,7 +142,7 @@ const styles: Record<string, React.CSSProperties> = {
         flexShrink: 0,
     },
     iconText: {
-        color: '#fff',
+        color: 'var(--text-on-accent)',
         fontSize: 11,
         fontWeight: 700,
     },
@@ -152,7 +152,7 @@ const styles: Record<string, React.CSSProperties> = {
     closeBtn: {
         background: 'none',
         border: 'none',
-        color: '#888',
+        color: 'var(--text-muted)',
         cursor: 'pointer',
         fontSize: 16,
         padding: '0 2px',

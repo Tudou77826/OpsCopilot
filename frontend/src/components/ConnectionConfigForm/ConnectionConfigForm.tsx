@@ -186,14 +186,14 @@ const styles = {
     },
     fieldLabel: {
         fontSize: '0.8rem',
-        color: '#ccc',
+        color: 'var(--text-secondary)',
     },
     protocolSwitch: {
         display: 'flex',
         gap: '0',
         borderRadius: '4px',
         overflow: 'hidden' as const,
-        border: '1px solid #444',
+        border: '1px solid var(--border)',
         width: 'fit-content',
         // 与 input 等高,避免表单内高度参差
         height: '34px',
@@ -202,8 +202,8 @@ const styles = {
     // 那是"执行动作"的主按钮专用色,这里只是配置选择,视觉层级要低一档)。
     protocolBtn: {
         padding: '0 16px',
-        backgroundColor: '#1e1e1e',
-        color: '#9a9a9a',
+        backgroundColor: 'var(--bg-primary)',
+        color: 'var(--text-tertiary)',
         border: 'none',
         cursor: 'pointer',
         fontSize: '0.85rem',
@@ -211,8 +211,8 @@ const styles = {
     },
     protocolBtnActive: {
         padding: '0 16px',
-        backgroundColor: '#3a3d41',
-        color: '#fff',
+        backgroundColor: 'var(--bg-input)',
+        color: 'var(--text-primary)',
         border: 'none',
         cursor: 'pointer',
         fontSize: '0.85rem',
@@ -221,16 +221,16 @@ const styles = {
     input: {
         padding: '8px',
         borderRadius: '4px',
-        border: '1px solid #444',
-        backgroundColor: '#1e1e1e',
-        color: '#fff',
+        border: '1px solid var(--border)',
+        backgroundColor: 'var(--bg-primary)',
+        color: 'var(--text-primary)',
         fontSize: '0.9rem',
         boxSizing: 'border-box' as const,
         outline: 'none',
     },
     bastionSection: {
         marginTop: '8px',
-        border: '1px solid #444',
+        border: '1px solid var(--border)',
         borderRadius: '4px',
         overflow: 'hidden',
     },
@@ -238,13 +238,13 @@ const styles = {
         display: 'flex',
         alignItems: 'center',
         padding: '10px',
-        backgroundColor: '#333',
+        backgroundColor: 'var(--bg-elevated)',
         cursor: 'pointer',
         userSelect: 'none' as const,
     },
     bastionBody: {
         padding: '12px',
-        backgroundColor: '#2a2a2a',
+        backgroundColor: 'var(--bg-elevated)',
     },
 };
 

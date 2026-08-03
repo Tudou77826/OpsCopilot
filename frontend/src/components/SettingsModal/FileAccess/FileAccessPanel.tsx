@@ -560,7 +560,7 @@ const styles: Record<string, React.CSSProperties> = {
   deleteBtn: {
     padding: '4px 10px',
     borderRadius: radius.sm,
-    border: '1px solid #5a3a3a',
+    border: '1px solid var(--danger-border)',
     backgroundColor: 'transparent',
     color: colors.danger,
     cursor: 'pointer',

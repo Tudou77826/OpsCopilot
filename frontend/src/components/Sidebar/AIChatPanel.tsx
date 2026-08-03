@@ -154,7 +154,7 @@ const AIChatPanel: React.FC = () => {
                             <div key={idx} style={{
                                 ...styles.messageItem,
                                 alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                                backgroundColor: msg.role === 'user' ? '#007acc' : '#333',
+                                backgroundColor: msg.role === 'user' ? 'var(--accent)' : 'var(--bg-tertiary)',
                                 maxWidth: msg.role === 'user' ? '85%' : '95%'
                             }} data-testid="message-item">
                                 <MessageRenderer content={msg.content} role={msg.role} />
@@ -212,11 +212,11 @@ const styles = {
         display: 'flex',
         flexDirection: 'column' as const,
         height: '100%',
-        color: '#ccc',
+        color: 'var(--text-secondary)',
     },
     header: {
         padding: '10px 16px',
-        borderBottom: '1px solid #333',
+        borderBottom: '1px solid var(--border)',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -224,14 +224,14 @@ const styles = {
     title: {
         fontSize: '14px',
         fontWeight: 'bold' as const,
-        color: '#fff',
+        color: 'var(--text-primary)',
     },
     newChatBtn: {
         padding: '4px 8px',
         backgroundColor: 'transparent',
-        border: '1px solid #555',
+        border: '1px solid var(--border-strong)',
         borderRadius: '4px',
-        color: '#ccc',
+        color: 'var(--text-secondary)',
         fontSize: '12px',
         cursor: 'pointer',
     },
@@ -248,7 +248,7 @@ const styles = {
         alignItems: 'center',
         justifyContent: 'center',
         height: '100%',
-        color: '#888',
+        color: 'var(--text-muted)',
     },
     icon: {
         fontSize: '48px',
@@ -266,14 +266,14 @@ const styles = {
         maxWidth: '85%',
         padding: '8px 12px',
         borderRadius: '8px',
-        color: '#fff',
+        color: 'var(--text-primary)',
         wordBreak: 'break-word' as const,
         overflow: 'hidden',
     },
     footer: {
         padding: '10px',
-        backgroundColor: '#252526',
-        borderTop: '1px solid #333',
+        backgroundColor: 'var(--bg-secondary)',
+        borderTop: '1px solid var(--border)',
     },
     inputBox: {
         display: 'flex',
@@ -281,10 +281,10 @@ const styles = {
     },
     textarea: {
         flex: 1,
-        backgroundColor: '#3c3c3c',
+        backgroundColor: 'var(--border)',
         border: 'none',
         borderRadius: '4px',
-        color: '#fff',
+        color: 'var(--text-primary)',
         padding: '8px',
         resize: 'none' as const,
         outline: 'none',
@@ -292,15 +292,15 @@ const styles = {
     },
     sendButton: {
         padding: '0 12px',
-        backgroundColor: '#007acc',
-        color: 'white',
+        backgroundColor: 'var(--accent)',
+        color: 'var(--text-on-accent)',
         border: 'none',
         borderRadius: '4px',
         cursor: 'pointer',
     },
     statusIndicator: {
         padding: '8px 12px',
-        color: '#888',
+        color: 'var(--text-muted)',
         fontSize: '12px',
         display: 'flex',
         alignItems: 'center',
@@ -314,9 +314,9 @@ const styles = {
     },
     statusHistory: {
         padding: '6px 12px 10px 12px',
-        borderLeft: '2px solid #333',
+        borderLeft: '2px solid var(--border)',
         marginLeft: '8px',
-        color: '#777',
+        color: 'var(--text-muted)',
         fontSize: '12px',
         display: 'flex',
         flexDirection: 'column' as const,
@@ -328,15 +328,15 @@ const styles = {
     },
     usedDocsBox: {
         padding: '10px 12px',
-        backgroundColor: '#1f1f1f',
-        border: '1px solid #333',
+        backgroundColor: 'var(--bg-primary)',
+        border: '1px solid var(--border)',
         borderRadius: '8px',
-        color: '#aaa',
+        color: 'var(--text-tertiary)',
         maxWidth: '95%',
     },
     usedDocsTitle: {
         fontSize: '12px',
-        color: '#888',
+        color: 'var(--text-muted)',
         marginBottom: '8px',
     },
     usedDocsList: {
@@ -347,9 +347,9 @@ const styles = {
     usedDocChip: {
         padding: '2px 8px',
         borderRadius: '999px',
-        backgroundColor: '#2a2a2a',
-        border: '1px solid #3a3a3a',
-        color: '#bbb',
+        backgroundColor: 'var(--bg-elevated)',
+        border: '1px solid var(--border)',
+        color: 'var(--text-secondary)',
         fontSize: '12px',
     },
 };

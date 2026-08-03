@@ -31,13 +31,13 @@ function saveHistory(entries: HistoryEntry[]) {
 }
 
 const PinIcon: React.FC<{ active: boolean }> = ({ active }) => (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill={active ? '#e8ab2c' : '#666'}>
+    <svg width="12" height="12" viewBox="0 0 16 16" fill={active ? 'var(--warning)' : 'var(--text-disabled)'}>
         <path d="M8 1.3l1.8 4.0H14l-3.4 2.7 1.3 4.3L8 9.8 4.1 12.3l1.3-4.3L2 5.3h4.2z"/>
     </svg>
 );
 
 const TrashIcon: React.FC = () => (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="#666">
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="var(--text-disabled)">
         <path d="M6.5 1a.5.5 0 0 0-.5.5V2H3.5a.5.5 0 0 0 0 1h9a.5.5 0 0 0 0-1H10v-.5a.5.5 0 0 0-.5-.5h-3zM4.5 4l.5 9.5a1 1 0 0 0 1 .5h4a1 1 0 0 0 1-.5L11.5 4h-7z"/>
     </svg>
 );
@@ -198,7 +198,7 @@ const CommandQueryOverlay: React.FC<CommandQueryOverlayProps> = ({
                                 key={entry.id}
                                 style={{
                                     ...styles.historyItem,
-                                    backgroundColor: hoveredId === entry.id ? '#2a2d2e' : 'transparent',
+                                    backgroundColor: hoveredId === entry.id ? 'var(--bg-elevated)' : 'transparent',
                                 }}
                                 onClick={() => selectHistory(entry)}
                                 onMouseEnter={() => setHoveredId(entry.id)}
@@ -279,12 +279,12 @@ const styles: Record<string, React.CSSProperties> = {
         transform: 'translate(-50%, -30%)',
         zIndex: 3600,
         width: '480px',
-        backgroundColor: '#1e1e1e',
-        border: '1px solid #3c3c3c',
+        backgroundColor: 'var(--bg-primary)',
+        border: '1px solid var(--border)',
         borderRadius: '10px',
         boxShadow: '0 12px 40px rgba(0, 0, 0, 0.7)',
         overflow: 'hidden',
-        color: '#ccc',
+        color: 'var(--text-secondary)',
         display: 'flex',
         flexDirection: 'column',
     },
@@ -292,24 +292,24 @@ const styles: Record<string, React.CSSProperties> = {
         display: 'flex',
         gap: '10px',
         padding: '16px 16px 12px',
-        borderBottom: '2px solid #444',
-        backgroundColor: '#2d2d2d',
+        borderBottom: '2px solid var(--border)',
+        backgroundColor: 'var(--bg-tertiary)',
     },
     input: {
         flex: 1,
-        backgroundColor: '#111',
-        border: '2px solid #666',
+        backgroundColor: 'var(--bg-primary)',
+        border: '2px solid var(--text-disabled)',
         borderRadius: '8px',
-        color: '#fff',
+        color: 'var(--text-primary)',
         fontSize: '14px',
         padding: '12px 14px',
         outline: 'none',
         fontWeight: 500,
     },
     primaryBtn: {
-        backgroundColor: '#0e639c',
+        backgroundColor: 'var(--accent)',
         border: 'none',
-        color: '#fff',
+        color: 'var(--text-primary)',
         borderRadius: '6px',
         padding: '10px 16px',
         fontSize: '13px',
@@ -327,7 +327,7 @@ const styles: Record<string, React.CSSProperties> = {
         justifyContent: 'space-between',
         padding: '6px 14px',
         cursor: 'pointer',
-        borderBottom: '1px solid #2a2a2a',
+        borderBottom: '1px solid var(--bg-elevated)',
         transition: 'background-color 0.1s',
     },
     historyContent: {
@@ -341,14 +341,14 @@ const styles: Record<string, React.CSSProperties> = {
     historyCommand: {
         fontFamily: 'var(--font-mono)',
         fontSize: '12px',
-        color: '#ccc',
+        color: 'var(--text-secondary)',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
     },
     historyDesc: {
         fontSize: '11px',
-        color: '#666',
+        color: 'var(--text-disabled)',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
@@ -369,7 +369,7 @@ const styles: Record<string, React.CSSProperties> = {
         border: 'none',
         borderRadius: '3px',
         background: 'transparent',
-        color: '#888',
+        color: 'var(--text-muted)',
         cursor: 'pointer',
         padding: 0,
     },
@@ -380,27 +380,27 @@ const styles: Record<string, React.CSSProperties> = {
         padding: '12px 16px 14px',
     },
     resultBox: {
-        backgroundColor: '#252526',
-        border: '1px solid #3c3c3c',
+        backgroundColor: 'var(--bg-secondary)',
+        border: '1px solid var(--border)',
         borderRadius: '6px',
         padding: '10px 12px',
     },
     commandLine: {
         fontFamily: 'var(--font-mono)',
         fontSize: '13px',
-        color: '#e0e0e0',
+        color: 'var(--text-primary)',
         whiteSpace: 'pre-wrap',
         wordBreak: 'break-word',
         lineHeight: 1.5,
     },
     explanation: {
         marginTop: '8px',
-        color: '#999',
+        color: 'var(--text-tertiary)',
         fontSize: '12px',
         lineHeight: 1.4,
     },
     errorText: {
-        color: '#f48771',
+        color: 'var(--severity-danger)',
         fontSize: '12px',
         lineHeight: 1.4,
         whiteSpace: 'pre-wrap',
@@ -413,18 +413,18 @@ const styles: Record<string, React.CSSProperties> = {
         justifyContent: 'flex-end',
     },
     secondaryBtn: {
-        backgroundColor: '#2e2e2e',
-        border: '1px solid #444',
-        color: '#ccc',
+        backgroundColor: 'var(--border-subtle)',
+        border: '1px solid var(--border)',
+        color: 'var(--text-secondary)',
         borderRadius: '6px',
         padding: '6px 10px',
         fontSize: '12px',
         cursor: 'pointer',
     },
     copiedBtn: {
-        backgroundColor: '#1a4a2e',
-        border: '1px solid #2d8a4e',
-        color: '#4ec870',
+        backgroundColor: 'var(--success-bg-subtle)',
+        border: '1px solid var(--success)',
+        color: 'var(--severity-success)',
         borderRadius: '6px',
         padding: '6px 10px',
         fontSize: '12px',

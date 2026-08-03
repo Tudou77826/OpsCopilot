@@ -23,9 +23,9 @@ export default function Card({ title, right, children, style }: CardProps) {
 
 const styles: Record<string, React.CSSProperties> = {
     card: {
-        border: '1px solid #2e2e2e',
+        border: '1px solid var(--border-subtle)',
         borderRadius: '10px',
-        backgroundColor: '#1b1b1b',
+        backgroundColor: 'var(--bg-elevated)',
         overflow: 'hidden'
     },
     header: {
@@ -33,12 +33,12 @@ const styles: Record<string, React.CSSProperties> = {
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '10px 12px',
-        borderBottom: '1px solid #2a2a2a',
-        backgroundColor: '#181818'
+        borderBottom: '1px solid var(--bg-elevated)',
+        backgroundColor: 'var(--bg-tertiary)'
     },
     title: {
         fontSize: '12px',
-        color: '#cfcfcf',
+        color: 'var(--text-secondary)',
         fontWeight: 700,
         letterSpacing: '0.2px'
     },

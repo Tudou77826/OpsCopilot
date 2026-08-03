@@ -47,8 +47,8 @@ const CommandCard: React.FC<CommandCardProps> = ({ command, description }) => {
 
 const styles = {
     card: {
-        backgroundColor: '#1e1e1e',
-        border: '1px solid #333',
+        backgroundColor: 'var(--bg-primary)',
+        border: '1px solid var(--border)',
         borderRadius: '8px',
         padding: '12px',
         marginBottom: '12px',
@@ -58,12 +58,12 @@ const styles = {
         marginBottom: '8px',
     },
     description: {
-        color: '#aaa',
+        color: 'var(--text-tertiary)',
         fontSize: '12px',
         fontWeight: 'bold' as const,
     },
     codeContainer: {
-        backgroundColor: '#000',
+        backgroundColor: 'var(--bg-primary)',
         padding: '8px',
         borderRadius: '4px',
         display: 'flex',
@@ -74,7 +74,7 @@ const styles = {
     commandText: {
         fontFamily: 'var(--font-mono)',
         fontSize: '13px',
-        color: '#ce9178',
+        color: 'var(--stage-orange)',
         flex: 1,
         overflowX: 'auto' as const,
         whiteSpace: 'nowrap' as const,
@@ -82,9 +82,9 @@ const styles = {
     },
     copyButton: {
         padding: '4px 12px',
-        backgroundColor: '#333',
-        color: '#ccc',
-        border: '1px solid #555',
+        backgroundColor: 'var(--bg-elevated)',
+        color: 'var(--text-secondary)',
+        border: '1px solid var(--border-strong)',
         borderRadius: '4px',
         cursor: 'pointer',
         fontSize: '12px',
