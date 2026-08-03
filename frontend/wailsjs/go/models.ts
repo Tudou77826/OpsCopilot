@@ -78,6 +78,18 @@ export namespace config {
 		    return a;
 		}
 	}
+	export class AppearanceConfig {
+	    theme: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppearanceConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.theme = source["theme"];
+	    }
+	}
 	export class TerminalConfig {
 	    scrollback: number;
 	    search_enabled: boolean;
@@ -210,6 +222,7 @@ export namespace config {
 	    // Go type: ExperimentalConfig
 	    experimental: any;
 	    terminal: TerminalConfig;
+	    appearance: AppearanceConfig;
 	    highlight_rules: HighlightRule[];
 	    patch_store: PatchStoreConfig;
 	
@@ -229,6 +242,7 @@ export namespace config {
 	        this.command_query_shortcut = source["command_query_shortcut"];
 	        this.experimental = this.convertValues(source["experimental"], null);
 	        this.terminal = this.convertValues(source["terminal"], TerminalConfig);
+	        this.appearance = this.convertValues(source["appearance"], AppearanceConfig);
 	        this.highlight_rules = this.convertValues(source["highlight_rules"], HighlightRule);
 	        this.patch_store = this.convertValues(source["patch_store"], PatchStoreConfig);
 	    }
@@ -251,6 +265,7 @@ export namespace config {
 		    return a;
 		}
 	}
+	
 	
 	
 	

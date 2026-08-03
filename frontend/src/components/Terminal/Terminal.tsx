@@ -16,6 +16,7 @@ import { RuleHighlightController } from './highlight/RuleHighlightController';
 import { Theme } from '../appearanceTypes';
 import { DEFAULT_THEME } from '../appearance';
 import { getTerminalTheme } from '../../themes/terminalSchemes';
+import { AnsiBackgroundFilter } from './ansiBgFilter';
 
 interface TerminalProps {
     id: string;
@@ -55,6 +56,9 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
     const zoomIndicatorTimerRef = useRef<number | null>(null);
     const highlightRulesRef = useRef<HighlightRule[] | undefined>(undefined);
     const themeRef = useRef<Theme>(theme);
+    // 亮色主题下剥离远端「设置背景色」SGR 的流式过滤器；暗色主题不启用（透传）。
+    // 解决远端 motd/bashrc 发 \x1b[40m 等导致亮色背景被染黑的通病。
+    const bgFilterRef = useRef<AnsiBackgroundFilter | null>(null);
 
     // Completion state
     const [completionVisible, setCompletionVisible] = useState(false);
@@ -267,7 +271,16 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         if (queue.length === 0) return;
         const merged = queue.join('');
         writeQueueRef.current = [];
-        xtermRef.current?.write(merged);
+        // 亮色主题：剥离远端发来的「设置背景色」SGR，使背景始终跟随主题；
+        // 暗色主题：直接透传，不影响现有体验。
+        if (themeRef.current === 'light') {
+            if (!bgFilterRef.current) bgFilterRef.current = new AnsiBackgroundFilter();
+            xtermRef.current?.write(bgFilterRef.current.feed(merged));
+        } else {
+            // 切回暗色时清理过滤器残留状态（避免下次切亮色时旧 partial 干扰）
+            if (bgFilterRef.current) bgFilterRef.current.reset();
+            xtermRef.current?.write(merged);
+        }
     }, []);
 
     // Helper function to sync terminal size to backend PTY
@@ -560,6 +573,8 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             // v6 正确姿势：直接赋值 options.theme + refresh。DOM renderer 无需 clearTextureAtlas。
             term.options.theme = getTerminalTheme(nextTheme);
             term.refresh(0, term.rows - 1);
+            // 切换主题时重置 ANSI 背景过滤器状态（跨 chunk partial 残留）
+            bgFilterRef.current?.reset();
             // 规则高亮装饰器颜色在创建时固化，需重建以适配新背景（自动对比度补偿在 Phase 4 接入）
             ruleHighlightControllerRef.current?.invalidate();
             ruleHighlightControllerRef.current?.schedule('rules');
@@ -979,6 +994,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         themeRef.current = theme;
         term.options.theme = getTerminalTheme(theme);
         term.refresh(0, term.rows - 1);
+        bgFilterRef.current?.reset();
         ruleHighlightControllerRef.current?.invalidate();
         ruleHighlightControllerRef.current?.schedule('rules');
     }, [theme]);

@@ -139,6 +139,31 @@ function App() {
         persistTheme(theme);
         applyThemeAll(theme);
     }, [theme, applyThemeAll]);
+
+    // 主题切换（顶栏快捷按钮 + 设置面板共用）：更新 state 并落盘后端。
+    // useEffect([theme]) 会负责写 data-theme/localStorage/广播终端；这里只做持久化到配置文件。
+    const themeSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const handleThemeChange = useCallback((nextTheme: Theme) => {
+        setTheme(nextTheme);
+        if (themeSaveTimerRef.current) clearTimeout(themeSaveTimerRef.current);
+        themeSaveTimerRef.current = setTimeout(async () => {
+            themeSaveTimerRef.current = null;
+            try {
+                // @ts-ignore
+                const cfg = await window.go?.main?.App?.GetSettings?.();
+                if (cfg) {
+                    cfg.appearance = { theme: nextTheme };
+                    // @ts-ignore
+                    await window.go?.main?.App?.SaveSettings?.(cfg);
+                }
+            } catch (e) {
+                console.error('Failed to save appearance:', e);
+            }
+        }, 200);
+    }, []);
+    const handleThemeToggle = useCallback(() => {
+        handleThemeChange(theme === 'dark' ? 'light' : 'dark');
+    }, [theme, handleThemeChange]);
     // Store unlisten functions for events
     const unlisteners = useRef(new Map<string, () => void>());
     const activeConnectError = connectErrors.length > 0 ? connectErrors[0] : null;
@@ -734,6 +759,18 @@ function App() {
                     )}
                     <button onClick={() => setIsSmartModalOpen(true)} style={styles.primaryBtn}>
                         + 新建连接
+                    </button>
+                    <button onClick={handleThemeToggle} style={styles.iconBtnUnified} title={theme === 'dark' ? '切换到亮色' : '切换到暗色'}>
+                        {theme === 'dark' ? (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="4" />
+                                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+                            </svg>
+                        ) : (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                            </svg>
+                        )}
                     </button>
                     <button onClick={() => setIsSettingsOpen(true)} style={{ ...styles.iconBtnUnified, position: 'relative' }} title="设置">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
