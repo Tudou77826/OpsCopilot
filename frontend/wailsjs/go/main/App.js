@@ -310,6 +310,10 @@ export function SaveTerminalConfig(arg1) {
   return window['go']['main']['App']['SaveTerminalConfig'](arg1);
 }
 
+export function SelectSavePath(arg1) {
+  return window['go']['main']['App']['SelectSavePath'](arg1);
+}
+
 export function SendCommand(arg1, arg2) {
   return window['go']['main']['App']['SendCommand'](arg1, arg2);
 }

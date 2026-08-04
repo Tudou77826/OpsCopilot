@@ -1,17 +1,26 @@
 import React, { useState, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
 
+interface ConfirmChoice {
+    label: string;
+    value: string;
+    danger?: boolean;
+    primary?: boolean;
+}
+
 interface ConfirmOptions {
     title?: string;
     message: string;
     confirmText?: string;
     cancelText?: string;
     danger?: boolean;
+    /** 多按钮模式：提供后取代默认"确定/取消"按钮组，点击返回对应 value，取消返回 null */
+    choices?: ConfirmChoice[];
 }
 
 interface ConfirmState extends ConfirmOptions {
     visible: boolean;
-    resolve: ((value: boolean) => void) | null;
+    resolve: ((value: boolean | string | null) => void) | null;
 }
 
 const INITIAL_STATE: ConfirmState = {
@@ -21,16 +30,23 @@ const INITIAL_STATE: ConfirmState = {
     confirmText: '确定',
     cancelText: '取消',
     danger: false,
+    choices: undefined,
     resolve: null,
 };
 
 let _setState: React.Dispatch<React.SetStateAction<ConfirmState>> | null = null;
 
 export const confirmDialog = {
-    show: (options: ConfirmOptions): Promise<boolean> => {
+    show: (options: ConfirmOptions): Promise<boolean | string | null> => {
         return new Promise(resolve => {
             if (!_setState) {
-                resolve(window.confirm(options.message));
+                // Fallback 环境（无 React 宿主）：多按钮退化为原生 confirm
+                if (options.choices && options.choices.length > 0) {
+                    const confirmed = window.confirm(`${options.message}\n\n[${options.choices.map(c => c.label).join(' / ')}]`);
+                    resolve(confirmed ? options.choices![0].value : null);
+                } else {
+                    resolve(window.confirm(options.message));
+                }
                 return;
             }
             _setState({
@@ -40,6 +56,7 @@ export const confirmDialog = {
                 confirmText: options.confirmText || '确定',
                 cancelText: options.cancelText || '取消',
                 danger: options.danger ?? false,
+                choices: options.choices,
                 resolve,
             });
         });
@@ -65,6 +82,11 @@ const ConfirmDialogInternal: React.FC = () => {
         setState(prev => ({ ...prev, visible: false, resolve: null }));
     }, [state.resolve]);
 
+    const handleChoice = useCallback((value: string) => {
+        state.resolve?.(value);
+        setState(prev => ({ ...prev, visible: false, resolve: null }));
+    }, [state.resolve]);
+
     if (!state.visible) return null;
 
     return ReactDOM.createPortal(
@@ -77,15 +99,34 @@ const ConfirmDialogInternal: React.FC = () => {
                     <p style={styles.message}>{state.message}</p>
                 </div>
                 <div style={styles.footer}>
-                    <button onClick={handleCancel} style={styles.cancelBtn}>
-                        {state.cancelText}
-                    </button>
-                    <button
-                        onClick={handleConfirm}
-                        style={state.danger ? styles.dangerBtn : styles.confirmBtn}
-                    >
-                        {state.confirmText}
-                    </button>
+                    {state.choices && state.choices.length > 0 ? (
+                        <>
+                            {state.choices.map(c => (
+                                <button
+                                    key={c.value}
+                                    onClick={() => handleChoice(c.value)}
+                                    style={c.danger ? styles.dangerBtn : c.primary ? styles.confirmBtn : styles.cancelBtn}
+                                >
+                                    {c.label}
+                                </button>
+                            ))}
+                            <button onClick={handleCancel} style={styles.cancelBtn}>
+                                {state.cancelText}
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button onClick={handleCancel} style={styles.cancelBtn}>
+                                {state.cancelText}
+                            </button>
+                            <button
+                                onClick={handleConfirm}
+                                style={state.danger ? styles.dangerBtn : styles.confirmBtn}
+                            >
+                                {state.confirmText}
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
         </div>,

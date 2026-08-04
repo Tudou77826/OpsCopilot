@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -2270,6 +2271,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 					"ok":        false,
 					"code":      te.Code,
 					"message":   te.Message,
+					"cancelled": errors.Is(ctx.Err(), context.Canceled),
 				})
 			}
 			return
@@ -2313,6 +2315,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 						"ok":        false,
 						"code":      filetransfer.ErrorCodeNotFound,
 						"message":   "root-relay 传输未就绪",
+						"cancelled": errors.Is(ctx.Err(), context.Canceled),
 					})
 				}
 				return
@@ -2336,6 +2339,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 					"ok":        false,
 					"code":      te.Code,
 					"message":   te.Message,
+					"cancelled": errors.Is(ctx.Err(), context.Canceled),
 				})
 				return
 			}
@@ -2405,6 +2409,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 				"ok":        false,
 				"code":      te.Code,
 				"message":   te.Message,
+				"cancelled": errors.Is(ctx.Err(), context.Canceled),
 			})
 			return
 		}
@@ -2750,6 +2755,24 @@ func (a *App) ExportScript(scriptID string) error {
 	}
 
 	return os.WriteFile(path, []byte(content), 0644)
+}
+
+// SelectSavePath 弹出系统"另存为"对话框，返回选中的保存路径。
+// 用户取消时返回空字符串。
+func (a *App) SelectSavePath(defaultName string) string {
+	if a.ctx == nil {
+		return ""
+	}
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		DefaultFilename: defaultName,
+		Filters: []runtime.FileFilter{
+			{DisplayName: "所有文件", Pattern: "*.*"},
+		},
+	})
+	if err != nil || path == "" {
+		return ""
+	}
+	return path
 }
 
 // GetScriptRecordingStatus 获取脚本录制状态
