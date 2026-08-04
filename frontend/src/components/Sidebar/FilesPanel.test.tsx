@@ -34,6 +34,8 @@ const makeBackend = () => ({
     LocalRemove: vi.fn(() => json({ ok: true })),
     LocalRename: vi.fn(() => json({ ok: true })),
     LocalCopy: vi.fn(() => json({ ok: true })),
+    LocalStat: vi.fn(() => json({ ok: false })),
+    SelectSavePath: vi.fn(() => json('C:\\Users\\tester\\local-1.txt')),
 });
 
 const renderPanel = (width: number, backend = makeBackend()) => {
@@ -118,6 +120,12 @@ describe('FilesPanel responsive layout', () => {
         }));
         renderPanel(1200, backend);
 
+        await waitFor(() => expect(screen.getByTestId('files-panel')).toHaveAttribute('data-layout-mode', 'wide'));
+
+        // 隐藏文件默认不显示（.bash_history 在远端 pane），打开远端"显示隐藏"后再断言
+        const remotePaneEl = screen.getByTestId('file-pane-远端');
+        fireEvent.click(within(remotePaneEl).getByText('显示隐藏'));
+
         await waitFor(() => expect(screen.getByText('.bash_history')).toBeInTheDocument());
 
         const row = screen.getByText('.bash_history').closest('tr') as HTMLTableRowElement;
@@ -148,15 +156,19 @@ describe('FilesPanel responsive layout', () => {
 
         await waitFor(() => expect(screen.getByText('local.txt')).toBeInTheDocument());
         const localPane = screen.getByTestId('file-pane-本地');
-        const firstCol = localPane.querySelector('col') as HTMLTableColElement;
-        expect(firstCol.getAttribute('style')).toContain('280px');
+        const cols = localPane.querySelectorAll('col');
+        // 第一列是复选框列(32px)，第二列才是名称列（内容自适应，短文件名收敛到最小值160px）
+        expect(cols[0].getAttribute('style')).toContain('32px');
+        expect(cols[1].getAttribute('style')).toContain('160px');
 
         const handle = screen.getAllByTestId('column-resize-name')[0];
         fireEvent.mouseDown(handle, { clientX: 100 });
         fireEvent.mouseMove(window, { clientX: 145 });
         fireEvent.mouseUp(window);
 
-        expect(firstCol.getAttribute('style')).toContain('325px');
+        // 名称列(第二列)宽度应随拖拽变化（自适应起始 160px + 45px）
+        const colsAfter = localPane.querySelectorAll('col');
+        expect(colsAfter[1].getAttribute('style')).toContain('205px');
     });
 
     it('shows a clear remote upload overlay when dragging a local file', async () => {
@@ -319,5 +331,145 @@ describe('FilesPanel responsive layout', () => {
             resizeCallback?.([makeEntry(641)], {} as ResizeObserver);
         });
         expect(screen.getByTestId('files-panel')).toHaveAttribute('data-layout-mode', 'medium');
+    });
+
+    it('supports ctrl multi-select and batch upload via context menu', async () => {
+        const backend = makeBackend();
+        backend.LocalList = vi.fn(() => json({
+            ok: true,
+            entries: [
+                { path: 'C:\\a.txt', name: 'a.txt', isDir: false, size: 100, modTime: '2026-06-08T00:00:00Z', mode: 0 },
+                { path: 'C:\\b.txt', name: 'b.txt', isDir: false, size: 200, modTime: '2026-06-08T00:00:00Z', mode: 0 },
+            ],
+        }));
+        backend.FTStat = vi.fn(() => json({ ok: false }));
+        renderPanel(1200, backend);
+
+        await waitFor(() => expect(screen.getByText('a.txt')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('b.txt')).toBeInTheDocument());
+
+        const rowA = screen.getByText('a.txt').closest('tr') as HTMLTableRowElement;
+        const rowB = screen.getByText('b.txt').closest('tr') as HTMLTableRowElement;
+        fireEvent.click(rowA);
+        fireEvent.click(rowB, { ctrlKey: true });
+
+        // 右键任一所选行 → 菜单出现"上传所选 2 项"
+        fireEvent.contextMenu(rowB, { clientX: 100, clientY: 100 });
+        const menu = await screen.findByTestId('file-context-menu');
+        fireEvent.click(within(menu).getByText('上传所选 2 项'));
+
+        await waitFor(() => expect(backend.FTUpload).toHaveBeenCalledTimes(2));
+        expect(backend.FTUpload).toHaveBeenCalledWith('session-1', 'C:\\a.txt', '/root/a.txt');
+        expect(backend.FTUpload).toHaveBeenCalledWith('session-1', 'C:\\b.txt', '/root/b.txt');
+    });
+
+    it('asks for local overwrite confirmation when the destination file exists', async () => {
+        const backend = makeBackend();
+        backend.LocalStat = vi.fn(() => json({ ok: true }));
+        renderPanel(1200, backend);
+
+        await waitFor(() => expect(screen.getByText('remote.log')).toBeInTheDocument());
+        const remoteRow = screen.getByText('remote.log').closest('tr') as HTMLTableRowElement;
+        fireEvent.doubleClick(remoteRow);
+
+        await waitFor(() => expect(backend.FTDownload).not.toHaveBeenCalled());
+    });
+
+    it('shows a right-click context menu on remote entries', async () => {
+        renderPanel(1200);
+
+        await waitFor(() => expect(screen.getByText('remote.log')).toBeInTheDocument());
+        const remoteRow = screen.getByText('remote.log').closest('tr') as HTMLTableRowElement;
+
+        fireEvent.contextMenu(remoteRow, { clientX: 300, clientY: 200 });
+
+        const menu = await screen.findByTestId('file-context-menu');
+        expect(menu).toBeInTheDocument();
+        expect(within(menu).getByText('下载')).toBeInTheDocument();
+        expect(within(menu).getByText('删除')).toBeInTheDocument();
+        expect(within(menu).getByText('复制路径')).toBeInTheDocument();
+    });
+
+    it('enables batch buttons via per-row checkboxes and header select-all', async () => {
+        const backend = makeBackend();
+        backend.LocalList = vi.fn(() => json({
+            ok: true,
+            entries: [
+                { path: 'C:\\a.txt', name: 'a.txt', isDir: false, size: 100, modTime: '2026-06-08T00:00:00Z', mode: 0 },
+                { path: 'C:\\b.txt', name: 'b.txt', isDir: false, size: 200, modTime: '2026-06-08T00:00:00Z', mode: 0 },
+            ],
+        }));
+        backend.FTStat = vi.fn(() => json({ ok: false }));
+        renderPanel(1200, backend);
+
+        await waitFor(() => expect(screen.getByText('a.txt')).toBeInTheDocument());
+
+        // 勾选第一行的复选框（点击 cell，不触发行单选）
+        const localPane = screen.getByTestId('file-pane-本地');
+        const check0 = localPane.querySelector('tbody input[type="checkbox"]') as HTMLInputElement;
+        fireEvent.click(check0);
+
+        // 勾选后右键菜单应出现批量"上传"项
+        const rowA = screen.getByText('a.txt').closest('tr') as HTMLTableRowElement;
+        fireEvent.contextMenu(rowA, { clientX: 100, clientY: 100 });
+        const menu = await screen.findByTestId('file-context-menu');
+        expect(within(menu).getByText('上传')).toBeInTheDocument();
+
+        // 表头全选：应勾选所有可见行
+        const checkAll = localPane.querySelector('thead input[type="checkbox"]') as HTMLInputElement;
+        fireEvent.click(checkAll);
+        const tbodyChecks = localPane.querySelectorAll('tbody input[type="checkbox"]');
+        expect((tbodyChecks[0] as HTMLInputElement).checked).toBe(true);
+        expect((tbodyChecks[1] as HTMLInputElement).checked).toBe(true);
+    });
+
+    it('sizes the name column from content, ignoring the longest 20% outliers', async () => {
+        const backend = makeBackend();
+        // 10 个条目：1 个超长 + 9 个普通；超长项应被前 20% 剔除，宽度取剩余最大值
+        const entries = [
+            { path: 'C:\\z'.padEnd(96, 'z') + '.txt', name: 'z'.repeat(90) + '.txt', isDir: false, size: 10, modTime: '2026-06-08T00:00:00Z', mode: 0 },
+        ];
+        for (let i = 1; i <= 9; i++) {
+            entries.push({ path: `C:\\file-1234-${i}.txt`, name: `file-1234-${i}.txt`, isDir: false, size: 10, modTime: '2026-06-08T00:00:00Z', mode: 0 });
+        }
+        backend.LocalList = vi.fn(() => json({ ok: true, entries }));
+        renderPanel(1200, backend);
+
+        await waitFor(() => expect(screen.getByText('file-1234-1.txt')).toBeInTheDocument());
+        const localPane = screen.getByTestId('file-pane-本地');
+        const cols = localPane.querySelectorAll('col');
+        // 名称列(第二列)宽度来自 9 个普通文件名最大值(≈190px)，而非超长项(≈677px)
+        expect(cols[1].getAttribute('style')).toContain('190px');
+        expect(cols[1].getAttribute('style')).not.toContain('677px');
+    });
+
+    it('copies all selected paths as a newline list when multiple are selected', async () => {
+        const backend = makeBackend();
+        backend.LocalList = vi.fn(() => json({
+            ok: true,
+            entries: [
+                { path: 'C:\\a.txt', name: 'a.txt', isDir: false, size: 100, modTime: '2026-06-08T00:00:00Z', mode: 0 },
+                { path: 'C:\\b.txt', name: 'b.txt', isDir: false, size: 200, modTime: '2026-06-08T00:00:00Z', mode: 0 },
+            ],
+        }));
+        const writeText = vi.fn();
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+        renderPanel(1200, backend);
+
+        await waitFor(() => expect(screen.getByText('a.txt')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('b.txt')).toBeInTheDocument());
+
+        const rowA = screen.getByText('a.txt').closest('tr') as HTMLTableRowElement;
+        const rowB = screen.getByText('b.txt').closest('tr') as HTMLTableRowElement;
+        fireEvent.click(rowA);
+        fireEvent.click(rowB, { ctrlKey: true });
+
+        // 右键选中行 → 菜单出现"复制路径 (2)"
+        fireEvent.contextMenu(rowB, { clientX: 100, clientY: 100 });
+        const menu = await screen.findByTestId('file-context-menu');
+        const copyItem = within(menu).getByText('复制路径 (2)');
+        fireEvent.click(copyItem);
+
+        expect(writeText).toHaveBeenCalledWith('C:\\a.txt\nC:\\b.txt');
     });
 });

@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FiArchive, FiCode, FiFile, FiFileText, FiFolder } from 'react-icons/fi';
 import { confirmDialog } from '../ConfirmDialog/ConfirmDialog';
+import FileContextMenu, { ContextMenuItem } from './FileContextMenu';
+import NameDialog from './NameDialog';
 
 interface TerminalSessionLite {
     id: string;
@@ -56,6 +58,8 @@ interface FileTransferBackend {
     LocalRemove: (localPath: string) => Promise<string>;
     LocalRename: (oldPath: string, newPath: string) => Promise<string>;
     LocalCopy: (src: string, dst: string) => Promise<string>;
+    LocalStat: (localPath: string) => Promise<string>;
+    SelectSavePath: (defaultName: string) => Promise<string>;
 }
 
 const appBackend = window.go?.main?.App as any;
@@ -76,6 +80,8 @@ const defaultBackend: FileTransferBackend = {
     LocalRemove: (localPath: string) => appBackend.LocalRemove(localPath),
     LocalRename: (oldPath: string, newPath: string) => appBackend.LocalRename(oldPath, newPath),
     LocalCopy: (src: string, dst: string) => appBackend.LocalCopy(src, dst),
+    LocalStat: (localPath: string) => appBackend.LocalStat(localPath),
+    SelectSavePath: (defaultName: string) => appBackend.SelectSavePath(defaultName),
 };
 
 type TaskState = {
@@ -102,6 +108,14 @@ const NARROW_LAYOUT_WIDTH = 640;
 const WIDE_LAYOUT_WIDTH = 920;
 const LAYOUT_HYSTERESIS = 16;
 
+// 各列最小宽度（用于列宽自适应与拖拽下限，三处共用）
+const COLUMN_MIN_WIDTH: Record<FileColumnKey, number> = {
+    name: 160,
+    owner: 48,
+    size: 72,
+    time: 116,
+};
+
 export const getFileTransferLayoutMode = (width: number): LayoutMode => {
     if (width < NARROW_LAYOUT_WIDTH) return 'narrow';
     if (width < WIDE_LAYOUT_WIDTH) return 'medium';
@@ -125,7 +139,6 @@ export const getStableFileTransferLayoutMode = (width: number, currentMode: Layo
 
 type FilePaneProps = {
     title: string;
-    badge?: string;
     owner: string;
     path: string;
     pathInput: string;
@@ -134,12 +147,11 @@ type FilePaneProps = {
     onUp: () => void;
     onRefresh: () => void;
     entries: FileEntry[];
-    selected: string;
-    onSelect: (p: string) => void;
+    selectedSet: Set<string>;
+    onSelect: (p: string, event: React.MouseEvent) => void;
     onOpenDir: (p: string) => void;
     onOpenFile?: (p: string) => void;
     disabled?: boolean;
-    toolbar?: React.ReactNode;
     layoutMode: LayoutMode;
     draggableEntries?: boolean;
     onEntryDragStart?: (entry: FileEntry, event: React.DragEvent) => void;
@@ -148,6 +160,11 @@ type FilePaneProps = {
     onPaneDragLeave?: (event: React.DragEvent<HTMLDivElement>) => void;
     onPaneDrop?: (event: React.DragEvent<HTMLDivElement>) => void;
     paneRef?: React.Ref<HTMLDivElement>;
+    onRowContextMenu?: (entry: FileEntry, event: React.MouseEvent) => void;
+    onBlankContextMenu?: (event: React.MouseEvent) => void;
+    onNavigate?: (p: string) => void;
+    onToggleCheck?: (p: string) => void;
+    onToggleCheckAll?: (paths: string[], checked: boolean) => void;
 };
 
 type FileColumnKey = 'name' | 'owner' | 'size' | 'time';
@@ -157,6 +174,19 @@ const formatFileSize = (size: number) => {
     if (size < 1024) return `${size} B`;
     const units = ['KB', 'MB', 'GB', 'TB'];
     let value = size / 1024;
+    let unit = units[0];
+    for (let i = 1; i < units.length && value >= 1024; i += 1) {
+        value /= 1024;
+        unit = units[i];
+    }
+    return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${unit}`;
+};
+
+const formatSpeed = (bps: number) => {
+    if (!Number.isFinite(bps) || bps < 0) return '-';
+    if (bps < 1024) return `${bps} B/s`;
+    const units = ['KB/s', 'MB/s', 'GB/s'];
+    let value = bps / 1024;
     let unit = units[0];
     for (let i = 1; i < units.length && value >= 1024; i += 1) {
         value /= 1024;
@@ -209,7 +239,6 @@ const FileKindIcon = ({ entry }: { entry: FileEntry }) => {
 
 function FilePane({
     title,
-    badge,
     owner,
     path,
     pathInput,
@@ -218,12 +247,11 @@ function FilePane({
     onUp,
     onRefresh,
     entries,
-    selected,
+    selectedSet,
     onSelect,
     onOpenDir,
     onOpenFile,
     disabled,
-    toolbar,
     layoutMode,
     draggableEntries,
     onEntryDragStart,
@@ -232,26 +260,63 @@ function FilePane({
     onPaneDragLeave,
     onPaneDrop,
     paneRef,
+    onRowContextMenu,
+    onBlankContextMenu,
+    onNavigate,
+    onToggleCheck,
+    onToggleCheckAll,
 }: FilePaneProps) {
-    const [columnWidths, setColumnWidths] = useState<Record<FileColumnKey, number>>({
-        name: 280,
-        owner: 64,
-        size: 92,
-        time: 152,
-    });
+    const [columnWidths, setColumnWidths] = useState<Record<FileColumnKey, number>>(COLUMN_MIN_WIDTH);
     const resizeRef = useRef<{ key: FileColumnKey; startX: number; startWidth: number; previousCursor: string } | null>(null);
+    // 用户手动拖过的列不再被内容自适应覆盖
+    const userResizedRef = useRef<Record<FileColumnKey, boolean>>({ name: false, owner: false, size: false, time: false });
+    const [sortKey, setSortKey] = useState<'name' | 'size' | 'time'>('name');
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+    const [filterText, setFilterText] = useState('');
+    const [showHidden, setShowHidden] = useState(false);
+
+    // 近似测量文本渲染宽度（11px 字号：ASCII ~6.5px、宽字符 ~12px）
+    const measureText = (s: string) => {
+        let w = 0;
+        for (const ch of s) {
+            w += ch.charCodeAt(0) > 255 ? 12 : 6.5;
+        }
+        return w;
+    };
+    // 建议宽度：该列所有显示项按长度降序，去掉最长的前 20% 后取剩余最大值，再加内边距
+    const suggestWidth = (items: string[], min: number, padding: number) => {
+        if (items.length === 0) return min;
+        const lens = items.map(measureText).sort((a, b) => b - a);
+        const drop = Math.floor(lens.length * 0.2);
+        const kept = lens.slice(drop);
+        const maxLen = kept.length > 0 ? kept[0] : lens[0];
+        return Math.max(min, Math.ceil(maxLen + padding));
+    };
+    // 内容自适应的初始列宽（名称列需额外容纳复选框+图标+间距）
+    const autoWidths = useMemo(() => ({
+        name: suggestWidth(entries.map(e => e.name), COLUMN_MIN_WIDTH.name, 92),
+        owner: suggestWidth(entries.map(e => getEntryOwnerLabel(e, owner)), COLUMN_MIN_WIDTH.owner, 22),
+        size: suggestWidth(entries.map(e => (e.isDir ? '-' : formatFileSize(e.size))), COLUMN_MIN_WIDTH.size, 26),
+        time: suggestWidth(entries.map(e => (e.modTime ? new Date(e.modTime).toLocaleString() : '')), COLUMN_MIN_WIDTH.time, 26),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }), [entries, owner]);
+    // entries 变化时，未手动拖过的列跟随内容自适应
+    useEffect(() => {
+        setColumnWidths(prev => {
+            const next = { ...prev };
+            (Object.keys(autoWidths) as FileColumnKey[]).forEach(key => {
+                if (!userResizedRef.current[key]) next[key] = autoWidths[key];
+            });
+            return next;
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [autoWidths]);
 
     useEffect(() => {
         const onMove = (event: MouseEvent) => {
             const state = resizeRef.current;
             if (!state) return;
-            const minWidth: Record<FileColumnKey, number> = {
-                name: 160,
-                owner: 48,
-                size: 72,
-                time: 116,
-            };
-            const nextWidth = Math.max(minWidth[state.key], state.startWidth + event.clientX - state.startX);
+            const nextWidth = Math.max(COLUMN_MIN_WIDTH[state.key], state.startWidth + event.clientX - state.startX);
             setColumnWidths(prev => ({ ...prev, [state.key]: nextWidth }));
         };
         const onUp = () => {
@@ -275,15 +340,106 @@ function FilePane({
             : ['name'];
     const isColumnVisible = (key: FileColumnKey) => visibleColumns.includes(key);
 
+    // 过滤 + 排序后的展示列表：目录始终排在文件前，其余按所选列排序。
+    const visibleEntries = useMemo(() => {
+        let list = entries;
+        if (!showHidden) list = list.filter(e => !e.name.startsWith('.'));
+        if (filterText) {
+            const f = filterText.toLowerCase();
+            list = list.filter(e => e.name.toLowerCase().includes(f));
+        }
+        if (list.length === 0) return [];
+        const sorted = [...list].sort((a, b) => {
+            if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+            let cmp = 0;
+            if (sortKey === 'size') {
+                cmp = (a.size - b.size) || a.name.localeCompare(b.name);
+            } else if (sortKey === 'time') {
+                const ta = a.modTime ? new Date(a.modTime).getTime() : 0;
+                const tb = b.modTime ? new Date(b.modTime).getTime() : 0;
+                cmp = (ta - tb) || a.name.localeCompare(b.name);
+            } else {
+                cmp = a.name.localeCompare(b.name);
+            }
+            return sortDir === 'asc' ? cmp : -cmp;
+        });
+        return sorted;
+    }, [entries, showHidden, filterText, sortKey, sortDir]);
+
+    const toggleSort = (key: 'name' | 'size' | 'time') => {
+        if (sortKey === key) {
+            setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+        } else {
+            setSortKey(key);
+            setSortDir('asc');
+        }
+    };
+
+    // 复选框多选：visibleEntries 中已被勾选的数量，用于表头全选/半选状态
+    const checkedCount = useMemo(
+        () => visibleEntries.filter(e => selectedSet.has(e.path)).length,
+        [visibleEntries, selectedSet]
+    );
+    const allChecked = checkedCount > 0 && checkedCount === visibleEntries.length;
+    const someChecked = checkedCount > 0 && checkedCount < visibleEntries.length;
+    const checkAllPaths = useMemo(() => visibleEntries.map(e => e.path), [visibleEntries]);
+    const handleCheckAllClick = (e: React.ChangeEvent<HTMLInputElement>) => {
+        e.stopPropagation();
+        onToggleCheckAll?.(checkAllPaths, e.target.checked);
+    };
+
+    const sortArrow = (key: 'name' | 'size' | 'time'): string => {
+        if (sortKey !== key) return '';
+        return sortDir === 'asc' ? ' ▲' : ' ▼';
+    };
+
+    // 面包屑：将当前路径拆分为可点击的分段（支持 Windows 盘符与 POSIX 路径）
+    const breadcrumbSegments = useMemo(() => {
+        const segs: { label: string; path: string }[] = [];
+        if (!path) return segs;
+        const isPosix = path.startsWith('/') && !/^[A-Za-z]:/.test(path);
+        if (isPosix) {
+            const parts = path.split('/').filter(Boolean);
+            let acc = '';
+            segs.push({ label: '/', path: '/' });
+            for (const p of parts) {
+                acc += '/' + p;
+                segs.push({ label: p, path: acc });
+            }
+            return segs;
+        }
+        const driveMatch = path.match(/^([A-Za-z]:)(.*)$/);
+        if (driveMatch) {
+            let acc = driveMatch[1] + '\\';
+            segs.push({ label: driveMatch[1], path: acc });
+            const rest = driveMatch[2].split(/[\\/]+/).filter(Boolean);
+            for (const p of rest) {
+                acc += p + '\\';
+                segs.push({ label: p, path: acc });
+            }
+            return segs;
+        }
+        let acc = '';
+        for (const p of path.split(/[\\/]+/).filter(Boolean)) {
+            acc = acc ? acc + '\\' + p : p;
+            segs.push({ label: p, path: acc });
+        }
+        return segs;
+    }, [path]);
+
     const renderHeaderCell = (label: string, key: FileColumnKey, extraStyle?: React.CSSProperties) => (
-        <th style={{ ...styles.th, ...extraStyle }}>
-            <span style={styles.thLabel}>{label}</span>
+        <th
+            style={{ ...styles.th, ...extraStyle }}
+            onClick={() => key !== 'owner' && toggleSort(key)}
+        >
+            <span style={styles.thLabel}>{label}{key !== 'owner' ? sortArrow(key) : ''}</span>
             {layoutMode !== 'narrow' ? (
                 <span
                     style={styles.colResizeHandle}
                     data-testid={`column-resize-${key}`}
                     onMouseDown={(event) => {
                         event.preventDefault();
+                        userResizedRef.current[key] = true;
                         resizeRef.current = { key, startX: event.clientX, startWidth: columnWidths[key], previousCursor: document.body.style.cursor };
                         document.body.style.cursor = 'col-resize';
                     }}
@@ -301,6 +457,19 @@ function FilePane({
         }
     };
 
+    // 行内复选框：勾选切换选中集合，onClick 阻止冒泡避免触发行点击（行点击保持单选）
+    const renderRowCheckbox = (entry: FileEntry, testId?: string) => (
+        <input
+            type="checkbox"
+            checked={selectedSet.has(entry.path)}
+            onChange={() => onToggleCheck?.(entry.path)}
+            onClick={(ev) => ev.stopPropagation()}
+            disabled={disabled}
+            aria-label={`勾选-${entry.name}`}
+            data-testid={testId}
+        />
+    );
+
     return (
         <div
             ref={paneRef}
@@ -310,15 +479,26 @@ function FilePane({
             onDragOver={onPaneDragOver}
             onDragLeave={onPaneDragLeave}
             onDrop={onPaneDrop}
+            onContextMenu={(e) => {
+                if (!onBlankContextMenu) return;
+                e.preventDefault();
+                onBlankContextMenu(e);
+            }}
         >
-            <div style={styles.paneHeader}>
-                <div style={styles.paneTitleGroup}>
-                    <div style={styles.paneTitle}>{title}</div>
-                    {badge ? <div style={styles.badge}>{badge}</div> : null}
-                </div>
-                <div style={styles.paneToolbar}>
-                    {toolbar}
-                </div>
+            <div style={styles.paneHeaderRow}>
+                <div style={styles.paneTitle}>{title}</div>
+                {onNavigate && breadcrumbSegments.length > 0 ? (
+                    <>
+                        <span style={styles.breadcrumbSep}>/</span>
+                        {breadcrumbSegments.map((seg, i) => (
+                            <React.Fragment key={seg.path}>
+                                <button style={styles.breadcrumbItem} onClick={() => onNavigate(seg.path)} disabled={disabled}>{seg.label}</button>
+                                {i < breadcrumbSegments.length - 1 ? <span style={styles.breadcrumbSep}>/</span> : null}
+                            </React.Fragment>
+                        ))}
+                    </>
+                ) : null}
+                <div style={{ flex: 1 }} />
             </div>
             <div style={styles.pathBar}>
                 <button style={styles.iconBtn} onClick={onUp} disabled={disabled}>↑</button>
@@ -333,6 +513,20 @@ function FilePane({
                     disabled={disabled}
                 />
                 <button style={styles.btn} onClick={onGo} disabled={disabled}>进入</button>
+            </div>
+            <div style={styles.filterBar}>
+                <input
+                    style={styles.filterInput}
+                    value={filterText}
+                    onChange={(e) => setFilterText(e.target.value)}
+                    placeholder="过滤文件名…"
+                    disabled={disabled}
+                    data-testid={`file-filter-${title}`}
+                />
+                <label style={styles.hiddenToggle}>
+                    <input type="checkbox" checked={showHidden} onChange={(e) => setShowHidden(e.target.checked)} disabled={disabled} />
+                    <span>显示隐藏</span>
+                </label>
             </div>
             <div style={styles.paneBody}>
                 {dropOverlay?.visible ? (
@@ -349,7 +543,7 @@ function FilePane({
                 ) : null}
                 {layoutMode === 'narrow' ? (
                     <div style={styles.compactList} data-testid={`file-list-${title}`}>
-                        {entries.map((e, index) => {
+                        {visibleEntries.map((e, index) => {
                             const size = e.isDir ? '-' : formatFileSize(e.size);
                             const time = e.modTime ? new Date(e.modTime).toLocaleString() : '';
                             const entryKey = e.path || `${title}:${e.name}:${index}`;
@@ -359,16 +553,25 @@ function FilePane({
                                     key={entryKey}
                                     style={{
                                         ...styles.compactRow,
-                                        ...(selected && selected === e.path ? styles.compactRowSelected : null),
+                                        ...(selectedSet.has(e.path) ? styles.compactRowSelected : null),
                                         cursor: disabled ? 'not-allowed' : 'pointer',
                                     }}
-                                    onClick={() => !disabled && onSelect(e.path)}
+                                    onClick={(ev) => !disabled && onSelect(e.path, ev)}
                                     onDoubleClick={() => openEntry(e)}
+                                    onContextMenu={(ev) => {
+                                        if (!onRowContextMenu) return;
+                                        ev.preventDefault();
+                                        ev.stopPropagation();
+                                        onRowContextMenu(e, ev);
+                                    }}
                                     draggable={!!draggableEntries && !e.isDir && !disabled}
                                     onDragStart={(event) => onEntryDragStart?.(e, event)}
                                     title={e.name}
                                 >
                                     <div style={styles.compactMain}>
+                                        {onToggleCheck ? (
+                                            <span style={styles.compactCheck}>{renderRowCheckbox(e)}</span>
+                                        ) : null}
                                         <FileKindIcon entry={e} />
                                         <span style={styles.compactName}>{e.name}</span>
                                     </div>
@@ -376,12 +579,13 @@ function FilePane({
                                 </div>
                             );
                         })}
-                        {entries.length === 0 ? <div style={styles.emptyState}>暂无数据</div> : null}
+                        {visibleEntries.length === 0 ? <div style={styles.emptyState}>暂无数据</div> : null}
                     </div>
                 ) : (
                 <div style={styles.fileTableWrap}>
                     <table style={styles.table}>
                         <colgroup>
+                            <col style={{ width: 32 }} />
                             {isColumnVisible('name') ? <col style={{ width: columnWidths.name }} /> : null}
                             {isColumnVisible('owner') ? <col style={{ width: columnWidths.owner }} /> : null}
                             {isColumnVisible('size') ? <col style={{ width: columnWidths.size }} /> : null}
@@ -389,6 +593,19 @@ function FilePane({
                         </colgroup>
                         <thead>
                             <tr>
+                                {onToggleCheckAll ? (
+                                    <th style={{ ...styles.th, width: 32, padding: '0 4px' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={allChecked}
+                                            ref={el => { if (el) el.indeterminate = someChecked; }}
+                                            onChange={handleCheckAllClick}
+                                            disabled={disabled || visibleEntries.length === 0}
+                                            aria-label={`全选-${title}`}
+                                            data-testid={`file-checkall-${title}`}
+                                        />
+                                    </th>
+                                ) : null}
                                 {isColumnVisible('name') ? renderHeaderCell('名称', 'name') : null}
                                 {isColumnVisible('owner') ? renderHeaderCell('所属', 'owner', styles.cellOwner) : null}
                                 {isColumnVisible('size') ? renderHeaderCell('大小', 'size', styles.cellSize) : null}
@@ -396,21 +613,32 @@ function FilePane({
                             </tr>
                         </thead>
                         <tbody>
-                            {entries.map((e, index) => (
+                            {visibleEntries.map((e, index) => (
                                 <tr
                                     key={e.path || `${title}:${e.name}:${index}`}
                                     style={{
                                         ...styles.fileRow,
-                                        ...(selected && selected === e.path ? styles.fileRowSelected : null),
+                                        ...(selectedSet.has(e.path) ? styles.fileRowSelected : null),
                                         cursor: disabled ? 'not-allowed' : 'pointer',
                                     }}
-                                    onClick={() => !disabled && onSelect(e.path)}
+                                    onClick={(ev) => !disabled && onSelect(e.path, ev)}
                                     onDoubleClick={() => {
                                         openEntry(e);
+                                    }}
+                                    onContextMenu={(ev) => {
+                                        if (!onRowContextMenu) return;
+                                        ev.preventDefault();
+                                        ev.stopPropagation();
+                                        onRowContextMenu(e, ev);
                                     }}
                                     draggable={!!draggableEntries && !e.isDir && !disabled}
                                     onDragStart={(event) => onEntryDragStart?.(e, event)}
                                 >
+                                    {onToggleCheck ? (
+                                        <td style={{ ...styles.td, ...styles.cellCheck }}>
+                                            {renderRowCheckbox(e, `file-check-${title}-${index}`)}
+                                        </td>
+                                    ) : null}
                                     <td style={{ ...styles.td, ...styles.cellName }} title={e.name}>
                                         <FileKindIcon entry={e} />
                                         <span>{e.name}</span>
@@ -420,9 +648,9 @@ function FilePane({
                                     {isColumnVisible('time') ? <td style={{ ...styles.td, ...styles.cellTime }}>{e.modTime ? new Date(e.modTime).toLocaleString() : ''}</td> : null}
                                 </tr>
                             ))}
-                            {entries.length === 0 ? (
+                            {visibleEntries.length === 0 ? (
                                 <tr>
-                                    <td style={styles.td} colSpan={visibleColumns.length}>暂无数据</td>
+                                    <td style={styles.td} colSpan={visibleColumns.length + (onToggleCheck ? 1 : 0)}>暂无数据</td>
                                 </tr>
                             ) : null}
                         </tbody>
@@ -446,12 +674,14 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
     const [localPath, setLocalPath] = useState<string>('');
     const [localPathInput, setLocalPathInput] = useState<string>('');
     const [localEntries, setLocalEntries] = useState<FileEntry[]>([]);
-    const [localSelected, setLocalSelected] = useState<string>('');
+    const [localSelected, setLocalSelected] = useState<Set<string>>(new Set());
+    const [localAnchor, setLocalAnchor] = useState<string>('');
 
     const [remotePath, setRemotePath] = useState<string>('/root');
     const [remotePathInput, setRemotePathInput] = useState<string>('/root');
     const [remoteEntries, setRemoteEntries] = useState<FileEntry[]>([]);
-    const [remoteSelected, setRemoteSelected] = useState<string>('');
+    const [remoteSelected, setRemoteSelected] = useState<Set<string>>(new Set());
+    const [remoteAnchor, setRemoteAnchor] = useState<string>('');
     const [editOpen, setEditOpen] = useState(false);
     const [editPath, setEditPath] = useState('');
     const [editContent, setEditContent] = useState('');
@@ -461,6 +691,26 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
 
     const [tasks, setTasks] = useState<Record<string, TaskState>>({});
     const [drawerOpen, setDrawerOpen] = useState(false);
+    const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
+    const [nameDialog, setNameDialog] = useState<{ title: string; defaultValue: string; onConfirm: (name: string) => void; onCancel: () => void } | null>(null);
+    // 弹出应用内名称输入框，返回输入值；取消返回 null。
+    const askName = (title: string, defaultValue = ''): Promise<string | null> =>
+        new Promise(resolve => {
+            setNameDialog({
+                title,
+                defaultValue,
+                onConfirm: (name) => { setNameDialog(null); resolve(name); },
+                onCancel: () => { setNameDialog(null); resolve(null); },
+            });
+        });
+    const copyPaths = (paths: string[]) => {
+        if (paths.length === 0) return;
+        try {
+            navigator.clipboard?.writeText(paths.join('\n'));
+        } catch {
+            // 剪贴板不可用时静默忽略
+        }
+    };
     const refreshTimerRef = useRef<number | null>(null);
     const refreshRetryTimerRef = useRef<number | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -714,6 +964,58 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
         });
     };
 
+    // 统一的多选逻辑：单击单选；Ctrl/Cmd 点击增减；Shift 点击范围选择。
+    // anchor 为当前 pane 的锚点（上次点击项），用于 Shift 范围选择的起点。
+    const handleSelect = (p: string, event: React.MouseEvent, entries: FileEntry[], setSel: React.Dispatch<React.SetStateAction<Set<string>>>, setAnchor: React.Dispatch<React.SetStateAction<string>>, anchor: string) => {
+        const multi = event.metaKey || event.ctrlKey;
+        const range = event.shiftKey;
+        setSel(prev => {
+            const next = new Set(prev);
+            if (range && entries.length > 0) {
+                const anchorPath = anchor || entries[0].path;
+                const idxA = entries.findIndex(e => e.path === anchorPath);
+                const idxB = entries.findIndex(e => e.path === p);
+                if (idxA >= 0 && idxB >= 0) {
+                    const [lo, hi] = idxA <= idxB ? [idxA, idxB] : [idxB, idxA];
+                    next.clear();
+                    for (let i = lo; i <= hi; i += 1) next.add(entries[i].path);
+                } else {
+                    next.clear();
+                    next.add(p);
+                }
+                return next;
+            }
+            if (multi) {
+                if (next.has(p)) next.delete(p);
+                else next.add(p);
+                return next;
+            }
+            return new Set([p]);
+        });
+        setAnchor(p);
+    };
+
+    // 复选框勾选（单行）：切换选中集合中该路径的存在性
+    const toggleCheck = (setSel: React.Dispatch<React.SetStateAction<Set<string>>>, p: string) => {
+        setSel(prev => {
+            const next = new Set(prev);
+            if (next.has(p)) next.delete(p);
+            else next.add(p);
+            return next;
+        });
+    };
+    // 表头全选/取消全选：作用于当前可见（过滤/排序后）的条目
+    const toggleCheckAll = (setSel: React.Dispatch<React.SetStateAction<Set<string>>>, paths: string[], checked: boolean) => {
+        setSel(prev => {
+            const next = new Set(prev);
+            for (const p of paths) {
+                if (checked) next.add(p);
+                else next.delete(p);
+            }
+            return next;
+        });
+    };
+
     const localParent = (p: string) => {
         const s = (p || '').replace(/[\\/]+$/, '');
         const idx = Math.max(s.lastIndexOf('\\'), s.lastIndexOf('/'));
@@ -853,7 +1155,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
 
     useEffect(() => {
         if (!sessionId) return;
-        setRemoteSelected('');
+        setRemoteSelected(new Set());
+        setRemoteAnchor('');
         refreshProtocol(sessionId).then(() => {
             refreshRemote(remotePath);
         });
@@ -917,7 +1220,9 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                         step: undefined as string | undefined
                     };
                     const ok = !!data?.ok;
-                    const status = ok ? 'done' : (data?.message?.includes('取消') ? 'cancelled' : 'error');
+                    // 优先用后端显式 cancelled 标志判定（不依赖错误消息文本）
+                    const cancelled = !!data?.cancelled || data?.message?.includes('取消');
+                    const status = ok ? 'done' : (cancelled ? 'cancelled' : 'error');
                     return {
                         ...prev,
                         [tid]: {
@@ -968,6 +1273,24 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
         }
     };
 
+    // 注册传输任务到队列。IPC 委派任务（主程序执行）收不到 done 事件，直接标记完成。
+    const registerTask = (taskId: string, message?: string) => {
+        const isDelegated = !!message?.includes?.('主程序');
+        setTasks(prev => ({
+            ...prev,
+            [taskId]: {
+                taskId,
+                sessionId,
+                bytesDone: 0,
+                bytesTotal: -1,
+                speedBps: 0,
+                status: isDelegated ? 'done' : 'running',
+                message: isDelegated ? (message || '任务已提交到主程序执行') : undefined,
+            },
+        }));
+        setDrawerOpen(true);
+    };
+
     const startUploadSelected = async () => {
         if (!sessionId) {
             setMsg('请先选择会话');
@@ -977,7 +1300,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
             setMsg('对端不支持文件传输');
             return;
         }
-        const src = localSelected;
+        const src = [...localSelected][0];
         if (!src) {
             setMsg('请先选择本地文件');
             return;
@@ -1035,21 +1358,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                 return;
             }
             if (resp.taskId) {
-                // Detect IPC delegated task: done events won't reach this frontend
-                const isDelegated = !!(resp as any).message?.includes?.('主程序');
-                setTasks(prev => ({
-                    ...prev,
-                    [resp.taskId as string]: {
-                        taskId: resp.taskId as string,
-                        sessionId,
-                        bytesDone: 0,
-                        bytesTotal: -1,
-                        speedBps: 0,
-                        status: isDelegated ? 'done' : 'running',
-                        message: isDelegated ? ((resp as any).message || '任务已提交到主程序执行') : undefined
-                    }
-                }));
-                setDrawerOpen(true);
+                registerTask(resp.taskId, (resp as any).message);
             }
         } catch (e: any) {
             setMsg('失败: ' + e.toString());
@@ -1230,7 +1539,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
             setMsg('SCP 模式请使用右侧“下载”表单');
             return;
         }
-        const src = remoteSelected;
+        const src = [...remoteSelected][0];
         if (!src) {
             setMsg('请先选择远端文件');
             return;
@@ -1241,6 +1550,137 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
             return;
         }
         await startDownloadFile(entry);
+    };
+
+    // 批量上传：遍历所有选中的本地文件逐个上传（跳过目录）。
+    const startUploadSelectedAll = async () => {
+        if (!sessionId) {
+            setMsg('请先选择会话');
+            return;
+        }
+        if (!isTransferSupported()) {
+            setMsg('对端不支持文件传输');
+            return;
+        }
+        const targets = localEntries.filter(e => localSelected.has(e.path) && !e.isDir);
+        if (targets.length === 0) {
+            setMsg('请先选择本地文件');
+            return;
+        }
+        for (const entry of targets) {
+            await startUploadFile(entry);
+        }
+    };
+
+    // 批量下载：遍历所有选中的远端文件逐个下载（跳过目录）。
+    const startDownloadSelectedAll = async () => {
+        if (!sessionId) {
+            setMsg('请先选择会话');
+            return;
+        }
+        if (!isTransferSupported()) {
+            setMsg('对端不支持文件传输');
+            return;
+        }
+        if (isSCPMode()) {
+            setMsg('SCP 模式请使用右侧“下载”表单');
+            return;
+        }
+        const targets = remoteEntries.filter(e => remoteSelected.has(e.path) && !e.isDir);
+        if (targets.length === 0) {
+            setMsg('请先选择远端文件');
+            return;
+        }
+        for (const entry of targets) {
+            await startDownloadFile(entry);
+        }
+    };
+
+    // 右键菜单：右键未选中的条目时先单选该条目，已选中时保留多选。
+    // 用"右键目标是否在选中集合中"来决定操作是单文件还是批量。
+    const showLocalRowMenu = (entry: FileEntry, event: React.MouseEvent) => {
+        if (!localSelected.has(entry.path)) {
+            handleSelect(entry.path, event, localEntries, setLocalSelected, setLocalAnchor, localAnchor);
+        }
+        const multi = localSelected.has(entry.path) && localSelected.size > 1;
+        const items: ContextMenuItem[] = [
+            { label: multi ? `上传所选 ${localSelected.size} 项` : '上传', onClick: () => startUploadSelectedAll() },
+            { label: '新建文件夹', onClick: () => createLocalFolder() },
+            { label: '重命名', disabled: multi, onClick: () => renameLocalSelected() },
+            { label: '删除', danger: true, onClick: () => deleteLocalSelected() },
+            { label: multi ? `复制路径 (${localSelected.size})` : '复制路径', onClick: () => copyPaths([...localSelected]) },
+            { label: '刷新', onClick: () => refreshLocal(localPath) },
+        ];
+        setCtxMenu({ x: event.clientX, y: event.clientY, items });
+    };
+
+    const showLocalBlankMenu = (event: React.MouseEvent) => {
+        setCtxMenu({
+            x: event.clientX,
+            y: event.clientY,
+            items: [
+                { label: '新建文件夹', onClick: () => createLocalFolder() },
+                { label: '刷新', onClick: () => refreshLocal(localPath) },
+            ],
+        });
+    };
+
+    const showRemoteRowMenu = (entry: FileEntry, event: React.MouseEvent) => {
+        if (!remoteSelected.has(entry.path)) {
+            handleSelect(entry.path, event, remoteEntries, setRemoteSelected, setRemoteAnchor, remoteAnchor);
+        }
+        const multi = remoteSelected.has(entry.path) && remoteSelected.size > 1;
+        const singleTarget = remoteSelected.has(entry.path) && remoteSelected.size === 1;
+        const items: ContextMenuItem[] = [
+            { label: multi ? `下载所选 ${remoteSelected.size} 项` : '下载', onClick: () => startDownloadSelectedAll() },
+            { label: '编辑', disabled: !singleTarget || entry.isDir || !isSFTPSupported(), onClick: () => openRemoteEditor() },
+            { label: '新建文件夹', onClick: () => createRemoteFolder() },
+            { label: '重命名', disabled: multi || !isSFTPSupported(), onClick: () => renameRemoteSelected() },
+            { label: '删除', danger: true, onClick: () => deleteRemoteSelected() },
+            { label: multi ? `复制路径 (${remoteSelected.size})` : '复制路径', onClick: () => copyPaths([...remoteSelected]) },
+            { label: '刷新', onClick: () => refreshRemote(remotePath) },
+        ];
+        setCtxMenu({ x: event.clientX, y: event.clientY, items });
+    };
+
+    const showRemoteBlankMenu = (event: React.MouseEvent) => {
+        setCtxMenu({
+            x: event.clientX,
+            y: event.clientY,
+            items: [
+                { label: '新建文件夹', onClick: () => createRemoteFolder() },
+                { label: '刷新', onClick: () => refreshRemote(remotePath) },
+            ],
+        });
+    };
+
+    // 下载前冲突处理：本地已存在同名文件时，让用户选择覆盖/另存为/取消。
+    // 返回最终保存路径；null 表示用户取消本次下载。
+    const resolveLocalConflict = async (name: string, dst: string): Promise<string | null> => {
+        try {
+            const raw = await api.LocalStat(dst);
+            const resp = parseResp(raw);
+            if (resp && resp.ok) {
+                const choice = await confirmDialog.show({
+                    title: '本地文件已存在',
+                    message: `本地已存在同名文件：\n${dst}\n\n请选择处理方式：`,
+                    cancelText: '取消',
+                    choices: [
+                        { label: '覆盖', value: 'overwrite', danger: true, primary: true },
+                        { label: '另存为…', value: 'save-as' },
+                    ],
+                });
+                if (choice === 'save-as') {
+                    const saved = await api.SelectSavePath(name);
+                    if (!saved) return null;
+                    return saved;
+                }
+                if (choice !== 'overwrite') return null;
+            }
+        } catch {
+            // 无法查询（视为目标不存在），继续使用默认路径
+        }
+        return dst;
     };
 
     const startDownloadFile = async (entry: FileEntry) => {
@@ -1260,7 +1700,9 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
             setMsg('仅支持下载文件');
             return;
         }
-        const dst = localPath ? `${localPath}${localPath.endsWith('\\') || localPath.endsWith('/') ? '' : '\\'}${entry.name}` : entry.name;
+        const defaultDst = localPath ? `${localPath}${localPath.endsWith('\\') || localPath.endsWith('/') ? '' : '\\'}${entry.name}` : entry.name;
+        const dst = await resolveLocalConflict(entry.name, defaultDst);
+        if (!dst) return; // 用户取消
         setLoading(true);
         setMsg('');
         try {
@@ -1275,20 +1717,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                 return;
             }
             if (resp.taskId) {
-                const isDelegated = !!(resp as any).message?.includes?.('主程序');
-                setTasks(prev => ({
-                    ...prev,
-                    [resp.taskId as string]: {
-                        taskId: resp.taskId as string,
-                        sessionId,
-                        bytesDone: 0,
-                        bytesTotal: -1,
-                        speedBps: 0,
-                        status: isDelegated ? 'done' : 'running',
-                        message: isDelegated ? ((resp as any).message || '任务已提交到主程序执行') : undefined
-                    }
-                }));
-                setDrawerOpen(true);
+                registerTask(resp.taskId, (resp as any).message);
             }
         } catch (e: any) {
             setMsg('失败: ' + e.toString());
@@ -1307,11 +1736,13 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
             return;
         }
         const rp = scpDownloadRemote.trim();
-        const lp = scpDownloadLocal.trim();
-        if (!rp || !lp) {
+        const lp0 = scpDownloadLocal.trim();
+        if (!rp || !lp0) {
             setMsg('请填写远端路径与本地保存路径');
             return;
         }
+        const lp = await resolveLocalConflict(lp0.replace(/^.*[\\/]/, '') || 'download', lp0);
+        if (!lp) return; // 用户取消
         setLoading(true);
         setMsg('');
         try {
@@ -1326,20 +1757,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                 return;
             }
             if (resp.taskId) {
-                const isDelegated = !!(resp as any).message?.includes?.('主程序');
-                setTasks(prev => ({
-                    ...prev,
-                    [resp.taskId as string]: {
-                        taskId: resp.taskId as string,
-                        sessionId,
-                        bytesDone: 0,
-                        bytesTotal: -1,
-                        speedBps: 0,
-                        status: isDelegated ? 'done' : 'running',
-                        message: isDelegated ? ((resp as any).message || '任务已提交到主程序执行') : undefined
-                    }
-                }));
-                setDrawerOpen(true);
+                registerTask(resp.taskId, (resp as any).message);
             }
         } catch (e: any) {
             setMsg('失败: ' + e.toString());
@@ -1354,7 +1772,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
             setMsg('当前模式不支持远端目录操作');
             return;
         }
-        const name = prompt('新建文件夹名称');
+        const name = await askName('新建文件夹');
         if (!name) return;
         const p = remoteJoin(remotePath, name);
         setLoading(true);
@@ -1384,26 +1802,44 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
             setMsg('当前模式不支持远端删除');
             return;
         }
-        if (!remoteSelected) {
+        const targets = [...remoteSelected];
+        if (targets.length === 0) {
             setMsg('请先选择远端文件或目录');
             return;
         }
-        const ok = await confirmDialog.show({ message: '确定要删除所选远端项吗？', danger: true });
+        const targetSet = new Set(targets);
+        const hasDir = remoteEntries.some(e => targetSet.has(e.path) && e.isDir);
+        const targetNames = targets.map(p => p.split('/').pop() || p);
+        const summary = targetNames.length <= 3 ? targetNames.join('\n') : targetNames.slice(0, 3).join('\n') + `\n…等 ${targetNames.length} 项`;
+        const ok = await confirmDialog.show({
+            message: hasDir
+                ? `确定要删除以下 ${targets.length} 项吗？\n${summary}\n\n其中包含目录，将递归删除目录及其全部内容，此操作不可恢复。`
+                : `确定要删除以下 ${targets.length} 项吗？\n${summary}\n\n此操作不可恢复。`,
+            danger: true,
+        });
         if (!ok) return;
         setLoading(true);
         setMsg('');
+        let firstError = '';
         try {
-            const raw = await api.FTRemoteRemove(sessionId, remoteSelected);
-            const resp = parseResp(raw);
-            if (!resp) {
-                setMsg('返回格式错误');
+            for (const p of targets) {
+                const raw = await api.FTRemoteRemove(sessionId, p);
+                const resp = parseResp(raw);
+                if (!resp) {
+                    firstError = '返回格式错误';
+                    break;
+                }
+                if (!resp.ok) {
+                    firstError = formatError(resp);
+                    break;
+                }
+            }
+            if (firstError) {
+                setMsg(firstError);
                 return;
             }
-            if (!resp.ok) {
-                setMsg(formatError(resp));
-                return;
-            }
-            setRemoteSelected('');
+            setRemoteSelected(new Set());
+            setRemoteAnchor('');
             await refreshRemote(remotePath);
         } catch (e: any) {
             setMsg('失败: ' + e.toString());
@@ -1418,12 +1854,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
             setMsg('当前模式不支持远端重命名');
             return;
         }
-        if (!remoteSelected) {
+        if (remoteSelected.size === 0) {
             setMsg('请先选择远端文件或目录');
             return;
         }
-        const entry = remoteEntries.find(e => e.path === remoteSelected);
-        const next = prompt('重命名为', entry?.name || '');
+        const entry = remoteEntries.find(e => e.path === [...remoteSelected][0]);
+        const next = await askName('重命名为', entry?.name || '');
         if (!next || !entry) return;
         const parent = remoteParent(entry.path);
         const newPath = remoteJoin(parent, next);
@@ -1440,7 +1876,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                 setMsg(formatError(resp));
                 return;
             }
-            setRemoteSelected('');
+            setRemoteSelected(new Set());
+            setRemoteAnchor('');
             await refreshRemote(remotePath);
         } catch (e: any) {
             setMsg('失败: ' + e.toString());
@@ -1455,11 +1892,11 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
             setMsg('当前模式不支持远端文件直读');
             return;
         }
-        if (!remoteSelected) {
+        if (remoteSelected.size === 0) {
             setMsg('请先选择远端文件');
             return;
         }
-        const entry = remoteEntries.find(e => e.path === remoteSelected);
+        const entry = remoteEntries.find(e => e.path === [...remoteSelected][0]);
         if (!entry || entry.isDir) {
             setMsg('仅支持编辑文件');
             return;
@@ -1513,7 +1950,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
     };
 
     const createLocalFolder = async () => {
-        const name = prompt('新建文件夹名称');
+        const name = await askName('新建文件夹');
         if (!name) return;
         const p = localPath ? `${localPath}${localPath.endsWith('\\') || localPath.endsWith('/') ? '' : '\\'}${name}` : name;
         setLoading(true);
@@ -1538,26 +1975,44 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
     };
 
     const deleteLocalSelected = async () => {
-        if (!localSelected) {
+        const targets = [...localSelected];
+        if (targets.length === 0) {
             setMsg('请先选择本地文件或目录');
             return;
         }
-        const ok = await confirmDialog.show({ message: '确定要删除所选项吗？', danger: true });
+        const targetSet = new Set(targets);
+        const hasDir = localEntries.some(e => targetSet.has(e.path) && e.isDir);
+        const targetNames = targets.map(p => p.replace(/^.*[\\/]/, '') || p);
+        const summary = targetNames.length <= 3 ? targetNames.join('\n') : targetNames.slice(0, 3).join('\n') + `\n…等 ${targetNames.length} 项`;
+        const ok = await confirmDialog.show({
+            message: hasDir
+                ? `确定要删除以下 ${targets.length} 项吗？\n${summary}\n\n其中包含目录，将递归删除目录及其全部内容，此操作不可恢复。`
+                : `确定要删除以下 ${targets.length} 项吗？\n${summary}\n\n此操作不可恢复。`,
+            danger: true,
+        });
         if (!ok) return;
         setLoading(true);
         setMsg('');
+        let firstError = '';
         try {
-            const raw = await api.LocalRemove(localSelected);
-            const resp = parseResp(raw);
-            if (!resp) {
-                setMsg('返回格式错误');
+            for (const p of targets) {
+                const raw = await api.LocalRemove(p);
+                const resp = parseResp(raw);
+                if (!resp) {
+                    firstError = '返回格式错误';
+                    break;
+                }
+                if (!resp.ok) {
+                    firstError = formatError(resp);
+                    break;
+                }
+            }
+            if (firstError) {
+                setMsg(firstError);
                 return;
             }
-            if (!resp.ok) {
-                setMsg(formatError(resp));
-                return;
-            }
-            setLocalSelected('');
+            setLocalSelected(new Set());
+            setLocalAnchor('');
             await refreshLocal(localPath);
         } catch (e: any) {
             setMsg('失败: ' + e.toString());
@@ -1567,12 +2022,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
     };
 
     const renameLocalSelected = async () => {
-        if (!localSelected) {
+        if (localSelected.size === 0) {
             setMsg('请先选择本地文件或目录');
             return;
         }
-        const entry = localEntries.find(e => e.path === localSelected);
-        const next = prompt('重命名为', entry?.name || '');
+        const entry = localEntries.find(e => e.path === [...localSelected][0]);
+        const next = await askName('重命名为', entry?.name || '');
         if (!next || !entry) return;
         const parent = localParent(entry.path);
         const newPath = `${parent}${parent.endsWith('\\') || parent.endsWith('/') ? '' : '\\'}${next}`;
@@ -1589,7 +2044,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                 setMsg(formatError(resp));
                 return;
             }
-            setLocalSelected('');
+            setLocalSelected(new Set());
+            setLocalAnchor('');
             await refreshLocal(localPath);
         } catch (e: any) {
             setMsg('失败: ' + e.toString());
@@ -1614,30 +2070,20 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
     return (
         <div ref={containerRef} style={panelRootStyle} data-testid="files-panel" data-layout-mode={layoutMode}>
             <div style={styles.topBar}>
-                <div style={styles.infoGrid}>
-                    <div style={{ ...styles.infoField, ...styles.infoFieldPrimary }}>
-                        <span style={styles.infoLabel}>当前会话</span>
-                        <select style={styles.select} value={sessionId} onChange={(e) => setSessionId(e.target.value)}>
-                            {terminals.map(t => (
-                                <option key={t.id} value={t.id}>
-                                    {t.title || t.id}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <div style={styles.infoChip}>
-                        <span style={styles.infoLabel}>连接方式</span>
-                        <span style={protocol ? styles.infoValue : styles.infoValueMuted}>
-                            {getProtocolLabel(protocol)}
-                        </span>
-                    </div>
-                    <div style={styles.infoChip}>
-                        <span style={styles.infoLabel}>工作方式</span>
-                        <span style={protocol ? styles.infoValue : styles.infoValueMuted}>
-                            {getWorkModeLabel(protocol)}
-                        </span>
-                    </div>
-                </div>
+                <select style={styles.select} value={sessionId} onChange={(e) => setSessionId(e.target.value)} aria-label="当前会话">
+                    {terminals.map(t => (
+                        <option key={t.id} value={t.id}>
+                            {t.title || t.id}
+                        </option>
+                    ))}
+                </select>
+                {protocol ? (
+                    <span style={styles.protocolChip} title={`${getProtocolLabel(protocol)} · ${getWorkModeLabel(protocol)}`}>
+                        {getProtocolLabel(protocol)}
+                    </span>
+                ) : (
+                    <span style={styles.protocolChipMuted}>连接方式未探测</span>
+                )}
                 <div style={{ flex: 1 }} />
                 <button style={styles.btnSecondary} onClick={() => {
                     if (isNarrow) {
@@ -1677,7 +2123,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                 {(!isNarrow || narrowPane === 'local') ? (
                     <FilePane
                         title="本地"
-                        badge={localPath ? localPath : ''}
                         owner="本地"
                         path={localPath}
                         pathInput={localPathInput}
@@ -1689,10 +2134,11 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                         }}
                         onRefresh={() => refreshLocal(localPath)}
                         entries={localEntries}
-                        selected={localSelected}
-                        onSelect={setLocalSelected}
+                        selectedSet={localSelected}
+                        onSelect={(p, ev) => handleSelect(p, ev, localEntries, setLocalSelected, setLocalAnchor, localAnchor)}
                         onOpenDir={(p) => {
-                            setLocalSelected('');
+                            setLocalSelected(new Set());
+                            setLocalAnchor('');
                             refreshLocal(p);
                         }}
                         onOpenFile={(p) => {
@@ -1708,13 +2154,15 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                         onPaneDragLeave={handleLocalDragLeave}
                         onPaneDrop={handleLocalDrop}
                         paneRef={localPaneRef}
-                        toolbar={
-                            <>
-                                <button style={styles.btnSecondary} onClick={createLocalFolder} disabled={loading}>新建</button>
-                                <button style={styles.btnSecondary} onClick={renameLocalSelected} disabled={loading || !localSelected}>重命名</button>
-                                <button style={styles.btnDanger} onClick={deleteLocalSelected} disabled={loading || !localSelected}>删除</button>
-                            </>
-                        }
+                        onRowContextMenu={showLocalRowMenu}
+                        onBlankContextMenu={showLocalBlankMenu}
+                        onNavigate={(p) => {
+                            setLocalSelected(new Set());
+                            setLocalAnchor('');
+                            refreshLocal(p);
+                        }}
+                        onToggleCheck={(p) => toggleCheck(setLocalSelected, p)}
+                        onToggleCheckAll={(paths, checked) => toggleCheckAll(setLocalSelected, paths, checked)}
                     />
                 ) : null}
 
@@ -1762,7 +2210,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                 ) : (
                     <FilePane
                         title="远端"
-                        badge={remotePath}
                         owner="-"
                         path={remotePath}
                         pathInput={remotePathInput}
@@ -1771,11 +2218,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                         onUp={() => refreshRemote(remoteParent(remotePath))}
                         onRefresh={() => refreshRemote(remotePath)}
                         entries={remoteEntries}
-                        selected={remoteSelected}
-                        onSelect={setRemoteSelected}
+                        selectedSet={remoteSelected}
+                        onSelect={(p, ev) => handleSelect(p, ev, remoteEntries, setRemoteSelected, setRemoteAnchor, remoteAnchor)}
                         onOpenDir={(p) => {
                             const next = p;
-                            setRemoteSelected('');
+                            setRemoteSelected(new Set());
+                            setRemoteAnchor('');
                             refreshRemote(next);
                         }}
                         onOpenFile={(p) => {
@@ -1790,14 +2238,15 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                         onPaneDragLeave={handleRemoteDragLeave}
                         onPaneDrop={handleRemoteDrop}
                         paneRef={remotePaneRef}
-                        toolbar={
-                            <>
-                                <button style={styles.btnSecondary} onClick={createRemoteFolder} disabled={loading || !isSFTPSupported()}>新建</button>
-                                <button style={styles.btnSecondary} onClick={renameRemoteSelected} disabled={loading || !remoteSelected || !isSFTPSupported()}>重命名</button>
-                                <button style={styles.btnDanger} onClick={deleteRemoteSelected} disabled={loading || !remoteSelected || !isSFTPSupported()}>删除</button>
-                                <button style={styles.btnSecondary} onClick={openRemoteEditor} disabled={loading || !remoteSelected || !isSFTPSupported()}>编辑</button>
-                            </>
-                        }
+                        onRowContextMenu={showRemoteRowMenu}
+                        onBlankContextMenu={showRemoteBlankMenu}
+                        onNavigate={(p) => {
+                            setRemoteSelected(new Set());
+                            setRemoteAnchor('');
+                            refreshRemote(p);
+                        }}
+                        onToggleCheck={(p) => toggleCheck(setRemoteSelected, p)}
+                        onToggleCheckAll={(paths, checked) => toggleCheckAll(setRemoteSelected, paths, checked)}
                     />
                 )) : null}
             </div>
@@ -1830,11 +2279,14 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                                     {t.status === 'done' && t.message ? (
                                         <div style={styles.taskMsg}>{t.message}</div>
                                     ) : null}
+                                    {t.status === 'running' && t.step ? (
+                                        <div style={styles.taskStep}>{t.step}</div>
+                                    ) : null}
                                     {t.status === 'running' && t.bytesTotal > 0 ? (
-                                        <div style={styles.taskProgress}>{t.bytesDone}/{t.bytesTotal}</div>
+                                        <div style={styles.taskProgress}>{formatFileSize(t.bytesDone)} / {formatFileSize(t.bytesTotal)}</div>
                                     ) : null}
                                     {t.status === 'running' && t.speedBps > 0 ? (
-                                        <div style={styles.taskSpeed}>{t.speedBps} B/s</div>
+                                        <div style={styles.taskSpeed}>{formatSpeed(t.speedBps)}</div>
                                     ) : null}
                                     {t.status === 'running' ? (
                                         <button style={styles.btnSecondary} onClick={() => cancelTask(t.taskId)} disabled={loading}>
@@ -1846,6 +2298,24 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                         )}
                     </div>
                 </div>
+            ) : null}
+
+            {nameDialog ? (
+                <NameDialog
+                    title={nameDialog.title}
+                    defaultValue={nameDialog.defaultValue}
+                    onConfirm={nameDialog.onConfirm}
+                    onCancel={nameDialog.onCancel}
+                />
+            ) : null}
+
+            {ctxMenu ? (
+                <FileContextMenu
+                    x={ctxMenu.x}
+                    y={ctxMenu.y}
+                    items={ctxMenu.items}
+                    onClose={() => setCtxMenu(null)}
+                />
             ) : null}
 
             {editOpen ? (
@@ -1895,7 +2365,6 @@ const styles: Record<string, React.CSSProperties> = {
         display: 'flex',
         gap: '8px',
         alignItems: 'center',
-        flexWrap: 'wrap' as const,
         flexShrink: 0,
         padding: '7px 8px',
         border: '1px solid var(--border-subtle)',
@@ -2033,34 +2502,23 @@ const styles: Record<string, React.CSSProperties> = {
         backgroundColor: 'var(--bg-primary)',
         boxShadow: '0 1px 0 rgba(255,255,255,0.03)'
     },
-    paneTitleGroup: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        minWidth: 0,
-        overflow: 'hidden'
-    },
     paneTitle: {
         color: 'var(--text-primary)',
         fontSize: '12px',
         fontWeight: 700,
-        letterSpacing: 0
+        letterSpacing: 0,
+        flexShrink: 0,
+        whiteSpace: 'nowrap' as const
     },
-    paneToolbar: {
-        display: 'flex',
-        gap: '5px',
-        flexWrap: 'wrap' as const,
-        justifyContent: 'flex-end',
-        flexShrink: 0
-    },
-    paneHeader: {
-        padding: '7px 8px',
+    paneHeaderRow: {
+        padding: '5px 8px',
         borderBottom: '1px solid var(--border-subtle)',
         backgroundColor: 'var(--bg-tertiary)',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '6px'
+        gap: '4px',
+        minWidth: 0,
+        overflow: 'hidden'
     },
     pathBar: {
         padding: '6px 8px',
@@ -2083,6 +2541,52 @@ const styles: Record<string, React.CSSProperties> = {
         height: '28px',
         boxSizing: 'border-box' as const
     },
+    breadcrumbItem: {
+        padding: '2px 6px',
+        borderRadius: '4px',
+        border: 'none',
+        backgroundColor: 'transparent',
+        color: 'var(--text-secondary)',
+        cursor: 'pointer',
+        fontSize: '11px',
+        whiteSpace: 'nowrap' as const,
+        flexShrink: 0,
+    },
+    breadcrumbSep: {
+        color: 'var(--text-muted)',
+        fontSize: '11px',
+        userSelect: 'none' as const,
+        flexShrink: 0,
+    },
+    filterBar: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '5px 8px',
+        borderBottom: '1px solid var(--border-subtle)',
+        backgroundColor: 'var(--bg-secondary)',
+    },
+    filterInput: {
+        flex: 1,
+        padding: '4px 8px',
+        borderRadius: '4px',
+        border: '1px solid var(--border-subtle)',
+        backgroundColor: 'var(--bg-primary)',
+        color: 'var(--text-primary)',
+        outline: 'none',
+        fontSize: '11px',
+        height: '24px',
+        boxSizing: 'border-box' as const,
+    },
+    hiddenToggle: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
+        color: 'var(--text-muted)',
+        fontSize: '11px',
+        whiteSpace: 'nowrap' as const,
+        cursor: 'pointer',
+    },
     paneBody: {
         flex: 1,
         display: 'flex',
@@ -2092,6 +2596,8 @@ const styles: Record<string, React.CSSProperties> = {
     fileTableWrap: {
         flex: 1,
         overflow: 'auto',
+        // 预留滚动条空间，避免 sticky 表头覆盖右侧垂直滚动条
+        scrollbarGutter: 'stable' as const,
         backgroundColor: 'var(--bg-primary)'
     },
     table: {
@@ -2149,6 +2655,11 @@ const styles: Record<string, React.CSSProperties> = {
         gap: '8px',
         minWidth: 0
     },
+    cellCheck: {
+        textAlign: 'center' as const,
+        padding: '0 4px',
+        width: 32,
+    },
     cellOwner: {
         color: 'var(--text-secondary)'
     },
@@ -2193,6 +2704,12 @@ const styles: Record<string, React.CSSProperties> = {
         alignItems: 'center',
         gap: '7px',
         minWidth: 0
+    },
+    compactCheck: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        flexShrink: 0,
+        cursor: 'pointer',
     },
     compactName: {
         overflow: 'hidden',
@@ -2431,46 +2948,27 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: '12px',
         resize: 'none' as const
     },
-    infoGrid: {
-        display: 'flex',
-        flexWrap: 'wrap' as const,
-        gap: '8px',
+    protocolChip: {
+        display: 'inline-flex',
         alignItems: 'center',
-        minWidth: 0
+        padding: '3px 10px',
+        border: '1px solid var(--accent)',
+        borderRadius: '999px',
+        backgroundColor: 'var(--bg-active-soft)',
+        color: 'var(--accent)',
+        fontSize: '11px',
+        whiteSpace: 'nowrap' as const,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        maxWidth: '260px',
     },
-    infoField: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '6px',
-        fontSize: '12px'
-    },
-    infoFieldPrimary: {
-        minWidth: 0
-    },
-    infoChip: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '6px',
-        padding: '4px 8px',
+    protocolChipMuted: {
+        padding: '3px 10px',
         border: '1px solid var(--border-subtle)',
         borderRadius: '999px',
         backgroundColor: 'var(--bg-secondary)',
-        fontSize: '11px',
-        maxWidth: '260px'
-    },
-    infoLabel: {
-        color: 'var(--text-muted)',
-        whiteSpace: 'nowrap' as const
-    },
-    infoValue: {
-        color: 'var(--text-secondary)',
-        whiteSpace: 'nowrap' as const,
-        overflow: 'hidden',
-        textOverflow: 'ellipsis'
-    },
-    infoValueMuted: {
         color: 'var(--text-disabled)',
-        whiteSpace: 'nowrap' as const
+        fontSize: '11px',
     },
     relayBanner: {
         padding: '8px 10px',
