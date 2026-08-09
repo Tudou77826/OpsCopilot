@@ -31,7 +31,7 @@ describe('timeline utils', () => {
         const md = generateMarkdown(filtered, 'Problem', 'Cause');
         
         expect(md).toContain('# 排查会话记录');
-        expect(md).toContain('**排查目标:** Problem');
+        expect(md).toContain('**原始问题:** Problem');
         expect(md).toContain('**根本原因:** Cause');
         
         expect(md).toContain('### 用户提问');

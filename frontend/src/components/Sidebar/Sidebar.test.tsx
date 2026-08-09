@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import Sidebar from './Sidebar';
+import { ToastProvider } from '../Toast/Toast';
 import { describe, it, expect, vi } from 'vitest';
 import '@testing-library/jest-dom';
 
@@ -23,14 +24,16 @@ describe('Sidebar Component', () => {
 
     it('renders closed state correctly', () => {
         const { container } = render(
-            <Sidebar
-                isOpen={false}
-                activeTab="troubleshoot"
-                onToggle={() => { }}
-                onConnect={() => { }}
-                activeTerminalId={null}
-                terminals={[]}
-            />
+            <ToastProvider>
+                <Sidebar
+                    isOpen={false}
+                    activeTab="troubleshoot"
+                    onToggle={() => { }}
+                    onConnect={() => { }}
+                    activeTerminalId={null}
+                    terminals={[]}
+                />
+            </ToastProvider>
         );
         // When closed, it should return a hidden div, not null
         expect(container.firstChild).not.toBeNull();
@@ -39,14 +42,16 @@ describe('Sidebar Component', () => {
 
     it('renders TroubleshootingPanel when activeTab is troubleshoot', () => {
         render(
-            <Sidebar
-                isOpen={true}
-                activeTab="troubleshoot"
-                onToggle={() => { }}
-                onConnect={() => { }}
-                activeTerminalId={null}
-                terminals={[]}
-            />
+            <ToastProvider>
+                <Sidebar
+                    isOpen={true}
+                    activeTab="troubleshoot"
+                    onToggle={() => { }}
+                    onConnect={() => { }}
+                    activeTerminalId={null}
+                    terminals={[]}
+                />
+            </ToastProvider>
         );
         // Assuming TroubleshootingPanel renders specific text
         expect(screen.getByText('开始排查')).toBeInTheDocument();
@@ -54,14 +59,16 @@ describe('Sidebar Component', () => {
 
     it('renders AIChatPanel when activeTab is chat', () => {
         render(
-            <Sidebar
-                isOpen={true}
-                activeTab="chat"
-                onToggle={() => { }}
-                onConnect={() => { }}
-                activeTerminalId={null}
-                terminals={[]}
-            />
+            <ToastProvider>
+                <Sidebar
+                    isOpen={true}
+                    activeTab="chat"
+                    onToggle={() => { }}
+                    onConnect={() => { }}
+                    activeTerminalId={null}
+                    terminals={[]}
+                />
+            </ToastProvider>
         );
         expect(screen.getByText('AI 问答')).toBeInTheDocument();
     });
