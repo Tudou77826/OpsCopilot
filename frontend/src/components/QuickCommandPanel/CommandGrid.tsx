@@ -7,11 +7,17 @@ interface CommandGridProps {
     onEdit: (command: QuickCommand) => void;
     onDelete: (id: string) => void;
     onAdd: () => void;
+    /** 当前搜索关键字（在当前分组内进一步过滤） */
+    searchQuery: string;
+    onSearchChange: (query: string) => void;
 }
 
-const CommandGrid: React.FC<CommandGridProps> = ({ commands, onExecute, onEdit, onDelete, onAdd }) => {
+const CommandGrid: React.FC<CommandGridProps> = ({
+    commands, onExecute, onEdit, onDelete, onAdd, searchQuery, onSearchChange,
+}) => {
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; cmdId: string } | null>(null);
     const [hoveredId, setHoveredId] = useState<string | null>(null);
+    const searchInputRef = React.useRef<HTMLInputElement>(null);
 
     // Close context menu on any outside pointer event (including xterm.js terminals)
     useEffect(() => {
@@ -28,6 +34,27 @@ const CommandGrid: React.FC<CommandGridProps> = ({ commands, onExecute, onEdit, 
     return (
         <>
             <div style={styles.grid} data-testid="command-grid">
+                {/* 搜索卡片：与命令卡片同 flow 的第一个元素，外观接近普通卡片（不抢眼）。
+                    在当前分组内按 name/content 过滤（issue #56）。 */}
+                <div
+                    style={styles.searchCard}
+                    data-testid="command-search"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        searchInputRef.current?.focus();
+                    }}
+                >
+                    <span style={styles.searchIcon} aria-hidden>🔍</span>
+                    <input
+                        ref={searchInputRef}
+                        style={styles.searchInput}
+                        value={searchQuery}
+                        onChange={(e) => onSearchChange(e.target.value)}
+                        placeholder=""
+                        aria-label="搜索快捷命令"
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                </div>
                 {commands.map(cmd => {
                     const isHovered = hoveredId === cmd.id;
                     return (
@@ -128,6 +155,41 @@ const styles = {
         backgroundColor: 'transparent',
         flex: '0 0 auto',
         transition: 'border-color 0.2s, color 0.2s',
+    },
+    // 搜索卡片：刻意做成与命令卡片近似的样式（同 padding/border/radius/字号），
+    // 与命令流融为一体、不抢眼（issue #56）。内部是 🔍 + 透明输入框。
+    // 输入框宽度收紧到与一个普通命令卡片相近，避免它比其它卡片长出一截而扎眼。
+    searchCard: {
+        padding: '4px 8px',
+        borderRadius: '4px',
+        cursor: 'text',
+        border: '1px solid var(--bg-elevated)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
+        fontSize: '11px',
+        backgroundColor: 'var(--bg-primary)',
+        color: 'var(--text-tertiary)',
+        userSelect: 'none' as const,
+        flex: '0 0 auto',
+        transition: 'border-color 0.2s, color 0.2s',
+    },
+    searchIcon: {
+        fontSize: '10px',
+        color: 'var(--text-disabled)',
+        flexShrink: 0,
+        lineHeight: 1,
+    },
+    searchInput: {
+        border: 'none',
+        outline: 'none',
+        backgroundColor: 'transparent',
+        color: 'var(--text-primary)',
+        fontSize: '11px',
+        padding: '0',
+        margin: '0',
+        width: '44px',
+        fontFamily: 'inherit',
     },
     backdrop: {
         position: 'fixed' as const,

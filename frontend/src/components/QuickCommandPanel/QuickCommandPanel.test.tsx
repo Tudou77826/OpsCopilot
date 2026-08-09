@@ -55,4 +55,20 @@ describe('QuickCommandPanel', () => {
         expect(screen.getByTestId('command-edit-modal')).toBeInTheDocument();
         expect(screen.getByText('新建命令')).toBeInTheDocument();
     });
+
+    it('filters commands by keyword within the current group', async () => {
+        // default 分组下只有 "List Files"（ls -la）；"Check Disk" 属于 system 分组，不参与搜索（issue #56）
+        render(<QuickCommandPanel isOpen={true} onExecute={vi.fn()} />);
+        await screen.findByText('List Files');
+
+        const input = screen.getByTestId('command-search').querySelector('input')!;
+
+        // 命中 name：输入 list，仍显示 List Files
+        fireEvent.change(input, { target: { value: 'list' } });
+        expect(screen.getByText('List Files')).toBeInTheDocument();
+
+        // 输入不匹配的关键字，当前分组命令消失
+        fireEvent.change(input, { target: { value: 'nomatch' } });
+        expect(screen.queryByText('List Files')).not.toBeInTheDocument();
+    });
 });

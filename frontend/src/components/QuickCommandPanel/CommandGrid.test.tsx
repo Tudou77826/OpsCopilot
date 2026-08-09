@@ -15,6 +15,8 @@ describe('CommandGrid', () => {
         onEdit: vi.fn(),
         onDelete: vi.fn(),
         onAdd: vi.fn(),
+        searchQuery: '',
+        onSearchChange: vi.fn(),
     };
 
     it('renders command cards', () => {
@@ -71,5 +73,23 @@ describe('CommandGrid', () => {
         render(<CommandGrid {...defaultProps} commands={[]} />);
         expect(screen.getByTestId('command-add-btn')).toBeInTheDocument();
         expect(screen.queryByText('编辑')).not.toBeInTheDocument();
+    });
+
+    it('renders a search card that looks like other command cards', () => {
+        // 搜索卡片与命令卡片同 flow，作为网格第一个元素（issue #56）
+        render(<CommandGrid {...defaultProps} />);
+        const search = screen.getByTestId('command-search');
+        expect(search).toBeInTheDocument();
+        // 含放大镜图标与可输入框
+        expect(search.querySelector('input')).toBeInTheDocument();
+    });
+
+    it('calls onSearchChange when typing in the search card', () => {
+        const onSearchChange = vi.fn();
+        render(<CommandGrid {...defaultProps} onSearchChange={onSearchChange} />);
+
+        const input = screen.getByTestId('command-search').querySelector('input')!;
+        fireEvent.change(input, { target: { value: 'disk' } });
+        expect(onSearchChange).toHaveBeenCalledWith('disk');
     });
 });

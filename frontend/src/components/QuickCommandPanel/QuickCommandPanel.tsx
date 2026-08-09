@@ -23,6 +23,23 @@ const QuickCommandPanel: React.FC<QuickCommandPanelProps> = ({ isOpen, onExecute
 
     const [editingCmd, setEditingCmd] = useState<QuickCommand | null>(null);
     const [isNewCommand, setIsNewCommand] = useState(false);
+    // 搜索关键字：在当前分组内进一步过滤（按 name/content 匹配，大小写不敏感）（issue #56）
+    const [searchQuery, setSearchQuery] = useState('');
+
+    // 切换分组时清空搜索词：搜索作用于「当前分组」，换组后旧关键词通常无意义
+    const handleSelectGroup = (group: string) => {
+        setSelectedGroup(group);
+        setSearchQuery('');
+    };
+
+    // 在当前分组命令之上，按关键字过滤。空关键字时显示全部当前分组命令。
+    const visibleCommands = (() => {
+        const q = searchQuery.trim().toLowerCase();
+        if (!q) return filteredCommands;
+        return filteredCommands.filter(cmd =>
+            cmd.name.toLowerCase().includes(q) || cmd.content.toLowerCase().includes(q)
+        );
+    })();
 
     const handleAdd = () => {
         setEditingCmd({
@@ -76,16 +93,18 @@ const QuickCommandPanel: React.FC<QuickCommandPanelProps> = ({ isOpen, onExecute
             {isOpen && (
                 <div style={styles.body}>
                     <CommandGrid
-                        commands={filteredCommands}
+                        commands={visibleCommands}
                         onExecute={onExecute}
                         onEdit={handleEdit}
                         onDelete={deleteCommand}
                         onAdd={handleAdd}
+                        searchQuery={searchQuery}
+                        onSearchChange={setSearchQuery}
                     />
                     <GroupStrip
                         groups={availableGroups}
                         selectedGroup={selectedGroup}
-                        onSelectGroup={setSelectedGroup}
+                        onSelectGroup={handleSelectGroup}
                         onAddGroup={handleAddGroup}
                     />
                 </div>
