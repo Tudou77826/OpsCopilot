@@ -47,8 +47,8 @@ const KeysMap: React.FC<KeysMapProps> = ({ commandQueryShortcut }) => {
         {
             keys: 'Ctrl+V',
             scope: '终端',
-            action: '不启用（避免与终端输入冲突）',
-            notes: '推荐使用鼠标右键粘贴/中键粘贴，或系统菜单粘贴',
+            action: '粘贴剪贴板内容',
+            notes: '也可使用鼠标右键粘贴/中键粘贴；中键无选区时读取系统剪贴板',
         },
         {
             keys: 'Ctrl+P',
