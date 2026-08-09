@@ -78,6 +78,87 @@ interface PatchSyncStatus {
 
 type TabId = 'llm' | 'appearance' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'knowledge' | 'aiagent' | 'whitelist' | 'fileaccess' | 'experimental' | 'about';
 
+// Skill 安装条目：每个 AI Agent 目录一行，独立保存检测状态/版本/消息。
+// 支撑多个 coding agent（Claude Code / Cursor / Codex 等）并用的场景（issue #54）。
+type SkillState = 'unknown' | 'not_installed' | 'up_to_date' | 'outdated';
+interface SkillEntry {
+    id: string;
+    dir: string;
+    state: SkillState;
+    installedVer: string;
+    builtinVer: string;
+    msg: string;
+}
+
+// 多 skill 目录持久化（issue #54）：
+//   opscopilot:skillDirs —— JSON 字符串数组（当前）
+//   opscopilot:skillDir  —— 旧版单值（向后兼容，存在则迁移为单元素数组）
+const SKILL_DIRS_KEY = 'opscopilot:skillDirs';
+const SKILL_DIR_LEGACY_KEY = 'opscopilot:skillDir';
+
+function newSkillId(): string {
+    // @ts-ignore
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+    return `s_${Math.random().toString(16).slice(2)}_${Date.now()}`;
+}
+
+function loadSkillDirs(): string[] {
+    try {
+        const raw = localStorage.getItem(SKILL_DIRS_KEY);
+        if (raw) {
+            const arr = JSON.parse(raw);
+            if (Array.isArray(arr)) return arr.filter((x: any) => typeof x === 'string');
+        }
+    } catch { /* ignore */ }
+    // 兼容旧版单目录存储
+    const legacy = localStorage.getItem(SKILL_DIR_LEGACY_KEY);
+    return legacy ? [legacy] : [];
+}
+
+function saveSkillDirs(dirs: string[]): void {
+    localStorage.setItem(SKILL_DIRS_KEY, JSON.stringify(dirs));
+}
+
+// 单个 skill 目录的状态徽章文案（多目录列表每行展示，issue #54）
+function skillBadgeLabel(state: SkillState): string {
+    switch (state) {
+        case 'up_to_date': return '已最新';
+        case 'outdated': return '可更新';
+        case 'not_installed': return '未安装';
+        default: return '未检测';
+    }
+}
+
+// 状态徽章样式：用颜色区分安装状态
+function skillBadgeStyle(state: SkillState): React.CSSProperties {
+    const map: Record<SkillState, { bg: string; fg: string }> = {
+        up_to_date: { bg: 'var(--success-tint)', fg: 'var(--severity-success)' },
+        outdated: { bg: 'var(--warning-tint)', fg: 'var(--warning)' },
+        not_installed: { bg: 'var(--danger-tint)', fg: 'var(--severity-danger)' },
+        unknown: { bg: colors.bgHover, fg: colors.textTertiary },
+    };
+    const c = map[state];
+    return {
+        display: 'inline-block',
+        padding: '2px 8px',
+        borderRadius: '999px',
+        fontSize: font.xs,
+        backgroundColor: c.bg,
+        color: c.fg,
+        whiteSpace: 'nowrap',
+        flexShrink: 0,
+    };
+}
+
+// 全局安装/更新按钮文案：按所有目录的聚合状态决定（任一未安装→安装，任一过期→更新，否则→重新安装）
+function aggregateInstallLabel(entries: SkillEntry[]): string {
+    const checked = entries.filter(e => e.state !== 'unknown');
+    if (checked.some(e => e.state === 'not_installed')) return '全部安装';
+    if (checked.some(e => e.state === 'outdated')) return '全部更新';
+    if (checked.length > 0) return '全部重新安装';
+    return '安装/更新';
+}
+
 interface NavItem {
     id: TabId;
     label: string;
@@ -138,17 +219,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const [importDir, setImportDir] = useState('');
     const [importLoading, setImportLoading] = useState(false);
     const [importMsg, setImportMsg] = useState('');
-    // AI 接入：skill 安装/更新
-    const [skillDir, setSkillDir] = useState('');
+    // AI 接入：skill 安装/更新（多目录列表，支撑多个 coding agent 并用，issue #54）
+    const [skillEntries, setSkillEntries] = useState<SkillEntry[]>([]);
     const [skillLoading, setSkillLoading] = useState(false);
-    const [skillMsg, setSkillMsg] = useState('');
-    const [skillState, setSkillState] = useState<'unknown' | 'not_installed' | 'up_to_date' | 'outdated'>('unknown');
-    // skill 是否需要关注（未配置 / 未安装 / 过期）→ 「AI 接入」导航项亮红点
+    // skill 是否需要关注（未配置 / 任一目录未安装或过期）→ 「AI 接入」导航项亮红点
     const [skillNeedsAttention, setSkillNeedsAttention] = useState(false);
     // 高亮规则是否有存量问题（语法错 / 灾难正则，常因用户直改 JSON 引入）→ 「突出显示」导航项亮红点
     const [highlightIssues, setHighlightIssues] = useState<{ name: string; issues: string[] }[]>([]);
-    const [skillInstalledVer, setSkillInstalledVer] = useState('');
-    const [skillBuiltinVer, setSkillBuiltinVer] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [patchSyncStatus, setPatchSyncStatus] = useState<PatchSyncStatus>(defaultPatchSyncStatus);
     const [patchSyncLoading, setPatchSyncLoading] = useState(false);
@@ -204,37 +281,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             setMsg('');
             setImportDir('');
             setImportMsg('');
-            setSkillMsg('');
-            setSkillState('unknown');
-            setSkillInstalledVer('');
-            setSkillBuiltinVer('');
             setSearchQuery('');
             setActiveTab('llm');
 
-            // 回填上次使用的 skill 目录，并据此判断「AI 接入」导航项是否需要亮红点。
-            // 同时写入 skillState/版本号，供 tab 内状态横幅展示准确文案。
-            const savedSkillDir = localStorage.getItem('opscopilot:skillDir') || '';
-            setSkillDir(savedSkillDir);
-            if (!savedSkillDir) {
-                // 从未配置过 skill 目录 → 引导用户去配置/安装，亮红点
+            // 回填上次使用的 skill 目录列表，并据此判断「AI 接入」导航项是否需要亮红点。
+            // 兼容旧版单目录存储（opscopilot:skillDir）→ 自动迁移为单元素数组。
+            const dirs = loadSkillDirs();
+            const entries: SkillEntry[] = dirs.map(d => ({
+                id: newSkillId(), dir: d, state: 'unknown', installedVer: '', builtinVer: '', msg: '',
+            }));
+            setSkillEntries(entries);
+            if (entries.length === 0) {
+                // 从未配置过任何 skill 目录 → 引导用户去配置/安装，亮红点
                 setSkillNeedsAttention(true);
             } else {
-                // 已配置过：静默检测一次，按 state 决定是否亮点
-                // @ts-ignore
-                window.go?.main?.App?.CheckSkillStatus?.(savedSkillDir)
-                    .then((raw: string) => {
-                        const r = raw ? JSON.parse(raw) : {};
-                        if (r.success === false) {
-                            // 检测出错（目录无效等）不误导，不亮
-                            setSkillNeedsAttention(false);
-                            return;
-                        }
-                        setSkillState(r.state || 'unknown');
-                        setSkillInstalledVer(r.installed || '');
-                        setSkillBuiltinVer(r.builtin || '');
-                        setSkillNeedsAttention(r.state !== 'up_to_date');
-                    })
-                    .catch(() => setSkillNeedsAttention(false));
+                // 已配置过：静默批量检测，任一目录非 up_to_date 即亮红点
+                void checkSkills(entries);
             }
         }
     }, [isOpen]);
@@ -478,95 +540,134 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         }
     };
 
-    // 检测指定目录下是否已安装 skill，以及版本是否最新
-    const handleCheckSkill = async () => {
-        const dir = (skillDir || '').trim();
-        if (!dir) {
-            setSkillMsg('请输入 skill 安装目录');
-            setSkillState('unknown');
-            return;
-        }
-        setSkillLoading(true);
-        setSkillMsg('正在检测...');
-        try {
-            // @ts-ignore
-            const raw = await window.go.main.App.CheckSkillStatus(dir);
-            const r = raw ? JSON.parse(raw) : {};
-            if (r.success === false) {
-                setSkillMsg(r.error || '检测失败');
-                setSkillState('unknown');
-                setSkillNeedsAttention(false);
-            } else {
-                // 记住这次使用的目录，下次打开面板时自动回填并检测
-                localStorage.setItem('opscopilot:skillDir', dir);
-                setSkillInstalledVer(r.installed || '');
-                setSkillBuiltinVer(r.builtin || '');
-                setSkillState(r.state || 'unknown');
-                // 同步导航 badge：非 up_to_date（未安装/过期）则亮红点
-                setSkillNeedsAttention(r.state !== 'up_to_date');
-                if (r.state === 'not_installed') {
-                    setSkillMsg('该目录下尚未安装 OpsCopilot skill');
-                } else if (r.state === 'up_to_date') {
-                    setSkillMsg(`已是最新版本（v${r.installed}）`);
-                } else if (r.state === 'outdated') {
-                    setSkillMsg(`已安装 v${r.installed}，可更新至 v${r.builtin}`);
-                } else {
-                    setSkillMsg('检测完成');
-                }
-            }
-        } catch (e: any) {
-            setSkillMsg('检测失败: ' + e.toString());
-            setSkillState('unknown');
-        } finally {
-            setSkillLoading(false);
-        }
+    // 多目录列表操作（issue #54）：增/改/删一个 skill 目录条目。
+    // 改动后同步持久化目录数组，并重置该条目状态（避免显示陈旧的版本对比）。
+    const persistSkillDirs = (next: SkillEntry[]) => {
+        setSkillEntries(next);
+        saveSkillDirs(next.map(e => e.dir.trim()).filter(d => d !== ''));
+    };
+    const addSkillDir = () => {
+        persistSkillDirs([...skillEntries, { id: newSkillId(), dir: '', state: 'unknown', installedVer: '', builtinVer: '', msg: '' }]);
+    };
+    const updateSkillDir = (id: string, dir: string) => {
+        persistSkillDirs(skillEntries.map(e => e.id === id ? { ...e, dir, state: 'unknown', installedVer: '', builtinVer: '', msg: '' } : e));
+    };
+    const removeSkillDir = (id: string) => {
+        persistSkillDirs(skillEntries.filter(e => e.id !== id));
     };
 
-    // 安装（或更新）skill 到指定目录下的 opscopilot-ops/ 子目录
-    const handleInstallSkill = async () => {
-        const dir = (skillDir || '').trim();
-        if (!dir) {
-            setSkillMsg('请输入 skill 安装目录');
+    // 批量检测所有目录下是否已安装 skill 以及版本是否最新（issue #54 多目录）。
+    // 对每个 entry 独立调用 CheckSkillStatus，并发执行；任一非 up_to_date 则导航亮红点。
+    const checkSkills = async (entries: SkillEntry[]) => {
+        const valid = entries.filter(e => e.dir.trim() !== '');
+        if (valid.length === 0) {
+            setSkillNeedsAttention(true);
+            return;
+        }
+        // @ts-ignore
+        const app: any = window.go?.main?.App;
+        if (!app?.CheckSkillStatus) return;
+        const results = await Promise.all(valid.map(async e => {
+            try {
+                const raw = await app.CheckSkillStatus(e.dir.trim());
+                const r = raw ? JSON.parse(raw) : {};
+                if (r.success === false) {
+                    return { id: e.id, state: 'unknown' as SkillState, installedVer: '', builtinVer: '', msg: r.error || '检测失败' };
+                }
+                const state: SkillState = r.state || 'unknown';
+                let msg = '检测完成';
+                if (state === 'not_installed') msg = '该目录下尚未安装 OpsCopilot skill';
+                else if (state === 'up_to_date') msg = `已是最新版本（v${r.installed}）`;
+                else if (state === 'outdated') msg = `已安装 v${r.installed}，可更新至 v${r.builtin}`;
+                return { id: e.id, state, installedVer: r.installed || '', builtinVer: r.builtin || '', msg };
+            } catch (err: any) {
+                return { id: e.id, state: 'unknown' as SkillState, installedVer: '', builtinVer: '', msg: '检测失败: ' + err.toString() };
+            }
+        }));
+        setSkillEntries(prev => prev.map(e => {
+            const r = results.find(x => x.id === e.id);
+            return r ? { ...e, state: r.state, installedVer: r.installedVer, builtinVer: r.builtinVer, msg: r.msg } : e;
+        }));
+        // 任一已检测目录非 up_to_date，即需要关注（导航亮红点）。
+        // 用最新的 results 判断，而非可能过时的传入 entries。
+        setSkillNeedsAttention(results.some(r => r.state !== 'up_to_date'));
+    };
+
+    const handleCheckSkill = async () => {
+        const trimmed = skillEntries.map(e => e.dir.trim());
+        if (skillEntries.length === 0 || trimmed.every(d => d === '')) {
+            setSkillNeedsAttention(true);
             return;
         }
         setSkillLoading(true);
-        setSkillMsg('正在安装...');
-        try {
-            // @ts-ignore
-            const raw = await window.go.main.App.InstallSkill(dir);
-            const r = raw ? JSON.parse(raw) : {};
-            if (r.success === false) {
-                setSkillMsg(r.error || '安装失败');
-            } else {
-                setSkillMsg(`已安装到 ${r.path}（v${r.version}）`);
-                // 安装后刷新状态
-                await handleCheckSkill();
-            }
-        } catch (e: any) {
-            setSkillMsg('安装失败: ' + e.toString());
-        } finally {
-            setSkillLoading(false);
+        await checkSkills(skillEntries);
+        setSkillLoading(false);
+    };
+
+    // 批量安装（或更新）所有目录下的 opscopilot-ops/ 子目录（issue #54 多目录）。
+    // 逐目录串行安装（避免并发写盘竞态），完成后统一刷新检测状态。
+    const handleInstallSkill = async () => {
+        const valid = skillEntries.filter(e => e.dir.trim() !== '');
+        if (valid.length === 0) {
+            setSkillNeedsAttention(true);
+            return;
         }
+        setSkillLoading(true);
+        // @ts-ignore
+        const app: any = window.go?.main?.App;
+        if (!app?.InstallSkill) {
+            setSkillLoading(false);
+            return;
+        }
+        // 标记进行中
+        setSkillEntries(prev => prev.map(e => e.dir.trim() === '' ? e : { ...e, msg: '正在安装...' }));
+        const outcomes: { id: string; ok: boolean; msg: string }[] = [];
+        for (const e of valid) {
+            try {
+                const raw = await app.InstallSkill(e.dir.trim());
+                const r = raw ? JSON.parse(raw) : {};
+                if (r.success === false) {
+                    outcomes.push({ id: e.id, ok: false, msg: r.error || '安装失败' });
+                } else {
+                    outcomes.push({ id: e.id, ok: true, msg: `已安装到 ${r.path}（v${r.version}）` });
+                }
+            } catch (err: any) {
+                outcomes.push({ id: e.id, ok: false, msg: '安装失败: ' + err.toString() });
+            }
+        }
+        setSkillEntries(prev => prev.map(e => {
+            const o = outcomes.find(x => x.id === e.id);
+            return o ? { ...e, msg: o.msg } : e;
+        }));
+        // 安装后统一刷新检测状态
+        await checkSkills(skillEntries);
+        setSkillLoading(false);
     };
 
     if (!isOpen || !config) return null;
 
     // AI 接入 tab 顶部的状态横幅：当 skill 需要关注时（未配置/未安装/过期），
     // 明确告诉用户「红点是因为什么 + 下一步该干嘛」，避免点开 tab 后不知所措。
+    // 多目录场景（issue #54）按聚合状态展示：无目录 / 部分未安装 / 部分可更新。
     const renderSkillAttentionBanner = () => {
+        const valid = skillEntries.filter(e => e.dir.trim() !== '');
+        const checked = valid.filter(e => e.state !== 'unknown');
+        const notInstalled = checked.filter(e => e.state === 'not_installed').length;
+        const outdated = checked.filter(e => e.state === 'outdated').length;
+
         let message = '';
         let tone: 'warning' | 'accent' = 'accent';
-        if (!skillDir) {
+        if (valid.length === 0) {
             message = '尚未配置 skill 目录，AI Agent 无法调用 OpsCopilot。请填写目录后点击「检测状态」。';
             tone = 'warning';
-        } else if (skillState === 'not_installed') {
-            message = '目录下尚未安装 OpsCopilot skill，请点击「安装」。';
+        } else if (checked.length === 0) {
+            message = `已配置 ${valid.length} 个目录，请点击「检测状态」查看安装情况。`;
+            tone = 'accent';
+        } else if (notInstalled > 0) {
+            message = `${notInstalled} 个目录下尚未安装 OpsCopilot skill，请点击「安装」。`;
             tone = 'warning';
-        } else if (skillState === 'outdated') {
-            const ver = skillInstalledVer && skillBuiltinVer
-                ? `（v${skillInstalledVer} → v${skillBuiltinVer}）`
-                : '';
-            message = `skill 有新版本可更新${ver}，建议点击「更新」。`;
+        } else if (outdated > 0) {
+            message = `${outdated} 个目录的 skill 有新版本可更新，建议点击「更新」。`;
             tone = 'accent';
         }
         if (!message) return null;
@@ -1026,58 +1127,79 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         {renderSkillAttentionBanner()}
                         <div style={styles.card}>
                             <div style={styles.cardTitle}>Skill 安装</div>
-                            <div style={styles.rowTop}>
-                                <div style={styles.rowLeft}>
-                                    <div style={styles.rowLabel}>安装 Skill 到 AI Agent</div>
-                                    <div style={styles.rowDesc}>
-                                        以 Claude Code skill 格式安装到指定目录（opscopilot-ops/ 子目录），
-                                        AI Agent 即可调用 OpsCopilot 执行运维操作和故障诊断。
-                                    </div>
-                                </div>
-                                <div style={styles.rowRight}>
-                                    <input
-                                        style={styles.inputWide}
-                                        value={skillDir}
-                                        onChange={(e) => {
-                                            setSkillDir(e.target.value);
-                                            // 改动目录后重置状态，避免显示陈旧的版本对比
-                                            setSkillState('unknown');
-                                            setSkillMsg('');
-                                        }}
-                                        placeholder="例如：C:\\Users\\xxx\\.claude\\skills"
-                                    />
-                                    <button
-                                        onClick={handleCheckSkill}
-                                        style={styles.secondaryButton}
-                                        disabled={skillLoading}
-                                    >
-                                        {skillLoading ? '检测中...' : '检测状态'}
-                                    </button>
-                                    <button
-                                        onClick={handleInstallSkill}
-                                        style={styles.secondaryButton}
-                                        disabled={skillLoading}
-                                    >
-                                        {skillState === 'not_installed' ? '安装'
-                                            : skillState === 'outdated' ? '更新'
-                                            : skillState === 'up_to_date' ? '重新安装'
-                                            : '安装/更新'}
-                                    </button>
-                                </div>
+                            <div style={{ ...styles.rowDesc, marginLeft: '0', marginBottom: '10px' }}>
+                                以 Claude Code skill 格式安装到指定目录（opscopilot-ops/ 子目录），
+                                AI Agent 即可调用 OpsCopilot 执行运维操作和故障诊断。
+                                支持配置多个目录，以支撑多个 coding agent（Claude Code / Cursor / Codex 等）并用。
                             </div>
-                            {skillMsg ? (
-                                <div style={{
-                                    ...styles.rowDesc,
-                                    color: skillState === 'up_to_date' ? colors.success : colors.textSecondary,
-                                    marginLeft: '0',
-                                }}>
-                                    {skillMsg}
-                                </div>
-                            ) : (
-                                <div style={{ ...styles.rowDesc, marginLeft: '0' }}>
-                                    命令路径会自动替换为本机 opscopilot.exe 的绝对路径。
-                                </div>
-                            )}
+
+                            {/* 多目录列表：每行一个目录 + 状态徽章 + 删除按钮 + 该行检测/安装结果 */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {skillEntries.length === 0 && (
+                                    <div style={{ ...styles.rowDesc, marginLeft: '0' }}>
+                                        暂无目录，点击下方「添加目录」开始配置。
+                                    </div>
+                                )}
+                                {skillEntries.map((e) => (
+                                    <div key={e.id} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                            <input
+                                                style={{ ...styles.inputWide, flex: 1 }}
+                                                value={e.dir}
+                                                onChange={(ev) => updateSkillDir(e.id, ev.target.value)}
+                                                placeholder="例如：C:\\Users\\xxx\\.claude\\skills"
+                                            />
+                                            <span style={skillBadgeStyle(e.state)}>{skillBadgeLabel(e.state)}</span>
+                                            <button
+                                                onClick={() => removeSkillDir(e.id)}
+                                                style={{ ...styles.secondaryButton, padding: '4px 10px' }}
+                                                title="移除该目录"
+                                                disabled={skillLoading}
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+                                        {e.msg && (
+                                            <div style={{
+                                                ...styles.rowDesc,
+                                                marginLeft: '0',
+                                                color: e.state === 'up_to_date' ? colors.success : colors.textSecondary,
+                                            }}>
+                                                {e.msg}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* 全局操作：添加目录 + 批量检测/安装。操作粒度为全部目录（issue #54）。 */}
+                            <div style={{ display: 'flex', gap: '8px', marginTop: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <button
+                                    onClick={addSkillDir}
+                                    style={styles.secondaryButton}
+                                    disabled={skillLoading}
+                                >
+                                    + 添加目录
+                                </button>
+                                <div style={{ flex: 1 }} />
+                                <button
+                                    onClick={handleCheckSkill}
+                                    style={styles.secondaryButton}
+                                    disabled={skillLoading || skillEntries.length === 0}
+                                >
+                                    {skillLoading ? '检测中...' : '检测状态'}
+                                </button>
+                                <button
+                                    onClick={handleInstallSkill}
+                                    style={styles.secondaryButton}
+                                    disabled={skillLoading || skillEntries.length === 0}
+                                >
+                                    {aggregateInstallLabel(skillEntries)}
+                                </button>
+                            </div>
+                            <div style={{ ...styles.rowDesc, marginLeft: '0', marginTop: '8px' }}>
+                                命令路径会自动替换为本机 opscopilot.exe 的绝对路径。
+                            </div>
                         </div>
                         <div style={styles.card}>
                             <div style={styles.cardTitle}>安全闸门</div>
