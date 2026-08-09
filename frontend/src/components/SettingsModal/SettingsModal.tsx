@@ -1342,7 +1342,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <div style={styles.modal}>
                 {/* Header */}
                 <div style={styles.header}>
-                    <h2 style={styles.title}>系统设置</h2>
+                    {/* 左上角返回入口：把标题做成可点击的「← 系统设置」，
+                        贴近视口左上角、贴近用户高频的左侧导航区。
+                        右上 × 与右下「取消」保留不动，这里只是新增更顺手的入口。 */}
+                    <button
+                        onClick={handleClose}
+                        style={styles.backTitle}
+                        title="返回"
+                        className="settings-back-title"
+                    >
+                        <span style={styles.backArrow} className="settings-back-arrow">←</span>
+                        <span>系统设置</span>
+                    </button>
                     <button onClick={handleClose} style={styles.closeBtn}>×</button>
                 </div>
 
@@ -1447,11 +1458,29 @@ const styles = {
         backgroundColor: colors.bgPrimary,
         flexShrink: 0,
     },
-    title: {
+    // 左上角「← 系统设置」返回按钮：看似标题，hover 有反馈（hover 效果由
+    // settings-back-title / settings-back-arrow 两个 class 在全局 CSS 实现，
+    // 因为 React 内联 style 不支持 :hover 伪类）。
+    backTitle: {
         margin: 0,
         fontSize: '1.05rem',
         color: colors.textPrimary,
         fontWeight: 600,
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        padding: '6px 10px',
+        borderRadius: radius.sm,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '8px',
+        fontFamily: 'inherit',
+    },
+    backArrow: {
+        color: colors.textTertiary,
+        fontSize: '1rem',
+        lineHeight: 1,
+        transition: 'color 0.15s ease',
     },
     closeBtn: {
         background: 'none',
