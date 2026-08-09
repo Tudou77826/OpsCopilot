@@ -198,7 +198,7 @@ describe('SmartConnectModal', () => {
         mockOnParse.mockRejectedValue(new Error('Post "https://...": net/http: TLS handshake timeout'));
 
         render(<SmartConnectModal {...defaultProps} />);
-        
+
         const input = getConnectInput();
         fireEvent.change(input, { target: { value: 'Connect to somewhere' } });
         fireEvent.click(screen.getByText('智能分析'));
@@ -207,5 +207,39 @@ describe('SmartConnectModal', () => {
         await waitFor(() => {
             expect(screen.getByText(/连接超时：无法连接到 AI 服务/i)).toBeInTheDocument();
         });
+    });
+
+    it('keeps input text after a successful parse (#53-2)', async () => {
+        // 解析成功后不应清空输入框：用户可能只是打错字，想改完重新点解析。
+        mockOnParse.mockResolvedValue([{ host: '10.0.0.1', port: 22, user: 'root', name: '10.0.0.1' }]);
+
+        render(<SmartConnectModal {...defaultProps} />);
+
+        const input = getConnectInput();
+        fireEvent.change(input, { target: { value: '连接到 10.0.0.1' } });
+        fireEvent.click(screen.getByText('智能分析'));
+
+        await waitFor(() => expect(screen.getByText('连接列表 (1)')).toBeInTheDocument());
+
+        // 解析成功后输入框文本应保留（此时输入框已切换为 compact 形态，placeholder 变化）
+        const compactInput = screen.getByPlaceholderText(/继续输入连接描述/);
+        expect(compactInput).toHaveValue('连接到 10.0.0.1');
+    });
+
+    it('prefills configs from initialConfigs prop (#53-1)', () => {
+        // 连接失败带回配置：打开时用 initialConfigs 预填列表、全选并展开（单条）。
+        render(
+            <SmartConnectModal
+                {...defaultProps}
+                initialConfigs={[{ host: '192.168.1.1', port: 22, user: 'root', name: '失败连接' }]}
+            />
+        );
+
+        // 预填的配置应出现在列表中并被选中
+        expect(screen.getByText('连接列表 (1)')).toBeInTheDocument();
+        expect(screen.getByText('已选 1')).toBeInTheDocument();
+        expect(screen.getByDisplayValue('失败连接')).toBeInTheDocument();
+        // 单条应自动展开编辑表单
+        expect(screen.getByLabelText('主机地址')).toHaveValue('192.168.1.1');
     });
 });

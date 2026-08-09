@@ -8,6 +8,8 @@ interface SmartConnectModalProps {
     onClose: () => void;
     onConnect: (configs: ConnectionConfig[]) => void;
     onParse: (input: string) => Promise<ConnectionConfig[]>;
+    /** 打开时预填的连接配置（用于连接失败后带回，让用户改完重试） */
+    initialConfigs?: ConnectionConfig[];
 }
 
 const quickInputExamples = [
@@ -24,7 +26,7 @@ const quickInputExamples = [
     }
 ];
 
-const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, onConnect, onParse }) => {
+const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, onConnect, onParse, initialConfigs }) => {
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [parsedConfigs, setParsedConfigs] = useState<ConnectionConfig[]>([]);
@@ -33,7 +35,10 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
     const [error, setError] = useState('');
     const [showErrorDetails, setShowErrorDetails] = useState(false);
 
-    // Reset state when modal opens/closes
+    // 打开/关闭时的状态处理：
+    //  - 关闭：重置为初始状态（下次打开若带 initialConfigs 会重新预填）
+    //  - 打开：若带 initialConfigs（如连接失败带回的配置），预填进列表并全选+展开，
+    //    方便用户直接修改后重试。不带则保持空白，由用户自行输入/解析。
     useEffect(() => {
         if (!isOpen) {
             setInput('');
@@ -41,8 +46,18 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
             setSelectedIndices(new Set());
             setExpandedIndices(new Set());
             setError('');
+            return;
         }
-    }, [isOpen]);
+        const seed = initialConfigs && initialConfigs.length > 0
+            ? initialConfigs.map(c => ({ ...c, name: c.name || c.host }))
+            : [];
+        if (seed.length > 0) {
+            setParsedConfigs(seed);
+            setSelectedIndices(new Set(seed.map((_, i) => i)));
+            // 只有一条时直接展开编辑，多条折叠让用户按需展开
+            setExpandedIndices(new Set(seed.length === 1 ? [0] : []));
+        }
+    }, [isOpen, initialConfigs]);
 
     if (!isOpen) return null;
 
@@ -82,8 +97,8 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
                 setExpandedIndices(new Set([0]));
             }
 
-            // Clear input after successful parse
-            setInput('');
+            // 解析成功后保留输入框文本：用户可能只是打错字，改完重新点解析即可。
+            // 不再清空 input，由用户自行决定是否修改或清空。
         } catch (e: any) {
             let errorMsg = e.message || e.toString();
             errorMsg = errorMsg.replace(/^Error: /, '');

@@ -72,7 +72,11 @@ function App() {
     const [commandQueryResult, setCommandQueryResult] = useState<CommandQueryResult | null>(null);
     const [commandQueryError, setCommandQueryError] = useState('');
     const commandQueryShortcut = 'Ctrl+K';
-    const [connectErrors, setConnectErrors] = useState<{ title: string; message: string }[]>([]);
+    // connectError 携带的额外信息：reopenNewConnect 标记「新建连接失败」（区别于重连失败），
+    // failedConfigs 保存失败的配置，供关闭错误弹窗后带回 SmartConnectModal 编辑重试。
+    const [connectErrors, setConnectErrors] = useState<{ title: string; message: string; reopenNewConnect?: boolean; failedConfigs?: ConnectionConfig[] }[]>([]);
+    // 连接失败带回的配置：dismissConnectError 写入，SmartConnectModal 打开时作为 initialConfigs 预填。
+    const [reconnectSeedConfigs, setReconnectSeedConfigs] = useState<ConnectionConfig[]>([]);
     const [parsedTimestamp, setParsedTimestamp] = useState<TimestampResult | null>(null);
     const [updateAvailable, setUpdateAvailable] = useState(false);
     const statusResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -168,11 +172,21 @@ function App() {
     const unlisteners = useRef(new Map<string, () => void>());
     const activeConnectError = connectErrors.length > 0 ? connectErrors[0] : null;
 
-    const enqueueConnectError = (title: string, message: string) => {
-        setConnectErrors(prev => [...prev, { title, message }]);
+    const enqueueConnectError = (
+        title: string,
+        message: string,
+        extra?: { reopenNewConnect?: boolean; failedConfigs?: ConnectionConfig[] }
+    ) => {
+        setConnectErrors(prev => [...prev, { title, message, ...extra }]);
     };
 
     const dismissConnectError = () => {
+        // activeConnectError 是当前展示的错误（队列首条）。仅「新建连接失败」关闭后
+        // 重开配置界面并带回失败配置；重连失败保持原行为，留在当前 tab。
+        if (activeConnectError?.reopenNewConnect && activeConnectError.failedConfigs && activeConnectError.failedConfigs.length > 0) {
+            setReconnectSeedConfigs(activeConnectError.failedConfigs);
+            setIsSmartModalOpen(true);
+        }
         setConnectErrors(prev => prev.slice(1));
     };
 
@@ -440,17 +454,26 @@ function App() {
                 } else {
                     setStatus("就绪");
                     const connectLabel = config?.name || (config?.user && config?.host ? `${config.user}@${config.host}` : (config?.host || '未知目标'));
-                    enqueueConnectError(`连接失败：${connectLabel}`, result.message || '未知错误');
+                    enqueueConnectError(`连接失败：${connectLabel}`, result.message || '未知错误', {
+                        reopenNewConnect: true,
+                        failedConfigs: [config as ConnectionConfig],
+                    });
                 }
             } else {
                 setStatus("就绪");
-                enqueueConnectError("连接失败：运行时未就绪", "Wails 运行时未就绪");
+                enqueueConnectError("连接失败：运行时未就绪", "Wails 运行时未就绪", {
+                    reopenNewConnect: true,
+                    failedConfigs: [config as ConnectionConfig],
+                });
             }
         } catch (e) {
             const errMsg = (e as any)?.message ? String((e as any).message) : String(e);
             setStatus("就绪");
             const connectLabel = config?.name || (config?.user && config?.host ? `${config.user}@${config.host}` : (config?.host || '未知目标'));
-            enqueueConnectError(`连接失败：${connectLabel}`, errMsg || '未知错误');
+            enqueueConnectError(`连接失败：${connectLabel}`, errMsg || '未知错误', {
+                reopenNewConnect: true,
+                failedConfigs: [config as ConnectionConfig],
+            });
         }
     };
 
@@ -925,9 +948,13 @@ function App() {
 
             <SmartConnectModal
                 isOpen={isSmartModalOpen}
-                onClose={() => setIsSmartModalOpen(false)}
+                onClose={() => {
+                    setIsSmartModalOpen(false);
+                    setReconnectSeedConfigs([]);
+                }}
                 onConnect={handleBatchConnect}
                 onParse={handleParseIntent}
+                initialConfigs={reconnectSeedConfigs}
             />
 
             <SettingsModal
