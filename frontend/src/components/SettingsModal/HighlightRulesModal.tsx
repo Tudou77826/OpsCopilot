@@ -354,7 +354,7 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
                                                             patch(r.id, { pattern: e.target.value });
                                                         }}
                                                         style={styles.input}
-                                                        placeholder="例如：(?i)\\b(error|fail)\\b"
+                                                        placeholder="例如：\\b(error|fail)\\b（默认大小写不敏感）"
                                                     />
                                                     {risk.level !== 'safe' && (
                                                         <div style={{

@@ -17,12 +17,13 @@ describe('HighlightRulesModal', () => {
         expect(screen.getByText('新规则')).toBeInTheDocument();
         expect(screen.getByText('已禁用')).toBeInTheDocument();
 
-        // Enter a risky regex pattern (.+)+ — assessed as 'high' risk
-        const regexInput = screen.getByPlaceholderText(/例如：\(\?i\)\\\\b\(error\|fail\)\\\\b/) as HTMLInputElement;
+        // Enter a risky regex pattern (.+)+ — assessed as 'severe' risk (cannot be enabled)
+        const regexInput = screen.getByPlaceholderText(/例如：.*\(error\|fail\).*（默认大小写不敏感）/) as HTMLInputElement;
         fireEvent.change(regexInput, { target: { value: '(.+)+' } });
 
-        // Risk badge appears (appears twice: badge + detail text)
-        const riskLabels = screen.getAllByText('高风险');
+        // Risk badge appears (appears twice: badge + detail text).
+        // (.+)+ 经 assessPattern 判定为 severe（灾难性回溯），UI 显示「严重风险」且不可启用。
+        const riskLabels = screen.getAllByText('严重风险');
         expect(riskLabels.length).toBeGreaterThanOrEqual(1);
 
         // The toggle checkbox is disabled because user hasn't acknowledged risk

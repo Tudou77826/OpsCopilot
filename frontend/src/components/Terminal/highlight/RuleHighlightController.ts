@@ -26,13 +26,13 @@ const compileRules = (rules: HighlightRule[]): CompiledRule[] => rules
     .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
     .map(rule => {
         let pattern = rule.pattern;
-        let caseInsensitive = false;
+        // 默认大小写不敏感：运维关键词（error/Error/ERROR）通常希望都能高亮。
+        // 用户仍可在 pattern 内书写显式大小写（如 [Ee]rror）来覆盖此默认。
         if (pattern.startsWith('(?i)')) {
             pattern = pattern.slice(4);
-            caseInsensitive = true;
         }
         try {
-            const flags = `g${caseInsensitive ? 'i' : ''}`;
+            const flags = 'gi';
             new RegExp(pattern, flags);
             return { rule, matcher: { id: rule.id, source: pattern, flags } };
         } catch {
