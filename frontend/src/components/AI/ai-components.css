@@ -502,31 +502,6 @@
 }
 .ai-empty-composer { position: relative; width: min(100%, 430px); }
 .ai-empty-composer .ai-composer { padding: 0; border: 0; background: transparent; }
-.ai-prompt-suggestions {
-    position: relative;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 6px;
-    margin-top: 12px;
-}
-.ai-prompt-suggestions button {
-    height: 25px;
-    padding: 0 9px;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--bg-elevated) 72%, transparent);
-    color: var(--text-muted);
-    cursor: pointer;
-    font-size: 9.5px;
-    transition: border-color .15s ease, color .15s ease, background .15s ease;
-}
-.ai-prompt-suggestions button:hover {
-    border-color: color-mix(in srgb, var(--stage-blue) 38%, var(--border));
-    background: color-mix(in srgb, var(--stage-blue) 7%, var(--bg-elevated));
-    color: var(--text-primary);
-}
-
 .ai-session-bar,
 .ai-chat-subheader {
     min-height: 39px;

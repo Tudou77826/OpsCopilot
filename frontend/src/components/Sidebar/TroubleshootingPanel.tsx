@@ -449,11 +449,6 @@ const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ activeTermi
                             contexts={activeTerminalTitle ? [{ id: 'terminal', label: `● SSH · ${activeTerminalTitle}`, active: true }] : []}
                         />
                     </div>
-                    <div className="ai-prompt-suggestions">
-                        {['接口持续 504', 'CPU 突然升高', '磁盘空间不足'].map(example => (
-                            <button type="button" key={example} onClick={() => setInput(example)}>{example}</button>
-                        ))}
-                    </div>
                 </div>
             ) : (
                 <>

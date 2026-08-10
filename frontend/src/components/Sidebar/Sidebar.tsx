@@ -146,9 +146,12 @@ const Sidebar: React.FC<SidebarProps> = ({
         <div className={`sidebar-shell sidebar-${activeTab}`} style={{
             ...styles.container,
             width: isOpen ? width : 0,
+            minWidth: isOpen ? undefined : 0,
             position: 'relative',
             // When closed, hide border and content but keep mounted
             borderLeft: isOpen ? '1px solid var(--border)' : 'none',
+            boxShadow: isOpen ? undefined : 'none',
+            overflow: isOpen ? 'visible' : 'hidden',
         }}>
             <style>{`
                 .hide-scrollbar::-webkit-scrollbar {

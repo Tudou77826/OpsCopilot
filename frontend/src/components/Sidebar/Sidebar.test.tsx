@@ -22,12 +22,12 @@ describe('Sidebar Component', () => {
         };
     });
 
-    it('renders closed state correctly', () => {
+    it.each(['troubleshoot', 'chat'] as const)('collapses the closed %s panel without retaining its minimum width', (activeTab) => {
         const { container } = render(
             <ToastProvider>
                 <Sidebar
                     isOpen={false}
-                    activeTab="troubleshoot"
+                    activeTab={activeTab}
                     onToggle={() => { }}
                     onConnect={() => { }}
                     activeTerminalId={null}
@@ -35,9 +35,13 @@ describe('Sidebar Component', () => {
                 />
             </ToastProvider>
         );
-        // When closed, it should return a hidden div, not null
         expect(container.firstChild).not.toBeNull();
-        expect(container.firstChild).toHaveStyle({ width: '0px' });
+        expect(container.firstChild).toHaveStyle({
+            width: '0px',
+            minWidth: '0',
+            boxShadow: 'none',
+            overflow: 'hidden',
+        });
     });
 
     it('renders TroubleshootingPanel when activeTab is troubleshoot', () => {
