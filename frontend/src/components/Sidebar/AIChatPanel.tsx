@@ -1,5 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
-import MessageRenderer from './MessageRenderer';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+    AIComposer,
+    AgentTraceEvent,
+    CitationList,
+    KnowledgeReference,
+    KnowledgeTarget,
+    RetrievalTrace,
+    RichText,
+    referencesFromDocuments,
+} from '../AI';
 // @ts-ignore
 import { EventsOn } from '../../../wailsjs/runtime/runtime';
 
@@ -7,358 +16,186 @@ interface Message {
     role: 'user' | 'ai';
     content: string;
     timestamp: number;
+    trace?: AgentTraceEvent[];
+    references?: KnowledgeReference[];
 }
 
-interface AgentStatusEvent {
-    runId?: string;
-    stage: string;
-    message: string;
-    ts: number;
+interface AIChatPanelProps {
+    activeTerminalTitle?: string;
+    onOpenSource?: (target: Omit<KnowledgeTarget, 'requestId'>) => void;
 }
 
-const AIChatPanel: React.FC = () => {
+const extractDocFromReadingMessage = (message: string): string | null => {
+    const marker = '正在阅读文档:';
+    const index = message.indexOf(marker);
+    if (index === -1) return null;
+    return message.slice(index + marker.length).trim().replace(/\.\.\.$/, '').trim() || null;
+};
+
+const AIChatPanel: React.FC<AIChatPanelProps> = ({ activeTerminalTitle, onOpenSource }) => {
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
-    const [agentStatus, setAgentStatus] = useState<{ stage: string; message: string } | null>(null);
-    const [agentStatusHistory, setAgentStatusHistory] = useState<AgentStatusEvent[]>([]);
-    const [lastUsedDocs, setLastUsedDocs] = useState<string[]>([]);
+    const [agentTrace, setAgentTrace] = useState<AgentTraceEvent[]>([]);
+    const [busy, setBusy] = useState(false);
+    const traceRef = useRef<AgentTraceEvent[]>([]);
     const usedDocsRef = useRef<Set<string>>(new Set());
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    const extractDocFromReadingMessage = (message: string): string | null => {
-        const idx = message.indexOf('正在阅读文档:');
-        if (idx === -1) return null;
-        const after = message.slice(idx + '正在阅读文档:'.length).trim();
-        return after.replace(/\.\.\.$/, '').trim() || null;
-    };
-
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
-
     useEffect(() => {
-        scrollToBottom();
-    }, [messages, agentStatus]);
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages, agentTrace]);
 
     const handleSend = async () => {
-        if (!input.trim()) return;
-        
-        const userMsg: Message = {
-            role: 'user',
-            content: input,
-            timestamp: Date.now()
-        };
-        
-        setMessages(prev => [...prev, userMsg]);
-        setInput('');
+        const question = input.trim();
+        if (!question || busy) return;
 
-        setAgentStatus({ stage: 'thinking', message: '正在思考...' });
-        setAgentStatusHistory([]);
-        setLastUsedDocs([]);
+        setMessages(previous => [...previous, { role: 'user', content: question, timestamp: Date.now() }]);
+        setInput('');
+        setBusy(true);
+        const initialTrace: AgentTraceEvent[] = [{ stage: 'thinking', message: '正在思考...', ts: Date.now() }];
+        traceRef.current = initialTrace;
         usedDocsRef.current = new Set();
+        setAgentTrace(initialTrace);
 
         let cancelStatus: (() => void) | undefined;
-
         try {
-            if (EventsOn) {
-                cancelStatus = EventsOn("agent:status", (...args: any[]) => {
-                    const data = args?.[0] ?? {};
-                    const stage = String(data?.stage ?? '');
-                    const message = String(data?.message ?? '');
-                    const runId = data?.runId ? String(data.runId) : undefined;
-                    if (!stage || !message) return;
+            try {
+                if (EventsOn) {
+                    cancelStatus = EventsOn('agent:status', (...args: any[]) => {
+                        const data = args?.[0] ?? {};
+                        const stage = String(data?.stage ?? '');
+                        const message = String(data?.message ?? '');
+                        if (!stage || !message) return;
 
-                    setAgentStatus({ stage, message });
-                    setAgentStatusHistory(prev => {
-                        const last = prev[prev.length - 1];
-                        if (last && last.stage === stage && last.message === message) return prev;
-                        const next = [...prev, { runId, stage, message, ts: Date.now() }];
-                        return next.slice(-8);
+                        const event: AgentTraceEvent = {
+                            runId: data?.runId ? String(data.runId) : undefined,
+                            stage,
+                            message,
+                            ts: Date.now(),
+                        };
+                        const previous = traceRef.current;
+                        const last = previous[previous.length - 1];
+                        if (!last || last.stage !== stage || last.message !== message) {
+                            traceRef.current = [...previous, event].slice(-8);
+                            setAgentTrace(traceRef.current);
+                        }
+                        if (stage === 'reading') {
+                            const document = extractDocFromReadingMessage(message);
+                            if (document) usedDocsRef.current.add(document);
+                        }
                     });
-
-                    if (stage === 'reading') {
-                        const doc = extractDocFromReadingMessage(message);
-                        if (doc) usedDocsRef.current.add(doc);
-                    }
-                });
+                }
+            } catch (listenerError) {
+                console.error('Failed to register event listener:', listenerError);
             }
-        } catch (err) {
-            console.error("Failed to register event listener:", err);
-        }
 
-        try {
+            let response: string;
             // @ts-ignore
-            if (window.go && window.go.main && window.go.main.App && window.go.main.App.AskAI) {
+            if (window.go?.main?.App?.AskAI) {
                 // @ts-ignore
-                const response = await window.go.main.App.AskAI(userMsg.content);
-                
-                setMessages(prev => [...prev, {
-                    role: 'ai',
-                    content: response,
-                    timestamp: Date.now()
-                }]);
+                response = String(await window.go.main.App.AskAI(question) ?? '');
             } else {
-                 setMessages(prev => [...prev, {
-                    role: 'ai',
-                    content: "Error: Backend not connected.",
-                    timestamp: Date.now()
-                }]);
+                response = 'Error: Backend not connected.';
             }
-        } catch (e: any) {
-            setMessages(prev => [...prev, {
+            setMessages(previous => [...previous, {
                 role: 'ai',
-                content: "Error: " + e.toString(),
-                timestamp: Date.now()
+                content: response,
+                timestamp: Date.now(),
+                trace: [...traceRef.current],
+                references: referencesFromDocuments(Array.from(usedDocsRef.current)),
+            }]);
+        } catch (error: any) {
+            setMessages(previous => [...previous, {
+                role: 'ai',
+                content: `Error: ${error?.message || String(error)}`,
+                timestamp: Date.now(),
+                trace: [...traceRef.current],
+                references: referencesFromDocuments(Array.from(usedDocsRef.current)),
             }]);
         } finally {
-            if (cancelStatus) cancelStatus();
-            setAgentStatus(null);
-            setAgentStatusHistory([]);
-            setLastUsedDocs(Array.from(usedDocsRef.current));
-        }
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSend();
+            cancelStatus?.();
+            setAgentTrace([]);
+            setBusy(false);
         }
     };
 
     const handleNewChat = () => {
         setMessages([]);
         setInput('');
-        setAgentStatus(null);
-        setAgentStatusHistory([]);
-        setLastUsedDocs([]);
+        setAgentTrace([]);
+        traceRef.current = [];
         usedDocsRef.current = new Set();
     };
 
     return (
-        <div style={styles.container}>
-            <div style={styles.header}>
-                <button onClick={handleNewChat} style={styles.newChatBtn}>
-                    + 新建对话
-                </button>
+        <div className="ai-panel ai-chat-panel" style={styles.container}>
+            <div className="ai-chat-subheader">
+                <span className="ai-session-state"><i /> 知识增强</span>
+                <button onClick={handleNewChat} className="ai-new-chat-button">+ 新建对话</button>
             </div>
 
-            <div style={styles.chatContainer}>
+            <div className="ai-conversation-scroll">
                 {messages.length === 0 ? (
-                    <div style={styles.emptyState}>
-                        <div style={styles.icon}>💬</div>
-                        <p style={styles.emptyText}>有问题？随时问我！</p>
+                    <div className="ai-empty-stage ai-chat-empty">
+                        <div className="ai-empty-glyph" aria-hidden="true"><span>AI</span><i /><i /><i /></div>
+                        <span className="ai-empty-eyebrow">KNOWLEDGE ASSISTANT</span>
+                        <h4>询问运维知识</h4>
+                        <p>了解机制、对比方案，或从现象中寻找可能的原因。</p>
                     </div>
                 ) : (
-                    <div style={styles.messageList}>
-                        {messages.map((msg, idx) => (
-                            <div key={idx} style={{
-                                ...styles.messageItem,
-                                alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                                backgroundColor: msg.role === 'user' ? 'var(--accent)' : 'var(--bg-tertiary)',
-                                maxWidth: msg.role === 'user' ? '85%' : '95%'
-                            }} data-testid="message-item">
-                                <MessageRenderer content={msg.content} role={msg.role} />
+                    <div className="ai-message-list">
+                        {messages.map((message, index) => message.role === 'user' ? (
+                            <div key={`${message.timestamp}-${index}`} className="ai-user-message" data-testid="message-item">
+                                <RichText content={message.content} />
                             </div>
+                        ) : (
+                            <article key={`${message.timestamp}-${index}`} className="ai-assistant-message" data-testid="message-item">
+                                <RetrievalTrace events={message.trace || []} active={false} />
+                                <RichText content={message.content} />
+                                {!!message.references?.length && (
+                                    <section style={styles.references}>
+                                        <h4 style={styles.sectionTitle}>参考文档</h4>
+                                        <CitationList references={message.references} onOpenSource={onOpenSource} />
+                                    </section>
+                                )}
+                            </article>
                         ))}
+                        {busy && <RetrievalTrace events={agentTrace} active />}
                         <div ref={messagesEndRef} />
-                        {agentStatus && (
-                            <div style={styles.statusIndicator}>
-                                <span style={styles.spinner}>⚙️</span> {agentStatus.message}
-                            </div>
-                        )}
-                        {agentStatus && agentStatusHistory.length > 0 && (
-                            <div style={styles.statusHistory}>
-                                {agentStatusHistory.slice(-5).map((s, idx) => (
-                                    <div key={idx} style={styles.statusHistoryLine}>
-                                        {s.stage}: {s.message}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                        {!agentStatus && lastUsedDocs.length > 0 && (
-                            <div style={styles.usedDocsBox}>
-                                <div style={styles.usedDocsTitle}>本次参考文档</div>
-                                <div style={styles.usedDocsList}>
-                                    {lastUsedDocs.map((d) => (
-                                        <span key={d} style={styles.usedDocChip}>{d}</span>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
                     </div>
                 )}
             </div>
 
-            <div style={styles.footer}>
-                <div style={styles.inputBox}>
-                    <textarea
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        placeholder="输入问题..."
-                        style={styles.textarea}
-                        className="hide-scrollbar"
-                        rows={1}
-                    />
-                    <button onClick={handleSend} style={styles.sendButton}>发送</button>
-                </div>
+            <div className="ai-panel-footer">
+                <AIComposer
+                    value={input}
+                    onChange={setInput}
+                    onSend={handleSend}
+                    disabled={busy}
+                    placeholder="输入问题…"
+                    contexts={activeTerminalTitle ? [{ id: 'terminal', label: `当前终端 · ${activeTerminalTitle}`, active: true }] : []}
+                />
             </div>
         </div>
     );
 };
 
 const styles = {
-    container: {
-        display: 'flex',
-        flexDirection: 'column' as const,
-        height: '100%',
-        color: 'var(--text-secondary)',
-    },
-    header: {
-        padding: '10px 16px',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    title: {
-        fontSize: '14px',
-        fontWeight: 'bold' as const,
-        color: 'var(--text-primary)',
-    },
-    newChatBtn: {
-        padding: '4px 8px',
-        backgroundColor: 'transparent',
-        border: '1px solid var(--border-strong)',
-        borderRadius: '4px',
-        color: 'var(--text-secondary)',
-        fontSize: '12px',
-        cursor: 'pointer',
-    },
-    chatContainer: {
-        flex: 1,
-        overflowY: 'auto' as const,
-        padding: '10px',
-        minHeight: 0, // Critical for nested flex scrolling
-    },
-    emptyState: {
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column' as const,
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100%',
-        color: 'var(--text-muted)',
-    },
-    icon: {
-        fontSize: '48px',
-        marginBottom: '16px',
-    },
-    emptyText: {
-        marginBottom: '20px',
-    },
-    messageList: {
-        display: 'flex',
-        flexDirection: 'column' as const,
-        gap: '10px',
-    },
-    messageItem: {
-        maxWidth: '85%',
-        padding: '8px 12px',
-        borderRadius: '8px',
-        color: 'var(--text-primary)',
-        wordBreak: 'break-word' as const,
-        overflow: 'hidden',
-    },
-    footer: {
-        padding: '10px',
-        backgroundColor: 'var(--bg-secondary)',
-        borderTop: '1px solid var(--border)',
-    },
-    inputBox: {
-        display: 'flex',
-        gap: '8px',
-    },
-    textarea: {
-        flex: 1,
-        backgroundColor: 'var(--border)',
-        border: 'none',
-        borderRadius: '4px',
-        color: 'var(--text-primary)',
-        padding: '8px',
-        resize: 'none' as const,
-        outline: 'none',
-        fontFamily: 'inherit',
-    },
-    sendButton: {
-        padding: '0 12px',
-        backgroundColor: 'var(--accent)',
-        color: 'var(--text-on-accent)',
-        border: 'none',
-        borderRadius: '4px',
-        cursor: 'pointer',
-    },
-    statusIndicator: {
-        padding: '8px 12px',
-        color: 'var(--text-muted)',
-        fontSize: '12px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '6px',
-        fontStyle: 'italic',
-        animation: 'fadeIn 0.3s ease',
-    },
-    spinner: {
-        display: 'inline-block',
-        animation: 'spin 2s linear infinite',
-    },
-    statusHistory: {
-        padding: '6px 12px 10px 12px',
-        borderLeft: '2px solid var(--border)',
-        marginLeft: '8px',
-        color: 'var(--text-muted)',
-        fontSize: '12px',
-        display: 'flex',
-        flexDirection: 'column' as const,
-        gap: '4px',
-    },
-    statusHistoryLine: {
-        whiteSpace: 'pre-wrap' as const,
-        wordBreak: 'break-word' as const,
-    },
-    usedDocsBox: {
-        padding: '10px 12px',
-        backgroundColor: 'var(--bg-primary)',
-        border: '1px solid var(--border)',
-        borderRadius: '8px',
-        color: 'var(--text-tertiary)',
-        maxWidth: '95%',
-    },
-    usedDocsTitle: {
-        fontSize: '12px',
-        color: 'var(--text-muted)',
-        marginBottom: '8px',
-    },
-    usedDocsList: {
-        display: 'flex',
-        flexWrap: 'wrap' as const,
-        gap: '6px',
-    },
-    usedDocChip: {
-        padding: '2px 8px',
-        borderRadius: '999px',
-        backgroundColor: 'var(--bg-elevated)',
-        border: '1px solid var(--border)',
-        color: 'var(--text-secondary)',
-        fontSize: '12px',
-    },
+    container: { display: 'flex', flexDirection: 'column' as const, height: '100%', color: 'var(--text-secondary)' },
+    header: { padding: '8px 14px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+    headerHint: { color: 'var(--text-muted)', fontSize: '11px' },
+    newChatBtn: { padding: '4px 8px', backgroundColor: 'transparent', border: '1px solid var(--border-strong)', borderRadius: '4px', color: 'var(--text-secondary)', fontSize: '12px', cursor: 'pointer' },
+    chatContainer: { flex: 1, overflowY: 'auto' as const, padding: '16px 18px', minHeight: 0 },
+    emptyState: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', textAlign: 'center' as const },
+    emptyMark: { width: '42px', height: '42px', display: 'grid', placeItems: 'center', border: '1px solid var(--border-strong)', borderRadius: '10px', color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.05em' },
+    emptyTitle: { margin: '14px 0 4px', color: 'var(--text-primary)', fontSize: '14px' },
+    emptyText: { margin: 0, maxWidth: '260px', fontSize: '12px', lineHeight: 1.6 },
+    messageList: { display: 'flex', flexDirection: 'column' as const, gap: '16px' },
+    userMessage: { alignSelf: 'flex-end', maxWidth: '85%', padding: '8px 12px', borderRadius: '8px 8px 2px 8px', background: 'var(--accent)', color: 'var(--text-on-accent)', overflow: 'hidden' },
+    aiMessage: { width: '100%', color: 'var(--text-primary)', overflow: 'hidden' },
+    references: { marginTop: '18px' },
+    sectionTitle: { margin: '0 0 8px', color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em' },
+    footer: { padding: '10px 12px 12px', backgroundColor: 'var(--bg-secondary)', borderTop: '1px solid var(--border)' },
 };
-
-// Add style tag for animations if not exists
-const styleSheet = document.createElement("style");
-styleSheet.textContent = `
-    @keyframes spin { 100% { transform: rotate(360deg); } }
-`;
-document.head.appendChild(styleSheet);
 
 export default AIChatPanel;

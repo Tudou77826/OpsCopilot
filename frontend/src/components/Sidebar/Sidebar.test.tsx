@@ -53,8 +53,7 @@ describe('Sidebar Component', () => {
                 />
             </ToastProvider>
         );
-        // Assuming TroubleshootingPanel renders specific text
-        expect(screen.getByText('开始排查')).toBeInTheDocument();
+        expect(screen.getByText('从现象开始定位')).toBeInTheDocument();
     });
 
     it('renders AIChatPanel when activeTab is chat', () => {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
+import { TbArrowLeft } from 'react-icons/tb';
 import { TimelineEvent, filterTimelineEvents, generateMarkdown } from '../../utils/timeline';
 import { EventsOn } from '../../../wailsjs/runtime/runtime';
 
@@ -475,10 +476,13 @@ const SessionReviewModal: React.FC<SessionReviewModalProps> = ({ isOpen, onClose
         <>
             <style>{SPINNER_ANIMATION}</style>
             <div style={styles.header}>
+                <button onClick={onClose} style={styles.backButton} aria-label="返回排查">
+                    {TbArrowLeft({ size: 15 })}
+                    <span>返回</span>
+                </button>
                 <h3 style={styles.title}>
                     {view === 'timeline' ? '编辑排查记录' : '确认排查总结'}
                 </h3>
-                <button onClick={onClose} style={styles.closeButton}>&times;</button>
             </div>
 
             <div style={inline ? { ...styles.body, flex: 1 } : styles.body}>
@@ -634,22 +638,29 @@ const styles = {
         border: '1px solid var(--border)',
     },
     header: {
-        padding: '16px',
+        minHeight: '58px',
+        padding: '12px 16px',
         borderBottom: '1px solid var(--border)',
         display: 'flex',
-        justifyContent: 'space-between',
         alignItems: 'center',
+        gap: '12px',
     },
     title: {
         margin: 0,
         color: 'var(--text-primary)',
         fontSize: '16px',
     },
-    closeButton: {
-        background: 'none',
-        border: 'none',
+    backButton: {
+        height: '30px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '5px',
+        padding: '0 8px',
+        background: 'var(--bg-tertiary)',
+        border: '1px solid var(--border)',
+        borderRadius: '6px',
         color: 'var(--text-secondary)',
-        fontSize: '24px',
+        fontSize: '11px',
         cursor: 'pointer',
     },
     body: {

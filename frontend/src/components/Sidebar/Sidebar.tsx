@@ -9,6 +9,9 @@ import ScriptEditorModal from '../ScriptPanel/ScriptEditorModal';
 import { ConnectionConfig } from '../../types';
 import { useToast } from '../Toast/Toast';
 import { confirmDialog } from '../ConfirmDialog/ConfirmDialog';
+import { KnowledgeTarget } from '../AI';
+
+type SidebarTab = 'sessions' | 'troubleshoot' | 'chat' | 'script' | 'knowledge';
 
 interface TerminalSessionLite {
     id: string;
@@ -17,28 +20,47 @@ interface TerminalSessionLite {
 
 interface SidebarProps {
     isOpen: boolean;
-    activeTab: 'sessions' | 'troubleshoot' | 'chat' | 'script' | 'knowledge';
+    activeTab: SidebarTab;
     onToggle: () => void;
     onConnect: (config: ConnectionConfig) => void;
     activeTerminalId: string | null;
     terminals: TerminalSessionLite[];
+    onTypeCommand?: (command: string) => void;
+    onOpenKnowledgeSource?: (target: Omit<KnowledgeTarget, 'requestId'>) => void;
+    knowledgeTarget?: KnowledgeTarget | null;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onConnect, activeTerminalId, terminals }) => {
-    const defaultWidth = 300;
-    const [width, setWidth] = useState(defaultWidth);
+const getDefaultWidth = (tab: SidebarTab): number => {
+    if (tab === 'knowledge') return Math.max(Math.floor(document.body.clientWidth * 0.6), 500);
+    if (tab === 'troubleshoot' || tab === 'chat') {
+        return Math.min(520, Math.max(420, Math.floor(document.body.clientWidth * 0.34)));
+    }
+    return 300;
+};
+
+const Sidebar: React.FC<SidebarProps> = ({
+    isOpen, activeTab, onToggle, onConnect, activeTerminalId, terminals,
+    onTypeCommand, onOpenKnowledgeSource, knowledgeTarget,
+}) => {
+    const [widths, setWidths] = useState<Record<SidebarTab, number>>(() => ({
+        sessions: 300,
+        troubleshoot: getDefaultWidth('troubleshoot'),
+        chat: getDefaultWidth('chat'),
+        script: 300,
+        knowledge: getDefaultWidth('knowledge'),
+    }));
+    const width = widths[activeTab];
     const [editingScriptId, setEditingScriptId] = useState<string | null>(null);
     const scriptListRef = useRef<any>(null);
     const toast = useToast();
 
-    // 知识库 Tab 自动拓宽到 60% 屏宽，其他 Tab 恢复默认宽度
     useEffect(() => {
-        if (activeTab === 'knowledge') {
-            const minKnowledgeWidth = Math.max(Math.floor(document.body.clientWidth * 0.6), 500);
-            setWidth(minKnowledgeWidth);
-        } else {
-            setWidth(defaultWidth);
-        }
+        const handleResize = () => setWidths(previous => ({
+            ...previous,
+            [activeTab]: Math.min(previous[activeTab], Math.max(300, document.body.clientWidth - 120)),
+        }));
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
     }, [activeTab]);
 
     const handleEditScript = (scriptId: string) => {
@@ -93,7 +115,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onConnec
              // Calculate width from right edge: Window Width - Mouse X
              const newWidth = document.body.clientWidth - mouseMoveEvent.clientX;
              if (newWidth > 250 && newWidth < 800) {
-                 setWidth(newWidth);
+                 setWidths(previous => ({ ...previous, [activeTab]: newWidth }));
              }
         };
 
@@ -121,7 +143,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onConnec
 
     return (
         <>
-        <div style={{
+        <div className={`sidebar-shell sidebar-${activeTab}`} style={{
             ...styles.container,
             width: isOpen ? width : 0,
             position: 'relative',
@@ -154,8 +176,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onConnec
                 flex: 1
             }}>
                 {/* Header */}
-                <div style={styles.header}>
-                    <h3 style={styles.title}>{getTitle()}</h3>
+                <div className="sidebar-header" style={styles.header}>
+                    <div className="sidebar-title-group">
+                        <h3 style={styles.title}>{getTitle()}</h3>
+                        {(activeTab === 'troubleshoot' || activeTab === 'chat') && <span className="sidebar-ai-badge">AI</span>}
+                    </div>
                     <button onClick={onToggle} style={styles.closeButton} aria-label="Toggle Sidebar">×</button>
                 </div>
 
@@ -169,16 +194,23 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeTab, onToggle, onConnec
 
                         {/* Always mounted, toggled visibility */}
                         <div style={{ display: activeTab === 'troubleshoot' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-                            <TroubleshootingPanel />
+                            <TroubleshootingPanel
+                                activeTerminalTitle={terminals.find(terminal => terminal.id === activeTerminalId)?.title}
+                                onTypeCommand={onTypeCommand}
+                                onOpenSource={onOpenKnowledgeSource}
+                            />
                         </div>
 
                         <div style={{ display: activeTab === 'chat' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-                            <AIChatPanel />
+                            <AIChatPanel
+                                activeTerminalTitle={terminals.find(terminal => terminal.id === activeTerminalId)?.title}
+                                onOpenSource={onOpenKnowledgeSource}
+                            />
                         </div>
 
                         {/* Knowledge Browser */}
                         <div style={{ display: activeTab === 'knowledge' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-                            <KnowledgeBrowser />
+                            <KnowledgeBrowser target={knowledgeTarget} />
                         </div>
 
                         {/* Script Recording Panel */}

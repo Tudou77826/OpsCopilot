@@ -2,13 +2,6 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import TroubleshootingPanel from './TroubleshootingPanel';
 
-// Mock child components to simplify testing
-vi.mock('./TroubleshootingStep', () => ({
-    default: ({ step }: { step: string }) => <div data-testid="step">{step}</div>
-}));
-vi.mock('./CommandCard', () => ({
-    default: ({ command }: { command: string }) => <div data-testid="command">{command}</div>
-}));
 vi.mock('./SessionReviewModal', () => ({
     default: ({ isOpen, onArchive }: { isOpen: boolean, onArchive: (params: any) => void }) => (
         isOpen ? <div data-testid="review-modal"><button onClick={() => onArchive({ conclusion: 'Conclusion', service: 'TestService', module: 'TestModule', targetFile: '' })}>Archive</button></div> : null
@@ -38,9 +31,26 @@ describe('TroubleshootingPanel', () => {
         Element.prototype.scrollIntoView = vi.fn();
     });
 
+    beforeEach(() => {
+        mockStartSession.mockReset();
+        mockStopSession.mockReset();
+        mockArchiveSession.mockReset();
+        mockAskAI.mockReset();
+        mockAskAI.mockResolvedValue('');
+        window.go = {
+            main: { App: {
+                StartSession: mockStartSession,
+                StopSession: mockStopSession,
+                ArchiveSession: mockArchiveSession,
+                AskAI: mockAskAI,
+                PolishRootCause: vi.fn(),
+            } },
+        } as any;
+    });
+
     it('renders initial empty state correctly', () => {
         render(<TroubleshootingPanel />);
-        expect(screen.getByText('开始排查')).toBeInTheDocument();
+        expect(screen.getByTitle('发送')).toBeInTheDocument();
         expect(screen.getByPlaceholderText(/例如：/i)).toBeInTheDocument();
     });
 
@@ -50,12 +60,12 @@ describe('TroubleshootingPanel', () => {
         const input = screen.getByPlaceholderText(/例如：/i);
         fireEvent.change(input, { target: { value: 'CPU high' } });
 
-        const startBtn = screen.getByText('开始排查');
+        const startBtn = screen.getByTitle('发送');
         fireEvent.click(startBtn);
 
         expect(mockStartSession).toHaveBeenCalledWith('CPU high');
         // Should show stop button
-        expect(screen.getByText('结束排查')).toBeInTheDocument();
+        expect(screen.getByText('整理排查结论')).toBeInTheDocument();
     });
 
     it('renders structured AI response correctly', async () => {
@@ -69,12 +79,13 @@ describe('TroubleshootingPanel', () => {
 
         // Start
         fireEvent.change(screen.getByPlaceholderText(/例如：/i), { target: { value: 'Issue' } });
-        fireEvent.click(screen.getByText('开始排查'));
+        fireEvent.click(screen.getByTitle('发送'));
 
         // Wait for async operations (using findBy which waits)
-        expect(await screen.findByText('排查思路')).toBeInTheDocument();
-        expect(screen.getAllByTestId('step')).toHaveLength(2);
-        expect(screen.getByTestId('command')).toHaveTextContent('top');
+        expect(await screen.findByText('定位思路')).toBeInTheDocument();
+        expect(screen.getByText('Check CPU')).toBeInTheDocument();
+        expect(screen.getByText('Check Memory')).toBeInTheDocument();
+        expect(screen.getByText('top')).toBeInTheDocument();
     });
 
     it('handles stop and archive flow', async () => {
@@ -82,17 +93,17 @@ describe('TroubleshootingPanel', () => {
 
         // Start first
         fireEvent.change(screen.getByPlaceholderText(/例如：/i), { target: { value: 'Issue' } });
-        fireEvent.click(screen.getByText('开始排查'));
+        fireEvent.click(screen.getByTitle('发送'));
 
         // Click stop
-        fireEvent.click(screen.getByText('结束排查'));
+        fireEvent.click(screen.getByText('整理排查结论'));
 
         // Input root cause (simulating the stop UI flow)
-        const rootCauseInput = screen.getByPlaceholderText(/请输入根本原因/i);
+        const rootCauseInput = screen.getByPlaceholderText(/简要补充根本原因/i);
         fireEvent.change(rootCauseInput, { target: { value: 'Bug in code' } });
 
         // Confirm stop
-        fireEvent.click(screen.getByText('确认结束'));
+        fireEvent.click(screen.getByText('继续编辑结论'));
 
         // Should open review modal
         const archiveBtn = await screen.findByText('Archive'); // In mock modal

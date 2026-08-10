@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -18,6 +18,7 @@ import {
     ReportPatchIssue,
     UpdatePatchIssueStatus,
 } from '../../../wailsjs/go/main/App';
+import { KnowledgeTarget } from '../AI';
 
 // --- Types ---
 
@@ -215,7 +216,13 @@ const StarRating: React.FC<{
 
 // --- Main Component ---
 
-const KnowledgeBrowser: React.FC = () => {
+interface KnowledgeBrowserProps {
+    target?: KnowledgeTarget | null;
+}
+
+const normalizeKnowledgePath = (value: string) => value.replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
+
+const KnowledgeBrowser: React.FC<KnowledgeBrowserProps> = ({ target }) => {
     const [view, setView] = useState<ViewMode>('tree');
     const [detailTab, setDetailTab] = useState<DetailTab>('content');
     const [searchQuery, setSearchQuery] = useState('');
@@ -246,6 +253,7 @@ const KnowledgeBrowser: React.FC = () => {
     const [issuePriority, setIssuePriority] = useState('medium');
     const [issueTitle, setIssueTitle] = useState('');
     const [issueDesc, setIssueDesc] = useState('');
+    const lastTargetRequestRef = useRef<number | null>(null);
 
     // Load catalog
     const loadCatalog = useCallback(async () => {
@@ -282,7 +290,7 @@ const KnowledgeBrowser: React.FC = () => {
     };
 
     // Open detail view
-    const openDetail = async (entry: ScenarioEntry, service: string, module: string) => {
+    const openDetail = useCallback(async (entry: ScenarioEntry, service: string, module: string) => {
         setSelectedEntry(entry);
         setSelectedService(service);
         setSelectedModule(module);
@@ -315,7 +323,48 @@ const KnowledgeBrowser: React.FC = () => {
         }
 
         setDetailLoading(false);
-    };
+    }, []);
+
+    useEffect(() => {
+        if (!catalog || !target || lastTargetRequestRef.current === target.requestId) return;
+
+        const requestedPath = normalizeKnowledgePath(target.path);
+        type CatalogMatch = { entry: ScenarioEntry; service: string; module: string };
+        let pathMatch: CatalogMatch | null = null;
+        let lineMatch: CatalogMatch | null = null;
+
+        for (const service of catalog.services) {
+            for (const module of service.modules) {
+                for (const entry of module.scenarios) {
+                    const entryPath = normalizeKnowledgePath(entry.file);
+                    const sameFile = entryPath === requestedPath
+                        || entryPath.endsWith(`/${requestedPath}`)
+                        || requestedPath.endsWith(`/${entryPath}`);
+                    if (!sameFile) continue;
+                    pathMatch ??= { entry, service: service.name, module: module.name };
+                    if (target.line && target.line >= entry.lineStart && target.line <= entry.lineEnd) {
+                        lineMatch = { entry, service: service.name, module: module.name };
+                        break;
+                    }
+                }
+                if (lineMatch) break;
+            }
+            if (lineMatch) break;
+        }
+
+        lastTargetRequestRef.current = target.requestId;
+        const match = lineMatch || pathMatch;
+        if (match) {
+            setError('');
+            void openDetail(match.entry, match.service, match.module);
+            return;
+        }
+
+        const filename = requestedPath.split('/').pop() || target.path;
+        setView('tree');
+        setSearchQuery(filename);
+        setError(`未在目录中定位到来源：${target.path}`);
+    }, [catalog, openDetail, target]);
 
     // Submit rating
     const submitRating = async () => {

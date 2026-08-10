@@ -1,13 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { TbBrain, TbTarget, TbSearch, TbBook, TbWriting, TbRefresh, TbAlertTriangle, TbSettings, TbSparkles } from 'react-icons/tb';
-import TroubleshootingStep from './TroubleshootingStep';
-import CommandCard from './CommandCard';
+import { TbArrowRight, TbFileDescription, TbSparkles, TbX } from 'react-icons/tb';
 import SessionReviewModal, { ArchiveParams } from './SessionReviewModal';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
-import 'highlight.js/styles/github-dark.css';
 import { confirmDialog } from '../ConfirmDialog/ConfirmDialog';
+import {
+    AIComposer,
+    AgentTraceEvent,
+    KnowledgeAnswer,
+    KnowledgeTarget,
+    RetrievalTrace,
+    RichText,
+    parseKnowledgeResponse,
+    referencesFromDocuments,
+} from '../AI';
 // @ts-ignore
 import { EventsOn } from '../../../wailsjs/runtime/runtime';
 
@@ -15,36 +19,23 @@ interface Message {
     role: 'user' | 'ai';
     content: string;
     timestamp: number;
+    trace?: AgentTraceEvent[];
+    references?: string[];
 }
 
-interface AgentStatusEvent {
-    runId?: string;
-    stage: string;
-    message: string;
-    ts: number;
+interface TroubleshootingPanelProps {
+    activeTerminalTitle?: string;
+    onTypeCommand?: (command: string) => void;
+    onOpenSource?: (target: Omit<KnowledgeTarget, 'requestId'>) => void;
 }
 
-// Stage display configuration: maps backend stage names to user-friendly labels, icons, and colors
-const STAGE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-    thinking:       { label: '分析中',   icon: TbBrain({size: 14}), color: 'var(--stage-purple)' },
-    catalog_match:  { label: '匹配知识库', icon: TbTarget({size: 14}), color: 'var(--stage-blue)' },
-    grepping:       { label: '搜索关键词', icon: TbSearch({size: 14}), color: 'var(--severity-warning)' },
-    reading:        { label: '查阅文档', icon: TbBook({size: 14}), color: 'var(--stage-blue)' },
-    answering:      { label: '生成回答', icon: TbWriting({size: 14}), color: 'var(--severity-success)' },
-    retrying:       { label: '重试中',   icon: TbRefresh({size: 14}), color: 'var(--stage-orange)' },
-    error:          { label: '出错',     icon: TbAlertTriangle({size: 14}), color: 'var(--severity-danger)' },
-};
-
-function getStageConfig(stage: string) {
-    return STAGE_CONFIG[stage] || { label: stage, icon: TbSettings({size: 14}), color: 'var(--text-muted)' };
-}
-
-const TroubleshootingPanel: React.FC = () => {
+const TroubleshootingPanel: React.FC<TroubleshootingPanelProps> = ({ activeTerminalTitle, onTypeCommand, onOpenSource }) => {
     const [isInvestigating, setIsInvestigating] = useState(false);
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
     const [agentStatus, setAgentStatus] = useState<{ stage: string; message: string } | null>(null);
-    const [agentStatusHistory, setAgentStatusHistory] = useState<AgentStatusEvent[]>([]);
+    const [agentStatusHistory, setAgentStatusHistory] = useState<AgentTraceEvent[]>([]);
+    const agentTraceRef = useRef<AgentTraceEvent[]>([]);
     const [contextUsage, setContextUsage] = useState<{ used: number; max: number } | null>(null);
     const [catalogMatches, setCatalogMatches] = useState<string[]>([]);
     const catalogMatchRef = useRef<string[]>([]);
@@ -93,12 +84,6 @@ const TroubleshootingPanel: React.FC = () => {
             timestamp: Date.now()
         }]);
         
-        setMessages(prev => [...prev, {
-            role: 'ai',
-            content: `已开始排查会话。问题描述：${problem}\n正在为您分析...`,
-            timestamp: Date.now()
-        }]);
-
         // @ts-ignore
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.StartSession) {
             // @ts-ignore
@@ -108,6 +93,7 @@ const TroubleshootingPanel: React.FC = () => {
         try {
             setAgentStatus({ stage: 'thinking', message: '正在分析问题，扫描知识库目录...' });
             setAgentStatusHistory([]);
+            agentTraceRef.current = [];
             setCatalogMatches([]);
             catalogMatchRef.current = [];
             setLastUsedDocs([]);
@@ -124,12 +110,11 @@ const TroubleshootingPanel: React.FC = () => {
                         if (!stage || !message) return;
 
                         setAgentStatus({ stage, message });
-                        setAgentStatusHistory(prev => {
-                            const last = prev[prev.length - 1];
-                            if (last && last.stage === stage && last.message === message) return prev;
-                            const next = [...prev, { runId, stage, message, ts: Date.now() }];
-                            return next.slice(-8);
-                        });
+                        const last = agentTraceRef.current[agentTraceRef.current.length - 1];
+                        if (!last || last.stage !== stage || last.message !== message) {
+                            agentTraceRef.current = [...agentTraceRef.current, { runId, stage, message, ts: Date.now() }].slice(-8);
+                            setAgentStatusHistory(agentTraceRef.current);
+                        }
 
                         if (stage === 'reading') {
                             const doc = extractDocFromReadingMessage(message);
@@ -160,7 +145,9 @@ const TroubleshootingPanel: React.FC = () => {
                 setMessages(prev => [...prev, {
                     role: 'ai',
                     content: response,
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
+                    trace: [...agentTraceRef.current],
+                    references: Array.from(usedDocsRef.current),
                 }]);
             } else {
                  // Fallback to AskAI if AskTroubleshoot is not available (e.g. bindings not updated yet)
@@ -171,7 +158,9 @@ const TroubleshootingPanel: React.FC = () => {
                     setMessages(prev => [...prev, {
                         role: 'ai',
                         content: response,
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        trace: [...agentTraceRef.current],
+                        references: Array.from(usedDocsRef.current),
                     }]);
                 }
             }
@@ -181,7 +170,6 @@ const TroubleshootingPanel: React.FC = () => {
             console.error("Initial AI analysis failed", e);
         } finally {
             setAgentStatus(null);
-            setAgentStatusHistory([]);
             setLastUsedDocs(Array.from(usedDocsRef.current));
             setContextUsage(null);
         }
@@ -219,6 +207,7 @@ const TroubleshootingPanel: React.FC = () => {
         setMessages([]);
         setAgentStatus(null);
         setAgentStatusHistory([]);
+        agentTraceRef.current = [];
         setCatalogMatches([]);
         catalogMatchRef.current = [];
         setLastUsedDocs([]);
@@ -293,6 +282,7 @@ const TroubleshootingPanel: React.FC = () => {
 
         setAgentStatus({ stage: 'thinking', message: '正在分析问题，扫描知识库目录...' });
         setAgentStatusHistory([]);
+        agentTraceRef.current = [];
         setCatalogMatches([]);
         catalogMatchRef.current = [];
         setLastUsedDocs([]);
@@ -309,12 +299,11 @@ const TroubleshootingPanel: React.FC = () => {
                     if (!stage || !message) return;
 
                     setAgentStatus({ stage, message });
-                    setAgentStatusHistory(prev => {
-                        const last = prev[prev.length - 1];
-                        if (last && last.stage === stage && last.message === message) return prev;
-                        const next = [...prev, { runId, stage, message, ts: Date.now() }];
-                        return next.slice(-8);
-                    });
+                    const last = agentTraceRef.current[agentTraceRef.current.length - 1];
+                    if (!last || last.stage !== stage || last.message !== message) {
+                        agentTraceRef.current = [...agentTraceRef.current, { runId, stage, message, ts: Date.now() }].slice(-8);
+                        setAgentStatusHistory(agentTraceRef.current);
+                    }
 
                     if (stage === 'reading') {
                         const doc = extractDocFromReadingMessage(message);
@@ -346,7 +335,9 @@ const TroubleshootingPanel: React.FC = () => {
                 setMessages(prev => [...prev, {
                     role: 'ai',
                     content: response,
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
+                    trace: [...agentTraceRef.current],
+                    references: Array.from(usedDocsRef.current),
                 }]);
             } else {
                  // Fallback to AskAI if AskTroubleshoot is not available (e.g. bindings not updated yet)
@@ -358,7 +349,9 @@ const TroubleshootingPanel: React.FC = () => {
                     setMessages(prev => [...prev, {
                         role: 'ai',
                         content: response,
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        trace: [...agentTraceRef.current],
+                        references: Array.from(usedDocsRef.current),
                     }]);
                 } else {
                      setMessages(prev => [...prev, {
@@ -372,13 +365,13 @@ const TroubleshootingPanel: React.FC = () => {
             setMessages(prev => [...prev, {
                 role: 'ai',
                 content: "Error: " + e.toString(),
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                trace: [...agentTraceRef.current],
             }]);
         } finally {
             if (cancelStatus) cancelStatus();
             if (cancelContext) cancelContext();
             setAgentStatus(null);
-            setAgentStatusHistory([]);
             setLastUsedDocs(Array.from(usedDocsRef.current));
             setContextUsage(null);
         }
@@ -394,136 +387,40 @@ const TroubleshootingPanel: React.FC = () => {
     const preprocessContent = (content: string): string => {
         if (!content) return '';
         let text = content;
-
-        // 1. 尝试从 JSON 包装中提取文本（仅在无 steps/commands 时拆包）
         try {
             const trimmed = text.trim();
             if (trimmed.startsWith('{')) {
                 const data = JSON.parse(trimmed);
-                // 如果是完整的 troubleshoot JSON（含 steps 或 commands），不要拆包
-                if (Array.isArray(data.steps) || Array.isArray(data.commands)) {
-                    return text; // 直接返回，交给下方 renderMessageContent 解析渲染
-                }
-                for (const key of ['summary', 'content', 'answer', 'text']) {
-                    if (data[key] && typeof data[key] === 'string') {
-                        text = data[key];
-                        break;
+                if (!Array.isArray(data.steps) && !Array.isArray(data.commands)) {
+                    for (const key of ['summary', 'content', 'answer', 'text']) {
+                        if (typeof data[key] === 'string') {
+                            text = data[key];
+                            break;
+                        }
                     }
                 }
             }
         } catch {}
-
-        // 2. 确保标题前有空行（修复 `文字\n## 标题` → `文字\n\n## 标题`）
-        text = text.replace(/([^\n])\n(#{1,6} )/g, '$1\n\n$2');
-
-        return text;
+        return text.replace(/([^\n])\n(#{1,6} )/g, '$1\n\n$2');
     };
 
-    const renderMessageContent = (content: string) => {
-        content = preprocessContent(content);
-        try {
-            // Check if content looks like JSON before parsing
-            let jsonContent = content.trim();
-
-            // Try to strip Markdown code blocks if present (frontend fallback)
-            const markdownMatch = jsonContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-            if (markdownMatch) {
-                jsonContent = markdownMatch[1].trim();
-            }
-
-            if (jsonContent.startsWith('{')) {
-                const data = JSON.parse(jsonContent);
-                if (data && (Array.isArray(data.steps) || Array.isArray(data.commands) || data.summary)) {
-                    return (
-                        <div style={styles.structuredResponse}>
-                            {/* Summary section - shows comprehensive analysis */}
-                            {data.summary && (
-                                <div style={styles.section}>
-                                    <h4 style={styles.sectionTitle}>综合分析</h4>
-                                    <div style={{...styles.messageContent, paddingBottom: '12px'}}>
-                                        <ReactMarkdown
-                                            remarkPlugins={[remarkGfm]}
-                                            rehypePlugins={[rehypeHighlight]}
-                                            components={{
-                                                h1: ({node, ...props}) => <h1 style={{...props.style, fontSize: '1.3em', fontWeight: 'bold', marginBottom: '0.5em', marginTop: '0.8em'}} {...props} />,
-                                                h2: ({node, ...props}) => <h2 style={{...props.style, fontSize: '1.15em', fontWeight: 'bold', marginBottom: '0.5em', marginTop: '0.6em'}} {...props} />,
-                                                h3: ({node, ...props}) => <h3 style={{...props.style, fontSize: '1.05em', fontWeight: 'bold', marginBottom: '0.5em', marginTop: '0.5em'}} {...props} />,
-                                                p: ({node, ...props}) => <p style={{...props.style, marginBottom: '0.6em', lineHeight: '1.5'}} {...props} />,
-                                                ul: ({node, ...props}) => <ul style={{...props.style, paddingLeft: '1.5em', marginBottom: '0.6em'}} {...props} />,
-                                                ol: ({node, ...props}) => <ol style={{...props.style, paddingLeft: '1.5em', marginBottom: '0.6em'}} {...props} />,
-                                                li: ({node, ...props}) => <li style={{...props.style, marginBottom: '0.25em'}} {...props} />,
-                                                code: ({node, inline, ...props}: any) => inline
-                                                    ? <code style={{backgroundColor: 'var(--bg-elevated)', padding: '2px 6px', borderRadius: '3px', fontSize: '0.9em'}} {...props} />
-                                                    : <code style={{display: 'block', backgroundColor: 'var(--bg-primary)', padding: '10px', borderRadius: '4px', overflowX: 'auto', marginBottom: '0.6em', fontSize: '0.85em'}} {...props} />,
-                                                strong: ({node, ...props}) => <strong style={{fontWeight: 'bold'}} {...props} />,
-                                                blockquote: ({node, ...props}) => <blockquote style={{borderLeft: '3px solid var(--border-strong)', paddingLeft: '0.8em', fontStyle: 'italic', color: 'var(--text-tertiary)', marginBottom: '0.6em'}} {...props} />,
-                                            }}
-                                        >
-                                            {data.summary}
-                                        </ReactMarkdown>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Steps section */}
-                            {Array.isArray(data.steps) && data.steps.length > 0 && (
-                                <div style={styles.section}>
-                                    <h4 style={styles.sectionTitle}>排查思路</h4>
-                                    {data.steps.map((step: any, idx: number) => (
-                                        <TroubleshootingStep key={idx} step={step} index={idx} />
-                                    ))}
-                                </div>
-                            )}
-
-                            {/* Commands section */}
-                            {Array.isArray(data.commands) && data.commands.length > 0 && (
-                                <div style={styles.section}>
-                                    <h4 style={styles.sectionTitle}>建议命令</h4>
-                                    {data.commands.map((cmd: any, idx: number) => (
-                                        <CommandCard
-                                            key={idx}
-                                            command={cmd.command}
-                                            description={cmd.description}
-                                        />
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    );
-                }
-            }
-        } catch (e) {
-            console.error("Failed to parse structured response:", e);
+    const renderMessageContent = (message: Message) => {
+        const structured = parseKnowledgeResponse(message.content);
+        if (structured) {
+            return (
+                <KnowledgeAnswer
+                    response={structured}
+                    references={referencesFromDocuments(message.references || [])}
+                    onTypeCommand={onTypeCommand}
+                    onOpenSource={onOpenSource}
+                />
+            );
         }
-        // Render as Markdown if not structured JSON
-        return (
-            <div style={styles.messageContent}>
-                <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeHighlight]}
-                    components={{
-                        h1: ({node, ...props}) => <h1 style={{...props.style, fontSize: '1.5em', fontWeight: 'bold', marginBottom: '0.5em', marginTop: '1em'}} {...props} />,
-                        h2: ({node, ...props}) => <h2 style={{...props.style, fontSize: '1.3em', fontWeight: 'bold', marginBottom: '0.5em', marginTop: '0.8em'}} {...props} />,
-                        h3: ({node, ...props}) => <h3 style={{...props.style, fontSize: '1.1em', fontWeight: 'bold', marginBottom: '0.5em', marginTop: '0.6em'}} {...props} />,
-                        p: ({node, ...props}) => <p style={{...props.style, marginBottom: '0.8em', lineHeight: '1.5'}} {...props} />,
-                        ul: ({node, ...props}) => <ul style={{...props.style, paddingLeft: '1.5em', marginBottom: '0.8em'}} {...props} />,
-                        ol: ({node, ...props}) => <ol style={{...props.style, paddingLeft: '1.5em', marginBottom: '0.8em'}} {...props} />,
-                        li: ({node, ...props}) => <li style={{...props.style, marginBottom: '0.3em'}} {...props} />,
-                        code: ({node, inline, ...props}: any) => inline
-                            ? <code style={{backgroundColor: 'var(--bg-elevated)', padding: '2px 6px', borderRadius: '3px', fontSize: '0.9em'}} {...props} />
-                            : <code style={{display: 'block', backgroundColor: 'var(--bg-primary)', padding: '12px', borderRadius: '6px', overflowX: 'auto', marginBottom: '1em'}} {...props} />,
-                        strong: ({node, ...props}) => <strong style={{fontWeight: 'bold'}} {...props} />,
-                        blockquote: ({node, ...props}) => <blockquote style={{borderLeft: '3px solid var(--border-strong)', paddingLeft: '1em', fontStyle: 'italic', color: 'var(--text-tertiary)', marginBottom: '0.8em'}} {...props} />,
-                    }}
-                >
-                    {content}
-                </ReactMarkdown>
-            </div>
-        );
+        return <RichText content={preprocessContent(message.content)} />;
     };
 
     return (
-        <div style={styles.container}>
+        <div className="ai-panel ai-troubleshoot-panel" style={styles.container}>
             {isReviewModalOpen ? (
                 <SessionReviewModal
                     isOpen={isReviewModalOpen}
@@ -538,58 +435,52 @@ const TroubleshootingPanel: React.FC = () => {
             ) : (
             <>
             {!isInvestigating ? (
-                <div style={styles.emptyState}>
-                    <div style={styles.icon}>🩺</div>
-                    <p style={styles.emptyText}>请输入您遇到的问题，并点击"开始排查"</p>
-                    <div style={{width: '100%', padding: '0 20px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', gap: '10px'}}>
-
-                        {/* 问题输入区域 */}
-                        <textarea
+                <div className="ai-empty-stage">
+                    <div className="ai-empty-glyph" aria-hidden="true"><span>OC</span><i /><i /><i /></div>
+                    <span className="ai-empty-eyebrow">OPS KNOWLEDGE ENGINE</span>
+                    <h4>从现象开始定位</h4>
+                    <p>描述错误、影响范围和发生时间，AI 将结合知识库给出可验证的定位思路。</p>
+                    <div className="ai-empty-composer">
+                        <AIComposer
                             value={input}
-                            onChange={(e) => setInput(e.target.value)}
+                            onChange={setInput}
+                            onSend={handleStart}
                             placeholder="例如：服务器 CPU 占用率过高..."
-                            style={{...styles.textarea, minHeight: '80px', backgroundColor: 'var(--bg-input)'}}
+                            contexts={activeTerminalTitle ? [{ id: 'terminal', label: `● SSH · ${activeTerminalTitle}`, active: true }] : []}
                         />
-
-                        <button onClick={handleStart} style={styles.primaryButton}>
-                            开始排查
-                        </button>
+                    </div>
+                    <div className="ai-prompt-suggestions">
+                        {['接口持续 504', 'CPU 突然升高', '磁盘空间不足'].map(example => (
+                            <button type="button" key={example} onClick={() => setInput(example)}>{example}</button>
+                        ))}
                     </div>
                 </div>
             ) : (
-                <div style={styles.chatContainer}>
-                    <div style={styles.messageList}>
+                <>
+                <div className="ai-session-bar">
+                    <span className="ai-session-state"><i /> 定位会话</span>
+                    <span className="ai-session-topic" title={originalProblem}>{originalProblem}</span>
+                    <div className="ai-session-actions">
+                        <button type="button" onClick={handleCancelClick} title="取消并清空当前定位">{TbX({ size: 14 })}<span>取消</span></button>
+                    </div>
+                </div>
+                <div className="ai-conversation-scroll">
+                    <div className="ai-message-list">
                         {messages.map((msg, idx) => (
-                                <div key={idx} style={{
-                                    ...styles.messageItem,
-                                    alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                                    backgroundColor: msg.role === 'user' ? 'var(--accent)' : 'var(--bg-tertiary)',
-                                    color: msg.role === 'user' ? 'var(--text-on-accent)' : 'var(--text-primary)',
-                                    maxWidth: msg.role === 'user' ? '85%' : '95%'
-                                }}>
-                                    {msg.role === 'ai' ? renderMessageContent(msg.content) : (
-                                        <div style={styles.messageContent}>{msg.content}</div>
+                                <div key={idx} className={msg.role === 'user' ? 'ai-user-message' : 'ai-assistant-message'}>
+                                    {msg.role === 'ai' ? (
+                                        <>
+                                            {msg.trace && msg.trace.length > 0 && <RetrievalTrace events={msg.trace} active={false} />}
+                                            {renderMessageContent(msg)}
+                                        </>
+                                    ) : (
+                                        <div>{msg.content}</div>
                                     )}
                                 </div>
                             ))
                         }
                         <div ref={messagesEndRef} />
-                        {agentStatus && (() => {
-                            const cfg = getStageConfig(agentStatus.stage);
-                            return (
-                                <div style={styles.statusIndicator}>
-                                    <span style={{...styles.stageIcon, color: cfg.color}}>{cfg.icon}</span>
-                                    <span style={{...styles.stageLabel, color: cfg.color}}>{cfg.label}</span>
-                                    {agentStatus.stage === 'catalog_match' ? (
-                                        <span style={styles.stageBreadcrumb}>{agentStatus.message}</span>
-                                    ) : agentStatus.stage === 'thinking' ? (
-                                        <span style={styles.stageMessage}>{agentStatus.message}</span>
-                                    ) : (
-                                        <span style={styles.stageMessage}>{agentStatus.message.replace(cfg.label, '')}</span>
-                                    )}
-                                </div>
-                            );
-                        })()}
+                        {agentStatus && <RetrievalTrace events={agentStatusHistory.length > 0 ? agentStatusHistory : [{ stage: agentStatus.stage, message: agentStatus.message, ts: Date.now() }]} active />}
                         {contextUsage && (() => {
                             const ratio = contextUsage.used / contextUsage.max;
                             const pct = Math.min(ratio * 100, 100);
@@ -608,123 +499,58 @@ const TroubleshootingPanel: React.FC = () => {
                                 </div>
                             );
                         })()}
-                        {agentStatus && agentStatusHistory.length > 1 && (
-                            <div style={styles.statusHistory}>
-                                {agentStatusHistory.slice(0, -1).map((s, idx) => {
-                                    const cfg = getStageConfig(s.stage);
-                                    // Extract meaningful detail from the message
-                                    let detail = '';
-                                    if (s.stage === 'catalog_match') {
-                                        const parts = s.message.split(' › ');
-                                        detail = parts[parts.length - 1] || '';
-                                    } else if (s.stage === 'grepping') {
-                                        // Extract keyword from "正在搜索关键词: xxx..."
-                                        const m = s.message.match(/关键词:\s*(.+?)(\.\.\.)?$/);
-                                        detail = m ? m[1] : '';
-                                    } else if (s.stage === 'reading') {
-                                        // Extract doc name from "正在阅读文档: xxx..."
-                                        const m = s.message.match(/文档:\s*(.+?)(\.\.\.)?$/);
-                                        detail = m ? m[1] : '';
-                                    }
-                                    return (
-                                        <div key={idx} style={styles.statusHistoryLine}>
-                                            <span style={{...styles.historyIcon, color: cfg.color}}>{cfg.icon}</span>
-                                            <span style={{...styles.historyLabel, color: cfg.color}}>{cfg.label}</span>
-                                            {detail && <span style={styles.historyDetail}>{detail}</span>}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                        {!agentStatus && catalogMatches.length > 0 && (
-                            <div style={styles.usedDocsBox}>
-                                <div style={styles.usedDocsTitle}>知识库匹配路径</div>
-                                <div style={styles.usedDocsList}>
-                                    {catalogMatches.map((path, idx) => {
-                                        const parts = path.split(' › ');
-                                        return (
-                                            <span key={idx} style={styles.catalogPathChip}>
-                                                {parts.map((part, pi) => (
-                                                    <span key={pi}>
-                                                        {pi > 0 && <span style={styles.catalogPathSep}> / </span>}
-                                                        <span style={{
-                                                            color: pi === parts.length - 1 ? 'var(--text-secondary)' : 'var(--text-muted)',
-                                                            fontWeight: pi === parts.length - 1 ? 500 : 400,
-                                                        }}>{part}</span>
-                                                    </span>
-                                                ))}
-                                            </span>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-                        {!agentStatus && lastUsedDocs.length > 0 && catalogMatches.length === 0 && (
-                            <div style={styles.usedDocsBox}>
-                                <div style={styles.usedDocsTitle}>本次参考文档</div>
-                                <div style={styles.usedDocsList}>
-                                    {lastUsedDocs.map((d) => (
-                                        <span key={d} style={styles.usedDocChip}>{d}</span>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
                     </div>
                 </div>
+                </>
             )}
 
             {isInvestigating && (
-                <div style={styles.footer}>
+                <div className="ai-panel-footer">
                     {isStopping ? (
-                        <div style={styles.stopContainer}>
-                            <div style={styles.inputWrapper}>
+                        <div className="ai-stop-confirmation">
+                            <div className="ai-stop-confirmation-heading">
+                                <strong>整理排查结论</strong>
+                                <span>先补充根本原因，再进入结论编辑</span>
+                            </div>
+                            <div className="ai-stop-confirmation-input">
                                 <input
                                     type="text"
                                     value={rootCause}
                                     onChange={(e) => setRootCause(e.target.value)}
-                                    placeholder="请输入根本原因 (Root Cause)..."
-                                    style={styles.rootCauseInput}
+                                    placeholder="简要补充根本原因（可稍后完善）"
                                     autoFocus
                                 />
                                 <button
+                                    className="ai-stop-polish-button"
                                     onClick={handlePolishRootCause}
-                                    style={styles.magicButton}
                                     title="AI 润色"
                                     disabled={isPolishing}
                                 >
                                     {isPolishing ? '...' : TbSparkles({size: 14})}
                                 </button>
                             </div>
-                            <div style={styles.stopActions}>
-                                <button onClick={() => setIsStopping(false)} style={styles.secondaryButton}>取消</button>
-                                <button onClick={handleConfirmStop} style={styles.primaryButton}>确认结束</button>
+                            <div className="ai-stop-confirmation-actions">
+                                <button className="is-secondary" onClick={() => setIsStopping(false)}>返回排查</button>
+                                <button className="is-primary" onClick={handleConfirmStop}><span>继续编辑结论</span>{TbArrowRight({ size: 14 })}</button>
                             </div>
                         </div>
                     ) : (
                         <>
-                            <div style={styles.toolbar}>
-                                <button onClick={handleCancelClick} style={styles.cancelButton}>
-                                    <span style={styles.cancelButtonIcon}>✕</span>
-                                    <span style={styles.cancelButtonText}>取消定位</span>
-                                </button>
-                                <button onClick={handleStopClick} style={styles.stopButton}>
-                                    <span style={styles.stopButtonIcon}>⏹</span>
-                                    <span style={styles.stopButtonText}>结束排查</span>
+                            <div className="ai-conclusion-transition">
+                                <span>有明确结论后，可整理为知识记录</span>
+                                <button type="button" onClick={handleStopClick} title="整理本次排查结论">
+                                    {TbFileDescription({ size: 14 })}
+                                    <span>整理排查结论</span>
                                 </button>
                             </div>
-
-                            <div style={styles.inputBox}>
-                                <textarea
-                                    value={input}
-                                    onChange={(e) => setInput(e.target.value)}
-                                    onKeyDown={handleKeyDown}
-                                    placeholder="输入问题或现象..."
-                                    style={styles.textarea}
-                                    className="hide-scrollbar"
-                                    rows={1}
-                                />
-                                <button onClick={handleSend} style={styles.sendButton}>发送</button>
-                            </div>
+                            <AIComposer
+                                value={input}
+                                onChange={setInput}
+                                onSend={handleSend}
+                                placeholder="补充现象或继续追问…"
+                                contexts={activeTerminalTitle ? [{ id: 'terminal', label: `● SSH · ${activeTerminalTitle}`, active: true }] : []}
+                                disabled={Boolean(agentStatus)}
+                            />
                         </>
                     )}
                 </div>
@@ -757,23 +583,13 @@ const styles = {
     },
     emptyText: {
         marginBottom: '20px',
+        textAlign: 'center' as const,
+        lineHeight: 1.5,
     },
-    primaryButton: {
-        padding: '8px 16px',
-        backgroundColor: 'var(--accent)',
-        color: 'var(--text-on-accent)',
-        border: 'none',
-        borderRadius: '4px',
-        cursor: 'pointer',
-    },
-    secondaryButton: {
-        padding: '4px 8px',
-        backgroundColor: 'var(--bg-input)',
-        color: 'var(--text-secondary)',
-        border: '1px solid var(--border-strong)',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        fontSize: '12px',
+    emptyComposer: {
+        width: '100%',
+        maxWidth: '480px',
+        margin: '0 auto',
     },
     stopButton: {
         display: 'flex',
@@ -838,10 +654,18 @@ const styles = {
         padding: '10px',
         flex: 1,
     },
-    messageItem: {
+    userMessageItem: {
         maxWidth: '85%',
-        padding: '10px 14px',
-        borderRadius: '8px',
+        padding: '9px 11px',
+        borderRadius: '8px 8px 2px 8px',
+        backgroundColor: 'var(--accent)',
+        color: 'var(--text-primary)',
+        wordBreak: 'break-word' as const,
+    },
+    aiMessageItem: {
+        width: '100%',
+        maxWidth: '100%',
+        padding: '4px 2px 10px',
         color: 'var(--text-primary)',
         wordBreak: 'break-word' as const,
     },
@@ -850,15 +674,13 @@ const styles = {
         lineHeight: '1.4',
     },
     footer: {
-        padding: '10px',
         backgroundColor: 'var(--bg-secondary)',
-        borderTop: '1px solid var(--border)',
     },
     toolbar: {
         display: 'flex',
         justifyContent: 'flex-end',
         gap: '8px',
-        marginBottom: '8px',
+        padding: '8px 10px 0',
     },
     inputBox: {
         display: 'flex',
@@ -1023,44 +845,6 @@ const styles = {
         color: 'var(--text-tertiary)',
         textTransform: 'uppercase' as const,
         letterSpacing: '0.5px',
-    },
-    stopContainer: {
-        display: 'flex',
-        flexDirection: 'column' as const,
-        gap: '8px',
-    },
-    inputWrapper: {
-        display: 'flex',
-        gap: '8px',
-        alignItems: 'center',
-    },
-    rootCauseInput: {
-        flex: 1,
-        padding: '8px',
-        backgroundColor: 'var(--bg-input)',
-        border: '1px solid var(--border-strong)',
-        borderRadius: '4px',
-        color: 'var(--text-primary)',
-        fontSize: '13px',
-        outline: 'none',
-        boxSizing: 'border-box' as const,
-    },
-    magicButton: {
-        background: 'none',
-        border: '1px solid var(--border-strong)',
-        borderRadius: '4px',
-        color: 'var(--star-active)',
-        cursor: 'pointer',
-        fontSize: '16px',
-        padding: '6px 10px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    stopActions: {
-        display: 'flex',
-        justifyContent: 'flex-end',
-        gap: '8px',
     },
 };
 

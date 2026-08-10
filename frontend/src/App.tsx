@@ -20,6 +20,7 @@ import { normalizeTerminalConfig } from './components/Terminal/terminalAppearanc
 import { Theme } from './components/appearanceTypes';
 import { DEFAULT_THEME, normalizeTheme, persistTheme, readPersistedTheme } from './components/appearance';
 import { TimestampResult } from './utils/timestampParser';
+import { KnowledgeTarget } from './components/AI';
 
 interface TerminalSession {
     id: string;
@@ -50,6 +51,7 @@ function App() {
     const [sidebarTab, setSidebarTab] = useState<'sessions' | 'troubleshoot' | 'chat' | 'script' | 'knowledge'>('sessions');
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
+    const [knowledgeTarget, setKnowledgeTarget] = useState<KnowledgeTarget | null>(null);
     const [isBroadcastMode, setIsBroadcastMode] = useState(false);
     const [broadcastIds, setBroadcastIds] = useState<string[]>([]);
     const [isConfirmCloseOpen, setIsConfirmCloseOpen] = useState(false);
@@ -628,6 +630,12 @@ function App() {
         }, 0);
     };
 
+    const handleOpenKnowledgeSource = useCallback((target: Omit<KnowledgeTarget, 'requestId'>) => {
+        setKnowledgeTarget({ ...target, requestId: Date.now() });
+        setSidebarTab('knowledge');
+        setIsSidebarOpen(true);
+    }, []);
+
     const handleCloseTerminal = useCallback((id: string) => {
         // Close session in backend
         // @ts-ignore
@@ -869,6 +877,9 @@ function App() {
                     onConnect={(config) => handleBatchConnect([config])}
                     activeTerminalId={activeTerminalId}
                     terminals={terminals}
+                    onTypeCommand={handleQuickCommand}
+                    onOpenKnowledgeSource={handleOpenKnowledgeSource}
+                    knowledgeTarget={knowledgeTarget}
                 />
 
                 {/* Right Nav (Icon Bar) */}

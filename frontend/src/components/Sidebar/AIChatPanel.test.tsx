@@ -18,6 +18,11 @@ describe('AIChatPanel', () => {
         Element.prototype.scrollIntoView = vi.fn();
     });
 
+    beforeEach(() => {
+        mockAskAI.mockReset();
+        window.go = { main: { App: { AskAI: mockAskAI } } } as any;
+    });
+
     it('renders empty chat state correctly', () => {
         render(<AIChatPanel />);
         expect(screen.getByPlaceholderText(/输入问题/i)).toBeInTheDocument();
@@ -43,7 +48,7 @@ describe('AIChatPanel', () => {
         render(<AIChatPanel />);
         const input = screen.getByPlaceholderText(/输入问题/i);
         fireEvent.change(input, { target: { value: 'Question' } });
-        fireEvent.click(screen.getByText('发送'));
+        fireEvent.click(screen.getByTitle('发送'));
 
         // Check AI response
         expect(await screen.findByText('This is AI response')).toBeInTheDocument();
@@ -57,7 +62,7 @@ describe('AIChatPanel', () => {
         // Add a message first
         const input = screen.getByPlaceholderText(/输入问题/i);
         fireEvent.change(input, { target: { value: 'Question' } });
-        fireEvent.click(screen.getByText('发送'));
+        fireEvent.click(screen.getByTitle('发送'));
         
         await screen.findByText('Question');
 
