@@ -29,6 +29,7 @@ type telnetConn struct {
 
 	// 协商状态:记录我们已 WILL/DO 的选项,避免重复协商。
 	nawsAnnounced bool // 是否已发过 WILL NAWS
+	binary        bool // 是否进入 BINARY 传输(对端 DO Binary);为 true 时写路径跳过 NVT 字节规范化
 	closed        chan struct{}
 }
 
@@ -97,7 +98,11 @@ func (c *telnetConn) handleOption(cmd, opt byte) {
 			// 已 WILL 过,收到 DO 时无需重复 WILL;尺寸由 Resize 单独发送。
 			// 标记已声明,确保 Resize 生效。
 			c.nawsAnnounced = true
-		case optSGA, optEcho, optBinary:
+		case optBinary:
+			// 对端要求二进制传输:进入 BINARY 模式,写路径跳过 NVT 字节规范化。
+			c.binary = true
+			c.sendRaw([]byte{cmdIAC, cmdWILL, opt})
+		case optSGA, optEcho:
 			c.sendRaw([]byte{cmdIAC, cmdWILL, opt})
 		default:
 			c.sendRaw([]byte{cmdIAC, cmdWONT, opt}) // 拒绝不认识的
@@ -244,13 +249,36 @@ func (w *telnetWriter) Write(p []byte) (int, error) {
 	if w.c.isClosed() {
 		return 0, io.ErrClosedPipe
 	}
-	// 转义:数据中的每个 0xFF → 0xFF 0xFF
+	// 字节规范化:
+	//   - 0xFF 始终转义为 0xFF 0xFF(IAC 转义,BINARY 模式也适用)。
+	//   - NVT(非 BINARY)模式下额外适配传统 telnet / 网络设备:
+	//       * DEL(0x7f) → BS(0x08):前端 Backspace 发 DEL,但网络设备行编器
+	//         普遍以 Ctrl-H(0x08) 为 erase 字符(Issue #60)。
+	//       * 单独 CR(0x0d,后非 LF/NUL) → CR LF:RFC 854 要求 CR 不能单独出现,
+	//         前端 Enter 发 \r,规范化为 \r\n。
 	out := make([]byte, 0, len(p)+8)
-	for _, b := range p {
-		out = append(out, b)
+	binary := w.c.binary
+	for i := 0; i < len(p); i++ {
+		b := p[i]
 		if b == cmdIAC {
-			out = append(out, cmdIAC)
+			out = append(out, cmdIAC, cmdIAC)
+			continue
 		}
+		if !binary {
+			if b == 0x7f { // DEL → BS
+				out = append(out, 0x08)
+				continue
+			}
+			if b == 0x0d { // 单独 CR → CR LF
+				if i+1 < len(p) && (p[i+1] == 0x0a || p[i+1] == 0x00) {
+					out = append(out, 0x0d) // 已是规范 CR 序列(LF/NUL 紧随),保持原样
+				} else {
+					out = append(out, 0x0d, 0x0a) // 单独 CR(含末尾) → CR LF
+				}
+				continue
+			}
+		}
+		out = append(out, b)
 	}
 	if _, err := w.c.netConn.Write(out); err != nil {
 		return 0, err

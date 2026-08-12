@@ -200,8 +200,8 @@ func TestLoginHandler_NormalSequence(t *testing.T) {
 	mu.Lock()
 	got := written.String()
 	mu.Unlock()
-	if got != "alice\n" {
-		t.Errorf("after login prompt: expected 'alice\\n', got %q", got)
+	if got != "alice\r\n" {
+		t.Errorf("after login prompt: expected 'alice\\r\\n', got %q", got)
 	}
 
 	// 2. 看到 "Password:" → 应写密码
@@ -209,8 +209,8 @@ func TestLoginHandler_NormalSequence(t *testing.T) {
 	mu.Lock()
 	got = written.String()
 	mu.Unlock()
-	if got != "alice\nsecret\n" {
-		t.Errorf("after password prompt: expected 'alice\\nsecret\\n', got %q", got)
+	if got != "alice\r\nsecret\r\n" {
+		t.Errorf("after password prompt: expected 'alice\\r\\nsecret\\r\\n', got %q", got)
 	}
 
 	// 3. 登录后再出现 "password" 字样(如 cat password.txt)→ 不应再写
@@ -230,8 +230,8 @@ func TestLoginHandler_CaseInsensitive(t *testing.T) {
 
 	// 大写变体 LOGIN: 也应触发
 	h.Handle([]byte("LOGIN: "))
-	if got := written.String(); got != "bob\n" {
-		t.Errorf("case insensitive: expected 'bob\\n', got %q", got)
+	if got := written.String(); got != "bob\r\n" {
+		t.Errorf("case insensitive: expected 'bob\\r\\n', got %q", got)
 	}
 }
 
@@ -242,8 +242,8 @@ func TestLoginHandler_PasswordInBanner_NoMisfire(t *testing.T) {
 	// banner 里出现 "Password:" 但还没到 password 阶段(state 0)→ 不应触发
 	h.Handle([]byte("WARNING: do not share your Password: keep it safe\nlogin: "))
 	// 应只在看到 login: 时写用户名
-	if got := written.String(); got != "u\n" {
-		t.Errorf("banner misfire: expected only 'u\\n', got %q", got)
+	if got := written.String(); got != "u\r\n" {
+		t.Errorf("banner misfire: expected only 'u\\r\\n', got %q", got)
 	}
 	// 状态现在应是 stateWaitPassword
 	if h.state != stateWaitPassword {
@@ -257,8 +257,8 @@ func TestLoginHandler_NoUsername_SkipsToPassword(t *testing.T) {
 
 	// 无用户名,直接看到 Password: 应填密码
 	h.Handle([]byte("Password: "))
-	if got := written.String(); got != "onlypass\n" {
-		t.Errorf("no-username mode: expected 'onlypass\\n', got %q", got)
+	if got := written.String(); got != "onlypass\r\n" {
+		t.Errorf("no-username mode: expected 'onlypass\\r\\n', got %q", got)
 	}
 	if h.state != stateDone {
 		t.Errorf("expected stateDone, got %v", h.state)

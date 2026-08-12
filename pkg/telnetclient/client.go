@@ -268,7 +268,9 @@ func (c *Client) Run(ctx context.Context, cmd string) (string, error) {
 		// 默认 30s 兜底,避免无限等待
 		deadline = time.Now().Add(30 * time.Second)
 	}
-	c.conn.SetDeadline(deadline)
+	// conn 读 deadline 略晚于 ctx,确保 ctx(权威超时源)先超时:当 Read 因
+	// deadline 返回时 ctx.Err() 必非 nil,避免被误判为"连接关闭"分支(竞态)。
+	c.conn.SetDeadline(deadline.Add(200 * time.Millisecond))
 	defer c.conn.SetDeadline(time.Time{})
 
 	readBuf := make([]byte, 4096)

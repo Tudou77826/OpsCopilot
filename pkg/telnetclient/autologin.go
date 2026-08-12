@@ -106,7 +106,7 @@ func (h *LoginHandler) Handle(data []byte) {
 			return
 		}
 		if containsAny(s, loginKeywords) {
-			h.stdin.Write([]byte(h.username + "\n"))
+			h.stdin.Write([]byte(h.username + "\r\n"))
 			h.state = stateWaitPassword
 		}
 	case stateWaitPassword:
@@ -125,7 +125,7 @@ func (h *LoginHandler) Handle(data []byte) {
 
 // writePassword 向 stdin 写入密码 + 换行。调用前需持有 h.mu。
 func (h *LoginHandler) writePassword() {
-	h.stdin.Write([]byte(h.password + "\n"))
+	h.stdin.Write([]byte(h.password + "\r\n"))
 	h.state = stateDone
 	h.markDone()
 }
