@@ -80,6 +80,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
     const [searchCountText, setSearchCountText] = useState('');
     const [searchErrorText, setSearchErrorText] = useState('');
     const [searchComposing, setSearchComposing] = useState(false);
+    const [searchPanelResetKey, setSearchPanelResetKey] = useState(0);
     const [zoomIndicatorSize, setZoomIndicatorSize] = useState<number | null>(null);
     const searchControllerRef = useRef<SearchController | null>(null);
     const ruleHighlightControllerRef = useRef<RuleHighlightController | null>(null);
@@ -797,6 +798,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                         }
                         window.setTimeout(() => searchInputRef.current?.focus(), 0);
                     } else {
+                        setSearchPanelResetKey(k => k + 1);
                         window.setTimeout(() => {
                             searchInputRef.current?.focus();
                             searchInputRef.current?.select();
@@ -1059,6 +1061,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
                 onCompositionChange={setSearchComposing}
                 matchText={searchCountText}
                 errorText={searchErrorText}
+                resetKey={searchPanelResetKey}
                 ref={searchInputRef}
             />
             <CompletionOverlay

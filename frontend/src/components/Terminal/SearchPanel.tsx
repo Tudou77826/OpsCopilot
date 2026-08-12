@@ -1,5 +1,7 @@
 import React, { useEffect, forwardRef, useState, useCallback, useRef } from 'react';
 
+const INITIAL_POSITION = { left: 12, bottom: 12 };
+
 interface SearchPanelProps {
     visible: boolean;
     query: string;
@@ -16,6 +18,7 @@ interface SearchPanelProps {
     onCompositionChange?: (composing: boolean) => void;
     matchText?: string;
     errorText?: string;
+    resetKey?: number;
 }
 
 const SearchPanel = forwardRef<HTMLInputElement, SearchPanelProps>(function SearchPanel({
@@ -33,13 +36,19 @@ const SearchPanel = forwardRef<HTMLInputElement, SearchPanelProps>(function Sear
     onWholeWordChange,
     onCompositionChange,
     matchText,
-    errorText
+    errorText,
+    resetKey
 }: SearchPanelProps, inputRef) {
 
     // 拖动相关状态
-    const [position, setPosition] = useState({ left: 12, bottom: 12 });
+    const [position, setPosition] = useState(INITIAL_POSITION);
     const [isDragging, setIsDragging] = useState(false);
     const dragStartRef = useRef({ x: 0, y: 0, left: 0, bottom: 0 });
+
+    // 重复触发（如再次按下 Ctrl+F）时，将浮层重置回左下角初始位置
+    useEffect(() => {
+        setPosition(INITIAL_POSITION);
+    }, [resetKey]);
 
     useEffect(() => {
         if (!visible) return;
