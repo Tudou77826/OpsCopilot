@@ -1527,6 +1527,10 @@ func (a *App) SaveSettings(cfg config.AppConfig) string {
 		return fmt.Sprintf("Failed to save settings: %v", err)
 	}
 
+	// 高亮规则独立存储于 highlight_rules.json，主配置 Save() 不覆盖它，
+	// 需要单独落盘，否则开关规则后仅写入内存、重启即丢失。
+	a.configMgr.SetHighlightRules(cfg.HighlightRules)
+
 	// Update AI Service Provider
 	llmConfig := cfg.LLM
 	fastModel := llmConfig.FastModel
