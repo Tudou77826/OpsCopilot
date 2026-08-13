@@ -215,6 +215,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const [config, setConfig] = useState<AppConfig | null>(null);
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
+    // 最近一次已落盘配置的 JSON 快照，用于判断是否存在未保存改动（加载/保存成功后更新）
+    const [savedConfigJson, setSavedConfigJson] = useState<string | null>(null);
+    // 关闭页面时存在未保存改动 → 弹确认框
+    const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
     const [activeTab, setActiveTab] = useState<TabId>('llm');
     const [importDir, setImportDir] = useState('');
     const [importLoading, setImportLoading] = useState(false);
@@ -279,6 +283,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             loadSettings();
             loadPatchSyncStatus();
             setMsg('');
+            setShowUnsavedConfirm(false);
             setImportDir('');
             setImportMsg('');
             setSearchQuery('');
@@ -367,7 +372,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     })
                     .filter(it => it.failed);
                 setHighlightIssues(ruleIssues);
-                setConfig({
+                const next: AppConfig = {
                     ...cfg,
                     llm: {
                         ...llmCfg,
@@ -380,7 +385,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     highlight_rules,
                     patch_store: normalizePatchStore(cfg.patch_store),
                     command_query_shortcut: cfg.command_query_shortcut || 'Ctrl+K',
-                });
+                };
+                setConfig(next);
+                setSavedConfigJson(JSON.stringify(next));
             }
         } catch (e) {
             console.error(e);
@@ -416,8 +423,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         return normalized || 'Ctrl+K';
     };
 
-    const handleSave = async () => {
-        if (!config) return;
+    // 是否有未保存改动：对比当前工作副本与最近一次已落盘快照。
+    // 主题不经过 config（走 onThemeChange 即时落盘），因此不会误报为脏。
+    const isDirty = useMemo(() => {
+        if (!config || savedConfigJson === null) return false;
+        return JSON.stringify(config) !== savedConfigJson;
+    }, [config, savedConfigJson]);
+
+    // 统一落盘逻辑，保存成功返回 true。closeAfter 为 true 时保存成功后关闭页面，
+    // 用于「保存并关闭」；普通「保存更改」只提示成功、不关闭。
+    const persistConfig = async (closeAfter: boolean): Promise<boolean> => {
+        if (!config) return false;
         setLoading(true);
         try {
             const nextConfig = {
@@ -431,31 +447,44 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             const err = await window.go.main.App.SaveSettings(nextConfig);
             if (err) {
                 setMsg('错误: ' + err);
-            } else {
-                setMsg('设置已保存！');
-                await loadPatchSyncStatus();
-                if (onCompletionDelayChange && nextConfig.completion_delay !== undefined) {
-                    onCompletionDelayChange(nextConfig.completion_delay);
-                }
-                if (onHighlightRulesChange) {
-                    onHighlightRulesChange(nextConfig.highlight_rules || []);
-                }
-                if (onTerminalConfigChange) {
-                    onTerminalConfigChange(nextConfig.terminal);
-                }
-                setTimeout(() => {
-                    setMsg('');
-                    onClose();
-                }, 1000);
+                return false;
             }
+            // 落盘成功后更新快照，避免 isDirty 仍判定为「有未保存改动」
+            setSavedConfigJson(JSON.stringify(nextConfig));
+            setMsg('设置已保存！');
+            await loadPatchSyncStatus();
+            if (onCompletionDelayChange && nextConfig.completion_delay !== undefined) {
+                onCompletionDelayChange(nextConfig.completion_delay);
+            }
+            if (onHighlightRulesChange) {
+                onHighlightRulesChange(nextConfig.highlight_rules || []);
+            }
+            if (onTerminalConfigChange) {
+                onTerminalConfigChange(nextConfig.terminal);
+            }
+            if (closeAfter) {
+                onClose();
+            } else {
+                setTimeout(() => setMsg(''), 2000);
+            }
+            return true;
         } catch (e: any) {
             setMsg('错误: ' + e.toString());
+            return false;
         } finally {
             setLoading(false);
         }
     };
 
+    const handleSave = () => {
+        void persistConfig(false);
+    };
+
     const handleClose = () => {
+        if (isDirty) {
+            setShowUnsavedConfirm(true);
+            return;
+        }
         onClose();
     };
 
@@ -1423,6 +1452,25 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                 </div>
             </div>
+
+            {/* 关闭确认：存在未保存改动时提醒用户保存/放弃/继续编辑 */}
+            {showUnsavedConfirm && (
+                <div style={styles.unsavedOverlay}>
+                    <div style={styles.unsavedModal}>
+                        <h3 style={styles.unsavedTitle}>有未保存的更改</h3>
+                        <p style={styles.unsavedMessage}>
+                            当前设置页还有改动尚未保存，直接关闭将丢失这些改动。
+                        </p>
+                        <div style={styles.unsavedActions}>
+                            <button style={styles.cancelBtn} onClick={() => setShowUnsavedConfirm(false)}>继续编辑</button>
+                            <button style={styles.discardBtn} onClick={() => { setShowUnsavedConfirm(false); onClose(); }}>放弃更改</button>
+                            <button style={styles.saveBtn} onClick={() => { setShowUnsavedConfirm(false); void persistConfig(true); }} disabled={loading}>
+                                保存并关闭
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -1894,6 +1942,53 @@ const styles = {
         ':hover': {
             backgroundColor: colors.bgHover,
         }
+    },
+    // 关闭确认弹层：覆盖在设置页之上，zIndex 略高于设置页
+    unsavedOverlay: {
+        position: 'fixed' as const,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: colors.overlay,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 2100,
+    },
+    unsavedModal: {
+        backgroundColor: colors.bgSecondary,
+        borderRadius: radius.lg,
+        padding: '24px',
+        width: '420px',
+        maxWidth: '90vw',
+        boxShadow: '0 4px 12px var(--shadow)',
+    },
+    unsavedTitle: {
+        color: colors.textPrimary,
+        fontSize: font.base,
+        fontWeight: 600,
+        margin: '0 0 12px 0',
+    },
+    unsavedMessage: {
+        color: colors.textSecondary,
+        fontSize: font.base,
+        margin: '0 0 20px 0',
+    },
+    unsavedActions: {
+        display: 'flex',
+        gap: '10px',
+        justifyContent: 'flex-end',
+    },
+    discardBtn: {
+        padding: '8px 16px',
+        borderRadius: radius.sm,
+        border: '1px solid var(--danger-border)',
+        backgroundColor: 'var(--danger-bg-subtle)',
+        color: colors.danger,
+        cursor: 'pointer',
+        fontWeight: 500,
+        fontSize: font.base,
     },
 };
 
