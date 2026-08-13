@@ -69,16 +69,21 @@ logs/opscopilot.log
 # Development artifacts
 .trae/
 .doc/
+.zcode/
 
 # Runtime data (generated at runtime, not source-controlled)
 patchstore/
 scripts/
+output/
+tmp/
+nual
 file_access.json
 docs/.catalog.json
 
 # Backup files
 *.backup
 *.bak
+*.bak*
 
 # Thread dumps
 thread_dump*.txt
@@ -92,3 +97,4 @@ mcp-server.exe~
 # Local-only docs (keep on disk, not source-controlled)
 AGENTS.md
 .sdd/
+OpsCopilot_效率改进申报材料.md
