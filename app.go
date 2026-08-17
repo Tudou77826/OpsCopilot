@@ -630,6 +630,7 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 	// 构造协议无关配置(remote.ConnectConfig 是 sshclient.ConnectConfig 的别名,
 	// JSON tag 一致,持久化向后兼容)。Protocol 字段由前端传入,空值走 SSH。
 	clientConfig := &remote.ConnectConfig{
+		Name:         config.Name,
 		Protocol:     config.Protocol,
 		Host:         config.Host,
 		Port:         config.Port,
@@ -642,6 +643,7 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 	// 递归构建 Bastion 配置
 	if config.Bastion != nil {
 		clientConfig.Bastion = &remote.ConnectConfig{
+			Name:     config.Bastion.Name,
 			Host:     config.Bastion.Host,
 			Port:     config.Bastion.Port,
 			User:     config.Bastion.User,

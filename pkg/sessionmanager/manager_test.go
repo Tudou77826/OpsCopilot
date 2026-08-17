@@ -65,7 +65,7 @@ func TestUpsertSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Upsert move failed: %v", err)
 	}
-	
+
 	// Should have 1 folder in root, and session inside it
 	if len(m.Sessions) != 1 {
 		t.Fatalf("Expected 1 node (folder) in root, got %d", len(m.Sessions))
@@ -93,7 +93,7 @@ func TestDeleteSession(t *testing.T) {
 	m.Upsert(config, "")
 
 	id := m.Sessions[0].ID
-	
+
 	err := m.DeleteSession(id)
 	if err != nil {
 		t.Fatalf("Delete failed: %v", err)
@@ -115,7 +115,7 @@ func TestRenameSession(t *testing.T) {
 	m.Upsert(config, "")
 
 	id := m.Sessions[0].ID
-	
+
 	err := m.RenameSession(id, "NewName")
 	if err != nil {
 		t.Fatalf("Rename failed: %v", err)
@@ -123,6 +123,68 @@ func TestRenameSession(t *testing.T) {
 
 	if m.Sessions[0].Name != "NewName" {
 		t.Errorf("Expected name 'NewName', got %s", m.Sessions[0].Name)
+	}
+	if m.Sessions[0].Config.Name != "NewName" {
+		t.Errorf("Expected config name 'NewName', got %s", m.Sessions[0].Config.Name)
+	}
+}
+
+func TestUpsertPreservesRenamedSessionName(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
+	m := NewManagerWithPath(tmpFile)
+
+	config := sshclient.ConnectConfig{
+		Host: "10.0.0.1",
+		Port: 22,
+		User: "root",
+	}
+	if err := m.Upsert(config, ""); err != nil {
+		t.Fatalf("initial Upsert failed: %v", err)
+	}
+
+	id := m.Sessions[0].ID
+	if err := m.RenameSession(id, "web-primary"); err != nil {
+		t.Fatalf("Rename failed: %v", err)
+	}
+
+	// Simulate reconnecting with an older saved config whose Name was empty.
+	if err := m.Upsert(config, ""); err != nil {
+		t.Fatalf("reconnect Upsert failed: %v", err)
+	}
+
+	if len(m.Sessions) != 1 {
+		t.Fatalf("Expected one session, got %d", len(m.Sessions))
+	}
+	if m.Sessions[0].ID != id {
+		t.Errorf("Expected session ID %q to be reused, got %q", id, m.Sessions[0].ID)
+	}
+	if m.Sessions[0].Name != "web-primary" {
+		t.Errorf("Expected renamed display name to be preserved, got %q", m.Sessions[0].Name)
+	}
+	if m.Sessions[0].Config.Name != "web-primary" {
+		t.Errorf("Expected config name to stay in sync, got %q", m.Sessions[0].Config.Name)
+	}
+}
+
+func TestUpsertUsesConfiguredDisplayName(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
+	m := NewManagerWithPath(tmpFile)
+
+	config := sshclient.ConnectConfig{
+		Name: "database-primary",
+		Host: "10.0.0.2",
+		Port: 22,
+		User: "root",
+	}
+	if err := m.Upsert(config, ""); err != nil {
+		t.Fatalf("Upsert failed: %v", err)
+	}
+
+	if m.Sessions[0].Name != "database-primary" {
+		t.Errorf("Expected configured display name, got %q", m.Sessions[0].Name)
+	}
+	if m.Sessions[0].Config.Name != "database-primary" {
+		t.Errorf("Expected config name to be persisted, got %q", m.Sessions[0].Config.Name)
 	}
 }
 
@@ -154,25 +216,25 @@ func TestPersistence(t *testing.T) {
 }
 
 func TestRecursiveDelete(t *testing.T) {
-    tmpFile := filepath.Join(os.TempDir(), "test_sessions_recursive_delete.json")
+	tmpFile := filepath.Join(os.TempDir(), "test_sessions_recursive_delete.json")
 	defer os.Remove(tmpFile)
 
 	m := NewManager()
 	m.filePath = tmpFile
 
-    // Create Group -> Session
+	// Create Group -> Session
 	m.Upsert(sshclient.ConnectConfig{Host: "1.1.1.1"}, "GroupA")
-    
-    // Find Group ID
-    groupID := m.Sessions[0].ID
 
-    // Delete Group
-    err := m.DeleteSession(groupID)
-    if err != nil {
-        t.Fatalf("Delete group failed: %v", err)
-    }
+	// Find Group ID
+	groupID := m.Sessions[0].ID
 
-    if len(m.Sessions) != 0 {
-        t.Errorf("Expected root empty after group delete, got %d", len(m.Sessions))
-    }
+	// Delete Group
+	err := m.DeleteSession(groupID)
+	if err != nil {
+		t.Fatalf("Delete group failed: %v", err)
+	}
+
+	if len(m.Sessions) != 0 {
+		t.Errorf("Expected root empty after group delete, got %d", len(m.Sessions))
+	}
 }

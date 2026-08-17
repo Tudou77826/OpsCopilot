@@ -19,10 +19,10 @@ const (
 )
 
 type Session struct {
-	ID       string                   `json:"id"`
-	Name     string                   `json:"name"` // Display name (IP)
-	Type     SessionType              `json:"type"`
-	Children []*Session               `json:"children,omitempty"` // For folders
+	ID       string                `json:"id"`
+	Name     string                `json:"name"` // Display name; defaults to Host
+	Type     SessionType           `json:"type"`
+	Children []*Session            `json:"children,omitempty"` // For folders
 	Config   *remote.ConnectConfig `json:"config,omitempty"`   // For sessions
 }
 
@@ -112,11 +112,7 @@ func (m *Manager) RenameSession(id, newName string) error {
 			if node.ID == id {
 				node.Name = newName
 				if node.Config != nil {
-					// We only change the display name of the node,
-					// but maybe we should also sync it to config?
-					// The Requirement says "Name uses IP".
-					// If user renames, they might want a custom alias.
-					// So we allow renaming the Node.Name.
+					node.Config.Name = newName
 				}
 				return true
 			}
@@ -137,7 +133,7 @@ func (m *Manager) RenameSession(id, newName string) error {
 
 // Upsert adds or updates a session.
 // If groupName is provided, it puts it in that folder.
-// Naming rule: Use IP (Host) as Name.
+// Naming rule: Use the configured display name, falling back to Host.
 // sameEndpoint 判断两个连接配置是否指向同一远程端点。
 // key 为 (Host, Port, Protocol) 三元组。Protocol 空值归一化为 SSH,
 // 保证老数据(无 Protocol 字段)与新数据比较一致。
@@ -159,7 +155,7 @@ func sameEndpoint(a, b *remote.ConnectConfig) bool {
 
 // Upsert adds or updates a session.
 // If groupName is provided, it puts it in that folder.
-// Naming rule: Use IP (Host) as Name.
+// Naming rule: Use the configured display name, falling back to Host.
 //
 // 去重 key 为 (Host, Port, Protocol) 三元组:同一 host 不同协议/端口可共存,
 // 例如 192.168.1.1:22(SSH) 与 192.168.1.1:23(Telnet) 不冲突。
@@ -173,21 +169,16 @@ func (m *Manager) Upsert(config remote.ConnectConfig, groupName string) error {
 		config.Protocol = remote.ProtocolSSH
 	}
 
-	targetName := config.Host
-	if targetName == "" {
-		targetName = config.Name // Fallback
-	}
-
 	// Step 1: Remove existing session with same (Host, Port, Protocol) from anywhere in the tree.
 	// This handles "Update" (by removing old and adding new) and "Move" (if group changed).
-	var removedID string
+	var removed *Session
 	var removeByHost func(nodes []*Session) []*Session
 	removeByHost = func(nodes []*Session) []*Session {
 		var result []*Session
 		for _, node := range nodes {
 			if node.Type == TypeSession && node.Config != nil && sameEndpoint(node.Config, &config) {
-				removedID = node.ID // Reuse ID
-				continue            // Remove
+				removed = node
+				continue // Remove
 			}
 			if node.Type == TypeFolder {
 				node.Children = removeByHost(node.Children)
@@ -198,12 +189,32 @@ func (m *Manager) Upsert(config remote.ConnectConfig, groupName string) error {
 	}
 	m.Sessions = removeByHost(m.Sessions)
 
+	// Connections opened from the saved-session tree carry the stored config.
+	// Preserve the node's display name when that config still has the old/empty name.
+	targetName := config.Name
+	if removed != nil && removed.Name != "" {
+		oldConfigName := ""
+		if removed.Config != nil {
+			oldConfigName = removed.Config.Name
+		}
+		if targetName == "" || targetName == oldConfigName {
+			targetName = removed.Name
+		}
+	}
+	if targetName == "" {
+		targetName = config.Host
+	}
+	config.Name = targetName
+
 	// Step 2: Create new node
 	newNode := &Session{
-		ID:     removedID,
+		ID:     "",
 		Name:   targetName,
 		Type:   TypeSession,
 		Config: &config,
+	}
+	if removed != nil {
+		newNode.ID = removed.ID
 	}
 	if newNode.ID == "" {
 		newNode.ID = uuid.New().String()
