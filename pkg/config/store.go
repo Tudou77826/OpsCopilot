@@ -24,6 +24,7 @@ type AppConfig struct {
 	Appearance           AppearanceConfig   `json:"appearance"`
 	HighlightRules       []HighlightRule    `json:"highlight_rules"`
 	PatchStore           PatchStoreConfig   `json:"patch_store"`
+	SessionShare         SessionShareConfig `json:"session_share"`
 }
 
 const DefaultCLIExecTimeoutSec = 120
@@ -69,6 +70,16 @@ type PatchStoreConfig struct {
 	Type      string `json:"type"`       // "git"（未来: "http", "sftp"）
 	RemoteURL string `json:"remote_url"` // Git 仓库地址
 	Branch    string `json:"branch"`     // 分支名，默认 "main"
+}
+
+// SessionShareConfig 会话连接信息共享配置。
+// 密钥用于加密仓库中的密码（AES-256-GCM + scrypt），
+// 团队成员配置相同仓库地址/分支/密钥即可互看共享会话。
+type SessionShareConfig struct {
+	Enabled   bool   `json:"enabled"`
+	RemoteURL string `json:"remote_url"` // Git 仓库地址
+	Branch    string `json:"branch"`     // 分支名，默认 "main"
+	SecretKey string `json:"secret_key"` // 团队共享加密密钥
 }
 
 // ExperimentalConfig 实验性功能配置（保留结构以便未来扩展）
@@ -404,6 +415,7 @@ func (m *Manager) Save() error {
 		Terminal             TerminalConfig     `json:"terminal"`
 		Appearance           AppearanceConfig   `json:"appearance"`
 		PatchStore           PatchStoreConfig   `json:"patch_store"`
+		SessionShare         SessionShareConfig `json:"session_share"`
 	}
 
 	cfg := ConfigForSave{
@@ -418,6 +430,7 @@ func (m *Manager) Save() error {
 		Terminal:             m.Config.Terminal,
 		Appearance:           m.Config.Appearance,
 		PatchStore:           m.Config.PatchStore,
+		SessionShare:         m.Config.SessionShare,
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")

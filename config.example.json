@@ -23,5 +23,11 @@
     "scrollback": 5000,
     "search_enabled": true,
     "highlight_enabled": true
+  },
+  "session_share": {
+    "enabled": false,
+    "remote_url": "git@github.com:team/opscopilot-sessions.git",
+    "branch": "main",
+    "secret_key": "team-shared-secret"
   }
 }

@@ -26,6 +26,8 @@ export function CloseSession(arg1:string):Promise<void>;
 
 export function Connect(arg1:main.ConnectConfig):Promise<main.ConnectResult>;
 
+export function ConnectSharedSession(arg1:string):Promise<main.SharedConnectResult>;
+
 export function ConnectWithID(arg1:main.ConnectConfig,arg2:string):Promise<main.ConnectResult>;
 
 export function CreateSavedFolder(arg1:string):Promise<string>;
@@ -102,9 +104,13 @@ export function GetScriptList():Promise<Array<script.Script>>;
 
 export function GetScriptRecordingStatus():Promise<script.ScriptStatus>;
 
+export function GetSessionShareStatus():Promise<string>;
+
 export function GetSessionTimeline():Promise<recorder.RecordingSession>;
 
 export function GetSettings():Promise<config.AppConfig>;
+
+export function GetSharedSessions():Promise<string>;
 
 export function GetVersion():Promise<string>;
 
@@ -138,6 +144,8 @@ export function RatePatch(arg1:string,arg2:number,arg3:string):Promise<string>;
 
 export function ReconnectSession(arg1:string):Promise<main.ConnectResult>;
 
+export function RemoveSharedSession(arg1:string):Promise<string>;
+
 export function RenameSavedSession(arg1:string,arg2:string):Promise<string>;
 
 export function ReplayScript(arg1:string,arg2:string):Promise<void>;
@@ -150,6 +158,8 @@ export function ResizeTerminal(arg1:string,arg2:number,arg3:number):Promise<void
 
 export function RetryPatchSync():Promise<string>;
 
+export function RetrySessionShareSync():Promise<string>;
+
 export function SaveCommandWhitelist(arg1:security.WhitelistConfig):Promise<void>;
 
 export function SaveFileAccessConfig(arg1:security.FileAccessConfig):Promise<void>;
@@ -159,6 +169,8 @@ export function SaveHighlightRules(arg1:Array<config.HighlightRule>):Promise<str
 export function SaveQuickCommands(arg1:Array<config.QuickCommand>):Promise<string>;
 
 export function SaveSettings(arg1:config.AppConfig):Promise<string>;
+
+export function SaveSharedSessionToLocal(arg1:string):Promise<string>;
 
 export function SaveTerminalConfig(arg1:config.TerminalConfig):Promise<string>;
 

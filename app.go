@@ -81,6 +81,8 @@ type App struct {
 	patchSyncStatusMu sync.RWMutex
 	patchSyncStatus   PatchSyncStatus
 	patchSyncing      atomic.Bool
+	sessionShareMu    sync.RWMutex         // protects sessionShare
+	sessionShare      *sessionShareRuntime // 会话共享运行时（nil = 未启用，逻辑见 app_sessionshare.go）
 }
 
 // NewApp creates a new App application struct
@@ -499,6 +501,9 @@ func (a *App) startup(ctx context.Context) {
 	// 初始化反馈存储（复用同一 Git 仓库）
 	a.initFeedbackStore()
 
+	// 初始化会话共享（如果已配置，见 app_sessionshare.go）
+	a.initSessionShareStore()
+
 	// 清理自更新残留文件，并显示更新结果
 	if execPath, err := os.Executable(); err == nil {
 		appDir := filepath.Dir(execPath)
@@ -722,6 +727,9 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 	if err := a.savedSessionMgr.Upsert(*clientConfig, config.Group); err != nil {
 		fmt.Fprintf(os.Stderr, "[WARN] Failed to auto-save session: %v\n", err)
 	}
+
+	// 会话共享：记录本次成功登录并异步推送（未启用时 nil 守卫直接返回）
+	a.recordSharedLogin(config)
 
 	// Read loop
 	go func() {
@@ -1520,6 +1528,12 @@ func (a *App) SaveSettings(cfg config.AppConfig) string {
 	if cfg.PatchStore.Branch == "" {
 		cfg.PatchStore.Branch = "main"
 	}
+	cfg.SessionShare.RemoteURL = strings.TrimSpace(cfg.SessionShare.RemoteURL)
+	cfg.SessionShare.Branch = strings.TrimSpace(cfg.SessionShare.Branch)
+	if cfg.SessionShare.Branch == "" {
+		cfg.SessionShare.Branch = "main"
+	}
+	cfg.SessionShare.SecretKey = strings.TrimSpace(cfg.SessionShare.SecretKey)
 
 	// Update config in memory
 	*a.configMgr.Config = cfg
@@ -1561,6 +1575,9 @@ func (a *App) SaveSettings(cfg config.AppConfig) string {
 	// 让补丁同步配置在保存后立即生效
 	a.initPatchStore()
 	a.initFeedbackStore()
+
+	// 让会话共享配置在保存后立即生效
+	a.initSessionShareStore()
 
 	return ""
 }

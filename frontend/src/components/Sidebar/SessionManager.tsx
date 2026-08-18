@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { TbFolderOpen, TbFolder, TbTerminal2 } from 'react-icons/tb';
 import { ConnectionConfig, normalizeProtocol, PROTOCOL_LABEL } from '../../types';
 import EditSavedSessionModal from './EditSavedSessionModal';
+import SharedSessionPanel from './SharedSessionPanel';
 import { confirmDialog } from '../ConfirmDialog/ConfirmDialog';
 
 // Wails bindings
@@ -412,6 +413,10 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect }) => {
                     <div style={styles.empty}>无会话</div>
                 )}
             </div>
+
+            {/* 团队共享会话（下半 1/4 区域；功能未启用时组件自身返回 null，不占空间）。
+                与上方会话树共用搜索词和统一连接流程 */}
+            <SharedSessionPanel onConnect={onConnect} searchTerm={searchTerm} />
 
             {/* Context Menu */}
             {contextMenu && (

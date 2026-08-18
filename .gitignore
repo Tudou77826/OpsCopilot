@@ -73,6 +73,8 @@ logs/opscopilot.log
 
 # Runtime data (generated at runtime, not source-controlled)
 patchstore/
+sessionstore/
+sessionstore-local.json
 scripts/
 output/
 tmp/

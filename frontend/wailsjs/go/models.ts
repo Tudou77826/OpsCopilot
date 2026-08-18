@@ -1,5 +1,23 @@
 export namespace config {
 	
+	export class SessionShareConfig {
+	    enabled: boolean;
+	    remote_url: string;
+	    branch: string;
+	    secret_key: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SessionShareConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.remote_url = source["remote_url"];
+	        this.branch = source["branch"];
+	        this.secret_key = source["secret_key"];
+	    }
+	}
 	export class PatchStoreConfig {
 	    enabled: boolean;
 	    type: string;
@@ -225,6 +243,7 @@ export namespace config {
 	    appearance: AppearanceConfig;
 	    highlight_rules: HighlightRule[];
 	    patch_store: PatchStoreConfig;
+	    session_share: SessionShareConfig;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppConfig(source);
@@ -245,6 +264,7 @@ export namespace config {
 	        this.appearance = this.convertValues(source["appearance"], AppearanceConfig);
 	        this.highlight_rules = this.convertValues(source["highlight_rules"], HighlightRule);
 	        this.patch_store = this.convertValues(source["patch_store"], PatchStoreConfig);
+	        this.session_share = this.convertValues(source["session_share"], SessionShareConfig);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -265,6 +285,7 @@ export namespace config {
 		    return a;
 		}
 	}
+	
 	
 	
 	
@@ -368,6 +389,40 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.modules = this.convertValues(source["modules"], ModuleInfo);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SharedConnectResult {
+	    success: boolean;
+	    message?: string;
+	    config?: ConnectConfig;
+	
+	    static createFrom(source: any = {}) {
+	        return new SharedConnectResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.message = source["message"];
+	        this.config = this.convertValues(source["config"], ConnectConfig);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

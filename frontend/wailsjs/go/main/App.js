@@ -38,6 +38,10 @@ export function Connect(arg1) {
   return window['go']['main']['App']['Connect'](arg1);
 }
 
+export function ConnectSharedSession(arg1) {
+  return window['go']['main']['App']['ConnectSharedSession'](arg1);
+}
+
 export function ConnectWithID(arg1, arg2) {
   return window['go']['main']['App']['ConnectWithID'](arg1, arg2);
 }
@@ -190,12 +194,20 @@ export function GetScriptRecordingStatus() {
   return window['go']['main']['App']['GetScriptRecordingStatus']();
 }
 
+export function GetSessionShareStatus() {
+  return window['go']['main']['App']['GetSessionShareStatus']();
+}
+
 export function GetSessionTimeline() {
   return window['go']['main']['App']['GetSessionTimeline']();
 }
 
 export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
+}
+
+export function GetSharedSessions() {
+  return window['go']['main']['App']['GetSharedSessions']();
 }
 
 export function GetVersion() {
@@ -262,6 +274,10 @@ export function ReconnectSession(arg1) {
   return window['go']['main']['App']['ReconnectSession'](arg1);
 }
 
+export function RemoveSharedSession(arg1) {
+  return window['go']['main']['App']['RemoveSharedSession'](arg1);
+}
+
 export function RenameSavedSession(arg1, arg2) {
   return window['go']['main']['App']['RenameSavedSession'](arg1, arg2);
 }
@@ -286,6 +302,10 @@ export function RetryPatchSync() {
   return window['go']['main']['App']['RetryPatchSync']();
 }
 
+export function RetrySessionShareSync() {
+  return window['go']['main']['App']['RetrySessionShareSync']();
+}
+
 export function SaveCommandWhitelist(arg1) {
   return window['go']['main']['App']['SaveCommandWhitelist'](arg1);
 }
@@ -304,6 +324,10 @@ export function SaveQuickCommands(arg1) {
 
 export function SaveSettings(arg1) {
   return window['go']['main']['App']['SaveSettings'](arg1);
+}
+
+export function SaveSharedSessionToLocal(arg1) {
+  return window['go']['main']['App']['SaveSharedSessionToLocal'](arg1);
 }
 
 export function SaveTerminalConfig(arg1) {

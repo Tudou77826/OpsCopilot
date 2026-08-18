@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { TbRobot, TbPalette, TbKeyboard, TbLayoutGrid, TbBooks, TbShieldCheck, TbLock, TbSettings, TbInfoCircle, TbSearch, TbPlugConnected, TbMinus, TbPlus, TbRefresh, TbCheck, TbSun, TbMoon } from 'react-icons/tb';
+import { TbRobot, TbPalette, TbKeyboard, TbLayoutGrid, TbBooks, TbShieldCheck, TbLock, TbSettings, TbInfoCircle, TbSearch, TbPlugConnected, TbMinus, TbPlus, TbRefresh, TbCheck, TbSun, TbMoon, TbUsers } from 'react-icons/tb';
 import KeysMap from './KeysMap';
 import HighlightRulesModal from './HighlightRulesModal';
 import CommandWhitelistPanel from './CommandWhitelist/CommandWhitelistPanel';
@@ -47,6 +47,12 @@ interface AppConfig {
         remote_url: string;
         branch: string;
     };
+    session_share?: {
+        enabled: boolean;
+        remote_url: string;
+        branch: string;
+        secret_key: string;
+    };
     completion_delay: number;
     command_query_shortcut: string;
 }
@@ -76,7 +82,23 @@ interface PatchSyncStatus {
     branch?: string;
 }
 
-type TabId = 'llm' | 'appearance' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'knowledge' | 'aiagent' | 'whitelist' | 'fileaccess' | 'experimental' | 'about';
+// 会话共享同步状态（结构对齐后端 SessionShareStatus）
+interface SessionShareStatus {
+    enabled: boolean;
+    configured: boolean;
+    hasSecretKey: boolean;
+    running: boolean;
+    pendingCount: number;
+    entryCount: number;
+    owner?: string;
+    lastSyncAt?: string;
+    lastSyncSuccess: boolean;
+    lastSyncMessage?: string;
+    remoteURL?: string;
+    branch?: string;
+}
+
+type TabId = 'llm' | 'appearance' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'knowledge' | 'sessionshare' | 'aiagent' | 'whitelist' | 'fileaccess' | 'experimental' | 'about';
 
 // Skill 安装条目：每个 AI Agent 目录一行，独立保存检测状态/版本/消息。
 // 支撑多个 coding agent（Claude Code / Cursor / Codex 等）并用的场景（issue #54）。
@@ -191,6 +213,32 @@ const normalizePatchStore = (patchStore?: AppConfig['patch_store']) => ({
     branch: ((patchStore?.branch || defaultPatchStore.branch).trim() || defaultPatchStore.branch)
 });
 
+const defaultSessionShare = {
+    enabled: false,
+    remote_url: '',
+    branch: 'main',
+    secret_key: ''
+};
+
+const normalizeSessionShare = (sessionShare?: AppConfig['session_share']) => ({
+    ...defaultSessionShare,
+    ...sessionShare,
+    remote_url: (sessionShare?.remote_url || '').trim(),
+    branch: ((sessionShare?.branch || defaultSessionShare.branch).trim() || defaultSessionShare.branch),
+    secret_key: (sessionShare?.secret_key || '').trim()
+});
+
+const defaultSessionShareStatus: SessionShareStatus = {
+    enabled: false,
+    configured: false,
+    hasSecretKey: false,
+    running: false,
+    pendingCount: 0,
+    entryCount: 0,
+    lastSyncSuccess: false,
+    lastSyncMessage: ''
+};
+
 const defaultPatchSyncStatus: PatchSyncStatus = {
     enabled: false,
     configured: false,
@@ -233,6 +281,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const [searchQuery, setSearchQuery] = useState('');
     const [patchSyncStatus, setPatchSyncStatus] = useState<PatchSyncStatus>(defaultPatchSyncStatus);
     const [patchSyncLoading, setPatchSyncLoading] = useState(false);
+    const [sessionShareStatus, setSessionShareStatus] = useState<SessionShareStatus>(defaultSessionShareStatus);
+    const [sessionShareLoading, setSessionShareLoading] = useState(false);
     const searchInputRef = useRef<HTMLInputElement>(null);
 
     // Navigation items structure
@@ -243,6 +293,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         { id: 'shortcuts', label: '快捷键', icon: TbKeyboard({}), category: '交互' },
         { id: 'broadcast', label: '多窗口', icon: TbLayoutGrid({}), category: '交互' },
         { id: 'knowledge', label: '知识共享', icon: TbBooks({}), category: '知识' },
+        { id: 'sessionshare', label: '会话共享', icon: TbUsers({}), category: '知识', keywords: ['连接共享', '共享会话', 'session share'] },
         { id: 'aiagent', label: 'AI 接入', icon: TbPlugConnected({}), category: 'AI 接入' },
         { id: 'whitelist', label: '命令白名单', icon: TbShieldCheck({}), category: 'AI 接入' },
         { id: 'fileaccess', label: '文件访问控制', icon: TbLock({}), category: 'AI 接入' },
@@ -282,6 +333,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         if (isOpen) {
             loadSettings();
             loadPatchSyncStatus();
+            loadSessionShareStatus();
             setMsg('');
             setShowUnsavedConfirm(false);
             setImportDir('');
@@ -384,6 +436,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     terminal,
                     highlight_rules,
                     patch_store: normalizePatchStore(cfg.patch_store),
+                    session_share: normalizeSessionShare(cfg.session_share),
                     command_query_shortcut: cfg.command_query_shortcut || 'Ctrl+K',
                 };
                 setConfig(next);
@@ -418,6 +471,27 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         }
     };
 
+    const loadSessionShareStatus = async () => {
+        setSessionShareLoading(true);
+        try {
+            // @ts-ignore
+            const raw = await window.go.main.App.GetSessionShareStatus();
+            const parsed = raw ? JSON.parse(raw) : {};
+            setSessionShareStatus({
+                ...defaultSessionShareStatus,
+                ...parsed
+            });
+        } catch (e) {
+            console.error(e);
+            setSessionShareStatus({
+                ...defaultSessionShareStatus,
+                lastSyncMessage: '加载会话共享状态失败'
+            });
+        } finally {
+            setSessionShareLoading(false);
+        }
+    };
+
     const formatShortcutLabel = (shortcut: string) => {
         const normalized = (shortcut || '').trim();
         return normalized || 'Ctrl+K';
@@ -440,7 +514,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 ...config,
                 cli: normalizeCliConfig(config.cli),
                 terminal: normalizeTerminalConfig(config.terminal),
-                patch_store: normalizePatchStore(config.patch_store)
+                patch_store: normalizePatchStore(config.patch_store),
+                session_share: normalizeSessionShare(config.session_share)
             };
             setConfig(nextConfig);
             // @ts-ignore
@@ -453,6 +528,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             setSavedConfigJson(JSON.stringify(nextConfig));
             setMsg('设置已保存！');
             await loadPatchSyncStatus();
+            await loadSessionShareStatus();
             if (onCompletionDelayChange && nextConfig.completion_delay !== undefined) {
                 onCompletionDelayChange(nextConfig.completion_delay);
             }
@@ -519,6 +595,44 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 [key]: value
             }
         });
+    };
+
+    const handleSessionShareChange = (key: keyof NonNullable<AppConfig['session_share']>, value: string | boolean) => {
+        if (!config) return;
+        setConfig({
+            ...config,
+            session_share: {
+                ...normalizeSessionShare(config.session_share),
+                [key]: value
+            }
+        });
+    };
+
+    const handleRetrySessionShareSync = async () => {
+        setSessionShareLoading(true);
+        try {
+            // @ts-ignore
+            const err = await window.go.main.App.RetrySessionShareSync();
+            if (err) {
+                setMsg('会话共享同步失败: ' + err);
+            } else {
+                setMsg('已触发会话共享同步');
+            }
+        } catch (e: any) {
+            setMsg('会话共享同步失败: ' + e.toString());
+        } finally {
+            await loadSessionShareStatus();
+        }
+    };
+
+    const renderSessionShareState = () => {
+        if (sessionShareLoading) return '正在读取状态...';
+        if (sessionShareStatus.running) return '同步中';
+        if (!sessionShareStatus.enabled) return '已关闭';
+        if (!sessionShareStatus.configured) return '待配置仓库';
+        if (!sessionShareStatus.hasSecretKey) return '待配置共享密钥';
+        if (sessionShareStatus.lastSyncMessage) return sessionShareStatus.lastSyncMessage;
+        return '待同步';
     };
 
     const handleRetryPatchSync = async () => {
@@ -1141,6 +1255,133 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                         onClick={loadPatchSyncStatus}
                                         style={styles.secondaryButton}
                                         disabled={patchSyncLoading}
+                                    >
+                                        刷新状态
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+
+            case 'sessionshare':
+                return (
+                    <div style={styles.settingsGroup}>
+                        <div style={styles.card}>
+                            <div style={styles.cardTitle}>会话共享</div>
+                            <div style={{ ...styles.rowDesc, marginLeft: '0', marginBottom: '10px' }}>
+                                开启后，每次连接成功会自动把该连接信息（密码加密后）推送到团队共享 Git 仓库；
+                                团队成员配置相同的仓库地址、分支与共享密钥，即可在会话管理面板互相看到最近使用的连接。
+                            </div>
+                            <div style={styles.row}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>启用会话共享</div>
+                                    <div style={styles.rowDesc}>
+                                        保存后立即生效并触发一次同步；关闭后不再记录与推送
+                                    </div>
+                                </div>
+                                <div style={styles.rowRight}>
+                                    <Switch
+                                        checked={!!config.session_share?.enabled}
+                                        onChange={(v) => handleSessionShareChange('enabled', v)}
+                                    />
+                                    <span style={{ color: colors.textSecondary, fontSize: font.base }}>
+                                        {config.session_share?.enabled ? '已开启' : '已关闭'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div style={styles.cardDivider} />
+                            <div style={styles.row}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>Git 仓库地址</div>
+                                    <div style={styles.rowDesc}>
+                                        支持本地路径、SSH 或 HTTPS 地址；认证依赖本机 Git 凭据、SSH Agent 或系统凭据管理
+                                    </div>
+                                </div>
+                                <div style={styles.rowRight}>
+                                    <input
+                                        style={styles.inputWide}
+                                        value={config.session_share?.remote_url || ''}
+                                        onChange={(e) => handleSessionShareChange('remote_url', e.target.value)}
+                                        placeholder="例如：git@github.com:team/opscopilot-sessions.git"
+                                    />
+                                </div>
+                            </div>
+                            <div style={styles.row}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>同步分支</div>
+                                    <div style={styles.rowDesc}>
+                                        共享者标识自动读取本机 `git config user.name`，无需手动填写
+                                    </div>
+                                </div>
+                                <div style={styles.rowRight}>
+                                    <input
+                                        style={styles.inputWide}
+                                        value={config.session_share?.branch || defaultSessionShare.branch}
+                                        onChange={(e) => handleSessionShareChange('branch', e.target.value)}
+                                        placeholder="main"
+                                    />
+                                </div>
+                            </div>
+                            <div style={styles.row}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>共享密钥</div>
+                                    <div style={styles.rowDesc}>
+                                        用于加密仓库中的连接密码；团队成员需配置同一密钥才能互相解密连接
+                                    </div>
+                                </div>
+                                <div style={styles.rowRight}>
+                                    <input
+                                        style={styles.inputWide}
+                                        type="password"
+                                        value={config.session_share?.secret_key || ''}
+                                        onChange={(e) => handleSessionShareChange('secret_key', e.target.value)}
+                                        placeholder="团队约定的共享密钥"
+                                        autoComplete="new-password"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <div style={styles.card}>
+                            <div style={styles.cardTitle}>同步状态</div>
+                            <div style={{ ...styles.statusGrid, maxWidth: '760px' }}>
+                                <div style={styles.statusCard}>
+                                    <div style={styles.statusCardLabel}>当前状态</div>
+                                    <div style={styles.statusCardValue}>{renderSessionShareState()}</div>
+                                </div>
+                                <div style={styles.statusCard}>
+                                    <div style={styles.statusCardLabel}>共享条目</div>
+                                    <div style={styles.statusCardValue}>{sessionShareStatus.entryCount}</div>
+                                </div>
+                                <div style={styles.statusCard}>
+                                    <div style={styles.statusCardLabel}>待推送登录</div>
+                                    <div style={styles.statusCardValue}>{sessionShareStatus.pendingCount}</div>
+                                </div>
+                                <div style={styles.statusCard}>
+                                    <div style={styles.statusCardLabel}>最近同步时间</div>
+                                    <div style={styles.statusCardValue}>{sessionShareStatus.lastSyncAt || '暂无'}</div>
+                                </div>
+                            </div>
+                            <div style={styles.cardDivider} />
+                            <div style={styles.row}>
+                                <div style={styles.rowLeft}>
+                                    <div style={styles.rowLabel}>手动重试</div>
+                                    <div style={styles.rowDesc}>
+                                        {sessionShareStatus.lastSyncMessage || '保存配置后会自动刷新运行中的会话共享实例'}
+                                    </div>
+                                </div>
+                                <div style={styles.rowRight}>
+                                    <button
+                                        onClick={handleRetrySessionShareSync}
+                                        style={styles.secondaryButton}
+                                        disabled={sessionShareLoading || sessionShareStatus.running || !sessionShareStatus.enabled || !sessionShareStatus.configured}
+                                    >
+                                        {sessionShareStatus.running ? '正在同步...' : '立即重试同步'}
+                                    </button>
+                                    <button
+                                        onClick={loadSessionShareStatus}
+                                        style={styles.secondaryButton}
+                                        disabled={sessionShareLoading}
                                     >
                                         刷新状态
                                     </button>
