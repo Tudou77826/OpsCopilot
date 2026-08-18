@@ -209,6 +209,36 @@ func TestSessionShareEndToEnd(t *testing.T) {
 	}
 }
 
+// TestSessionShareRetryAsync 验证手动同步为异步触发：
+// RetrySessionShareSync 立即返回（不等 git 操作完成），
+// 进度与结果通过状态快照反映（Running → 完成态）。
+func TestSessionShareRetryAsync(t *testing.T) {
+	bareRepo := initBareRepoForShare(t)
+	tmpRoot := filepath.Dir(bareRepo)
+	app := newShareTestApp(t, bareRepo, filepath.Join(tmpRoot, "userA"), "team-key")
+
+	app.initSessionShareStore()
+	rt := app.getSessionShare()
+	waitUntil(t, 30*time.Second, func() bool {
+		return !rt.statusSnapshot().Running
+	}, "initial sync to finish")
+
+	start := time.Now()
+	if err := app.RetrySessionShareSync(); err != "" {
+		t.Fatalf("RetrySessionShareSync: %s", err)
+	}
+	// 异步触发：调用本身不应携带 git 同步的耗时
+	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
+		t.Errorf("RetrySessionShareSync should return immediately, took %v", elapsed)
+	}
+
+	// 结果经状态快照异步就绪
+	waitUntil(t, 15*time.Second, func() bool {
+		s := rt.statusSnapshot()
+		return !s.Running && s.LastSyncSuccess && s.LastSyncAt != ""
+	}, "manual sync to complete asynchronously")
+}
+
 // TestSessionShareDisabled 覆盖 nil 守卫：未启用时钩子/接口全部安全短路。
 func TestSessionShareDisabled(t *testing.T) {
 	app := newShareTestApp(t, "unused-remote", t.TempDir(), "")

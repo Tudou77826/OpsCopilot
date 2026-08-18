@@ -80,6 +80,8 @@ interface PatchSyncStatus {
     lastSyncMessage?: string;
     remoteURL?: string;
     branch?: string;
+    progress?: number;
+    progressLabel?: string;
 }
 
 // 会话共享同步状态（结构对齐后端 SessionShareStatus）
@@ -96,6 +98,8 @@ interface SessionShareStatus {
     lastSyncMessage?: string;
     remoteURL?: string;
     branch?: string;
+    progress?: number;
+    progressLabel?: string;
 }
 
 type TabId = 'llm' | 'appearance' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'knowledge' | 'sessionshare' | 'aiagent' | 'whitelist' | 'fileaccess' | 'experimental' | 'about';
@@ -236,7 +240,8 @@ const defaultSessionShareStatus: SessionShareStatus = {
     pendingCount: 0,
     entryCount: 0,
     lastSyncSuccess: false,
-    lastSyncMessage: ''
+    lastSyncMessage: '',
+    progress: 0
 };
 
 const defaultPatchSyncStatus: PatchSyncStatus = {
@@ -245,7 +250,8 @@ const defaultPatchSyncStatus: PatchSyncStatus = {
     running: false,
     pendingCount: 0,
     lastSyncSuccess: false,
-    lastSyncMessage: ''
+    lastSyncMessage: '',
+    progress: 0
 };
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -328,6 +334,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         }
         return groups;
     }, [filteredNavItems]);
+
+    // 「会话共享」页激活期间低频轮询状态：让 当前状态/最近同步时间
+    // 实时反映启动同步与后台同步的进度，而不是只显示打开页面时的快照
+    useEffect(() => {
+        if (!isOpen || activeTab !== 'sessionshare') return;
+        const id = setInterval(() => { void loadSessionShareStatus(true); }, 2000);
+        return () => clearInterval(id);
+    }, [isOpen, activeTab]);
+
+    // 「知识共享」页同样实时轮询（两个共享页行为一致）
+    useEffect(() => {
+        if (!isOpen || activeTab !== 'knowledge') return;
+        const id = setInterval(() => { void loadPatchSyncStatus(true); }, 2000);
+        return () => clearInterval(id);
+    }, [isOpen, activeTab]);
 
     useEffect(() => {
         if (isOpen) {
@@ -450,8 +471,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         }
     };
 
-    const loadPatchSyncStatus = async () => {
-        setPatchSyncLoading(true);
+    // silent = true 时不切换 loading 态，供定时轮询使用（避免按钮禁用态闪烁）
+    const loadPatchSyncStatus = async (silent = false) => {
+        if (!silent) setPatchSyncLoading(true);
         try {
             // @ts-ignore
             const raw = await window.go.main.App.GetPatchSyncStatus();
@@ -460,19 +482,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 ...defaultPatchSyncStatus,
                 ...parsed
             });
+            return { ...defaultPatchSyncStatus, ...parsed } as PatchSyncStatus;
         } catch (e) {
             console.error(e);
             setPatchSyncStatus({
                 ...defaultPatchSyncStatus,
                 lastSyncMessage: '加载同步状态失败'
             });
+            return null;
         } finally {
-            setPatchSyncLoading(false);
+            if (!silent) setPatchSyncLoading(false);
         }
     };
 
-    const loadSessionShareStatus = async () => {
-        setSessionShareLoading(true);
+    // silent = true 时不切换 loading 态，供定时轮询使用（避免按钮禁用态闪烁）
+    const loadSessionShareStatus = async (silent = false) => {
+        if (!silent) setSessionShareLoading(true);
         try {
             // @ts-ignore
             const raw = await window.go.main.App.GetSessionShareStatus();
@@ -481,14 +506,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 ...defaultSessionShareStatus,
                 ...parsed
             });
+            return { ...defaultSessionShareStatus, ...parsed } as SessionShareStatus;
         } catch (e) {
             console.error(e);
             setSessionShareStatus({
                 ...defaultSessionShareStatus,
                 lastSyncMessage: '加载会话共享状态失败'
             });
+            return null;
         } finally {
-            setSessionShareLoading(false);
+            if (!silent) setSessionShareLoading(false);
         }
     };
 
@@ -609,25 +636,47 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     };
 
     const handleRetrySessionShareSync = async () => {
+        // 表单有未保存更改时先保存：点「立即重试同步」的意图是
+        // 用当前填写的内容同步，而非上次落盘的旧配置
+        if (isDirty) {
+            const saved = await persistConfig(false);
+            if (!saved) return; // 保存失败时中止，错误信息已展示
+        }
         setSessionShareLoading(true);
         try {
             // @ts-ignore
             const err = await window.go.main.App.RetrySessionShareSync();
             if (err) {
                 setMsg('会话共享同步失败: ' + err);
-            } else {
-                setMsg('已触发会话共享同步');
+                setSessionShareLoading(false);
+                return;
+            }
+            setMsg('正在同步会话共享...');
+
+            // 同步在后端异步执行：轮询状态直到结束，让「当前状态」
+            // 实时从 同步中 → 完成/失败 过渡，而不是卡在旧状态直到突然完成
+            for (let i = 0; i < 45; i++) {
+                await new Promise(r => setTimeout(r, 800));
+                const status = await loadSessionShareStatus(true);
+                if (status && !status.running) {
+                    setMsg(status.lastSyncSuccess ? '会话共享同步完成' : `会话共享同步失败: ${status.lastSyncMessage || '未知错误'}`);
+                    break;
+                }
             }
         } catch (e: any) {
             setMsg('会话共享同步失败: ' + e.toString());
         } finally {
-            await loadSessionShareStatus();
+            setSessionShareLoading(false);
         }
     };
 
     const renderSessionShareState = () => {
         if (sessionShareLoading) return '正在读取状态...';
-        if (sessionShareStatus.running) return '同步中';
+        if (sessionShareStatus.running) {
+            const label = sessionShareStatus.progressLabel || '同步中';
+            const pct = Math.max(5, Math.min(100, sessionShareStatus.progress ?? 5));
+            return `${label}（${pct}%）`;
+        }
         if (!sessionShareStatus.enabled) return '已关闭';
         if (!sessionShareStatus.configured) return '待配置仓库';
         if (!sessionShareStatus.hasSecretKey) return '待配置共享密钥';
@@ -636,25 +685,46 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     };
 
     const handleRetryPatchSync = async () => {
+        // 表单有未保存更改时先保存（与会话共享的重试行为一致）
+        if (isDirty) {
+            const saved = await persistConfig(false);
+            if (!saved) return;
+        }
+
         setPatchSyncLoading(true);
         try {
             // @ts-ignore
             const err = await window.go.main.App.RetryPatchSync();
             if (err) {
-                setMsg('同步失败: ' + err);
-            } else {
-                setMsg('已触发补丁同步');
+                setMsg('补丁同步失败: ' + err);
+                setPatchSyncLoading(false);
+                return;
+            }
+            setMsg('正在同步知识共享...');
+
+            // 同步在后端异步执行：轮询状态直到结束
+            for (let i = 0; i < 45; i++) {
+                await new Promise(r => setTimeout(r, 800));
+                const status = await loadPatchSyncStatus(true);
+                if (status && !status.running) {
+                    setMsg(status.lastSyncSuccess ? '知识共享同步完成' : `知识共享同步失败: ${status.lastSyncMessage || '未知错误'}`);
+                    break;
+                }
             }
         } catch (e: any) {
-            setMsg('同步失败: ' + e.toString());
+            setMsg('补丁同步失败: ' + e.toString());
         } finally {
-            await loadPatchSyncStatus();
+            setPatchSyncLoading(false);
         }
     };
 
     const renderPatchSyncState = () => {
         if (patchSyncLoading) return '正在读取同步状态...';
-        if (patchSyncStatus.running) return '同步中';
+        if (patchSyncStatus.running) {
+            const label = patchSyncStatus.progressLabel || '同步中';
+            const pct = Math.max(5, Math.min(100, patchSyncStatus.progress ?? 5));
+            return `${label}（${pct}%）`;
+        }
         if (!patchSyncStatus.enabled) return '已关闭';
         if (!patchSyncStatus.configured) return '待配置仓库';
         if (patchSyncStatus.lastSyncMessage) return patchSyncStatus.lastSyncMessage;
@@ -1168,11 +1238,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     <div style={styles.settingsGroup}>
                         <div style={styles.card}>
                             <div style={styles.cardTitle}>知识共享</div>
+                            <div style={{ ...styles.rowDesc, marginLeft: '0', marginBottom: '10px' }}>
+                                开启后，故障排查会话归档时会把排查场景自动推送到团队共享 Git 仓库；
+                                团队成员归档的知识也会同步合并到你的本地知识库，供 AI 检索和问答使用。
+                            </div>
                             <div style={styles.row}>
                                 <div style={styles.rowLeft}>
-                                    <div style={styles.rowLabel}>启用补丁同步</div>
+                                    <div style={styles.rowLabel}>启用知识共享</div>
                                     <div style={styles.rowDesc}>
-                                        归档后会将最新场景以补丁形式推送到共享 Git 仓库，保存后立即重载当前同步配置
+                                        保存后立即生效并触发一次同步；关闭后归档的知识仅保留在本地
                                     </div>
                                 </div>
                                 <div style={styles.rowRight}>
@@ -1240,7 +1314,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 <div style={styles.rowLeft}>
                                     <div style={styles.rowLabel}>手动重试</div>
                                     <div style={styles.rowDesc}>
-                                        {patchSyncStatus.lastSyncMessage || '保存配置后会自动刷新运行中的补丁同步实例'}
+                                        {patchSyncStatus.lastSyncMessage || '存在未保存更改时点击会先保存再同步'}
                                     </div>
                                 </div>
                                 <div style={styles.rowRight}>
@@ -1252,7 +1326,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                         {patchSyncStatus.running ? '正在同步...' : '立即重试同步'}
                                     </button>
                                     <button
-                                        onClick={loadPatchSyncStatus}
+                                        onClick={() => { void loadPatchSyncStatus(); }}
                                         style={styles.secondaryButton}
                                         disabled={patchSyncLoading}
                                     >
@@ -1367,7 +1441,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 <div style={styles.rowLeft}>
                                     <div style={styles.rowLabel}>手动重试</div>
                                     <div style={styles.rowDesc}>
-                                        {sessionShareStatus.lastSyncMessage || '保存配置后会自动刷新运行中的会话共享实例'}
+                                        {sessionShareStatus.lastSyncMessage || '存在未保存更改时点击会先保存再同步'}
                                     </div>
                                 </div>
                                 <div style={styles.rowRight}>
@@ -1379,7 +1453,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                         {sessionShareStatus.running ? '正在同步...' : '立即重试同步'}
                                     </button>
                                     <button
-                                        onClick={loadSessionShareStatus}
+                                        onClick={() => { void loadSessionShareStatus(); }}
                                         style={styles.secondaryButton}
                                         disabled={sessionShareLoading}
                                     >

@@ -619,6 +619,9 @@ type PatchSyncStatus struct {
 	LastSyncMessage string `json:"lastSyncMessage,omitempty"`
 	RemoteURL       string `json:"remoteURL,omitempty"`
 	Branch          string `json:"branch,omitempty"`
+	// 同步进行中的大致进度（0-100，按阶段推进：拉取 5→40、重建 40→65、逐条推送 65→95）
+	Progress      int    `json:"progress"`
+	ProgressLabel string `json:"progressLabel,omitempty"`
 }
 
 func (a *App) Connect(config ConnectConfig) ConnectResult {
@@ -1222,16 +1225,22 @@ func (a *App) GetPatchSyncStatus() string {
 	return string(data)
 }
 
+// RetryPatchSync 手动触发一次补丁同步（异步执行，立即返回；
+// 进度与结果通过 GetPatchSyncStatus 查询，与 RetrySessionShareSync 同模式）。
 func (a *App) RetryPatchSync() string {
 	store := a.getPatchStore()
 	if store == nil {
 		a.refreshPatchSyncStatusConfig()
 		return "补丁同步未启用或未配置 Git 仓库"
 	}
-
-	if err := a.runPatchSync(store); err != nil {
-		return err.Error()
+	if a.patchSyncing.Load() {
+		return "" // 已在同步中，不重复触发
 	}
+	go func() {
+		if err := a.runPatchSync(store); err != nil {
+			slog.Warn("patch sync: manual sync failed", "error", err)
+		}
+	}()
 	return ""
 }
 
@@ -2922,7 +2931,8 @@ func (a *App) runPatchSync(store patchstore.PatchStore) error {
 	a.refreshPatchSyncStatusConfig()
 	a.updatePatchSyncStatus(func(status *PatchSyncStatus) {
 		status.Running = true
-		status.LastSyncMessage = "正在同步..."
+		status.Progress = 5
+		status.ProgressLabel = "正在拉取远端补丁..."
 	})
 
 	err := a.syncPatches(store)
@@ -2934,6 +2944,8 @@ func (a *App) runPatchSync(store patchstore.PatchStore) error {
 			status.LastSyncAt = now
 			status.LastSyncSuccess = false
 			status.LastSyncMessage = err.Error()
+			status.Progress = 0
+			status.ProgressLabel = ""
 		})
 		return err
 	}
@@ -2943,6 +2955,8 @@ func (a *App) runPatchSync(store patchstore.PatchStore) error {
 		status.Running = false
 		status.LastSyncAt = now
 		status.LastSyncSuccess = true
+		status.Progress = 100
+		status.ProgressLabel = ""
 		if status.PendingCount > 0 {
 			status.LastSyncMessage = fmt.Sprintf("同步完成，仍有 %d 条待重试补丁", status.PendingCount)
 		} else {
@@ -2966,6 +2980,11 @@ func (a *App) syncPatches(store patchstore.PatchStore) error {
 		return fmt.Errorf("download patches: %w", err)
 	}
 
+	a.updatePatchSyncStatus(func(status *PatchSyncStatus) {
+		status.Progress = 40
+		status.ProgressLabel = fmt.Sprintf("已拉取 %d 条补丁", len(remotePatches))
+	})
+
 	pendingStore := a.newPendingPatchStore()
 	pendingPatches, err := pendingStore.List()
 	if err != nil {
@@ -2978,6 +2997,10 @@ func (a *App) syncPatches(store patchstore.PatchStore) error {
 	}
 
 	knowledgeDir := a.resolveKnowledgeBase()
+	a.updatePatchSyncStatus(func(status *PatchSyncStatus) {
+		status.Progress = 65
+		status.ProgressLabel = "重建本地知识文件..."
+	})
 	count, err := knowledge.RebuildFromPatches(knowledgeDir, patches)
 	if err != nil {
 		return fmt.Errorf("rebuild from patches: %w", err)
@@ -2990,7 +3013,14 @@ func (a *App) syncPatches(store patchstore.PatchStore) error {
 		slog.Info("patch sync completed", "patches", len(patches), "files_rebuilt", count)
 	}
 
-	if err := a.flushPendingPatches(store, pendingStore, remotePatches, pendingPatches); err != nil {
+	if err := a.flushPendingPatches(store, pendingStore, remotePatches, pendingPatches, func(done, total int) {
+		a.updatePatchSyncStatus(func(status *PatchSyncStatus) {
+			if total > 0 {
+				status.Progress = 65 + 30*done/total
+				status.ProgressLabel = fmt.Sprintf("推送待上传补丁 (%d/%d)", done, total)
+			}
+		})
+	}); err != nil {
 		slog.Warn("flush pending patches failed", "error", err)
 	}
 
@@ -3014,7 +3044,9 @@ func (a *App) uploadPatch(store patchstore.PatchStore, pendingStore *patchstore.
 	slog.Info("patch uploaded", "id", patch.ID, "service", patch.Service, "module", patch.Module)
 }
 
-func (a *App) flushPendingPatches(store patchstore.PatchStore, pendingStore *patchstore.PendingStore, remotePatches []patchstore.Patch, pendingPatches []patchstore.Patch) error {
+// flushPendingPatches 逐条上传 outbox 中远端缺失的补丁；onProgress 在每条
+// 成功后收到 (done, total)，用于同步进度上报。
+func (a *App) flushPendingPatches(store patchstore.PatchStore, pendingStore *patchstore.PendingStore, remotePatches []patchstore.Patch, pendingPatches []patchstore.Patch, onProgress func(done, total int)) error {
 	remoteByID := make(map[string]struct{}, len(remotePatches))
 	for _, patch := range remotePatches {
 		remoteByID[patch.ID] = struct{}{}
@@ -3024,10 +3056,16 @@ func (a *App) flushPendingPatches(store patchstore.PatchStore, pendingStore *pat
 		return pendingPatches[i].Timestamp.Before(pendingPatches[j].Timestamp)
 	})
 
+	total := len(pendingPatches)
+	done := 0
 	for _, patch := range pendingPatches {
 		if _, exists := remoteByID[patch.ID]; exists {
 			if err := pendingStore.Delete(patch); err != nil {
 				return err
+			}
+			done++
+			if onProgress != nil {
+				onProgress(done, total)
 			}
 			continue
 		}
@@ -3040,6 +3078,10 @@ func (a *App) flushPendingPatches(store patchstore.PatchStore, pendingStore *pat
 		}
 		if err := pendingStore.Delete(patch); err != nil {
 			return err
+		}
+		done++
+		if onProgress != nil {
+			onProgress(done, total)
 		}
 	}
 

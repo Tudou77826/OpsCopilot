@@ -43,6 +43,9 @@ type SessionShareStatus struct {
 	LastSyncMessage string `json:"lastSyncMessage,omitempty"`
 	RemoteURL       string `json:"remoteURL,omitempty"`
 	Branch          string `json:"branch,omitempty"`
+	// 同步进行中的大致进度（0-100，按阶段推进：拉取 5→40、逐条推送 40→90）
+	Progress      int    `json:"progress"`
+	ProgressLabel string `json:"progressLabel,omitempty"`
 }
 
 // SharedSessionView 前端可见的共享会话条目（不含任何明文凭据）。
@@ -334,7 +337,8 @@ func (a *App) runSessionShareSync(rt *sessionShareRuntime) error {
 
 	rt.updateStatus(func(status *SessionShareStatus) {
 		status.Running = true
-		status.LastSyncMessage = "正在同步..."
+		status.Progress = 5
+		status.ProgressLabel = "正在拉取远端数据..."
 	})
 
 	err := a.syncSharedSessions(rt)
@@ -348,11 +352,17 @@ func (a *App) runSessionShareSync(rt *sessionShareRuntime) error {
 		status.LastSyncSuccess = err == nil
 		if err != nil {
 			status.LastSyncMessage = err.Error()
+			status.Progress = 0
+			status.ProgressLabel = ""
 		} else if keyWarning != "" {
 			// syncSharedSessions 探测到的更具体提示（如密钥不正确），优先保留
 			status.LastSyncMessage = keyWarning
+			status.Progress = 100
+			status.ProgressLabel = ""
 		} else {
 			status.LastSyncMessage = "同步完成"
+			status.Progress = 100
+			status.ProgressLabel = ""
 		}
 	})
 
@@ -408,6 +418,8 @@ func (a *App) syncSharedSessions(rt *sessionShareRuntime) error {
 	rt.status.PendingCount = len(pending)
 	rt.status.Owner = owner
 	rt.status.HasSecretKey = passphrase != ""
+	rt.status.Progress = 40
+	rt.status.ProgressLabel = fmt.Sprintf("已拉取 %d 条共享会话", len(views))
 	if !keyOK && sampleIdx >= 0 {
 		rt.keyWarning = "共享密钥可能不正确，无法解密共享密码"
 	} else {
@@ -416,7 +428,14 @@ func (a *App) syncSharedSessions(rt *sessionShareRuntime) error {
 	rt.mu.Unlock()
 
 	// 补推本地待推端点（登录时推送失败的兜底通道）
-	for _, e := range pending {
+	total := len(pending)
+	for i, e := range pending {
+		if total > 0 {
+			rt.updateStatus(func(status *SessionShareStatus) {
+				status.Progress = 40 + 50*(i+1)/total
+				status.ProgressLabel = fmt.Sprintf("推送待同步登录 (%d/%d)", i+1, total)
+			})
+		}
 		upload := sessionshare.SharedSession{
 			Owner:       owner,
 			Name:        e.Name,
@@ -640,15 +659,22 @@ func (a *App) RemoveSharedSession(entryKey string) string {
 	return ""
 }
 
-// RetrySessionShareSync 手动触发一次同步。
+// RetrySessionShareSync 手动触发一次同步（异步执行，立即返回；
+// 进度与结果通过 GetSessionShareStatus 查询，避免前端 await 整个
+// git 同步过程导致状态卡片无反馈地"卡住"）。
 func (a *App) RetrySessionShareSync() string {
 	rt := a.getSessionShare()
 	if rt == nil {
 		return "会话共享未启用或未配置 Git 仓库"
 	}
-	if err := a.runSessionShareSync(rt); err != nil {
-		return err.Error()
+	if rt.syncing.Load() {
+		return "" // 已在同步中，不重复触发
 	}
+	go func() {
+		if err := a.runSessionShareSync(rt); err != nil {
+			slog.Warn("session share: manual sync failed", "error", err)
+		}
+	}()
 	return ""
 }
 
