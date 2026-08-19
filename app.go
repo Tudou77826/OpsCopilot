@@ -2597,6 +2597,32 @@ func (a *App) StreamConclusion(contextStr string, rootCause string) string {
 	return conclusion
 }
 
+// SummarizeUpdateNotes 用快速模型流式总结累积更新说明（禁用思考），
+// 通过 update-summary:token / :done / :error 事件推送。
+// notes 为 CheckUpdate 返回的累积变更日志（多版本合并 Markdown）。
+func (a *App) SummarizeUpdateNotes(notes string) string {
+	go func() {
+		onToken := func(token string) {
+			runtime.EventsEmit(a.ctx, "update-summary:token", map[string]string{
+				"token": token,
+			})
+		}
+
+		full, err := a.aiService.SummarizeUpdateNotesStream(context.Background(), notes, onToken)
+		if err != nil {
+			slog.Error("failed to summarize update notes", "error", err)
+			runtime.EventsEmit(a.ctx, "update-summary:error", map[string]string{
+				"error": err.Error(),
+			})
+			return
+		}
+		runtime.EventsEmit(a.ctx, "update-summary:done", map[string]string{
+			"summary": full,
+		})
+	}()
+	return ""
+}
+
 // --- Saved Session Management ---
 
 func (a *App) GetSavedSessions() []*sessionmanager.Session {

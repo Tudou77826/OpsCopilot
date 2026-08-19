@@ -188,6 +188,8 @@ export function StopSession(arg1:string,arg2:string):Promise<string>;
 
 export function StreamConclusion(arg1:string,arg2:string):Promise<string>;
 
+export function SummarizeUpdateNotes(arg1:string):Promise<string>;
+
 export function UpdatePatchIssueStatus(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function UpdateSavedSession(arg1:string,arg2:remote.ConnectConfig):Promise<string>;

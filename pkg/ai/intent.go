@@ -257,7 +257,6 @@ func wrapAsTroubleshootJSON(s string) string {
 	return fmt.Sprintf(`{"summary":%s,"steps":[],"commands":[]}`, string(escaped))
 }
 
-
 // TroubleshootCommand represents a single command in the troubleshooting response.
 type TroubleshootCommand struct {
 	Command     string `json:"command"`
@@ -442,6 +441,39 @@ func (s *AIService) GenerateConclusionStream(ctx context.Context, timeline strin
 	}
 
 	// fallback：其他 Provider 实现走通用接口
+	full, err := s.fastProvider.ChatCompletionStream(ctx, messages, onToken)
+	if err != nil {
+		return "", fmt.Errorf("AI provider stream error: %w", err)
+	}
+	return full, nil
+}
+
+// SummarizeUpdateNotesStream 用快速模型流式总结累积更新说明（禁用思考）。
+// notes 为 updater.buildCumulativeChangelog 合并的多版本 Markdown。
+func (s *AIService) SummarizeUpdateNotesStream(ctx context.Context, notes string, onToken func(string)) (string, error) {
+	prompt := `你是 OpsCopilot（AI 运维助手桌面应用）的发布助手。用户即将升级版本，下面是自用户当前版本以来所有版本的更新说明（多个版本合并，按 "## v版本号" 分节，可能有嵌套小节）。请整合成一份简明的中文升级摘要，帮助用户快速判断"这次升级能带来什么"：
+
+- 按「新功能 / 问题修复 / 体验优化」分组，合并各版本同类项、去除重复
+- 每条一行并标注来源版本，例如：- 会话连接信息团队共享（v1.8.9.5）
+- 使用面向最终用户的表述，去除内部术语
+- 没有内容的分组不要输出；总计不超过 15 行
+- 直接输出 Markdown 无序列表，不要标题、引言或结尾说明`
+
+	messages := []llm.ChatMessage{
+		{Role: "system", Content: prompt},
+		{Role: "user", Content: notes},
+	}
+
+	slog.Info("ai summarizing update notes stream")
+
+	if p, ok := s.fastProvider.(*llm.OpenAIProvider); ok {
+		full, err := p.ChatCompletionStreamNoThinking(ctx, messages, onToken)
+		if err != nil {
+			return "", fmt.Errorf("AI provider stream error: %w", err)
+		}
+		return full, nil
+	}
+
 	full, err := s.fastProvider.ChatCompletionStream(ctx, messages, onToken)
 	if err != nil {
 		return "", fmt.Errorf("AI provider stream error: %w", err)

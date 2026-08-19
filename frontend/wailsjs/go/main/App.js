@@ -362,6 +362,10 @@ export function StreamConclusion(arg1, arg2) {
   return window['go']['main']['App']['StreamConclusion'](arg1, arg2);
 }
 
+export function SummarizeUpdateNotes(arg1) {
+  return window['go']['main']['App']['SummarizeUpdateNotes'](arg1);
+}
+
 export function UpdatePatchIssueStatus(arg1, arg2, arg3) {
   return window['go']['main']['App']['UpdatePatchIssueStatus'](arg1, arg2, arg3);
 }

@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { EventsOn } from '../../../wailsjs/runtime/runtime';
 import logo from '../../assets/images/logo-universal.png';
-import { colors, radius, font } from './settingsStyles';
+import { colors, radius, font, btnSecondary } from './settingsStyles';
 
 interface ReleaseInfo {
     tag_name: string;
@@ -77,6 +77,18 @@ const releaseAccentBar = (isCurrent: boolean, isNew: boolean): React.CSSProperti
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// 数值化比较点分版本号（如 1.9.0.0 vs 1.8.9.5），短的按 0 补齐
+export const compareVersions = (a: string, b: string): number => {
+    const pa = a.split('.').map(n => parseInt(n, 10) || 0);
+    const pb = b.split('.').map(n => parseInt(n, 10) || 0);
+    const len = Math.max(pa.length, pb.length);
+    for (let i = 0; i < len; i++) {
+        const d = (pa[i] || 0) - (pb[i] || 0);
+        if (d !== 0) return d;
+    }
+    return 0;
+};
+
 const stripLeadingVersionHeading = (body: string, tagName: string) => {
     const version = tagName.trim().replace(/^v/i, '');
     if (!body || !version) return body;
@@ -100,6 +112,20 @@ const AboutPanel: React.FC = () => {
     const [historyError, setHistoryError] = useState('');
     const [releaseIndex, setReleaseIndex] = useState(0);
     const [pageDirection, setPageDirection] = useState<'next' | 'prev' | 'none'>('none');
+    // 落后版本数（比当前版本新的 release 个数）；null = 未知，不显示徽标
+    const [versionsBehind, setVersionsBehind] = useState<number | null>(null);
+    // AI 升级摘要：CheckUpdate 返回的累积变更日志原文 + 流式摘要状态
+    const [cumulativeBody, setCumulativeBody] = useState('');
+    const [summaryState, setSummaryState] = useState<'idle' | 'streaming' | 'done' | 'error'>('idle');
+    const [summaryText, setSummaryText] = useState('');
+    const [summaryError, setSummaryError] = useState('');
+    const summaryOffRef = useRef<Array<() => void>>([]);
+
+    // 卸载时取消摘要事件订阅
+    useEffect(() => () => {
+        summaryOffRef.current.forEach(off => off());
+        summaryOffRef.current = [];
+    }, []);
 
     useEffect(() => {
         const loadVersion = async () => {
@@ -115,6 +141,7 @@ const AboutPanel: React.FC = () => {
     const handleCheck = useCallback(async (): Promise<UpdateStatus | null> => {
         setUpdateState('checking');
         setErrorMsg('');
+        setVersionsBehind(null);
         try {
             // @ts-ignore
             const raw = await window.go?.main?.App?.CheckUpdate?.();
@@ -132,6 +159,11 @@ const AboutPanel: React.FC = () => {
             if (status.hasUpdate && status.downloadUrl) {
                 setLatestVersion(status.latestVersion || '');
                 setDownloadURL(status.downloadUrl);
+                // 保存累积变更日志原文（后端已合并多版本），供 AI 总结使用
+                setCumulativeBody(status.release?.body || '');
+                setSummaryState('idle');
+                setSummaryText('');
+                setSummaryError('');
                 if (status.release) {
                     const latestTag = status.latestVersion || status.release.tag_name;
                     const latestRelease: ReleaseHistoryItem = {
@@ -148,6 +180,9 @@ const AboutPanel: React.FC = () => {
                     setHistoryError('');
                 }
                 setUpdateState('available');
+                // 有更新时后台统计落后版本数（仅计数，不影响日志展示状态）。
+                // 优先用 CheckUpdate 返回的后端版本号，避免前端状态尚未就绪
+                void fetchVersionsBehind(status.currentVersion);
             } else {
                 setLatestVersion(status.latestVersion || status.currentVersion);
                 setUpdateState('no-update');
@@ -157,6 +192,97 @@ const AboutPanel: React.FC = () => {
             setUpdateState('error');
             setErrorMsg(friendlyError(e.toString()));
             return null;
+        }
+    }, []);
+
+    // AI 升级摘要：把累积变更日志交给用户配置的快速模型流式总结。
+    // 总览作为第一张卡插入版本卡片组（deck），生成时自动翻到该卡。
+    const handleSummarize = useCallback(async () => {
+        // 已生成过：不重复调用模型，直接翻到总览卡片
+        if (summaryState === 'done') {
+            setReleaseIndex(0);
+            setPageDirection('none');
+            return;
+        }
+        if (summaryState === 'streaming' || !cumulativeBody) return;
+        summaryOffRef.current.forEach(off => off());
+        summaryOffRef.current = [];
+        setSummaryState('streaming');
+        setSummaryText('');
+        setSummaryError('');
+        setReleaseIndex(0); // 立即切到总览卡片（位于 deck 第一张）
+        setPageDirection('none');
+
+        try {
+            if (EventsOn) {
+                summaryOffRef.current.push(EventsOn('update-summary:token', (...args: any[]) => {
+                    const data = args?.[0] ?? {};
+                    if (data.token) setSummaryText(prev => prev + data.token);
+                }));
+                summaryOffRef.current.push(EventsOn('update-summary:done', (...args: any[]) => {
+                    const data = args?.[0] ?? {};
+                    if (data.summary) setSummaryText(String(data.summary));
+                    setSummaryState('done');
+                }));
+                summaryOffRef.current.push(EventsOn('update-summary:error', (...args: any[]) => {
+                    const data = args?.[0] ?? {};
+                    setSummaryError(data.error || 'AI 总结失败');
+                    setSummaryState('error');
+                }));
+            }
+            // @ts-ignore
+            const err = await window.go?.main?.App?.SummarizeUpdateNotes?.(cumulativeBody);
+            if (err) {
+                setSummaryError(String(err));
+                setSummaryState('error');
+            }
+        } catch (e: any) {
+            setSummaryError(e?.message || String(e));
+            setSummaryState('error');
+        }
+    }, [cumulativeBody, summaryState]);
+
+    // 后台拉取发布历史，统计比当前版本新的 release 个数。
+    // 列表按新→旧排序：当前版本所在下标即落后数；当前版本不在列表
+    // （过于久远或列表被截断）时退回数值版本比较。
+    // 通过 ref 读取最新版本号：handleCheck（deps=[]）持有本函数的引用，
+    // 直接闭包 state 会停留在首次渲染的占位值，导致生产环境永远不触发。
+    const currentVersionRef = useRef(currentVersion);
+    currentVersionRef.current = currentVersion;
+    // 检查更新发现新版本后的一次后台请求，承担两件事：
+    // 1. 补全版本日志——deck 此前只有最新一张卡，补全后才能逐版本翻页；
+    // 2. 统计落后版本数（列表新→旧，当前版本下标即落后数；不在列表时退回数值比较）。
+    // 版本号为非数字（dev 构建）时只做第 1 件事。
+    const fetchVersionsBehind = useCallback(async (versionOverride?: string) => {
+        let list: ReleaseHistoryItem[] = [];
+        try {
+            // @ts-ignore
+            const raw = await window.go?.main?.App?.GetReleaseHistory?.();
+            if (raw) {
+                const resp: ReleaseHistoryResponse = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                list = resp.releases || [];
+                if (list.length > 0) {
+                    setReleaseHistory(list);
+                    setHistoryState('loaded');
+                    setHistoryError('');
+                    setReleaseIndex(0); // 定位最新版本（列表新→旧，第 0 项）
+                    setPageDirection('none');
+                }
+            }
+        } catch { /* 静默：拿不到历史时 deck 保持单卡 */ }
+
+        const current = (versionOverride || currentVersionRef.current || '').replace(/^v/i, '');
+        // 非数字版本号（如 dev 构建 "vdev"）无法比较，不显示徽标
+        if (!current || current === '...' || !/^\d/.test(current)) return;
+        const norm = (t: string) => t.replace(/^v/i, '');
+        const idx = list.findIndex(r => norm(r.tag_name) === current);
+        if (idx >= 0) {
+            setVersionsBehind(idx);
+            return;
+        }
+        const newer = list.filter(r => compareVersions(norm(r.tag_name), current) > 0);
+        if (newer.length > 0) {
+            setVersionsBehind(newer.length);
         }
     }, []);
 
@@ -179,7 +305,8 @@ const AboutPanel: React.FC = () => {
             }
             setReleaseHistory(resp.releases || []);
             setHistoryState('loaded');
-            // 默认定位：有新版本→新版本；否则→当前版本；否则→最新一条
+            // 默认定位：有新版本→新版本；否则→当前版本；否则→最新一条。
+            // 总览卡片占据 deck 第 0 位（若激活），release 定位需 +1 偏移
             const list = resp.releases || [];
             const norm = (t: string) => (t.startsWith('v') ? t.slice(1) : t);
             const currentVer = norm(currentVersion);
@@ -191,13 +318,15 @@ const AboutPanel: React.FC = () => {
             if (targetIdx < 0 && currentVersion) {
                 targetIdx = list.findIndex(r => norm(r.tag_name) === currentVer);
             }
-            setReleaseIndex(targetIdx >= 0 ? Math.min(targetIdx, list.length - 1) : 0);
+            if (targetIdx < 0) targetIdx = 0;
+            const offset = summaryState !== 'idle' && versionsBehind != null && versionsBehind >= 2 ? 1 : 0;
+            setReleaseIndex(Math.min(targetIdx + offset, list.length + offset - 1));
             setPageDirection('none');
         } catch (e: any) {
             setHistoryState('error');
             setHistoryError(friendlyHistoryError(e.toString()));
         }
-    }, [currentVersion, latestVersion]);
+    }, [currentVersion, latestVersion, summaryState, versionsBehind]);
 
     const formatDate = (iso: string) => {
         if (!iso) return '';
@@ -280,6 +409,11 @@ const AboutPanel: React.FC = () => {
 
     return (
         <div style={styles.container}>
+            {/* 动画 keyframes（about-spin 原先缺失定义导致 spinner 不转；blink 用于流式光标） */}
+            <style>{`
+                @keyframes about-spin { to { transform: rotate(360deg); } }
+                @keyframes about-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+            `}</style>
             <div style={styles.productHeader}>
                 <div style={styles.productIdentity}>
                     <img src={logo} alt="OpsCopilot" style={styles.productLogo} />
@@ -327,7 +461,10 @@ const AboutPanel: React.FC = () => {
                 )}
                 {updateState === 'available' && releaseHistory.length === 0 && (
                     <div style={styles.updateFallback}>
-                        <span>可更新至 {latestVersion}</span>
+                        <span>
+                            可更新至 {latestVersion}
+                            {versionsBehind != null && versionsBehind >= 2 ? `（落后 ${versionsBehind} 个版本）` : ''}
+                        </span>
                         <button style={styles.updateBtn} onClick={handleUpdate} disabled={!downloadURL}>
                             更新并重启
                         </button>
@@ -374,17 +511,20 @@ const AboutPanel: React.FC = () => {
                     <div style={styles.emptyHint}>暂无版本记录</div>
                 )}
 
-                {/* 版本日志：单卡 + 左右翻页 */}
+                {/* 版本日志：单卡 + 左右翻页。AI 总览生成后作为第一张卡加入 deck，
+                    与单版本卡片共用同一卡片体系（宽度/高度/叠卡/翻页一致） */}
                 {releaseHistory.length > 0 && (() => {
-                    const total = releaseHistory.length;
+                    const summaryInDeck = summaryState !== 'idle' && versionsBehind != null && versionsBehind >= 2;
+                    const total = releaseHistory.length + (summaryInDeck ? 1 : 0);
                     const safeIdx = Math.min(releaseIndex, total - 1);
-                    const r = releaseHistory[safeIdx];
-                    const releaseBody = stripLeadingVersionHeading(r.body, r.tag_name);
-                    const ver = r.tag_name.startsWith('v') ? r.tag_name.slice(1) : r.tag_name;
+                    const isSummaryCard = summaryInDeck && safeIdx === 0;
+                    const r = isSummaryCard ? null : releaseHistory[safeIdx - (summaryInDeck ? 1 : 0)];
+                    const releaseBody = r ? stripLeadingVersionHeading(r.body, r.tag_name) : '';
+                    const ver = r ? (r.tag_name.startsWith('v') ? r.tag_name.slice(1) : r.tag_name) : '';
                     const currentVer = currentVersion.startsWith('v') ? currentVersion.slice(1) : currentVersion;
-                    const isCurrent = !!(currentVersion && currentVer === ver);
-                    const isNew = updateState === 'available' && latestVersion === r.tag_name;
-                    const accentStyle = isCurrent
+                    const isCurrent = !!(r && currentVersion && currentVer === ver);
+                    const isNew = !!(r && updateState === 'available' && latestVersion === r.tag_name);
+                    const accentStyle = isSummaryCard || isCurrent
                         ? styles.releaseCardCurrent
                         : isNew
                             ? styles.releaseCardNew
@@ -396,7 +536,7 @@ const AboutPanel: React.FC = () => {
                                     style={{ ...styles.pagerArrow, ...styles.pagerArrowPrev }}
                                     onClick={() => pageRelease(-1, total)}
                                     disabled={safeIdx === 0}
-                                    aria-label="上一个版本"
+                                    aria-label="上一项"
                                 >‹</button>
                             )}
 
@@ -407,34 +547,95 @@ const AboutPanel: React.FC = () => {
                                         <div style={{ ...styles.releaseStackCard, ...styles.releaseStackCardMid }} />
                                     </>
                                 )}
-                                <div
-                                    key={r.tag_name}
-                                    className={`about-release-card about-release-card-${pageDirection}`}
-                                    style={{ ...styles.releaseCard, ...accentStyle }}
-                                >
-                                    <div style={releaseAccentBar(isCurrent, isNew)} />
-                                    <div style={styles.releaseContent}>
-                                        <div style={styles.releaseHeader}>
-                                            <span style={styles.releaseTag}>{r.tag_name}</span>
-                                            {isNew && <span style={styles.badgeNew}>新版本</span>}
-                                            {isCurrent && <span style={styles.badgeCurrent}>当前版本</span>}
-                                            {total > 1 && <span style={styles.releasePagerInfo}>{safeIdx + 1} / {total}</span>}
-                                            <span style={styles.releaseDate}>{formatDate(r.published_at)}</span>
+                                {isSummaryCard ? (
+                                    <div
+                                        key="ai-summary"
+                                        className={`about-release-card about-release-card-${pageDirection}`}
+                                        style={{ ...styles.releaseCard, ...styles.releaseCardNew }}
+                                    >
+                                        <div style={{ width: '3px', flexShrink: 0, backgroundColor: colors.accent }} />
+                                        <div style={styles.releaseContent}>
+                                            <div style={styles.releaseHeader}>
+                                                <span style={styles.aiChip}>AI</span>
+                                                <span style={styles.releaseTag}>更新总览</span>
+                                                <span style={styles.summaryRange}>{currentVersion} → {latestVersion} · {versionsBehind} 个版本</span>
+                                                {summaryState === 'streaming' && <div style={styles.loadingSpinner} />}
+                                                {total > 1 && <span style={styles.releasePagerInfo}>{safeIdx + 1} / {total}</span>}
+                                                <button
+                                                    style={styles.summaryCloseBtn}
+                                                    aria-label="关闭总览"
+                                                    onClick={() => { setSummaryState('idle'); setSummaryText(''); setSummaryError(''); setReleaseIndex(0); setPageDirection('none'); }}
+                                                >×</button>
+                                            </div>
+                                            {summaryState === 'error' ? (
+                                                <div style={styles.summaryError}>
+                                                    {summaryError}
+                                                    <button style={styles.linkBtn} onClick={handleSummarize}>重试</button>
+                                                </div>
+                                            ) : summaryText ? (
+                                                <div style={styles.releaseBody}>
+                                                    <ReactMarkdown components={releaseMarkdownComponents}>{summaryText}</ReactMarkdown>
+                                                    {summaryState === 'streaming' && <span style={styles.summaryCaret}>▍</span>}
+                                                </div>
+                                            ) : (
+                                                <div style={styles.summaryGenerating}>
+                                                    <div style={styles.loadingSpinner} />
+                                                    <span>正在整合 {versionsBehind} 个版本的更新...</span>
+                                                </div>
+                                            )}
+                                            {summaryState === 'done' && (
+                                                <div style={styles.summaryFooter}>
+                                                    <span style={{ flex: 1 }}>由 AI 整合生成，可能存在遗漏；逐版本详情可翻页查看。</span>
+                                                    <button style={styles.summaryRegenBtn} onClick={handleSummarize}>重新生成</button>
+                                                </div>
+                                            )}
                                         </div>
-                                        {releaseBody && (
-                                            <div style={styles.releaseBody}>
-                                                <ReactMarkdown components={releaseMarkdownComponents}>{releaseBody}</ReactMarkdown>
-                                            </div>
-                                        )}
-                                        {isNew && (
-                                            <div style={styles.btnRow}>
-                                                <button style={styles.updateBtn} onClick={handleUpdate} disabled={updateState !== 'available'}>
-                                                    更新并重启
-                                                </button>
-                                            </div>
-                                        )}
                                     </div>
-                                </div>
+                                ) : r && (
+                                    <div
+                                        key={r.tag_name}
+                                        className={`about-release-card about-release-card-${pageDirection}`}
+                                        style={{ ...styles.releaseCard, ...accentStyle }}
+                                    >
+                                        <div style={releaseAccentBar(isCurrent, isNew)} />
+                                        <div style={styles.releaseContent}>
+                                            <div style={styles.releaseHeader}>
+                                                <span style={styles.releaseTag}>{r.tag_name}</span>
+                                                {isNew && <span style={styles.badgeNew}>新版本</span>}
+                                                {isNew && versionsBehind != null && versionsBehind >= 2 && (
+                                                    <span style={styles.badgeBehind} title={`当前 ${currentVersion}，最新 ${r.tag_name}，之间共 ${versionsBehind} 个版本`}>
+                                                        落后 {versionsBehind} 个版本
+                                                    </span>
+                                                )}
+                                                {isNew && versionsBehind != null && versionsBehind >= 2 && (
+                                                    <button
+                                                        style={styles.summaryTriggerBtn}
+                                                        onClick={handleSummarize}
+                                                        disabled={summaryState === 'streaming' || !cumulativeBody}
+                                                        title="用 AI 把落后的多个版本更新整合成一张总览卡片"
+                                                    >
+                                                        {summaryState === 'streaming' ? 'AI 总览生成中...' : summaryState === 'done' ? '查看 AI 总览' : 'AI 总览'}
+                                                    </button>
+                                                )}
+                                                {isCurrent && <span style={styles.badgeCurrent}>当前版本</span>}
+                                                {total > 1 && <span style={styles.releasePagerInfo}>{safeIdx + 1} / {total}</span>}
+                                                <span style={styles.releaseDate}>{formatDate(r.published_at)}</span>
+                                            </div>
+                                            {releaseBody && (
+                                                <div style={styles.releaseBody}>
+                                                    <ReactMarkdown components={releaseMarkdownComponents}>{releaseBody}</ReactMarkdown>
+                                                </div>
+                                            )}
+                                            {isNew && (
+                                                <div style={styles.btnRow}>
+                                                    <button style={styles.updateBtn} onClick={handleUpdate} disabled={updateState !== 'available'}>
+                                                        更新并重启
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {total > 1 && (
@@ -442,7 +643,7 @@ const AboutPanel: React.FC = () => {
                                     style={{ ...styles.pagerArrow, ...styles.pagerArrowNext }}
                                     onClick={() => pageRelease(1, total)}
                                     disabled={safeIdx === total - 1}
-                                    aria-label="下一个版本"
+                                    aria-label="下一项"
                                 >›</button>
                             )}
                         </div>
@@ -742,6 +943,86 @@ const styles: Record<string, React.CSSProperties> = {
         padding: '2px 8px',
         borderRadius: radius.full,
         fontWeight: 600,
+    },
+    // 落后版本数徽标：警示色调，提示用户实际落后的不止最新一个版本
+    badgeBehind: {
+        color: 'var(--warning)',
+        fontSize: font.xs,
+        backgroundColor: 'var(--warning-tint)',
+        padding: '2px 8px',
+        borderRadius: radius.full,
+        fontWeight: 600,
+        border: '1px solid var(--warning-tint-border, transparent)',
+    },
+    // AI 总览相关：总览卡片复用 releaseCard 体系，此处仅补充差异样式
+    summaryRange: {
+        fontSize: font.xs,
+        color: colors.textMuted,
+    },
+    // 新版本卡片头部的 AI 总览触发按钮（link 风格，低视觉重量）
+    summaryTriggerBtn: {
+        border: 'none',
+        backgroundColor: 'transparent',
+        color: colors.accent,
+        fontSize: font.xs,
+        cursor: 'pointer',
+        padding: '2px 6px',
+        borderRadius: radius.sm,
+        fontWeight: 600,
+    },
+    // 生成中的占位内容（居中于卡片内容区）
+    summaryGenerating: {
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+        color: colors.textMuted,
+        fontSize: font.sm,
+    },
+    summaryFooter: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        fontSize: font.xs,
+        color: colors.textMuted,
+    },
+    // 重新生成：明确的按钮形态（区别于说明文字），右对齐脱离句尾
+    summaryRegenBtn: {
+        ...btnSecondary,
+        flexShrink: 0,
+        padding: '2px 10px',
+        fontSize: font.xs,
+    },
+    // 小型 AI 徽标，标记内容由模型生成
+    aiChip: {
+        fontSize: '10px',
+        fontWeight: 700,
+        color: 'var(--text-on-accent, #fff)',
+        backgroundColor: colors.accent,
+        borderRadius: radius.sm,
+        padding: '1px 6px',
+        letterSpacing: '0.5px',
+    },
+    // 流式输出光标
+    summaryCaret: {
+        display: 'inline-block',
+        color: colors.accent,
+        animation: 'about-blink 0.9s step-end infinite',
+    },
+    summaryCloseBtn: {
+        marginLeft: 'auto',
+        border: 'none',
+        backgroundColor: 'transparent',
+        color: colors.textMuted,
+        cursor: 'pointer',
+        fontSize: '15px',
+        lineHeight: 1,
+        padding: '0 2px',
+    },
+    summaryError: {
+        fontSize: font.sm,
+        color: colors.danger,
     },
     releaseDate: {
         color: colors.textMuted,
