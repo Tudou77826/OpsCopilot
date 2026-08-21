@@ -87,6 +87,7 @@ const defaultBackend: FileTransferBackend = {
 type TaskState = {
     taskId: string;
     sessionId: string;
+    name?: string; // 传输文件名，批量场景下替代无意义的 taskId 前缀
     bytesDone: number;
     bytesTotal: number;
     speedBps: number;
@@ -107,6 +108,10 @@ type DropOverlayState = {
 const NARROW_LAYOUT_WIDTH = 640;
 const WIDE_LAYOUT_WIDTH = 920;
 const LAYOUT_HYSTERESIS = 16;
+// 传输队列面板：默认/最小内容高度与拖拽调整的持久化键。
+const QUEUE_DEFAULT_HEIGHT = 220;
+const QUEUE_MIN_HEIGHT = 120;
+const QUEUE_HEIGHT_STORAGE_KEY = 'opscopilot-ft-queue-height';
 
 // 各列最小宽度（用于列宽自适应与拖拽下限，三处共用）
 const COLUMN_MIN_WIDTH: Record<FileColumnKey, number> = {
@@ -691,6 +696,16 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
 
     const [tasks, setTasks] = useState<Record<string, TaskState>>({});
     const [drawerOpen, setDrawerOpen] = useState(false);
+    // 用户手动隐藏队列后，抑制 done/注册事件的自动弹出，直到用户主动再打开。
+    const queueHiddenByUserRef = useRef(false);
+    // 队列面板内容高度（可拖拽调整），持久化到 localStorage。
+    const [queueBodyHeight, setQueueBodyHeight] = useState<number>(() => {
+        try {
+            const v = Number(window.localStorage.getItem(QUEUE_HEIGHT_STORAGE_KEY));
+            if (Number.isFinite(v) && v >= QUEUE_MIN_HEIGHT && v <= 2000) return Math.floor(v);
+        } catch { /* localStorage 不可用时用默认值 */ }
+        return QUEUE_DEFAULT_HEIGHT;
+    });
     const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
     const [nameDialog, setNameDialog] = useState<{ title: string; defaultValue: string; onConfirm: (name: string) => void; onCancel: () => void } | null>(null);
     // 弹出应用内名称输入框，返回输入值；取消返回 null。
@@ -1199,7 +1214,9 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                             bytesTotal: Number(data?.bytesTotal ?? cur.bytesTotal),
                             speedBps: Number(data?.speedBps ?? cur.speedBps),
                             status: 'running',
-                            step: (data?.step as string) || cur.step
+                            // 后端字节进度会显式下发空 step 清除排队等提示；
+                            // 仅当事件未携带 step 字段时才保留旧值
+                            step: data?.step !== undefined ? String(data.step) : cur.step
                         }
                     };
                 });
@@ -1233,7 +1250,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                         }
                     };
                 });
-                setDrawerOpen(true);
+                setDrawerOpen(open => (queueHiddenByUserRef.current ? open : true));
 
                 const ok = !!data?.ok;
                 const sid = (data?.sessionId as string) || '';
@@ -1274,13 +1291,14 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
     };
 
     // 注册传输任务到队列。IPC 委派任务（主程序执行）收不到 done 事件，直接标记完成。
-    const registerTask = (taskId: string, message?: string) => {
+    const registerTask = (taskId: string, message?: string, name?: string) => {
         const isDelegated = !!message?.includes?.('主程序');
         setTasks(prev => ({
             ...prev,
             [taskId]: {
                 taskId,
                 sessionId,
+                name,
                 bytesDone: 0,
                 bytesTotal: -1,
                 speedBps: 0,
@@ -1288,7 +1306,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                 message: isDelegated ? (message || '任务已提交到主程序执行') : undefined,
             },
         }));
-        setDrawerOpen(true);
+        setDrawerOpen(open => (queueHiddenByUserRef.current ? open : true));
     };
 
     const startUploadSelected = async () => {
@@ -1358,7 +1376,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                 return;
             }
             if (resp.taskId) {
-                registerTask(resp.taskId, (resp as any).message);
+                registerTask(resp.taskId, (resp as any).message, entry.name);
             }
         } catch (e: any) {
             setMsg('失败: ' + e.toString());
@@ -1725,7 +1743,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                 return;
             }
             if (resp.taskId) {
-                registerTask(resp.taskId, (resp as any).message);
+                registerTask(resp.taskId, (resp as any).message, entry.name);
             }
         } catch (e: any) {
             const m = '失败: ' + e.toString();
@@ -1766,7 +1784,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                 return;
             }
             if (resp.taskId) {
-                registerTask(resp.taskId, (resp as any).message);
+                registerTask(resp.taskId, (resp as any).message, rp.replace(/^.*[\\/]/, '') || 'download');
             }
         } catch (e: any) {
             setMsg('失败: ' + e.toString());
@@ -2067,6 +2085,55 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
         .filter(t => !sessionId || t.sessionId === sessionId)
         .slice()
         .sort((a, b) => a.taskId.localeCompare(b.taskId));
+    // 队列聚合统计：批量传输时提供全量进度。排队任务以后端 step 提示的前缀识别。
+    const queueStats = (() => {
+        let done = 0, error = 0, cancelled = 0, running = 0, queued = 0;
+        for (const t of taskList) {
+            if (t.status === 'done') done++;
+            else if (t.status === 'error') error++;
+            else if (t.status === 'cancelled') cancelled++;
+            else if ((t.step || '').startsWith('排队')) queued++;
+            else running++;
+        }
+        const total = taskList.length;
+        const finished = done + error + cancelled;
+        return { total, done, error, cancelled, running, queued, finished, pct: total > 0 ? Math.floor(finished / total * 100) : 0 };
+    })();
+    const hiddenErrorCount = queueStats.error;
+    // 清理已结束且无待处理信息的任务（失败任务保留，便于查看与重试）。
+    const clearFinishedTasks = () => {
+        setTasks(prev => {
+            const next: Record<string, TaskState> = {};
+            for (const [id, t] of Object.entries(prev)) {
+                if (t.status === 'done' || t.status === 'cancelled') continue;
+                next[id] = t;
+            }
+            return next;
+        });
+    };
+    // 拖拽队列顶部手柄调整高度：向上拖增大、向下拖减小，双击恢复默认。
+    const startQueueResize = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const startY = e.clientY;
+        const startHeight = queueBodyHeight;
+        const maxHeight = Math.max(QUEUE_MIN_HEIGHT, Math.floor((containerRef.current?.clientHeight || 400) * 0.6));
+        let latest = startHeight;
+        const onMove = (ev: MouseEvent) => {
+            latest = Math.min(maxHeight, Math.max(QUEUE_MIN_HEIGHT, startHeight + (startY - ev.clientY)));
+            setQueueBodyHeight(latest);
+        };
+        const onUp = () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+            try { window.localStorage.setItem(QUEUE_HEIGHT_STORAGE_KEY, String(latest)); } catch { /* 忽略持久化失败 */ }
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    };
+    const resetQueueHeight = () => {
+        setQueueBodyHeight(QUEUE_DEFAULT_HEIGHT);
+        try { window.localStorage.setItem(QUEUE_HEIGHT_STORAGE_KEY, String(QUEUE_DEFAULT_HEIGHT)); } catch { /* 忽略持久化失败 */ }
+    };
     const isNarrow = layoutMode === 'narrow';
     const panelRootStyle = isNarrow ? { ...styles.root, ...styles.rootNarrow } : styles.root;
     const splitStyle = layoutMode === 'narrow'
@@ -2099,17 +2166,20 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
                         setNarrowPane(v => v === 'queue' ? 'local' : 'queue');
                         return;
                     }
-                    setDrawerOpen(v => !v);
+                    setDrawerOpen(v => {
+                        queueHiddenByUserRef.current = !v ? false : true;
+                        return !v;
+                    });
                 }}>
-                    {showQueue ? '隐藏队列' : '显示队列'}
+                    {showQueue ? '隐藏队列' : `显示队列${hiddenErrorCount > 0 ? ` (${hiddenErrorCount} 失败)` : ''}`}
                 </button>
             </div>
 
             {isNarrow ? (
                 <div style={styles.segmented} role="tablist" aria-label="文件传输视图">
-                    <button style={narrowPane === 'local' ? styles.segmentedActive : styles.segmentedButton} onClick={() => setNarrowPane('local')}>本地</button>
-                    <button style={narrowPane === 'remote' ? styles.segmentedActive : styles.segmentedButton} onClick={() => setNarrowPane('remote')}>远端</button>
-                    <button style={narrowPane === 'queue' ? styles.segmentedActive : styles.segmentedButton} onClick={() => setNarrowPane('queue')}>队列</button>
+                    <button style={narrowPane === 'local' ? styles.segmentedActive : styles.segmentedButton} onClick={() => { queueHiddenByUserRef.current = true; setNarrowPane('local'); }}>本地</button>
+                    <button style={narrowPane === 'remote' ? styles.segmentedActive : styles.segmentedButton} onClick={() => { queueHiddenByUserRef.current = true; setNarrowPane('remote'); }}>远端</button>
+                    <button style={narrowPane === 'queue' ? styles.segmentedActive : styles.segmentedButton} onClick={() => { queueHiddenByUserRef.current = false; setNarrowPane('queue'); }}>队列</button>
                 </div>
             ) : null}
 
@@ -2263,47 +2333,91 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
 
             {showQueue ? (
                 <div style={styles.drawer}>
+                    <div
+                        style={styles.queueResizeHandle}
+                        title="拖拽调整队列高度，双击恢复默认"
+                        onMouseDown={startQueueResize}
+                        onDoubleClick={resetQueueHeight}
+                    />
                     <div style={styles.drawerHeader}>
-                        <div style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600 }}>传输队列</div>
+                        <div style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>传输队列</div>
+                        <div style={styles.queueSummaryText} data-testid="queue-summary">
+                            <span>共 {queueStats.total}</span>
+                            {queueStats.total > 0 ? (
+                                <>
+                                    <span style={{ color: 'var(--success)' }}>✓ {queueStats.done}</span>
+                                    {queueStats.running > 0 ? <span style={{ color: 'var(--severity-info)' }}>传输 {queueStats.running}</span> : null}
+                                    {queueStats.queued > 0 ? <span style={{ color: 'var(--text-tertiary)' }}>排队 {queueStats.queued}</span> : null}
+                                    {queueStats.error > 0 ? <span style={{ color: 'var(--severity-danger)' }}>✗ {queueStats.error}</span> : null}
+                                    {queueStats.cancelled > 0 ? <span style={{ color: 'var(--text-tertiary)' }}>取消 {queueStats.cancelled}</span> : null}
+                                </>
+                            ) : null}
+                        </div>
                         <div style={{ flex: 1 }} />
+                        <button
+                            style={styles.btnSecondary}
+                            onClick={clearFinishedTasks}
+                            disabled={queueStats.done + queueStats.cancelled === 0}
+                        >清空已完成</button>
                         <button style={styles.btnSecondary} onClick={() => {
+                            queueHiddenByUserRef.current = true;
                             setDrawerOpen(false);
                             if (isNarrow) setNarrowPane('local');
                         }}>收起</button>
                     </div>
-                    <div style={styles.drawerBody}>
+                    <div style={styles.queueProgressRow}>
+                        <div style={styles.queueProgressBar} title={`总进度 ${queueStats.pct}%（完成 ${queueStats.done}/${queueStats.total}）`}>
+                            <div style={{ ...styles.queueProgressFill, width: `${queueStats.pct}%` }} />
+                        </div>
+                        <span style={styles.queueProgressLabel}>{queueStats.total > 0 ? `${queueStats.done}/${queueStats.total} · ${queueStats.pct}%` : ''}</span>
+                    </div>
+                    <div style={{ ...styles.drawerBody, maxHeight: queueBodyHeight }}>
                         {taskList.length === 0 ? (
                             <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>暂无任务</div>
                         ) : (
-                            taskList.map(t => (
-                                <div key={t.taskId} style={styles.taskRow}>
-                                    <div style={styles.taskId} title={t.taskId}>{t.taskId.slice(0, 8)}</div>
-                                    {t.status === 'done' ? (
-                                        <span style={{ color: 'var(--success)', fontSize: '11px' }}>✓ 完成</span>
-                                    ) : t.status === 'error' || t.status === 'cancelled' ? (
-                                        <span style={{ color: 'var(--severity-danger)', fontSize: '11px' }}>✗ {t.status}</span>
-                                    ) : (
-                                        <span style={styles.taskStatus}>{t.status}</span>
-                                    )}
-                                    {t.status === 'done' && t.message ? (
-                                        <div style={styles.taskMsg}>{t.message}</div>
-                                    ) : null}
-                                    {t.status === 'running' && t.step ? (
-                                        <div style={styles.taskStep}>{t.step}</div>
-                                    ) : null}
-                                    {t.status === 'running' && t.bytesTotal > 0 ? (
-                                        <div style={styles.taskProgress}>{formatFileSize(t.bytesDone)} / {formatFileSize(t.bytesTotal)}</div>
-                                    ) : null}
-                                    {t.status === 'running' && t.speedBps > 0 ? (
-                                        <div style={styles.taskSpeed}>{formatSpeed(t.speedBps)}</div>
-                                    ) : null}
-                                    {t.status === 'running' ? (
-                                        <button style={styles.btnSecondary} onClick={() => cancelTask(t.taskId)} disabled={loading}>
-                                            取消
-                                        </button>
-                                    ) : null}
-                                </div>
-                            ))
+                            taskList.map(t => {
+                                const queued = t.status === 'running' && (t.step || '').startsWith('排队');
+                                let stateText: string;
+                                let stateColor: string;
+                                if (t.status === 'done') {
+                                    stateText = '✓ 完成';
+                                    stateColor = 'var(--success)';
+                                } else if (t.status === 'error') {
+                                    stateText = '✗ 失败';
+                                    stateColor = 'var(--severity-danger)';
+                                } else if (t.status === 'cancelled') {
+                                    stateText = '已取消';
+                                    stateColor = 'var(--text-tertiary)';
+                                } else if (queued) {
+                                    stateText = '排队';
+                                    stateColor = 'var(--text-tertiary)';
+                                } else {
+                                    stateText = '传输中';
+                                    stateColor = 'var(--severity-info)';
+                                }
+                                // 第三列统一聚合：完成/失败显示消息，排队显示等待提示，传输中显示字节与速度
+                                let detail = '';
+                                if (t.status === 'done' || t.status === 'error' || t.status === 'cancelled') {
+                                    detail = t.message || '';
+                                } else if (queued) {
+                                    detail = t.step || '';
+                                } else if (t.bytesTotal > 0) {
+                                    detail = `${formatFileSize(t.bytesDone)} / ${formatFileSize(t.bytesTotal)}`;
+                                    if (t.speedBps > 0) detail += ` · ${formatSpeed(t.speedBps)}`;
+                                }
+                                return (
+                                    <div key={t.taskId} style={styles.taskRow}>
+                                        <div style={styles.taskId} title={t.name || t.taskId}>{t.name || t.taskId.slice(0, 8)}</div>
+                                        <span style={{ ...styles.taskState, color: stateColor }}>{stateText}</span>
+                                        <span style={styles.taskDetail} title={detail || undefined}>{detail}</span>
+                                        {t.status === 'running' ? (
+                                            <button style={{ ...styles.btnSecondary, padding: '2px 8px', fontSize: '11px' }} onClick={() => cancelTask(t.taskId)} disabled={loading}>
+                                                取消
+                                            </button>
+                                        ) : <span style={styles.taskOpsPlaceholder} />}
+                                    </div>
+                                );
+                            })
                         )}
                     </div>
                 </div>
@@ -2846,6 +2960,48 @@ const styles: Record<string, React.CSSProperties> = {
         borderRadius: '8px',
         overflow: 'hidden'
     },
+    queueResizeHandle: {
+        height: '6px',
+        cursor: 'ns-resize',
+        backgroundColor: 'var(--bg-secondary)',
+        borderBottom: '1px solid var(--border)'
+    },
+    queueSummaryText: {
+        display: 'flex',
+        gap: '10px',
+        alignItems: 'center',
+        color: 'var(--text-tertiary)',
+        fontSize: '11px',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden'
+    },
+    queueProgressRow: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '4px 12px 6px',
+        backgroundColor: 'var(--bg-secondary)',
+        borderBottom: '1px solid var(--border)'
+    },
+    queueProgressLabel: {
+        color: 'var(--text-tertiary)',
+        fontSize: '11px',
+        whiteSpace: 'nowrap'
+    },
+    queueProgressBar: {
+        flex: '1 1 auto',
+        height: '6px',
+        borderRadius: '3px',
+        backgroundColor: 'var(--bg-primary)',
+        border: '1px solid var(--border)',
+        overflow: 'hidden'
+    },
+    queueProgressFill: {
+        height: '100%',
+        borderRadius: '2px',
+        backgroundColor: 'var(--success)',
+        transition: 'width 0.2s ease'
+    },
     drawerHeader: {
         padding: '10px 12px',
         backgroundColor: 'var(--bg-secondary)',
@@ -2859,47 +3015,38 @@ const styles: Record<string, React.CSSProperties> = {
         display: 'flex',
         flexDirection: 'column',
         gap: '6px',
-        maxHeight: '220px',
+        // 内容高度由拖拽手柄控制（内联 maxHeight 覆盖）
         overflowY: 'auto'
     },
     taskRow: {
-        display: 'flex',
+        // 四列网格保证多行之间的列对齐：文件名 | 状态 | 详情 | 操作
+        display: 'grid',
+        gridTemplateColumns: 'minmax(100px, 1.1fr) 56px minmax(120px, 1fr) 48px',
         gap: '8px',
         alignItems: 'center'
     },
     taskId: {
-        color: 'var(--text-tertiary)',
+        color: 'var(--text-secondary)',
         fontSize: '12px',
-        minWidth: '80px'
-    },
-    taskStatus: {
-        color: 'var(--text-tertiary)',
-        fontSize: '12px',
-        minWidth: '70px'
-    },
-    taskStep: {
-        color: 'var(--severity-info)',
-        fontSize: '11px',
-        flex: '1 1 80px',
-        maxWidth: '200px',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+    },
+    taskState: {
+        fontSize: '11px',
         whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis'
     },
-    taskProgress: {
+    taskDetail: {
         color: 'var(--text-tertiary)',
-        fontSize: '12px',
-        minWidth: '140px'
+        fontSize: '11px',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
     },
-    taskSpeed: {
-        color: 'var(--text-tertiary)',
-        fontSize: '12px',
-        minWidth: '110px'
-    },
-    taskMsg: {
-        color: 'var(--text-tertiary)',
-        fontSize: '12px',
-        flex: 1
+    taskOpsPlaceholder: {
+        width: '48px'
     },
     modalOverlay: {
         position: 'fixed' as const,

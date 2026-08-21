@@ -472,4 +472,118 @@ describe('FilesPanel responsive layout', () => {
 
         expect(writeText).toHaveBeenCalledWith('C:\\a.txt\nC:\\b.txt');
     });
+
+    // 收集 Wails 事件回调，用于在测试中模拟后端 file-transfer-* 事件。
+    const stubRuntimeEvents = () => {
+        const handlers: Record<string, (data: any) => void> = {};
+        vi.stubGlobal('runtime', {
+            EventsOn: vi.fn((name: string, cb: (data: any) => void) => {
+                handlers[name] = cb;
+            }),
+        });
+        return {
+            emit: (name: string, data: any) => act(() => { handlers[name]?.(data); }),
+        };
+    };
+
+    const downloadRemoteLog = async () => {
+        // 文件名可能同时出现在远端列表与传输队列任务行，取表格行（有 tr 祖先）的那个
+        await waitFor(() => {
+            const rows = screen.getAllByText('remote.log')
+                .map(n => n.closest('tr'))
+                .filter((n): n is HTMLTableRowElement => !!n);
+            expect(rows.length).toBeGreaterThan(0);
+            fireEvent.doubleClick(rows[0]);
+        });
+        await waitFor(() => expect(screen.getByTestId('queue-summary')).toBeInTheDocument());
+    };
+
+    it('aggregates queue summary across task states', async () => {
+        const backend = makeBackend();
+        let seq = 0;
+        backend.FTDownload = vi.fn(() => json({ ok: true, taskId: `download-${++seq}` }));
+        const events = stubRuntimeEvents();
+        renderPanel(1200, backend);
+
+        await downloadRemoteLog();
+        await downloadRemoteLog();
+
+        events.emit('file-transfer-progress', { taskId: 'download-2', sessionId: 'session-1', step: '排队等待其他传输完成...' });
+        events.emit('file-transfer-done', { taskId: 'download-1', sessionId: 'session-1', ok: true });
+
+        const summary = screen.getByTestId('queue-summary');
+        expect(within(summary).getByText('共 2')).toBeInTheDocument();
+        expect(within(summary).getByText('✓ 1')).toBeInTheDocument();
+        expect(within(summary).getByText('排队 1')).toBeInTheDocument();
+        // 任务行显示文件名而不是 taskId 前缀
+        expect(screen.getAllByText('remote.log').length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('keeps the queue hidden after the user closes it, even on new done events', async () => {
+        const backend = makeBackend();
+        const events = stubRuntimeEvents();
+        renderPanel(1200, backend);
+
+        await downloadRemoteLog();
+        fireEvent.click(screen.getByText('收起'));
+        expect(screen.queryByText('传输队列')).not.toBeInTheDocument();
+
+        // 隐藏后仍有任务完成：队列不得被强制弹出
+        events.emit('file-transfer-done', { taskId: 'download-1', sessionId: 'session-1', ok: true });
+        expect(screen.queryByText('传输队列')).not.toBeInTheDocument();
+        // 顶栏按钮不再带失败徽标（该任务成功）
+        expect(screen.getByText('显示队列')).toBeInTheDocument();
+    });
+
+    it('surfaces a failed badge on the show-queue button when hidden tasks fail', async () => {
+        const backend = makeBackend();
+        const events = stubRuntimeEvents();
+        renderPanel(1200, backend);
+
+        await downloadRemoteLog();
+        fireEvent.click(screen.getByText('收起'));
+
+        events.emit('file-transfer-done', { taskId: 'download-1', sessionId: 'session-1', ok: false, message: '网络异常' });
+        expect(screen.queryByText('传输队列')).not.toBeInTheDocument();
+        expect(screen.getByText('显示队列 (1 失败)')).toBeInTheDocument();
+
+        // 用户主动打开后，事件恢复自动弹出且徽标消失
+        fireEvent.click(screen.getByText('显示队列 (1 失败)'));
+        expect(screen.getByText('传输队列')).toBeInTheDocument();
+    });
+
+    it('clears the queued hint once byte progress arrives', async () => {
+        const backend = makeBackend();
+        const events = stubRuntimeEvents();
+        renderPanel(1200, backend);
+
+        await downloadRemoteLog();
+        events.emit('file-transfer-progress', { taskId: 'download-1', sessionId: 'session-1', step: '排队等待其他传输完成...' });
+        expect(screen.getByText('排队等待其他传输完成...')).toBeInTheDocument();
+
+        // 拿到槽位后的字节进度必须清掉排队提示（后端会显式下发空 step）
+        events.emit('file-transfer-progress', { taskId: 'download-1', sessionId: 'session-1', step: '', bytesDone: 1024, bytesTotal: 4096, speedBps: 2048 });
+        expect(screen.queryByText('排队等待其他传输完成...')).not.toBeInTheDocument();
+        expect(screen.getByText('传输中')).toBeInTheDocument();
+        expect(screen.getByText('1.0 KB / 4.0 KB · 2.0 KB/s')).toBeInTheDocument();
+
+        const summary = screen.getByTestId('queue-summary');
+        expect(within(summary).queryByText(/^排队/)).not.toBeInTheDocument();
+    });
+
+    it('clears finished tasks from the queue but keeps failed ones', async () => {
+        const backend = makeBackend();
+        const events = stubRuntimeEvents();
+        renderPanel(1200, backend);
+
+        await downloadRemoteLog();
+        await downloadRemoteLog();
+        events.emit('file-transfer-done', { taskId: 'download-1', sessionId: 'session-1', ok: true });
+        events.emit('file-transfer-done', { taskId: 'download-2', sessionId: 'session-1', ok: false, message: '失败' });
+
+        fireEvent.click(screen.getByText('清空已完成'));
+        const summary = screen.getByTestId('queue-summary');
+        await waitFor(() => expect(within(summary).getByText('共 1')).toBeInTheDocument());
+        expect(within(summary).getByText('✗ 1')).toBeInTheDocument();
+    });
 });
