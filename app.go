@@ -2315,6 +2315,9 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 		slog.Error("ft failed to get transfer client", "error", err)
 		return mustJSON(ftResponse{OK: false, Error: toTransferErr(err)})
 	}
+	// 预检仅用于快速报错；root 直连分支会新建 SSH 连接，须立即关闭，
+	// 实际传输用的连接由 goroutine 内重新解析获取。
+	info.closeFn()
 
 	taskID := uuid.New().String()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -2361,6 +2364,8 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 				// Step-only notification: don't overwrite byte progress
 				payload["step"] = p.Step
 			} else {
+				// 字节进度显式清空 step（如排队提示），否则前端会保留旧文案
+				payload["step"] = ""
 				payload["bytesDone"] = p.BytesDone
 				payload["bytesTotal"] = p.BytesTotal
 				payload["speedBps"] = p.SpeedBps
@@ -2526,8 +2531,6 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 		slog.Info("ft task transfer completed", "task", taskID[:8], "transport", usedTransport, "bytes", res.Bytes)
 	}()
 
-	// Suppress unused warning
-	_ = info
 	return mustJSON(ftResponse{OK: true, TaskID: taskID})
 }
 
