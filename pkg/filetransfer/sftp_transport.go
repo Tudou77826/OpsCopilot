@@ -363,6 +363,13 @@ func toTransferError(err error) error {
 	if strings.Contains(lower, "unknown channel") || strings.Contains(lower, "channel open failure") {
 		return &TransferError{Code: ErrorCodeSFTPNotSupported, Message: "对端不支持 SFTP 通道"}
 	}
+	// sshd MaxSessions/MaxStartups 拒绝新通道:并发传输过多时出现,
+	// 与"对端不支持 SFTP"不同,重试或降低并发即可恢复。
+	if strings.Contains(lower, "administratively prohibited") ||
+		strings.Contains(lower, "channel open failed") ||
+		strings.Contains(lower, "too many open sessions") {
+		return &TransferError{Code: ErrorCodeSessionLimit, Message: "并发传输过多，服务端拒绝新会话，请稍后重试或减少批量大小"}
+	}
 	if strings.Contains(lower, "permission denied") {
 		return &TransferError{Code: ErrorCodePermissionDenied, Message: "权限不足"}
 	}

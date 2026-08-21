@@ -68,6 +68,7 @@ type App struct {
 	isForceQuitting   bool         // Flag to skip confirmation on force quit
 	ftMu              sync.Mutex
 	ftCancels         map[string]context.CancelFunc
+	ftLimiters        map[string]*ftLimiter // 每会话传输并发限制（ftMu 保护）
 	relayMu           sync.Mutex
 	relayTransports   map[string]*filetransfer.RootRelayTransport
 	shellTransports   map[string]*filetransfer.RootRelayTransport
@@ -161,6 +162,7 @@ func NewApp() *App {
 		activeConfigs:     make(map[string]ConnectConfig),
 		isForceQuitting:   false,
 		ftCancels:         make(map[string]context.CancelFunc),
+		ftLimiters:        make(map[string]*ftLimiter),
 		relayTransports:   make(map[string]*filetransfer.RootRelayTransport),
 		shellTransports:   make(map[string]*filetransfer.RootRelayTransport),
 		sessionStates:     make(map[string]*SessionState),
@@ -2269,6 +2271,43 @@ func (a *App) FTCheck(sessionID string) string {
 	return mustJSON(ftResponse{OK: false, Error: te})
 }
 
+// maxConcurrentTransfersPerSession 限制同一会话并发的传输任务数。
+// SSH 服务端默认 MaxSessions=10（单连接并发会话数）、MaxStartups=10:30:100
+// （并发建连随机丢弃），批量传输全并发打开 SFTP 通道会被服务端拒绝，导致部分失败。
+// 终端 shell 自身占用 1 个会话，取 4 留有余量。
+const maxConcurrentTransfersPerSession = 4
+
+// ftLimiter 限制单会话并发传输数。refs 记录关联任务数（含排队中的），
+// 归零后由最后一个退出的任务从 ftLimiters 删除条目，避免 map 泄漏。
+type ftLimiter struct {
+	sem  chan struct{}
+	refs int
+}
+
+func (a *App) acquireFTLimiter(sessionID string) *ftLimiter {
+	a.ftMu.Lock()
+	defer a.ftMu.Unlock()
+	lim := a.ftLimiters[sessionID]
+	if lim == nil {
+		lim = &ftLimiter{sem: make(chan struct{}, maxConcurrentTransfersPerSession)}
+		a.ftLimiters[sessionID] = lim
+	}
+	lim.refs++
+	return lim
+}
+
+func (a *App) releaseFTLimiter(sessionID string, lim *ftLimiter, acquired bool) {
+	if acquired {
+		<-lim.sem
+	}
+	a.ftMu.Lock()
+	lim.refs--
+	if lim.refs <= 0 {
+		delete(a.ftLimiters, sessionID)
+	}
+	a.ftMu.Unlock()
+}
+
 func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string) string {
 	slog.Info("ft transfer started", "op", op, "session", sessionID[:8], "local", localPath, "remote", remotePath)
 	info, err := a.getTransferClientWithRelay(sessionID)
@@ -2328,6 +2367,38 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 			}
 			runtime.EventsEmit(a.ctx, "file-transfer-progress", payload)
 		}
+
+		// 并发限流：同一会话最多 maxConcurrentTransfersPerSession 个传输同时执行，
+		// 超出的任务排队等待，避免触发服务端 MaxSessions/MaxStartups 限制导致批量传输部分失败。
+		lim := a.acquireFTLimiter(sessionID)
+		acquired := false
+		select {
+		case lim.sem <- struct{}{}:
+			acquired = true
+		default:
+			progressFn(filetransfer.Progress{Step: "排队等待其他传输完成..."})
+			select {
+			case lim.sem <- struct{}{}:
+				acquired = true
+			case <-ctx.Done():
+			}
+		}
+		if !acquired {
+			a.releaseFTLimiter(sessionID, lim, false)
+			slog.Info("ft task cancelled while queued", "task", taskID[:8])
+			if a.ctx != nil {
+				runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
+					"taskId":    taskID,
+					"sessionId": sessionID,
+					"ok":        false,
+					"code":      filetransfer.ErrorCodeUnknown,
+					"message":   "已取消（排队中）",
+					"cancelled": true,
+				})
+			}
+			return
+		}
+		defer a.releaseFTLimiter(sessionID, lim, true)
 
 		var (
 			res   filetransfer.TransferResult

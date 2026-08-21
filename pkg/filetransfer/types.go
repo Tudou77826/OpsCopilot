@@ -16,6 +16,9 @@ const (
 	ErrorCodeRelayNoSpace     ErrorCode = "RELAY_NO_SPACE"
 	ErrorCodeFileSizeExceeded ErrorCode = "FILE_SIZE_EXCEEDED"
 	ErrorCodeChecksumMismatch ErrorCode = "CHECKSUM_MISMATCH"
+	// 会话数超限:服务端 sshd MaxSessions/MaxStartups 拒绝新开通道,
+	// 典型于批量传输并发过高时,重试或降低并发后可恢复。
+	ErrorCodeSessionLimit ErrorCode = "SESSION_LIMIT"
 )
 
 type TransferError struct {

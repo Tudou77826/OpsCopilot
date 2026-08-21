@@ -1591,8 +1591,14 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
             setMsg('请先选择远端文件');
             return;
         }
+        // 后端按会话限流排队，这里逐个启动；启动失败的文件汇总提示，
+        // 传输进度与成败在任务列表中逐项展示。
+        const failures: string[] = [];
         for (const entry of targets) {
-            await startDownloadFile(entry);
+            await startDownloadFile(entry, (m) => failures.push(`${entry.name}: ${m}`));
+        }
+        if (failures.length > 0) {
+            setMsg(`批量下载：${targets.length - failures.length} 个任务已开始，${failures.length} 个启动失败\n` + failures.join('\n'));
         }
     };
 
@@ -1683,7 +1689,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
         return dst;
     };
 
-    const startDownloadFile = async (entry: FileEntry) => {
+    const startDownloadFile = async (entry: FileEntry, onError?: (msg: string) => void) => {
         if (!sessionId) {
             setMsg('请先选择会话');
             return;
@@ -1709,18 +1715,21 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ba
             const raw = await api.FTDownload(sessionId, entry.path, dst);
             const resp = parseResp(raw);
             if (!resp) {
-                setMsg('返回格式错误');
+                const m = '返回格式错误';
+                if (onError) onError(m); else setMsg(m);
                 return;
             }
             if (!resp.ok) {
-                setMsg(formatError(resp));
+                const m = formatError(resp);
+                if (onError) onError(m); else setMsg(m);
                 return;
             }
             if (resp.taskId) {
                 registerTask(resp.taskId, (resp as any).message);
             }
         } catch (e: any) {
-            setMsg('失败: ' + e.toString());
+            const m = '失败: ' + e.toString();
+            if (onError) onError(m); else setMsg(m);
         } finally {
             setLoading(false);
         }
