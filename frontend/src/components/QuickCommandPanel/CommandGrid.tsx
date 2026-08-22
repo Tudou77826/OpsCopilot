@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { QuickCommand } from './types';
+import { confirmDialog } from '../ConfirmDialog/ConfirmDialog';
 
 interface CommandGridProps {
     commands: QuickCommand[];
@@ -17,6 +18,7 @@ const CommandGrid: React.FC<CommandGridProps> = ({
 }) => {
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; cmdId: string } | null>(null);
     const [hoveredId, setHoveredId] = useState<string | null>(null);
+    const [hoveredMenuItem, setHoveredMenuItem] = useState<number | null>(null);
     const searchInputRef = React.useRef<HTMLInputElement>(null);
 
     // Close context menu on any outside pointer event (including xterm.js terminals)
@@ -92,21 +94,52 @@ const CommandGrid: React.FC<CommandGridProps> = ({
             {contextMenu && (
                 <>
                     <div style={styles.backdrop} onClick={() => setContextMenu(null)} />
-                    <div style={{ ...styles.menu, top: contextMenu.y - 80, left: contextMenu.x }} data-testid="command-context-menu">
-                        <div style={styles.menuItem} onClick={() => {
-                            const cmd = commands.find(c => c.id === contextMenu.cmdId);
-                            if (cmd) onEdit(cmd);
-                            setContextMenu(null);
-                        }}>
-                            编辑
-                        </div>
-                        <div style={styles.menuItem} onClick={() => {
-                            onDelete(contextMenu.cmdId);
-                            setContextMenu(null);
-                        }}>
-                            删除
-                        </div>
-                    </div>
+                    {(() => {
+                        // 边界感知定位：菜单出现在指针处，但整体限制在视口内，
+                        // 靠近屏幕底部/右缘时向上/向左收，避免弹出可视区外。
+                        const MENU_W = 100;
+                        const MENU_H = 70;
+                        const top = Math.max(8, Math.min(contextMenu.y, window.innerHeight - MENU_H - 8));
+                        const left = Math.max(8, Math.min(contextMenu.x, window.innerWidth - MENU_W - 8));
+                        return (
+                            <div style={{ ...styles.menu, top, left }} data-testid="command-context-menu">
+                                <div
+                                    style={hoveredMenuItem === 0 ? { ...styles.menuItem, ...styles.menuItemHover } : styles.menuItem}
+                                    onMouseEnter={() => setHoveredMenuItem(0)}
+                                    onMouseLeave={() => setHoveredMenuItem(null)}
+                                    onClick={() => {
+                                        const cmd = commands.find(c => c.id === contextMenu.cmdId);
+                                        if (cmd) onEdit(cmd);
+                                        setContextMenu(null);
+                                    }}
+                                >
+                                    编辑
+                                </div>
+                                <div
+                                    style={{
+                                        ...(hoveredMenuItem === 1 ? { ...styles.menuItem, ...styles.menuItemHover } : styles.menuItem),
+                                        color: 'var(--severity-danger)',
+                                    }}
+                                    onMouseEnter={() => setHoveredMenuItem(1)}
+                                    onMouseLeave={() => setHoveredMenuItem(null)}
+                                    onClick={async () => {
+                                        const cmd = commands.find(c => c.id === contextMenu.cmdId);
+                                        setContextMenu(null);
+                                        if (!cmd) return;
+                                        const ok = await confirmDialog.show({
+                                            title: '删除快捷命令',
+                                            message: `确定删除「${cmd.name}」？此操作立即生效且不可恢复。`,
+                                            confirmText: '删除',
+                                            danger: true,
+                                        });
+                                        if (ok) onDelete(cmd.id);
+                                    }}
+                                >
+                                    删除
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </>
             )}
         </>
@@ -212,6 +245,9 @@ const styles = {
         fontSize: '11px',
         color: 'var(--text-secondary)',
         transition: 'background-color 0.15s',
+    },
+    menuItemHover: {
+        backgroundColor: 'var(--bg-elevated)',
     },
 };
 

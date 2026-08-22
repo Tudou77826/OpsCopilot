@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import '@testing-library/jest-dom';
 import CommandGrid from './CommandGrid';
@@ -52,13 +52,28 @@ describe('CommandGrid', () => {
         expect(onEdit).toHaveBeenCalledWith(commands[0]);
     });
 
-    it('calls onDelete from context menu', () => {
+    it('calls onDelete from context menu after confirmation', async () => {
         const onDelete = vi.fn();
+        // 无 React 宿主时 confirmDialog 降级为 window.confirm
+        const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
         render(<CommandGrid {...defaultProps} onDelete={onDelete} />);
 
         fireEvent.contextMenu(screen.getByText('List Files'));
         fireEvent.click(screen.getByText('删除'));
-        expect(onDelete).toHaveBeenCalledWith('1');
+        expect(confirmSpy).toHaveBeenCalled();
+        await waitFor(() => expect(onDelete).toHaveBeenCalledWith('1'));
+        confirmSpy.mockRestore();
+    });
+
+    it('does not delete when the confirmation is cancelled', () => {
+        const onDelete = vi.fn();
+        const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+        render(<CommandGrid {...defaultProps} onDelete={onDelete} />);
+
+        fireEvent.contextMenu(screen.getByText('List Files'));
+        fireEvent.click(screen.getByText('删除'));
+        expect(onDelete).not.toHaveBeenCalled();
+        confirmSpy.mockRestore();
     });
 
     it('calls onAdd when add button is clicked', () => {
