@@ -12,11 +12,27 @@ class WailsAdapter implements QuickCommandStorageAdapter {
         return [];
     }
 
-    save(commands: QuickCommand[]): void {
+    add(cmd: QuickCommand): void {
         // @ts-ignore
-        if (window.go?.main?.App?.SaveQuickCommands) {
+        if (window.go?.main?.App?.AddQuickCommand) {
             // @ts-ignore
-            window.go.main.App.SaveQuickCommands(commands);
+            window.go.main.App.AddQuickCommand(cmd);
+        }
+    }
+
+    update(id: string, updates: Partial<QuickCommand>): void {
+        // @ts-ignore
+        if (window.go?.main?.App?.UpdateQuickCommand) {
+            // @ts-ignore
+            window.go.main.App.UpdateQuickCommand(id, { ...updates, id });
+        }
+    }
+
+    remove(id: string): void {
+        // @ts-ignore
+        if (window.go?.main?.App?.DeleteQuickCommand) {
+            // @ts-ignore
+            window.go.main.App.DeleteQuickCommand(id);
         }
     }
 }
@@ -28,8 +44,16 @@ export class MemoryAdapter implements QuickCommandStorageAdapter {
         return this.data;
     }
 
-    save(commands: QuickCommand[]): void {
-        this.data = [...commands];
+    add(cmd: QuickCommand): void {
+        this.data = [...this.data, cmd];
+    }
+
+    update(id: string, updates: Partial<QuickCommand>): void {
+        this.data = this.data.map(c => c.id === id ? { ...c, ...updates } : c);
+    }
+
+    remove(id: string): void {
+        this.data = this.data.filter(c => c.id !== id);
     }
 }
 
@@ -47,16 +71,22 @@ export interface UseQuickCommandsReturn {
     addCommand: (name: string, content: string, group: string) => void;
     updateCommand: (id: string, updates: Partial<QuickCommand>) => void;
     deleteCommand: (id: string) => void;
+    /** 外部（多窗口热加载事件）推送的最新列表，直接替换本地状态 */
+    applyExternalCommands: (cmds: QuickCommand[]) => void;
 }
 
 export function useQuickCommands(options?: UseQuickCommandsOptions): UseQuickCommandsReturn {
-    const adapter = options?.adapter || new WailsAdapter();
+    // adapter 惰性初始化：组件每次渲染都新建实例会让依赖它的 effect 反复执行
+    //（旧实现因此把「切分组/输入搜索」也变成全量刷盘）
+    const adapterRef = useRef<QuickCommandStorageAdapter>();
+    if (!adapterRef.current) {
+        adapterRef.current = options?.adapter || new WailsAdapter();
+    }
+    const adapter = adapterRef.current;
 
     const [commands, setCommands] = useState<QuickCommand[]>([]);
     const [loaded, setLoaded] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState<string>('default');
-    // 标记本次 commands 变化是否由用户操作触发；加载完成后首次赋值应跳过保存
-    const skipNextSaveRef = useRef(false);
 
     const availableGroups = useMemo(() => {
         const groupSet = new Set<string>();
@@ -84,24 +114,31 @@ export function useQuickCommands(options?: UseQuickCommandsOptions): UseQuickCom
                 ...cmd,
                 group: cmd.group === '__new__' ? 'default' : (cmd.group || 'default'),
             }));
-            // 加载完成后的首次 setCommands 不是用户操作，跳过保存
-            skipNextSaveRef.current = true;
             setCommands(fixedCmds);
             setLoaded(true);
         }).catch(() => {
             setLoaded(true);
         });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // 热加载：本进程写盘或其他窗口（进程）修改配置文件时，后端推送最新列表。
+    // 只替换本地状态，不回写，避免与单条意图化操作形成回环。
     useEffect(() => {
-        if (!loaded) return;
-        // 跳过加载完成后的首次回写，避免无谓刷盘
-        if (skipNextSaveRef.current) {
-            skipNextSaveRef.current = false;
-            return;
-        }
-        adapter.save(commands);
-    }, [commands, loaded, adapter]);
+        // @ts-ignore
+        const runtime = window.runtime;
+        if (!runtime?.EventsOn) return;
+        const off = runtime.EventsOn('quick-commands-updated', (cmds: QuickCommand[]) => {
+            if (!Array.isArray(cmds)) return;
+            setCommands(cmds.map(cmd => ({
+                ...cmd,
+                group: cmd.group === '__new__' ? 'default' : (cmd.group || 'default'),
+            })));
+        });
+        return () => {
+            if (typeof off === 'function') off();
+        };
+    }, []);
 
     const filteredCommands = useMemo(() => {
         return commands.filter(cmd => {
@@ -122,6 +159,7 @@ export function useQuickCommands(options?: UseQuickCommandsOptions): UseQuickCom
             group: effectiveGroup,
         };
         setCommands(prev => [...prev, newCmd]);
+        adapter.add(newCmd);
     };
 
     const updateCommand = (id: string, updates: Partial<QuickCommand>) => {
@@ -131,10 +169,19 @@ export function useQuickCommands(options?: UseQuickCommandsOptions): UseQuickCom
             fixedUpdates.group = 'default';
         }
         setCommands(prev => prev.map(c => c.id === id ? { ...c, ...fixedUpdates } : c));
+        adapter.update(id, fixedUpdates);
     };
 
     const deleteCommand = (id: string) => {
         setCommands(prev => prev.filter(c => c.id !== id));
+        adapter.remove(id);
+    };
+
+    const applyExternalCommands = (cmds: QuickCommand[]) => {
+        setCommands(cmds.map(cmd => ({
+            ...cmd,
+            group: cmd.group === '__new__' ? 'default' : (cmd.group || 'default'),
+        })));
     };
 
     return {
@@ -147,5 +194,6 @@ export function useQuickCommands(options?: UseQuickCommandsOptions): UseQuickCom
         addCommand,
         updateCommand,
         deleteCommand,
+        applyExternalCommands,
     };
 }

@@ -482,6 +482,9 @@ func launchSelfUpdate(exePath, manifestPath string) error {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
+	// 快捷命令热加载：监听配置文件外部变化（多窗口互写），推送给前端
+	a.startQuickCommandsWatcher()
+
 	// 初始化命令提取器
 	a.commandExtractors = make(map[string]*terminal.CommandExtractor)
 
@@ -2566,10 +2569,56 @@ func (a *App) LoadQuickCommands() []config.QuickCommand {
 	return a.configMgr.Config.QuickCommands
 }
 
-// SaveQuickCommands updates and saves quick commands
-func (a *App) SaveQuickCommands(commands []config.QuickCommand) string {
-	a.configMgr.SetQuickCommands(commands)
+// 以下三个意图化接口取代旧的 SaveQuickCommands 全量覆盖保存：
+// 多窗口（多进程）各自持有内存快照，全量写回会用旧快照互相覆盖；
+// 单条操作 + 文件变化热加载保证各窗口近实时一致。
+
+func (a *App) AddQuickCommand(cmd config.QuickCommand) string {
+	a.configMgr.AddQuickCommand(cmd)
+	a.emitQuickCommandsUpdated()
 	return ""
+}
+
+func (a *App) UpdateQuickCommand(id string, cmd config.QuickCommand) string {
+	a.configMgr.UpdateQuickCommand(id, cmd)
+	a.emitQuickCommandsUpdated()
+	return ""
+}
+
+func (a *App) DeleteQuickCommand(id string) string {
+	a.configMgr.DeleteQuickCommand(id)
+	a.emitQuickCommandsUpdated()
+	return ""
+}
+
+// emitQuickCommandsUpdated 把最新命令列表推送给本进程前端（自己的写操作即时生效）
+func (a *App) emitQuickCommandsUpdated() {
+	if a.ctx == nil {
+		return
+	}
+	runtime.EventsEmit(a.ctx, "quick-commands-updated", a.configMgr.Config.QuickCommands)
+}
+
+// startQuickCommandsWatcher 轮询 quick_commands.json 变化（其他进程写入），
+// 变化时重载并推送前端，实现多窗口热加载。
+func (a *App) startQuickCommandsWatcher() {
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-a.ctx.Done():
+				return
+			case <-ticker.C:
+				changed, cmds := a.configMgr.CheckQuickCommandsChanged()
+				if !changed {
+					continue
+				}
+				slog.Debug("quick commands file changed externally, reloaded", "count", len(cmds))
+				a.emitQuickCommandsUpdated()
+			}
+		}
+	}()
 }
 
 // GetQuickCommandGroups returns a list of all unique groups from quick commands

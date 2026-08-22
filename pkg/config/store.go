@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
+	"time"
 )
 
 type AppConfig struct {
@@ -165,6 +167,12 @@ type Manager struct {
 	lastImportMessage  string
 	importing          atomic.Bool
 	readOnly           bool // 只读模式：Load 时不自动创建文件
+	// quickCmdMu 保护快捷命令的读改写；多窗口（多进程）场景下
+	// 各进程通过文件变化检测热加载，操作均为单条意图化增删改。
+	quickCmdMu sync.Mutex
+	// quickCmdMod/quickCmdSize 记录上次同步过的文件状态，用于热加载变化检测
+	quickCmdMod  time.Time
+	quickCmdSize int64
 }
 
 func NewManager() *Manager {
@@ -347,6 +355,8 @@ func (m *Manager) Load() error {
 
 // loadQuickCommands 从独立文件加载快捷命令配置
 func (m *Manager) loadQuickCommands() error {
+	m.quickCmdMu.Lock()
+	defer m.quickCmdMu.Unlock()
 	// 读取 quick_commands.json 文件
 	data, err := os.ReadFile(m.quickCommandsPath)
 	if os.IsNotExist(err) {
@@ -373,6 +383,7 @@ func (m *Manager) loadQuickCommands() error {
 		return err
 	}
 
+	m.recordQuickCmdStat()
 	return nil
 }
 
@@ -602,10 +613,13 @@ func (m *Manager) ImportFromDirectory(dirPath string) error {
 		return err
 	}
 	// Save() 不再捆绑写入独立文件，这里显式落盘导入的 quick_commands/highlight_rules
+	m.quickCmdMu.Lock()
 	if err := m.saveQuickCommands(); err != nil {
+		m.quickCmdMu.Unlock()
 		*m.Config = *original
 		return err
 	}
+	m.quickCmdMu.Unlock()
 	if err := m.saveHighlightRules(); err != nil {
 		*m.Config = *original
 		return err
@@ -651,7 +665,7 @@ func backupFileIfExists(srcPath, dstPath string) error {
 	return os.WriteFile(dstPath, data, 0644)
 }
 
-// saveQuickCommands 保存快捷命令配置到独立文件
+// saveQuickCommands 保存快捷命令配置到独立文件（调用方须持有 quickCmdMu）
 func (m *Manager) saveQuickCommands() error {
 	data, err := json.MarshalIndent(m.Config.QuickCommands, "", "  ")
 	if err != nil {
@@ -661,7 +675,19 @@ func (m *Manager) saveQuickCommands() error {
 	if old, rerr := os.ReadFile(m.quickCommandsPath); rerr == nil && bytes.Equal(old, data) {
 		return nil
 	}
-	return os.WriteFile(m.quickCommandsPath, data, 0644)
+	if err := os.WriteFile(m.quickCommandsPath, data, 0644); err != nil {
+		return err
+	}
+	m.recordQuickCmdStat()
+	return nil
+}
+
+// recordQuickCmdStat 记录文件当前状态，供热加载变化检测（调用方须持有 quickCmdMu）
+func (m *Manager) recordQuickCmdStat() {
+	if st, err := os.Stat(m.quickCommandsPath); err == nil {
+		m.quickCmdMod = st.ModTime()
+		m.quickCmdSize = st.Size()
+	}
 }
 
 func (m *Manager) SetLLMConfig(apiKey, baseURL, model string) {
@@ -674,10 +700,69 @@ func (m *Manager) SetLogDir(dir string) {
 	m.Config.Log.Dir = dir
 }
 
-func (m *Manager) SetQuickCommands(cmds []QuickCommand) {
-	m.Config.QuickCommands = cmds
-	// 立即保存到独立文件
+// AddQuickCommand 追加一条快捷命令并立即写盘。
+// 单条意图化操作取代旧的全量覆盖保存，避免多窗口互相用旧快照覆盖。
+func (m *Manager) AddQuickCommand(cmd QuickCommand) {
+	m.quickCmdMu.Lock()
+	defer m.quickCmdMu.Unlock()
+	m.Config.QuickCommands = append(m.Config.QuickCommands, cmd)
 	m.saveQuickCommands()
+}
+
+// UpdateQuickCommand 按 id 更新一条命令，返回是否找到目标。
+func (m *Manager) UpdateQuickCommand(id string, updates QuickCommand) bool {
+	m.quickCmdMu.Lock()
+	defer m.quickCmdMu.Unlock()
+	for i := range m.Config.QuickCommands {
+		if m.Config.QuickCommands[i].ID == id {
+			updates.ID = id // id 不可变
+			m.Config.QuickCommands[i] = updates
+			m.saveQuickCommands()
+			return true
+		}
+	}
+	return false
+}
+
+// DeleteQuickCommand 按 id 删除一条命令，返回是否找到目标。
+func (m *Manager) DeleteQuickCommand(id string) bool {
+	m.quickCmdMu.Lock()
+	defer m.quickCmdMu.Unlock()
+	cmds := m.Config.QuickCommands
+	for i := range cmds {
+		if cmds[i].ID == id {
+			m.Config.QuickCommands = append(cmds[:i:i], cmds[i+1:]...)
+			m.saveQuickCommands()
+			return true
+		}
+	}
+	return false
+}
+
+// CheckQuickCommandsChanged 检测 quick_commands.json 是否被外部修改
+//（多窗口场景下其他进程写入）。变化时重载进内存并返回最新列表。
+func (m *Manager) CheckQuickCommandsChanged() (bool, []QuickCommand) {
+	st, err := os.Stat(m.quickCommandsPath)
+	if err != nil {
+		return false, nil
+	}
+	m.quickCmdMu.Lock()
+	defer m.quickCmdMu.Unlock()
+	if st.ModTime().Equal(m.quickCmdMod) && st.Size() == m.quickCmdSize {
+		return false, nil
+	}
+	data, err := os.ReadFile(m.quickCommandsPath)
+	if err != nil {
+		return false, nil
+	}
+	var cmds []QuickCommand
+	if err := json.Unmarshal(data, &cmds); err != nil {
+		return false, nil // 损坏的写入（对端写一半），跳过本轮，下轮再试
+	}
+	m.Config.QuickCommands = cmds
+	m.quickCmdMod = st.ModTime()
+	m.quickCmdSize = st.Size()
+	return true, cmds
 }
 
 func (m *Manager) loadHighlightRules() error {

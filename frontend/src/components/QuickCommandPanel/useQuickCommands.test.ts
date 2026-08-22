@@ -115,4 +115,60 @@ describe('useQuickCommands', () => {
         // Should fall back to 'a'
         expect(result.current.selectedGroup).toBe('a');
     });
+
+    it('persists add/update/delete through intent-based adapter calls', async () => {
+        const adapter: import('./useQuickCommands').MemoryAdapter = new MemoryAdapter();
+        adapter.data = [{ id: '1', name: 'old', content: 'old', group: 'default' }];
+        const addSpy = vi.spyOn(adapter, 'add');
+        const updateSpy = vi.spyOn(adapter, 'update');
+        const removeSpy = vi.spyOn(adapter, 'remove');
+
+        const { result } = renderHook(() => useQuickCommands({ adapter }));
+        await vi.waitFor(() => expect(result.current.loaded).toBe(true));
+
+        act(() => { result.current.addCommand('n', 'c', 'default'); });
+        expect(addSpy).toHaveBeenCalledTimes(1);
+        expect(addSpy.mock.calls[0][0]).toMatchObject({ name: 'n', content: 'c' });
+
+        act(() => { result.current.updateCommand('1', { name: 'new' }); });
+        expect(updateSpy).toHaveBeenCalledWith('1', { name: 'new' });
+
+        act(() => { result.current.deleteCommand('1'); });
+        expect(removeSpy).toHaveBeenCalledWith('1');
+        expect(adapter.data).toHaveLength(1); // 仅剩新加的一条
+    });
+
+    it('applies external hot-reload updates without persisting back', async () => {
+        const adapter = new MemoryAdapter();
+        adapter.data = [{ id: '1', name: 'old', content: 'old', group: 'default' }];
+        const addSpy = vi.spyOn(adapter, 'add');
+        const updateSpy = vi.spyOn(adapter, 'update');
+        const removeSpy = vi.spyOn(adapter, 'remove');
+
+        let onUpdate: ((cmds: any[]) => void) | undefined;
+        vi.stubGlobal('runtime', {
+            EventsOn: vi.fn((name: string, cb: (cmds: any[]) => void) => {
+                if (name === 'quick-commands-updated') onUpdate = cb;
+            }),
+        });
+
+        const { result } = renderHook(() => useQuickCommands({ adapter }));
+        await vi.waitFor(() => expect(result.current.loaded).toBe(true));
+
+        // 其他窗口写入后的推送：本地状态整体刷新
+        act(() => {
+            onUpdate?.([
+                { id: '1', name: 'edited-elsewhere', content: 'x', group: 'default' },
+                { id: '2', name: 'added-elsewhere', content: 'y', group: 'default' },
+            ]);
+        });
+
+        expect(result.current.commands).toHaveLength(2);
+        expect(result.current.commands[0].name).toBe('edited-elsewhere');
+        // 热加载只更新内存，不得回写存储形成回环
+        expect(addSpy).not.toHaveBeenCalled();
+        expect(updateSpy).not.toHaveBeenCalled();
+        expect(removeSpy).not.toHaveBeenCalled();
+        vi.unstubAllGlobals();
+    });
 });
