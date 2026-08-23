@@ -26,7 +26,9 @@ const CommandEditModal: React.FC<CommandEditModalProps> = ({
     useEffect(() => {
         if (isOpen && command) {
             setEditCmd({ ...command });
-            setIsNewGroupMode(false);
+            // 从分组条 "+" 进入时 group 为 __new__：直接进入新分组输入模式，
+            // 否则用户必须先切到其它分组再切回来才能看到输入框
+            setIsNewGroupMode(command.group === '__new__');
         } else if (isOpen && isNew) {
             setEditCmd({
                 id: Date.now().toString(),
@@ -40,15 +42,23 @@ const CommandEditModal: React.FC<CommandEditModalProps> = ({
 
     if (!isOpen || !editCmd) return null;
 
+    // 新分组模式下分组名必填：留空（含初始占位 __new__）不允许保存，
+    // 避免命令被静默塞进第一个分组
+    const effectiveGroup = editCmd.group === '__new__' ? '' : (editCmd.group || '');
+    const groupNameEmpty = isNewGroupMode && !effectiveGroup.trim();
+    const canSave = !!editCmd.name.trim() && !groupNameEmpty;
+
     const handleSave = () => {
-        if (!editCmd.name.trim()) return;
+        if (!canSave) return;
         onSave(editCmd);
     };
 
     return (
         <div style={styles.overlay} data-testid="command-edit-modal">
             <div style={styles.modal}>
-                <h3 style={styles.title}>{isNew ? '新建命令' : '编辑命令'}</h3>
+                <h3 style={styles.title}>
+                    {isNew && isNewGroupMode ? '新建分组' : isNew ? '新建命令' : '编辑命令'}
+                </h3>
 
                 <div style={styles.formGroup}>
                     <label style={styles.label}>名称</label>
@@ -65,20 +75,29 @@ const CommandEditModal: React.FC<CommandEditModalProps> = ({
                 <div style={styles.formGroup}>
                     <label style={styles.label}>分组</label>
                     {isNewGroupMode ? (
-                        <input
-                            style={styles.input}
-                            value={editCmd.group === '__new__' ? '' : editCmd.group || ''}
-                            onChange={e => setEditCmd({ ...editCmd, group: e.target.value })}
-                            placeholder="输入新分组名"
-                            autoFocus
-                            onBlur={e => {
-                                if (!e.target.value.trim()) {
+                        <div style={styles.groupRow}>
+                            <input
+                                style={{ ...styles.input, flex: 1 }}
+                                value={editCmd.group === '__new__' ? '' : editCmd.group || ''}
+                                onChange={e => setEditCmd({ ...editCmd, group: e.target.value })}
+                                placeholder="输入新分组名"
+                                autoFocus
+                                data-testid="command-group-input"
+                            />
+                            {/* 显式的退出入口：回到选择已有分组。
+                                不做 onBlur 自动回退——点到其它字段就丢掉输入框是"流程不通"的元凶之一 */}
+                            <button
+                                style={styles.groupRevertBtn}
+                                title="返回选择已有分组"
+                                data-testid="command-group-revert"
+                                onClick={() => {
                                     setEditCmd({ ...editCmd, group: availableGroups[0] || 'default' });
                                     setIsNewGroupMode(false);
-                                }
-                            }}
-                            data-testid="command-group-input"
-                        />
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </div>
                     ) : (
                         <select
                             style={styles.input}
@@ -116,7 +135,11 @@ const CommandEditModal: React.FC<CommandEditModalProps> = ({
                     <button onClick={onCancel} style={styles.cancelBtn} data-testid="command-edit-cancel">
                         取消
                     </button>
-                    <button onClick={handleSave} style={styles.saveBtn} data-testid="command-edit-save">
+                    <button
+                        onClick={handleSave}
+                        style={{ ...styles.saveBtn, ...(canSave ? {} : styles.saveBtnDisabled) }}
+                        data-testid="command-edit-save"
+                    >
                         保存
                     </button>
                 </div>
@@ -186,6 +209,21 @@ const styles = {
         gap: '8px',
         marginTop: '20px',
     },
+    groupRow: {
+        display: 'flex',
+        gap: '4px',
+        alignItems: 'stretch',
+    },
+    groupRevertBtn: {
+        flex: '0 0 auto',
+        width: '30px',
+        backgroundColor: 'var(--bg-elevated)',
+        color: 'var(--text-muted)',
+        border: '1px solid var(--border-strong)',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        fontSize: '12px',
+    },
     saveBtn: {
         padding: '6px 16px',
         backgroundColor: 'var(--accent)',
@@ -194,6 +232,10 @@ const styles = {
         borderRadius: '4px',
         cursor: 'pointer',
         fontSize: '13px',
+    },
+    saveBtnDisabled: {
+        opacity: 0.45,
+        cursor: 'not-allowed',
     },
     cancelBtn: {
         padding: '6px 16px',

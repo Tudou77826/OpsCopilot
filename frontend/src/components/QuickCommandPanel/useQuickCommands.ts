@@ -35,6 +35,14 @@ class WailsAdapter implements QuickCommandStorageAdapter {
             window.go.main.App.DeleteQuickCommand(id);
         }
     }
+
+    reorder(ids: string[]): void {
+        // @ts-ignore
+        if (window.go?.main?.App?.ReorderQuickCommands) {
+            // @ts-ignore
+            window.go.main.App.ReorderQuickCommands(ids);
+        }
+    }
 }
 
 export class MemoryAdapter implements QuickCommandStorageAdapter {
@@ -55,6 +63,13 @@ export class MemoryAdapter implements QuickCommandStorageAdapter {
     remove(id: string): void {
         this.data = this.data.filter(c => c.id !== id);
     }
+
+    reorder(ids: string[]): void {
+        const set = new Set(ids);
+        const byId = new Map(this.data.filter(c => set.has(c.id)).map(c => [c.id, c]));
+        let k = 0;
+        this.data = this.data.map(c => set.has(c.id) ? (byId.get(ids[k++]) ?? c) : c);
+    }
 }
 
 export interface UseQuickCommandsOptions {
@@ -71,6 +86,8 @@ export interface UseQuickCommandsReturn {
     addCommand: (name: string, content: string, group: string) => void;
     updateCommand: (id: string, updates: Partial<QuickCommand>) => void;
     deleteCommand: (id: string) => void;
+    /** 按给定 id 顺序重排（拖拽排序），其余命令位置不变 */
+    reorderCommands: (ids: string[]) => void;
     /** 外部（多窗口热加载事件）推送的最新列表，直接替换本地状态 */
     applyExternalCommands: (cmds: QuickCommand[]) => void;
 }
@@ -177,6 +194,18 @@ export function useQuickCommands(options?: UseQuickCommandsOptions): UseQuickCom
         adapter.remove(id);
     };
 
+    const reorderCommands = (ids: string[]) => {
+        if (ids.length < 2) return;
+        // 乐观重排：ids 涉及的槽位按新顺序回填，后端事件到达后以权威列表为准
+        setCommands(prev => {
+            const set = new Set(ids);
+            const byId = new Map(prev.filter(c => set.has(c.id)).map(c => [c.id, c]));
+            let k = 0;
+            return prev.map(c => set.has(c.id) ? (byId.get(ids[k++]) ?? c) : c);
+        });
+        adapter.reorder(ids);
+    };
+
     const applyExternalCommands = (cmds: QuickCommand[]) => {
         setCommands(cmds.map(cmd => ({
             ...cmd,
@@ -194,6 +223,7 @@ export function useQuickCommands(options?: UseQuickCommandsOptions): UseQuickCom
         addCommand,
         updateCommand,
         deleteCommand,
+        reorderCommands,
         applyExternalCommands,
     };
 }

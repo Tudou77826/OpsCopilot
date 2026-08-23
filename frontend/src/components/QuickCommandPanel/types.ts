@@ -15,4 +15,6 @@ export interface QuickCommandStorageAdapter {
     add(cmd: QuickCommand): void;
     update(id: string, updates: Partial<QuickCommand>): void;
     remove(id: string): void;
+    /** 按给定 id 顺序重排这些命令的相对位置（其余命令位置不变） */
+    reorder(ids: string[]): void;
 }

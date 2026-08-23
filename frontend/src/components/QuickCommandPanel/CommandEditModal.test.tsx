@@ -44,3 +44,57 @@ describe('CommandEditModal', () => {
         expect(screen.queryByTestId('command-edit-modal')).not.toBeInTheDocument();
     });
 });
+
+describe('CommandEditModal new group flow', () => {
+    const base = {
+        isOpen: true,
+        isNew: true,
+        availableGroups: ['default', 'nginx'],
+        onSave: vi.fn(),
+        onCancel: vi.fn(),
+    };
+
+    it('enters group-name input mode directly when launched from the strip "+" (group=__new__)', () => {
+        render(<CommandEditModal {...base} command={{ id: '9', name: '', content: '', group: '__new__' }} />);
+        expect(screen.getByTestId('command-group-input')).toBeInTheDocument();
+        expect(screen.getByText('新建分组')).toBeInTheDocument();
+        expect(screen.queryByTestId('command-group-select')).not.toBeInTheDocument();
+    });
+
+    it('shows the select (not input) when opened for a normal new command', () => {
+        render(<CommandEditModal {...base} command={{ id: '9', name: '', content: '', group: 'nginx' }} />);
+        expect(screen.getByTestId('command-group-select')).toBeInTheDocument();
+        expect(screen.queryByTestId('command-group-input')).not.toBeInTheDocument();
+    });
+
+    it('switches to input mode when selecting "+ 新建分组" in the select', () => {
+        render(<CommandEditModal {...base} command={{ id: '9', name: '', content: '', group: 'nginx' }} />);
+        fireEvent.change(screen.getByTestId('command-group-select'), { target: { value: '__new__' } });
+        expect(screen.getByTestId('command-group-input')).toBeInTheDocument();
+    });
+
+    it('keeps input mode after blurring with an empty name (no silent revert)', () => {
+        render(<CommandEditModal {...base} command={{ id: '9', name: '', content: '', group: '__new__' }} />);
+        const input = screen.getByTestId('command-group-input');
+        fireEvent.blur(input);
+        expect(screen.getByTestId('command-group-input')).toBeInTheDocument();
+    });
+
+    it('blocks save when new group name is empty, allows after typing', () => {
+        const onSave = vi.fn();
+        render(<CommandEditModal {...base} onSave={onSave} command={{ id: '9', name: 'X', content: 'x', group: '__new__' }} />);
+        fireEvent.click(screen.getByTestId('command-edit-save'));
+        expect(onSave).not.toHaveBeenCalled();
+        fireEvent.change(screen.getByTestId('command-group-input'), { target: { value: '数据库' } });
+        fireEvent.click(screen.getByTestId('command-edit-save'));
+        expect(onSave).toHaveBeenCalledTimes(1);
+        expect(onSave.mock.calls[0][0].group).toBe('数据库');
+    });
+
+    it('reverts to select mode via the ✕ button', () => {
+        render(<CommandEditModal {...base} command={{ id: '9', name: '', content: '', group: '__new__' }} />);
+        fireEvent.click(screen.getByTestId('command-group-revert'));
+        expect(screen.getByTestId('command-group-select')).toBeInTheDocument();
+        expect(screen.queryByTestId('command-group-input')).not.toBeInTheDocument();
+    });
+});

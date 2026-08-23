@@ -17,6 +17,7 @@ describe('CommandGrid', () => {
         onAdd: vi.fn(),
         searchQuery: '',
         onSearchChange: vi.fn(),
+        onReorder: vi.fn(),
     };
 
     it('renders command cards', () => {
@@ -106,5 +107,24 @@ describe('CommandGrid', () => {
         const input = screen.getByTestId('command-search').querySelector('input')!;
         fireEvent.change(input, { target: { value: 'disk' } });
         expect(onSearchChange).toHaveBeenCalledWith('disk');
+    });
+
+    it('reorders commands via drag and drop', () => {
+        const onReorder = vi.fn();
+        render(<CommandGrid {...defaultProps} onReorder={onReorder} />);
+        const first = screen.getByTestId('command-card-1');
+        const second = screen.getByTestId('command-card-2');
+        // jsdom 不实现 DragEvent，通过 init 注入 dataTransfer
+        fireEvent.dragStart(first, { dataTransfer: { effectAllowed: '', dropEffect: '', setData: () => { } } });
+        // jsdom 的 getBoundingClientRect 全为 0，clientX>0 必然判定为"插入到目标之后"
+        fireEvent.dragOver(second, { clientX: 5, dataTransfer: { effectAllowed: '', dropEffect: '' } });
+        fireEvent.drop(second, { dataTransfer: {} });
+        expect(onReorder).toHaveBeenCalledTimes(1);
+        expect(onReorder.mock.calls[0][0].map((c: { id: string }) => c.id)).toEqual(['2', '1']);
+    });
+
+    it('disables drag reorder while searching', () => {
+        render(<CommandGrid {...defaultProps} searchQuery="disk" />);
+        expect(screen.getByTestId('command-card-2').draggable).toBe(false);
     });
 });

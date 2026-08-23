@@ -11,15 +11,33 @@ interface CommandGridProps {
     /** 当前搜索关键字（在当前分组内进一步过滤） */
     searchQuery: string;
     onSearchChange: (query: string) => void;
+    /** 拖拽排序回调：给出当前分组命令的新顺序（搜索过滤时不允许拖拽） */
+    onReorder: (ordered: QuickCommand[]) => void;
 }
 
 const CommandGrid: React.FC<CommandGridProps> = ({
-    commands, onExecute, onEdit, onDelete, onAdd, searchQuery, onSearchChange,
+    commands, onExecute, onEdit, onDelete, onAdd, searchQuery, onSearchChange, onReorder,
 }) => {
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; cmdId: string } | null>(null);
     const [hoveredId, setHoveredId] = useState<string | null>(null);
     const [hoveredMenuItem, setHoveredMenuItem] = useState<number | null>(null);
     const searchInputRef = React.useRef<HTMLInputElement>(null);
+
+    // 拖拽排序：搜索过滤时顺序意义不明确，禁用；只有一张卡时无意义，也禁用
+    const canReorder = commands.length > 1 && !searchQuery.trim();
+    const [dragId, setDragId] = useState<string | null>(null);
+    const [dropHint, setDropHint] = useState<{ id: string; before: boolean } | null>(null);
+
+    const commitReorder = (hint: { id: string; before: boolean }) => {
+        if (!dragId || dragId === hint.id) return;
+        const dragged = commands.find(c => c.id === dragId);
+        if (!dragged) return;
+        const rest = commands.filter(c => c.id !== dragId);
+        const targetIdx = rest.findIndex(c => c.id === hint.id);
+        if (targetIdx < 0) return;
+        rest.splice(hint.before ? targetIdx : targetIdx + 1, 0, dragged);
+        onReorder(rest);
+    };
 
     // Close context menu on any outside pointer event (including xterm.js terminals)
     useEffect(() => {
@@ -59,6 +77,8 @@ const CommandGrid: React.FC<CommandGridProps> = ({
                 </div>
                 {commands.map(cmd => {
                     const isHovered = hoveredId === cmd.id;
+                    const isDragging = dragId === cmd.id;
+                    const isDropTarget = dropHint?.id === cmd.id;
                     return (
                         <div
                             key={cmd.id}
@@ -67,6 +87,38 @@ const CommandGrid: React.FC<CommandGridProps> = ({
                                 backgroundColor: isHovered ? 'var(--bg-elevated)' : 'var(--bg-primary)',
                                 borderColor: isHovered ? 'var(--border)' : 'var(--bg-elevated)',
                                 color: isHovered ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                                // 光标保持普通指针：点击执行才是主操作，拖拽排序只是偶发能力，
+                                // 不能用 grab 光标喧宾夺主（真正拖动时浏览器原生 DnD 会接管光标）
+                                cursor: 'pointer',
+                                opacity: isDragging ? 0.35 : undefined,
+                                // 插入位置指示：目标卡左/右缘一条主题色竖线，不挤动布局
+                                boxShadow: isDropTarget
+                                    ? (dropHint!.before ? 'inset 3px 0 0 var(--accent)' : 'inset -3px 0 0 var(--accent)')
+                                    : undefined,
+                            }}
+                            draggable={canReorder}
+                            onDragStart={(e) => {
+                                setDragId(cmd.id);
+                                e.dataTransfer.effectAllowed = 'move';
+                                // WebView2 要求 dataTransfer 有数据才允许 drop
+                                e.dataTransfer.setData('text/plain', cmd.id);
+                            }}
+                            onDragEnd={() => { setDragId(null); setDropHint(null); }}
+                            onDragOver={(e) => {
+                                if (!dragId || dragId === cmd.id) return;
+                                e.preventDefault();
+                                e.dataTransfer.dropEffect = 'move';
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setDropHint({ id: cmd.id, before: e.clientX - rect.left < rect.width / 2 });
+                            }}
+                            onDragLeave={() => {
+                                if (dropHint?.id === cmd.id) setDropHint(null);
+                            }}
+                            onDrop={(e) => {
+                                e.preventDefault();
+                                if (dropHint?.id === cmd.id) commitReorder(dropHint);
+                                setDragId(null);
+                                setDropHint(null);
                             }}
                             onClick={() => onExecute(cmd.content)}
                             onContextMenu={(e) => {
@@ -156,7 +208,9 @@ const styles = {
         flexGrow: 1,
         flexShrink: 1,
         minWidth: 0,
-        maxHeight: '180px',
+        // 滚动边界由外层面板高度决定（面板可拖拽调高），
+        // 这里不再写死 180px 上限，改为允许在 flex 布局中收缩
+        minHeight: 0,
         alignContent: 'flex-start',
     },
     card: {
@@ -164,15 +218,15 @@ const styles = {
         borderRadius: '4px',
         cursor: 'pointer',
         border: '1px solid var(--bg-elevated)',
-        fontSize: '11px',
+        fontSize: '12px',
         color: 'var(--text-tertiary)',
         backgroundColor: 'var(--bg-primary)',
         whiteSpace: 'nowrap' as const,
-        overflow: 'hidden',
+        overflow: 'hidden' as const,
         textOverflow: 'ellipsis',
         userSelect: 'none' as const,
         flex: '0 0 auto',
-        maxWidth: '120px',
+        maxWidth: '140px',
         transition: 'background-color 0.2s, border-color 0.2s, color 0.2s',
     },
     addCard: {
@@ -184,7 +238,7 @@ const styles = {
         alignItems: 'center',
         justifyContent: 'center',
         color: 'var(--text-disabled)',
-        fontSize: '11px',
+        fontSize: '12px',
         backgroundColor: 'transparent',
         flex: '0 0 auto',
         transition: 'border-color 0.2s, color 0.2s',
@@ -200,7 +254,7 @@ const styles = {
         display: 'flex',
         alignItems: 'center',
         gap: '4px',
-        fontSize: '11px',
+        fontSize: '12px',
         backgroundColor: 'var(--bg-primary)',
         color: 'var(--text-tertiary)',
         userSelect: 'none' as const,
@@ -208,7 +262,7 @@ const styles = {
         transition: 'border-color 0.2s, color 0.2s',
     },
     searchIcon: {
-        fontSize: '10px',
+        fontSize: '11px',
         color: 'var(--text-disabled)',
         flexShrink: 0,
         lineHeight: 1,
@@ -218,10 +272,10 @@ const styles = {
         outline: 'none',
         backgroundColor: 'transparent',
         color: 'var(--text-primary)',
-        fontSize: '11px',
+        fontSize: '12px',
         padding: '0',
         margin: '0',
-        width: '44px',
+        width: '48px',
         fontFamily: 'inherit',
     },
     backdrop: {

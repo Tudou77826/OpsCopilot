@@ -2591,6 +2591,13 @@ func (a *App) DeleteQuickCommand(id string) string {
 	return ""
 }
 
+// ReorderQuickCommands 拖拽排序：按给定 id 顺序重排（其余命令位置不变）
+func (a *App) ReorderQuickCommands(ids []string) string {
+	a.configMgr.ReorderQuickCommands(ids)
+	a.emitQuickCommandsUpdated()
+	return ""
+}
+
 // emitQuickCommandsUpdated 把最新命令列表推送给本进程前端（自己的写操作即时生效）
 func (a *App) emitQuickCommandsUpdated() {
 	if a.ctx == nil {

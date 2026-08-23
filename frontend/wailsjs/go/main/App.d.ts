@@ -152,6 +152,8 @@ export function RemoveSharedSession(arg1:string):Promise<string>;
 
 export function RenameSavedSession(arg1:string,arg2:string):Promise<string>;
 
+export function ReorderQuickCommands(arg1:Array<string>):Promise<string>;
+
 export function ReplayScript(arg1:string,arg2:string):Promise<void>;
 
 export function ReplayScriptWithVars(arg1:string,arg2:string,arg3:Record<string, string>):Promise<void>;

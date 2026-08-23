@@ -739,6 +739,40 @@ func (m *Manager) DeleteQuickCommand(id string) bool {
 	return false
 }
 
+// ReorderQuickCommands 按给定 id 顺序重排这些命令的相对位置。
+// 这些 id 当前占据的槽位按新顺序回填，其余命令（其它分组）位置不变。
+// ids 中存在未知或重复 id 时拒绝执行，避免产生半重排状态。
+func (m *Manager) ReorderQuickCommands(ids []string) bool {
+	if len(ids) < 2 {
+		return false
+	}
+	m.quickCmdMu.Lock()
+	defer m.quickCmdMu.Unlock()
+	cmds := m.Config.QuickCommands
+	idSet := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		idSet[id] = true
+	}
+	pos := make([]int, 0, len(ids))
+	for i, c := range cmds {
+		if idSet[c.ID] {
+			pos = append(pos, i)
+		}
+	}
+	if len(pos) != len(ids) {
+		return false
+	}
+	byID := make(map[string]QuickCommand, len(cmds))
+	for _, c := range cmds {
+		byID[c.ID] = c
+	}
+	for k, id := range ids {
+		cmds[pos[k]] = byID[id]
+	}
+	m.saveQuickCommands()
+	return true
+}
+
 // CheckQuickCommandsChanged 检测 quick_commands.json 是否被外部修改
 //（多窗口场景下其他进程写入）。变化时重载进内存并返回最新列表。
 func (m *Manager) CheckQuickCommandsChanged() (bool, []QuickCommand) {

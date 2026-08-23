@@ -172,3 +172,18 @@ describe('useQuickCommands', () => {
         vi.unstubAllGlobals();
     });
 });
+
+    it('reorders commands optimistically and persists through adapter', async () => {
+        const adapter = new MemoryAdapter();
+        adapter.data = [
+            { id: 'a', name: 'A', content: 'a', group: 'default' },
+            { id: 'b', name: 'B', content: 'b', group: 'default' },
+            { id: 'x', name: 'X', content: 'x', group: 'other' },
+        ];
+        const { result } = renderHook(() => useQuickCommands({ adapter }));
+        await act(async () => { }); // 等初始 load
+        act(() => result.current.reorderCommands(['b', 'a']));
+        // 只有涉及的两条换了相对顺序，other 组的 x 位置不变
+        expect(result.current.commands.map(c => c.id)).toEqual(['b', 'a', 'x']);
+        expect(adapter.data.map(c => c.id)).toEqual(['b', 'a', 'x']);
+    });

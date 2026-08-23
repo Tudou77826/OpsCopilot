@@ -123,3 +123,47 @@ func TestQuickCommandsConcurrentAccess(t *testing.T) {
 		t.Fatalf("file corrupted after concurrent access: %v", err)
 	}
 }
+
+// 拖拽排序：只重排给定 id 的相对顺序，其它命令位置不变；未知/重复 id 拒绝执行
+func TestQuickCommandReorder(t *testing.T) {
+	m := newQuickCmdTestManager(t)
+	m.AddQuickCommand(QuickCommand{ID: "a", Name: "a", Content: "a", Group: "g1"})
+	m.AddQuickCommand(QuickCommand{ID: "b", Name: "b", Content: "b", Group: "g1"})
+	m.AddQuickCommand(QuickCommand{ID: "x", Name: "x", Content: "x", Group: "g2"})
+	m.AddQuickCommand(QuickCommand{ID: "c", Name: "c", Content: "c", Group: "g1"})
+
+	// g1 内 b 移到 c 后面：[a b c] -> [a c b]，g2 的 x（第 3 位）位置不变
+	if ok := m.ReorderQuickCommands([]string{"a", "c", "b"}); !ok {
+		t.Fatal("reorder should succeed")
+	}
+	got := make([]string, 0, 4)
+	for _, c := range m.Config.QuickCommands {
+		got = append(got, c.ID)
+	}
+	want := []string{"a", "c", "x", "b"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("order = %v, want %v", got, want)
+		}
+	}
+
+	if ok := m.ReorderQuickCommands([]string{"a", "missing"}); ok {
+		t.Fatal("reorder with unknown id should be rejected")
+	}
+	if ok := m.ReorderQuickCommands([]string{"a", "a"}); ok {
+		t.Fatal("reorder with duplicate id should be rejected")
+	}
+
+	// 落盘校验：成功那次的重排已写入文件，被拒绝的两次不影响
+	data, err := os.ReadFile(m.quickCommandsPath)
+	if err != nil {
+		t.Fatalf("read file: %v", err)
+	}
+	var persisted []QuickCommand
+	if err := json.Unmarshal(data, &persisted); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(persisted) != 4 || persisted[3].ID != "b" {
+		t.Fatalf("persisted order wrong: %+v", persisted)
+	}
+}
