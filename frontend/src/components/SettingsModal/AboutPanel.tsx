@@ -40,6 +40,10 @@ interface DownloadProgress {
     bytesTotal: number;
     percentage: number;
     speedBps: number;
+    /** 当前第几次下载尝试（≥2 表示发生过断线自动重试） */
+    attempt?: number;
+    /** 人读状态提示：网络波动重试、断点续传等 */
+    message?: string;
 }
 
 type UpdateState = 'idle' | 'checking' | 'available' | 'no-update' | 'error' | 'downloading' | 'ready';
@@ -48,6 +52,9 @@ const GITHUB_REPO = 'https://github.com/Tudou77826/OpsCopilot';
 
 const friendlyError = (raw: string): string => {
     const lower = raw.toLowerCase();
+    if (lower.includes('网络中断') || lower.includes('连接中断')) return '网络不稳定，下载中断；再次点击更新可从断点续传';
+    if (lower.includes('连接停滞')) return '网络长时间无响应，连接已断开；请检查网络后重试（已下载部分会续传）';
+    if (lower.includes('连接更新服务器失败') || lower.includes('请求 github 失败')) return '网络不稳定，无法连接更新服务器；请稍后再试';
     if (lower.includes('timeout') || lower.includes('deadline')) return '连接超时，请检查网络后重试';
     if (lower.includes('no such host') || lower.includes('dns') || lower.includes('lookup')) return '无法连接到更新服务器，请检查网络连接';
     if (lower.includes('connection refused') || lower.includes('network is unreachable')) return '网络不可用，请检查网络连接';
@@ -107,6 +114,8 @@ const AboutPanel: React.FC = () => {
     const [downloadURL, setDownloadURL] = useState('');
     const [errorMsg, setErrorMsg] = useState('');
     const [progress, setProgress] = useState<DownloadProgress>({ bytesDownloaded: 0, bytesTotal: 0, percentage: 0, speedBps: 0 });
+    // 下载过程提示：网络波动自动重试、断点续传等人读信息（显示在进度条下方）
+    const [downloadMsg, setDownloadMsg] = useState('');
     const [releaseHistory, setReleaseHistory] = useState<ReleaseHistoryItem[]>([]);
     const [historyState, setHistoryState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
     const [historyError, setHistoryError] = useState('');
@@ -338,6 +347,7 @@ const AboutPanel: React.FC = () => {
     const handleUpdate = useCallback(async () => {
         if (!downloadURL) return;
         setProgress({ bytesDownloaded: 0, bytesTotal: 0, percentage: 0, speedBps: 0 });
+        setDownloadMsg('');
         setUpdateState('downloading');
 
         let offProgress: (() => void) | undefined;
@@ -345,7 +355,14 @@ const AboutPanel: React.FC = () => {
 
         try {
             offProgress = EventsOn('update-download-progress', (data: DownloadProgress) => {
-                setProgress(data);
+                // 带 bytesTotal 的是完整进度帧，直接替换；
+                // 只有 message/attempt 的重试提示帧不覆盖进度条（保留断点处的进度）
+                if (data.bytesTotal > 0) {
+                    setProgress(data);
+                }
+                if (data.message) {
+                    setDownloadMsg(data.message);
+                }
             });
             offReady = EventsOn('update-ready', () => {
                 setUpdateState('ready');
@@ -473,7 +490,11 @@ const AboutPanel: React.FC = () => {
                 {updateState === 'downloading' && (
                     <div style={styles.statusBanner}>
                         <div style={styles.progressLabel}>
-                            {progress.percentage >= 100 ? '下载完成，正在准备安装...' : '正在下载更新...'}
+                            {progress.percentage >= 100
+                                ? '下载完成，正在准备安装...'
+                                : progress.attempt && progress.attempt >= 2
+                                    ? `正在下载更新...（第 ${progress.attempt} 次尝试，已自动续传）`
+                                    : '正在下载更新...'}
                         </div>
                         <div style={styles.progressBarBg}>
                             <div style={{ ...styles.progressBarFill, width: `${Math.min(progress.percentage, 100)}%` }} />
@@ -482,6 +503,9 @@ const AboutPanel: React.FC = () => {
                             <span>{formatBytes(progress.bytesDownloaded)} / {formatBytes(progress.bytesTotal)}</span>
                             <span>{formatSpeed(progress.speedBps)}</span>
                         </div>
+                        {downloadMsg && (
+                            <div style={{ marginTop: 4, fontSize: 11, color: 'var(--warning)' }}>{downloadMsg}</div>
+                        )}
                     </div>
                 )}
                 {updateState === 'ready' && (

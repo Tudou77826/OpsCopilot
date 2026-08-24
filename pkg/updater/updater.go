@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -22,7 +23,17 @@ const (
 
 	allReleasesURL   = "https://api.github.com/repos/" + owner + "/" + repo + "/releases"
 	latestReleaseURL = "https://api.github.com/repos/" + owner + "/" + repo + "/releases/latest"
+
+	// —— 下载链路稳定性参数：网络小波动自动重试 + 断点续传 ——
+	downloadStallTimeout = 30 * time.Second // 连续无数据多久判定连接卡死（原 60s，自愈更慢）
+	maxDownloadAttempts  = 5                // 下载总尝试次数（1 次首发 + 4 次重试）
+	retryBaseDelay       = 1 * time.Second  // 重试退避起始值：1s, 2s, 4s, 8s
+	maxRetryDelay        = 8 * time.Second
+	apiRetryAttempts     = 3 // 版本查询 API 的尝试次数
 )
+
+// retrySleep 可在测试中替换，避免真实等待退避时间
+var retrySleep = time.Sleep
 
 // newHTTPClient creates an HTTP client that respects system proxy settings.
 func newHTTPClient(timeout time.Duration) *http.Client {
@@ -65,9 +76,47 @@ type UpdateStatus struct {
 // DownloadProgress is emitted as a Wails event during download.
 type DownloadProgress struct {
 	BytesDownloaded int64   `json:"bytesDownloaded"`
-	BytesTotal     int64   `json:"bytesTotal"`
-	Percentage     float64 `json:"percentage"`
-	SpeedBps       float64 `json:"speedBps"`
+	BytesTotal      int64   `json:"bytesTotal"`
+	Percentage      float64 `json:"percentage"`
+	SpeedBps        float64 `json:"speedBps"`
+	Attempt         int     `json:"attempt,omitempty"` // 当前第几次尝试（≥2 表示发生过断线重连）
+	Message         string  `json:"message,omitempty"` // 人读状态提示：重试/续传等
+}
+
+// httpStatusError 标记服务端状态码错误，用于判断是否值得重试
+type httpStatusError struct {
+	Code int
+	Body string
+}
+
+func (e *httpStatusError) Error() string { return fmt.Sprintf("http %d: %s", e.Code, e.Body) }
+
+// fatalError 本地错误（磁盘/文件系统/参数），重试无意义
+type fatalError struct{ err error }
+
+func (e *fatalError) Error() string { return e.err.Error() }
+func (e *fatalError) Unwrap() error { return e.err }
+
+// isRetryableErr 判断错误是否值得重试：
+// 本地错误不重试；HTTP 4xx（除 429 限流和 416 分片失效）不重试；其余网络类错误重试
+func isRetryableErr(err error) bool {
+	var fe *fatalError
+	if errors.As(err, &fe) {
+		return false
+	}
+	var se *httpStatusError
+	if errors.As(err, &se) {
+		return se.Code >= 500 || se.Code == http.StatusTooManyRequests || se.Code == http.StatusRequestedRangeNotSatisfiable
+	}
+	return true
+}
+
+func backoffDelay(attempt int) time.Duration {
+	d := retryBaseDelay << (attempt - 1) // 1s, 2s, 4s, 8s
+	if d > maxRetryDelay {
+		d = maxRetryDelay
+	}
+	return d
 }
 
 // Files that should NOT be overwritten during update.
@@ -191,13 +240,12 @@ func DownloadAndExtract(downloadURL string, tempDir string, progressFn func(Down
 	isZip := strings.HasSuffix(downloadURL, ".zip")
 	slog.Info("updater: DownloadAndExtract", "isZip", isZip, "tempDir", tempDir)
 
-	// Clean and create temp directory.
-	if err := os.RemoveAll(tempDir); err != nil {
-		return "", fmt.Errorf("clean temp dir: %w", err)
-	}
+	// 不清空整个 tempDir：保留 *.part 分片，下载失败后用户再次尝试可续传。
+	// 只清理旧的解压产物，避免残留旧文件混入新版本。
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
 		return "", fmt.Errorf("create temp dir: %w", err)
 	}
+	os.RemoveAll(filepath.Join(tempDir, "extracted"))
 
 	if isZip {
 		zipPath := filepath.Join(tempDir, "update.zip")
@@ -250,102 +298,229 @@ func FetchReleaseHistory() ([]ReleaseInfo, error) {
 }
 
 // fetchLatestRelease calls the GitHub API to get the latest release.
+// 网络抖动自动重试（apiRetryAttempts 次），检查更新不再因瞬时故障报错。
 func fetchLatestRelease() (*ReleaseInfo, error) {
-	client := newHTTPClient(15 * time.Second)
-	req, err := http.NewRequest("GET", latestReleaseURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("github api request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("github api returned %d: %s", resp.StatusCode, string(body))
-	}
-
 	var release ReleaseInfo
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
+	if err := fetchJSONWithRetry(latestReleaseURL, &release); err != nil {
+		return nil, err
 	}
 	return &release, nil
 }
 
 // fetchAllReleases fetches all published releases from GitHub (up to 30 per page).
 func fetchAllReleases() ([]ReleaseInfo, error) {
-	client := newHTTPClient(15 * time.Second)
-	req, err := http.NewRequest("GET", allReleasesURL, nil)
+	var releases []ReleaseInfo
+	if err := fetchJSONWithRetry(allReleasesURL, &releases); err != nil {
+		return nil, err
+	}
+	return releases, nil
+}
+
+// fetchJSONWithRetry GET + JSON 解析，带重试与指数退避。
+// 4xx（除 429）属于请求本身的问题，不重试。
+func fetchJSONWithRetry(url string, out interface{}) error {
+	return fetchJSONWithRetryClient(url, out, newHTTPClient(15*time.Second))
+}
+
+func fetchJSONWithRetryClient(url string, out interface{}, client *http.Client) error {
+	var lastErr error
+	for attempt := 1; attempt <= apiRetryAttempts; attempt++ {
+		err := fetchJSONOnce(url, out, client)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		var fe *fatalError
+		if errors.As(err, &fe) {
+			return err
+		}
+		var se *httpStatusError
+		if errors.As(err, &se) && se.Code < 500 && se.Code != http.StatusTooManyRequests {
+			return err
+		}
+		if attempt == apiRetryAttempts {
+			break
+		}
+		delay := backoffDelay(attempt)
+		slog.Warn("updater: api request failed, will retry", "url", url, "attempt", attempt, "delay", delay, "error", err)
+		retrySleep(delay)
+	}
+	return fmt.Errorf("请求 GitHub 失败（已自动重试 %d 次）: %w", apiRetryAttempts-1, lastErr)
+}
+
+func fetchJSONOnce(url string, out interface{}, client *http.Client) error {
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return &fatalError{fmt.Errorf("create request: %w", err)}
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("github api request: %w", err)
+		return fmt.Errorf("github api request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("github api returned %d: %s", resp.StatusCode, string(body))
+		return &httpStatusError{Code: resp.StatusCode, Body: strings.TrimSpace(string(body))}
 	}
 
-	var releases []ReleaseInfo
-	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return fmt.Errorf("decode response: %w", err)
 	}
-	return releases, nil
+	return nil
 }
 
 // downloadFile downloads a file with optional progress reporting.
-// It uses context-based cancellation so that a stalled connection (no data
-// for stallTimeout) is detected and aborted quickly instead of blocking for
-// the full client timeout.
+// 网络小波动自动自愈：
+//   - 最多 maxDownloadAttempts 次尝试，指数退避（1s/2s/4s/8s）
+//   - 断点续传：内容写入 <dest>.part，重试时用 Range 从断点继续；
+//     <dest>.part.meta 记录来源 URL，跨次更新 URL 变化时丢弃旧分片，
+//     防止把不同版本的包续传到一起
+//   - 连接卡死（连续 downloadStallTimeout 无数据）主动断开并重试
 func downloadFile(url string, destPath string, progressFn func(DownloadProgress)) error {
-	const stallTimeout = 60 * time.Second // abort if no data for 60s
+	return downloadFileWithClient(url, destPath, progressFn, newHTTPClient(10*time.Minute))
+}
+
+func downloadFileWithClient(url string, destPath string, progressFn func(DownloadProgress), client *http.Client) error {
+	partPath := destPath + ".part"
+	metaPath := partPath + ".meta"
+
+	// 分片来源校验：URL 不一致或无记录 → 丢弃旧分片，从头下载
+	if meta, err := os.ReadFile(metaPath); err != nil || strings.TrimSpace(string(meta)) != url {
+		os.Remove(partPath)
+		if err := os.WriteFile(metaPath, []byte(url), 0644); err != nil {
+			return &fatalError{fmt.Errorf("写入分片记录: %w", err)}
+		}
+	}
+
+	emit := func(p DownloadProgress) {
+		if progressFn != nil {
+			progressFn(p)
+		}
+	}
+
+	var lastErr error
+	for attempt := 1; attempt <= maxDownloadAttempts; attempt++ {
+		err := downloadAttempt(url, partPath, attempt, emit, client)
+		if err == nil {
+			if err := os.Rename(partPath, destPath); err != nil {
+				return &fatalError{fmt.Errorf("移动下载文件: %w", err)}
+			}
+			os.Remove(metaPath)
+			return nil
+		}
+		lastErr = err
+		if !isRetryableErr(err) {
+			return err
+		}
+		if attempt == maxDownloadAttempts {
+			break
+		}
+		delay := backoffDelay(attempt)
+		slog.Warn("updater: download attempt failed, will retry",
+			"attempt", attempt, "delay", delay, "error", err)
+		if off, serr := os.Stat(partPath); serr == nil && off.Size() > 0 {
+			emit(DownloadProgress{
+				BytesDownloaded: off.Size(),
+				Attempt:         attempt + 1,
+				Message: fmt.Sprintf("网络波动，%d 秒后自动重试（第 %d/%d 次，已下载部分将续传）",
+					int(delay.Seconds()), attempt+1, maxDownloadAttempts),
+			})
+		} else {
+			emit(DownloadProgress{
+				Attempt: attempt + 1,
+				Message: fmt.Sprintf("网络波动，%d 秒后自动重试（第 %d/%d 次）",
+					int(delay.Seconds()), attempt+1, maxDownloadAttempts),
+			})
+		}
+		retrySleep(delay)
+	}
+	return fmt.Errorf("下载失败（已自动重试 %d 次，仍无法完成）: %w", maxDownloadAttempts-1, lastErr)
+}
+
+// downloadAttempt 执行一次下载尝试，支持从已有分片续传。
+// 成功时 partPath 已包含完整内容（由调用方改名到位）。
+func downloadAttempt(url string, partPath string, attempt int, emit func(DownloadProgress), client *http.Client) error {
+	var offset int64
+	if st, err := os.Stat(partPath); err == nil {
+		offset = st.Size()
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	client := newHTTPClient(10 * time.Minute)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return fmt.Errorf("create download request: %w", err)
+		return &fatalError{fmt.Errorf("构造下载请求: %w", err)}
 	}
-	slog.Info("updater: sending download request", "url", url)
+	if offset > 0 {
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", offset))
+	}
+
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("download request: %w", err)
+		return fmt.Errorf("连接更新服务器失败: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download returned %d", resp.StatusCode)
+	var total int64
+	resumed := false
+	switch {
+	case resp.StatusCode == http.StatusPartialContent: // 206：服务器接受续传
+		total = parseContentRangeTotal(resp.Header.Get("Content-Range"))
+		resumed = offset > 0
+	case resp.StatusCode == http.StatusRequestedRangeNotSatisfiable:
+		// 分片异常（比完整文件还大等）：丢弃后重试，下次从头下载
+		os.Remove(partPath)
+		return &httpStatusError{Code: resp.StatusCode, Body: "分片已失效，丢弃后重新下载"}
+	case resp.StatusCode == http.StatusOK:
+		if offset > 0 {
+			// 服务器不支持 Range（或忽略了）：从头下载
+			offset = 0
+		}
+		total = resp.ContentLength
+	default:
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
+		return &httpStatusError{Code: resp.StatusCode, Body: strings.TrimSpace(string(body))}
 	}
 
-	total := resp.ContentLength
-	slog.Info("updater: download started", "status", resp.StatusCode, "contentLength", total, "dest", destPath)
-
-	f, err := os.Create(destPath)
+	// 打开分片文件：续传则追加，否则重建
+	var f *os.File
+	if resumed && offset > 0 {
+		f, err = os.OpenFile(partPath, os.O_WRONLY|os.O_APPEND, 0644)
+	} else {
+		offset = 0
+		f, err = os.OpenFile(partPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	}
 	if err != nil {
-		return fmt.Errorf("create file: %w", err)
+		return &fatalError{fmt.Errorf("打开临时文件: %w", err)}
 	}
 	defer f.Close()
 
-	if progressFn == nil || total <= 0 {
+	if total <= 0 {
+		// 长度未知（罕见）：直接复制，出错按可重试处理
 		_, err = io.Copy(f, resp.Body)
-		return err
+		if err != nil {
+			return fmt.Errorf("下载中断: %w", err)
+		}
+		return nil
 	}
 
-	// Download with progress tracking and stall detection.
+	if resumed && offset > 0 {
+		emit(DownloadProgress{
+			BytesDownloaded: offset,
+			BytesTotal:      total,
+			Percentage:      float64(offset) / float64(total) * 100,
+			Attempt:         attempt,
+			Message:         fmt.Sprintf("断点续传：从 %.1f MB 处继续下载", float64(offset)/(1<<20)),
+		})
+	}
+
+	// 下载主循环：进度统计 + 卡死检测（连续 stallTimeout 无数据 → 主动断开）
 	buf := make([]byte, 32*1024)
-	var downloaded int64
+	var downloaded int64 = offset
 	start := time.Now()
 
 	ticker := time.NewTicker(500 * time.Millisecond)
@@ -353,27 +528,27 @@ func downloadFile(url string, destPath string, progressFn func(DownloadProgress)
 
 	done := make(chan struct{})
 	go func() {
-		var lastDownloaded int64
+		lastDownloaded := atomic.LoadInt64(&downloaded)
 		var stallTicks int
 		for {
 			select {
 			case <-ticker.C:
 				cur := atomic.LoadInt64(&downloaded)
 				elapsed := time.Since(start).Seconds()
-				speed := float64(0)
+				var speed float64
 				if elapsed > 0 {
-					speed = float64(cur) / elapsed
+					speed = float64(cur-offset) / elapsed
 				}
-				progressFn(DownloadProgress{
+				emit(DownloadProgress{
 					BytesDownloaded: cur,
-					BytesTotal:     total,
-					Percentage:     float64(cur) / float64(total) * 100,
-					SpeedBps:       speed,
+					BytesTotal:      total,
+					Percentage:      float64(cur) / float64(total) * 100,
+					SpeedBps:        speed,
+					Attempt:         attempt,
 				})
-				// Stall detection: if downloaded hasn't grown, increment counter.
 				if cur == lastDownloaded {
 					stallTicks++
-					if stallTicks >= int(stallTimeout/(500*time.Millisecond)) {
+					if stallTicks >= int(downloadStallTimeout/(500*time.Millisecond)) {
 						slog.Warn("updater: download stalled, cancelling", "downloaded", cur, "total", total)
 						cancel()
 						return
@@ -393,7 +568,7 @@ func downloadFile(url string, destPath string, progressFn func(DownloadProgress)
 		if n > 0 {
 			if _, writeErr := f.Write(buf[:n]); writeErr != nil {
 				close(done)
-				return writeErr
+				return &fatalError{fmt.Errorf("写入磁盘失败: %w", writeErr)}
 			}
 			atomic.AddInt64(&downloaded, int64(n))
 		}
@@ -402,7 +577,7 @@ func downloadFile(url string, destPath string, progressFn func(DownloadProgress)
 		// after delivering all data, causing Read to block forever instead
 		// of returning io.EOF.
 		if atomic.LoadInt64(&downloaded) >= total {
-			slog.Info("updater: all bytes received, exiting read loop", "downloaded", atomic.LoadInt64(&downloaded), "total", total)
+			slog.Info("updater: all bytes received", "downloaded", atomic.LoadInt64(&downloaded), "total", total)
 			break
 		}
 		if readErr != nil {
@@ -411,25 +586,48 @@ func downloadFile(url string, destPath string, progressFn func(DownloadProgress)
 				break
 			}
 			if ctx.Err() != nil {
-				return fmt.Errorf("download stalled (no data received for %v)", stallTimeout)
+				return fmt.Errorf("连接停滞 %v 无数据，已自动断开", downloadStallTimeout)
 			}
-			return readErr
+			return fmt.Errorf("网络中断: %w", readErr)
 		}
 	}
 
 	close(done)
 
-	// Final progress update.
-	cur := atomic.LoadInt64(&downloaded)
-	slog.Info("updater: download finished", "downloaded", cur, "total", total, "elapsed", time.Since(start).Round(time.Millisecond))
-	progressFn(DownloadProgress{
-		BytesDownloaded: cur,
-		BytesTotal:     total,
-		Percentage:     100,
-		SpeedBps:       float64(cur) / time.Since(start).Seconds(),
-	})
+	// 连接对端提前关闭且数据不完整 → 可重试（分片保留供续传）
+	if cur := atomic.LoadInt64(&downloaded); cur < total {
+		return fmt.Errorf("连接中断（已接收 %d/%d 字节）", cur, total)
+	}
 
+	elapsed := time.Since(start).Seconds()
+	var speed float64
+	if elapsed > 0 {
+		speed = float64(total-offset) / elapsed
+	}
+	emit(DownloadProgress{
+		BytesDownloaded: total,
+		BytesTotal:      total,
+		Percentage:      100,
+		SpeedBps:        speed,
+		Attempt:         attempt,
+	})
 	return nil
+}
+
+// parseContentRangeTotal 解析 Content-Range（"bytes 100-199/1000"）里的总长度
+func parseContentRangeTotal(v string) int64 {
+	if v == "" {
+		return -1
+	}
+	i := strings.LastIndex(v, "/")
+	if i < 0 || i == len(v)-1 {
+		return -1
+	}
+	n, err := strconv.ParseInt(v[i+1:], 10, 64)
+	if err != nil {
+		return -1
+	}
+	return n
 }
 
 // unzip extracts a zip archive to destDir.

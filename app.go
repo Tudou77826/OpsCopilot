@@ -423,6 +423,8 @@ func (a *App) DoUpdate(downloadURL string) string {
 			"bytesTotal":      p.BytesTotal,
 			"percentage":      p.Percentage,
 			"speedBps":        p.SpeedBps,
+			"attempt":         p.Attempt,
+			"message":         p.Message,
 		})
 	}
 
