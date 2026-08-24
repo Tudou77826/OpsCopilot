@@ -62,6 +62,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -75,4 +78,7 @@ jobs:
           files: |
             release/opscopilot-windows.zip
             release/opscopilot.exe
+          # 仓库内 docs/release-notes/<tag>.md 作为 Release 正文；
+          # GitHub 自动生成的变更列表附加在其后
+          body_path: docs/release-notes/${{ github.ref_name }}.md
           generate_release_notes: true
