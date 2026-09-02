@@ -125,6 +125,11 @@
   /* —— 遮罩与阴影 —— */
   --overlay: rgba(0, 0, 0, 0.7);
   --shadow: rgba(0, 0, 0, 0.4);
+  --shadow-dialog: 0 16px 40px rgba(0, 0, 0, 0.42);
+  --brand-logo-filter: none;
+  --bg-dialog: var(--bg-tertiary);
+  --bg-dialog-section: var(--bg-tertiary);
+  --bg-settings-canvas: var(--bg-tertiary);
 
   /* —— 滚动条 —— */
   --app-scrollbar-size: 6px;
@@ -136,33 +141,32 @@
 /* —— 亮色主题：覆盖同名 token。色板取自 One Half Light / GitHub Light，
    yellow 等在白底不可读的色已调暗。data-theme="light" 由切换逻辑写入 <html>。 —— */
 :root[data-theme="light"] {
-  /* 暖白主题：背景从纯白调整为带暖调的米白/暖灰，降低长时间注视的刺眼感；
-     hover/active 同步暖化，选中态保持蓝调但更柔和。 */
-  --bg-primary: #f6f3ec;
-  --bg-secondary: #ece7da;
-  --bg-tertiary: #e6e2d7;
-  --bg-elevated: #f1eee5;
-  --bg-input: #fbf9f4;
-  --bg-hover: #e6e1d5;
-  --bg-active: #ece1c8;
-  --bg-active-soft: #f0e7d2;
+  /* 暖白工作区：纸白画布、奶油白浮层、暖灰分区与低饱和琥珀交互态。 */
+  --bg-primary: #faf8f3;
+  --bg-secondary: #f2eee5;
+  --bg-tertiary: #eae4d8;
+  --bg-elevated: #fffdf8;
+  --bg-input: #fffefa;
+  --bg-hover: #e9e1d2;
+  --bg-active: #eee0c7;
+  --bg-active-soft: #f6eedf;
   --bg-tooltip: #2b2b2b;
 
-  --border: #c9c1ad;
-  --border-subtle: #dcd4c2;
-  --border-strong: #a59c87;
-  --border-focus: #a0721a;
+  --border: #d9d0c0;
+  --border-subtle: #e9e2d6;
+  --border-strong: #a99a84;
+  --border-focus: #855b23;
 
-  --text-primary: #33343a;
-  --text-secondary: #4f525e;
-  --text-tertiary: #6a737d;
-  --text-muted: #8a8f98;
-  --text-disabled: #b0b0b0;
+  --text-primary: #39362f;
+  --text-secondary: #554e43;
+  --text-tertiary: #655d50;
+  --text-muted: #6e6354;
+  --text-disabled: #9b907e;
   --text-on-accent: #ffffff;
 
-  --accent: #a0721a;
-  --accent-hover: #8a6113;
-  --accent-soft: #eee3cc;
+  --accent: #855b23;
+  --accent-hover: #6d491b;
+  --accent-soft: #eee0c7;
   --success: #1a7f37;
   --warning: #b08800;
   --danger: #cf222e;
@@ -197,7 +201,7 @@
   --severity-warning: #bf8700;
   --severity-info: #0969da;
   --severity-success: #1a7f37;
-  --severity-muted: #8a8f98;
+  --severity-muted: #6e6354;
 
   --status-danger-bg: #d1242f;
   --status-warning-bg: #bf8700;
@@ -212,7 +216,7 @@
 
   --chip-info-bg: #e4edfa;
 
-  --chip-code-bg: #e9e4d6;
+  --chip-code-bg: #f0e8d9;
 
   --chip-purple-bg: #fbefff;
   --chip-purple-fg: #8250df;
@@ -238,11 +242,20 @@
   --drop-blocked-bg: rgba(255, 235, 233, 0.92);
   --drop-blocked-border: #cf222e;
 
-  --overlay: rgba(0, 0, 0, 0.45);
-  --shadow: rgba(0, 0, 0, 0.15);
+  --overlay: rgba(52, 43, 29, 0.24);
+  --shadow: rgba(52, 43, 29, 0.12);
+  --shadow-dialog: 0 16px 48px rgba(52, 43, 29, 0.16), 0 2px 8px rgba(52, 43, 29, 0.06);
+  --brand-logo-filter: brightness(0) saturate(100%) opacity(0.82);
+  --bg-dialog: #fffdf8;
+  --bg-dialog-section: #faf8f3;
+  --bg-settings-canvas: #faf8f3;
 
-  --app-scrollbar-thumb: #b0b0b0;
-  --app-scrollbar-thumb-hover: #888;
+  --app-scrollbar-thumb: #bcaf99;
+  --app-scrollbar-thumb-hover: #9a896e;
+}
+
+.shell-brand-logo {
+  filter: var(--brand-logo-filter);
 }
 
 #app {

@@ -420,7 +420,7 @@ export const App: React.FC<SidecarShellAppProps> = ({ endpoint, autoConnect = fa
   return (
     <div className="shell-root">
       <header className="titlebar">
-        <span className="brand"><img src={logo} alt="OpsCopilot" className="brand-logo" />OpsCopilot Shell</span>
+        <span className="brand"><img src={logo} alt="OpsCopilot" className="brand-logo shell-brand-logo" />OpsCopilot Shell</span>
         <span className="titlebar-status"><span className="dot ok" />sidecar 已连接</span>
         <div className="titlebar-actions">
           <button className="btn-primary" data-testid="open-connect-modal" onClick={() => setSmartModalOpen(true)}>＋ 新建连接</button>

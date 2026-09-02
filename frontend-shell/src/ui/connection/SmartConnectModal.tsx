@@ -436,7 +436,7 @@ const styles = {
         boxSizing: 'border-box' as const,
     },
     modal: {
-        backgroundColor: 'var(--bg-tertiary)',
+        backgroundColor: 'var(--bg-dialog)',
         border: '1px solid var(--border)',
         padding: '0',
         borderRadius: '8px',
@@ -444,7 +444,7 @@ const styles = {
         maxHeight: '86vh',
         display: 'flex',
         flexDirection: 'column' as const,
-        boxShadow: '0 16px 40px rgba(0, 0, 0, 0.42)',
+        boxShadow: 'var(--shadow-dialog)',
         color: 'var(--text-primary)',
         overflow: 'hidden',
     },
@@ -493,7 +493,7 @@ const styles = {
         gap: '9px',
         padding: '12px 22px',
         borderBottom: '1px solid var(--border)',
-        backgroundColor: 'var(--bg-tertiary)',
+        backgroundColor: 'var(--bg-dialog-section)',
     },
     inputHeader: {
         display: 'flex',

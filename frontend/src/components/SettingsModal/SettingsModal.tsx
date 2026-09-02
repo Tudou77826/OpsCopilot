@@ -1974,7 +1974,7 @@ const styles = {
     contentArea: {
         flex: 1,
         overflowY: 'auto' as const,
-        backgroundColor: colors.bgTertiary,
+        backgroundColor: 'var(--bg-settings-canvas)',
         minWidth: 0,
     },
     pageContent: {
@@ -2237,7 +2237,7 @@ const styles = {
         borderRadius: radius.sm,
         border: 'none',
         backgroundColor: colors.accent,
-        color: colors.textPrimary,
+        color: 'var(--text-on-accent)',
         cursor: 'pointer',
         fontWeight: 500,
         fontSize: font.base,

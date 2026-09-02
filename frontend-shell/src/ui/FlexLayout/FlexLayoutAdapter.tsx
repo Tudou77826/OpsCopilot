@@ -488,9 +488,9 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: 'var(--text-disabled)',
+                    color: 'var(--text-muted)',
                 }}>
-                    暂无活动连接。请点击右上角 "+ 新建连接" 开始使用。
+                    暂无活动连接。请点击“新建连接”开始使用。
                 </div>
             ) : (
                 <Layout

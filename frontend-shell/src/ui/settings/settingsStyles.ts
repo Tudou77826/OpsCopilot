@@ -3,7 +3,7 @@
 // ============================================================
 
 // ---- Colors ----
-// 值全部映射到 App.css 的语义 token(暗色下与原值视觉一致,亮色下自动切换)
+// 值全部映射到共享 shell-theme.css 的语义 token。
 export const colors = {
   bgPrimary: 'var(--bg-primary)',
   bgSecondary: 'var(--bg-secondary)',
@@ -58,7 +58,7 @@ export const btnPrimary: React.CSSProperties = {
   borderRadius: radius.sm,
   border: 'none',
   backgroundColor: colors.accent,
-  color: colors.textPrimary,
+  color: 'var(--text-on-accent)',
   cursor: 'pointer',
   fontSize: font.base,
   fontWeight: 500,
@@ -223,7 +223,7 @@ export const pageDesc: React.CSSProperties = {
 
 // 内容区圆角卡片（orca SettingsSection body）
 export const settingsCard: React.CSSProperties = {
-  backgroundColor: colors.bgTertiary,
+  backgroundColor: 'var(--bg-dialog)',
   borderRadius: radius.lg,
   border: `1px solid ${colors.borderPrimary}`,
   padding: '24px 28px',

@@ -32,6 +32,7 @@ export default defineConfig({
     minify: false,
   },
   test: {
+    css: { include: [/App\.css/] },
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/setupTests.ts',

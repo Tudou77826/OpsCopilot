@@ -140,7 +140,7 @@ const styles: Record<string, React.CSSProperties> = {
     overlay: {
         position: 'fixed',
         top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        backgroundColor: 'var(--overlay)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -149,11 +149,11 @@ const styles: Record<string, React.CSSProperties> = {
         animation: 'fadeIn 0.15s ease-out',
     },
     modal: {
-        backgroundColor: 'var(--bg-secondary)',
+        backgroundColor: 'var(--bg-dialog)',
         width: '420px',
         maxWidth: '90%',
         borderRadius: 8,
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)',
+        boxShadow: 'var(--shadow-dialog)',
         border: '1px solid var(--border)',
         animation: 'slideIn 0.2s ease-out',
     },

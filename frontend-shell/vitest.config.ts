@@ -6,6 +6,7 @@ export default defineConfig({
     // 原 core 协议测试在 jsdom 下同样可运行（WebSocket 由测试 mock 全局覆盖）。
     // 阶段 4 起 .tsx 组件测试（FilesPanel 等）纳入质量门。
     environment: 'jsdom',
+    css: { include: [/shell-theme\.css/] },
     include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: './src/setupTests.ts',
   },
