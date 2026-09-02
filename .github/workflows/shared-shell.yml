@@ -1,0 +1,33 @@
+name: Shared Shell checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            frontend-shell/package-lock.json
+      - run: npm --prefix frontend-shell ci
+      - run: npm --prefix frontend ci
+      - run: npm --prefix frontend-shell run typecheck
+      - run: npm --prefix frontend-shell test -- --maxWorkers=2
+      - run: npm --prefix frontend test -- --run --maxWorkers=2
+      - run: npm --prefix frontend-shell run build
+      - run: npm --prefix frontend run build
+      - run: go test ./...
+      - run: go vet ./...
+      - run: go build ./cmd/shellsidecar

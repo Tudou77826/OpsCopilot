@@ -2,7 +2,7 @@
   "$schema": "https://wails.io/schemas/config.v2.json",
   "name": "opscopilot",
   "outputfilename": "opscopilot",
-  "frontend:install": "npm install",
+  "frontend:install": "npm --prefix ../frontend-shell ci && npm ci",
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "http://localhost:5174",

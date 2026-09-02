@@ -1,0 +1,578 @@
+import React, { useEffect, useState } from 'react';
+import { useToast } from '../feedback/Toast';
+import { confirmDialog } from '../feedback/ConfirmDialog';
+import type { ScriptRuntime, ScriptData, ScriptStep, ScriptVariable } from './types';
+
+// --- Types ---
+
+// 编辑器内的可编辑形态：loadScript 归一化后 steps/variables 必有
+type EditableScript = ScriptData & { steps: ScriptStep[]; variables: ScriptVariable[] };
+
+interface ScriptEditorModalProps {
+    isOpen: boolean;
+    scriptId: string | null;
+    onClose: () => void;
+    onSave: () => void;
+    runtime: ScriptRuntime;
+}
+
+// --- Main Component ---
+
+const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
+    isOpen,
+    scriptId,
+    onClose,
+    onSave,
+    runtime,
+}) => {
+    const [script, setScript] = useState<EditableScript | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [varsExpanded, setVarsExpanded] = useState(true);
+    const toast = useToast();
+
+    // Inject CSS
+    useEffect(() => {
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes scriptEditorFadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes scriptEditorSlideUp {
+                from { opacity: 0; transform: translateY(20px) scale(0.98); }
+                to { opacity: 1; transform: translateY(0) scale(1); }
+            }
+            .se-switch-slider { background-color: var(--bg-input); }
+            .se-switch-checkbox:checked + .se-switch-slider { background-color: var(--success); }
+            .se-switch-checkbox:checked + .se-switch-slider::after { transform: translateX(16px); }
+            .se-switch-slider::after {
+                content: ''; position: absolute; top: 2px; left: 2px;
+                width: 16px; height: 16px; background-color: var(--text-on-accent);
+                border-radius: 50%; transition: transform 0.2s ease;
+            }
+            .se-input:focus { outline: none; border-color: var(--accent) !important; box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2); }
+            .se-btn:hover { transform: translateY(-1px); }
+            .se-btn-action:hover { background-color: var(--bg-tertiary); color: var(--text-primary); }
+            .se-btn-close:hover { background-color: var(--bg-tertiary); color: var(--text-primary); }
+            .se-btn-add:hover { background-color: var(--accent-hover); box-shadow: 0 4px 12px rgba(0, 122, 204, 0.4); }
+            .se-btn-save:hover { background-color: var(--accent-hover); box-shadow: 0 4px 12px rgba(0, 122, 204, 0.4); }
+            .se-btn-cancel:hover { background-color: var(--bg-input); border-color: var(--border-strong); }
+            .se-command-card:hover { border-color: var(--border-strong); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
+            .se-meta-input:hover, .se-delay-group:hover { border-color: var(--border-strong); }
+        `;
+        document.head.appendChild(style);
+        return () => { try { document.head.removeChild(style); } catch {} };
+    }, []);
+
+    useEffect(() => {
+        if (isOpen && scriptId) loadScript();
+    }, [isOpen, scriptId]);
+
+    const loadScript = async () => {
+        if (!scriptId) return;
+        setLoading(true);
+        try {
+            const result = await runtime.load(scriptId);
+            if (!result.steps || result.steps.length === 0) {
+                result.steps = (result.commands || []).map((cmd: any, idx: number) => ({
+                    command: cmd.content,
+                    comment: cmd.comment || '',
+                    delay: cmd.delay || 0,
+                    enabled: cmd.enabled !== false,
+                    original_index: idx,
+                }));
+            }
+            if (!result.variables) result.variables = [];
+            setScript(result as EditableScript);
+        } catch (err: any) {
+            toast.error('加载脚本失败: ' + (err.message || err));
+            onClose();
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSave = async () => {
+        if (!script) return;
+        setSaving(true);
+        try {
+            await runtime.update(script);
+            onSave();
+            onClose();
+        } catch (err: any) {
+            toast.error('保存失败: ' + (err.message || err));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    // --- Step management ---
+
+    const updateSteps = (newSteps: ScriptStep[]) => {
+        setScript((prev) => prev ? { ...prev, steps: newSteps } : prev);
+    };
+
+    const updateStep = (index: number, update: Partial<ScriptStep>) => {
+        if (!script) return;
+        const newSteps = [...script.steps];
+        newSteps[index] = { ...newSteps[index], ...update };
+        updateSteps(newSteps);
+    };
+
+    const addCommandStep = () => {
+        if (!script) return;
+        updateSteps([...script.steps, {
+            command: '',
+            comment: '',
+            delay: 0,
+            enabled: true,
+        }]);
+    };
+
+    const insertStepAfter = (index: number) => {
+        if (!script) return;
+        const newSteps = [...script.steps];
+        newSteps.splice(index + 1, 0, {
+            command: '',
+            comment: '',
+            delay: 0,
+            enabled: true,
+        });
+        updateSteps(newSteps);
+    };
+
+    const moveStep = (index: number, direction: -1 | 1) => {
+        if (!script) return;
+        const target = index + direction;
+        if (target < 0 || target >= script.steps.length) return;
+        const newSteps = [...script.steps];
+        [newSteps[index], newSteps[target]] = [newSteps[target], newSteps[index]];
+        updateSteps(newSteps);
+    };
+
+    const deleteStep = async (index: number) => {
+        if (!script) return;
+        const ok = await confirmDialog.show({ message: '确定要删除这条命令吗？', danger: true });
+        if (!ok) return;
+        updateSteps(script.steps.filter((_, i) => i !== index));
+    };
+
+    // --- Variable management ---
+
+    const updateVariables = (newVars: ScriptVariable[]) => {
+        setScript((prev) => prev ? { ...prev, variables: newVars } : prev);
+    };
+
+    const addVariable = () => {
+        updateVariables([...(script?.variables || []), {
+            name: '',
+            display_name: '',
+            default_value: '',
+            required: false,
+            description: '',
+        }]);
+    };
+
+    const updateVariable = (index: number, update: Partial<ScriptVariable>) => {
+        if (!script) return;
+        const newVars = [...script.variables];
+        newVars[index] = { ...newVars[index], ...update };
+        updateVariables(newVars);
+    };
+
+    const deleteVariable = async (index: number) => {
+        const ok = await confirmDialog.show({ message: '确定要删除这个变量吗？', danger: true });
+        if (!ok) return;
+        updateVariables(script!.variables.filter((_, i) => i !== index));
+    };
+
+    // --- Render ---
+
+    if (!isOpen) return null;
+
+    if (loading) {
+        return (
+            <div style={styles.overlay}>
+                <div style={styles.modal}><div style={styles.loading}>加载中...</div></div>
+            </div>
+        );
+    }
+
+    if (!script) return null;
+
+    return (
+        <div style={styles.overlay}>
+            <div style={styles.modal}>
+                <div style={styles.header}>
+                    <h2 style={styles.title}>编辑脚本</h2>
+                    <button className="se-btn se-btn-close" style={styles.closeButton} onClick={onClose}>x</button>
+                </div>
+
+                <div style={styles.body}>
+                    {/* 基本信息 */}
+                    <div style={styles.fieldGroup}>
+                        <label style={styles.label}>脚本名称</label>
+                        <input className="se-input" style={styles.input} type="text" value={script.name}
+                            onChange={(e) => setScript({ ...script, name: e.target.value })}
+                            placeholder="例如：重启 Nginx 服务" />
+                    </div>
+                    <div style={styles.fieldGroup}>
+                        <label style={styles.label}>描述说明</label>
+                        <input className="se-input" style={styles.input} type="text" value={script.description}
+                            onChange={(e) => setScript({ ...script, description: e.target.value })}
+                            placeholder="简要描述脚本用途" />
+                    </div>
+
+                    {/* 变量定义区 */}
+                    <div style={styles.variablesSection}>
+                        <div style={styles.varSectionHeader} onClick={() => setVarsExpanded(!varsExpanded)}>
+                            <div style={styles.sectionTitleGroup}>
+                                <label style={styles.sectionTitle}>
+                                    变量定义 {varsExpanded ? '\u25BC' : '\u25B8'}
+                                </label>
+                                <span style={styles.sectionSubtitle}>{script.variables?.length || 0} 个变量</span>
+                            </div>
+                        </div>
+                        {varsExpanded && (
+                            <div style={styles.variablesContent}>
+                                <div style={styles.varHint}>
+                                    定义变量后，在命令中使用 <code style={styles.varHintCode}>{'${变量名}'}</code> 引用。回放脚本时，用户可以为变量填入不同的值，实现一个脚本多次复用。
+                                </div>
+                                {/* 表头 */}
+                                <div style={styles.varHeader}>
+                                    <span style={{...styles.varHeaderCell, flex: 2}}>变量名</span>
+                                    <span style={{...styles.varHeaderCell, flex: 2}}>显示名称</span>
+                                    <span style={{...styles.varHeaderCell, flex: 2}}>默认值</span>
+                                    <span style={{...styles.varHeaderCell, width: '36px', textAlign: 'center'}}>必填</span>
+                                    <span style={{...styles.varHeaderCell, width: '24px'}}></span>
+                                </div>
+                                {(script.variables || []).map((v, idx) => (
+                                    <div key={idx} style={styles.varRow}>
+                                        <input className="se-input" style={{...styles.varInput, flex: 2}} type="text" value={v.name}
+                                            onChange={(e) => updateVariable(idx, { name: e.target.value })}
+                                            placeholder="如 port" />
+                                        <input className="se-input" style={{...styles.varInput, flex: 2}} type="text" value={v.display_name}
+                                            onChange={(e) => updateVariable(idx, { display_name: e.target.value })}
+                                            placeholder="如 端口号" />
+                                        <input className="se-input" style={{...styles.varInput, flex: 2}} type="text" value={v.default_value}
+                                            onChange={(e) => updateVariable(idx, { default_value: e.target.value })}
+                                            placeholder="如 8080" />
+                                        <label style={styles.switchLabel} title={v.required ? '回放时必填' : '可选'}>
+                                            <input type="checkbox" checked={v.required}
+                                                onChange={(e) => updateVariable(idx, { required: e.target.checked })}
+                                                className="se-switch-checkbox" style={styles.switchCheckbox} />
+                                            <span className="se-switch-slider" style={styles.switchSlider}></span>
+                                        </label>
+                                        <button className="se-btn se-btn-action" style={styles.varDeleteBtn}
+                                            onClick={() => deleteVariable(idx)} title="删除变量">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M18 6L6 18M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                ))}
+                                {(!script.variables || script.variables.length === 0) && (
+                                    <div style={styles.varEmpty}>暂无变量，点击下方按钮添加</div>
+                                )}
+                                <button className="se-btn se-btn-add" style={styles.addVarButton} onClick={addVariable}>
+                                    + 添加变量
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 命令步骤区 */}
+                    <div style={styles.commandsSection}>
+                        <div style={styles.sectionHeader}>
+                            <div style={styles.sectionTitleGroup}>
+                                <label style={styles.sectionTitle}>命令列表</label>
+                                <span style={styles.sectionSubtitle}>{script.steps.length} 条命令</span>
+                            </div>
+                        </div>
+
+                        {script.steps.length === 0 && (
+                            <button className="se-btn se-btn-add" style={styles.addFirstButton} onClick={addCommandStep}>
+                                + 添加第一条命令
+                            </button>
+                        )}
+
+                        <div style={styles.commandsList}>
+                            {script.steps.map((step, idx) => {
+                                const usedVars = (step.command?.match(/\$\{([^}]+)\}/g) || [])
+                                    .map(m => m.slice(2, -1));
+
+                                return (
+                                <div key={idx} className="se-command-card" style={{
+                                    ...styles.commandCard,
+                                    opacity: step.enabled ? 1 : 0.5,
+                                }}>
+                                    {/* 序号 + 启用开关 */}
+                                    <div style={styles.stepLeft}>
+                                        <div style={{
+                                            ...styles.stepIndex,
+                                            backgroundColor: step.enabled ? 'var(--border)' : 'var(--bg-elevated)',
+                                        }}>{idx + 1}</div>
+                                        <label style={styles.switchLabel} title={step.enabled ? '已启用：回放时执行' : '已禁用：回放时跳过'}>
+                                            <input type="checkbox" checked={step.enabled}
+                                                onChange={(e) => updateStep(idx, { enabled: e.target.checked })}
+                                                className="se-switch-checkbox" style={styles.switchCheckbox} />
+                                            <span className="se-switch-slider" style={styles.switchSlider}></span>
+                                        </label>
+                                    </div>
+
+                                    <div style={styles.commandContent}>
+                                        <div style={styles.commandInputRow}>
+                                            <input className="se-input" style={{
+                                                ...styles.commandInput,
+                                                paddingRight: usedVars.length > 0 ? `${usedVars.length * 60 + 16}px` : '14px',
+                                            }} type="text" value={step.command || ''}
+                                                onChange={(e) => updateStep(idx, { command: e.target.value })}
+                                                placeholder="输入命令，用 ${变量名} 引用变量" />
+                                            {usedVars.length > 0 && (
+                                                <div style={styles.varTags}>
+                                                    {usedVars.map((v, vi) => (
+                                                        <span key={vi} style={styles.varTag}>${'{' + v + '}'}</span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div style={styles.commandMetadata}>
+                                            <input className="se-input se-meta-input" style={styles.commentInput} type="text"
+                                                value={step.comment || ''} onChange={(e) => updateStep(idx, { comment: e.target.value })}
+                                                placeholder="备注说明（可选）" />
+                                            <div className="se-delay-group" style={styles.delayInputGroup}>
+                                                <span style={styles.delayLabel}>延迟</span>
+                                                <input className="se-input" style={styles.delayInput} type="number" value={step.delay || 0}
+                                                    onChange={(e) => updateStep(idx, { delay: parseInt(e.target.value) || 0 })}
+                                                    placeholder="0" min="0" step="100" />
+                                                <span style={styles.delayUnit}>ms</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div style={styles.commandActions}>
+                                        <div style={styles.actionRow}>
+                                            <button className="se-btn se-btn-action" style={styles.insertButton}
+                                                onClick={() => insertStepAfter(idx)} title="在下方插入">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                                    <path d="M12 5v14M5 12h14"/>
+                                                </svg>
+                                            </button>
+                                            <button className="se-btn se-btn-action" style={styles.moveButton}
+                                                onClick={() => moveStep(idx, -1)} title="上移"
+                                                disabled={idx === 0}>
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                    <path d="M18 15l-6-6-6 6"/>
+                                                </svg>
+                                            </button>
+                                            <button className="se-btn se-btn-action" style={styles.moveButton}
+                                                onClick={() => moveStep(idx, 1)} title="下移"
+                                                disabled={idx === script.steps.length - 1}>
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                    <path d="M6 9l6 6 6-6"/>
+                                                </svg>
+                                            </button>
+                                            <button className="se-btn se-btn-action" style={styles.actionButton} onClick={() => deleteStep(idx)} title="删除">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                    <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            );})}
+                        </div>
+                    </div>
+                </div>
+
+                <div style={styles.footer}>
+                    <button className="se-btn se-btn-cancel" style={styles.cancelButton} onClick={onClose}>
+                        取消
+                    </button>
+                    <button className="se-btn se-btn-save" style={styles.saveButton} onClick={handleSave} disabled={saving}>
+                        {saving ? '保存中...' : '保存'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- Styles ---
+
+const styles: Record<string, React.CSSProperties> = {
+    overlay: {
+        position: 'fixed' as const, top: 0, left: 0, right: 0, bottom: 0,
+        backgroundColor: 'var(--overlay)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 5000, animation: 'scriptEditorFadeIn 0.2s ease-out',
+    },
+    modal: {
+        width: '960px', maxHeight: '85vh', backgroundColor: 'var(--bg-primary)',
+        borderRadius: '12px', border: '1px solid var(--border)',
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
+        display: 'flex', flexDirection: 'column' as const,
+        animation: 'scriptEditorSlideUp 0.3s ease-out',
+    },
+    header: {
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '20px 24px', borderBottom: '1px solid var(--border)',
+    },
+    title: { margin: 0, fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)' },
+    closeButton: {
+        width: '36px', height: '36px', padding: 0, backgroundColor: 'transparent',
+        border: 'none', color: 'var(--text-muted)', fontSize: '24px', cursor: 'pointer',
+        borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    },
+    body: { flex: 1, overflowY: 'auto' as const, padding: '24px' },
+    loading: { textAlign: 'center', padding: '60px', color: 'var(--text-muted)', fontSize: '14px' },
+    fieldGroup: { marginBottom: '20px' },
+    label: { display: 'block', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: 500 },
+    input: {
+        width: '100%', padding: '10px 14px', backgroundColor: 'var(--bg-secondary)',
+        border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)',
+        fontSize: '14px', boxSizing: 'border-box' as const,
+    },
+
+    // 变量区
+    variablesSection: { marginTop: '20px', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' },
+    varSectionHeader: {
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '12px 16px', backgroundColor: 'var(--bg-secondary)', cursor: 'pointer', userSelect: 'none' as const,
+    },
+    variablesContent: { padding: '12px 16px', backgroundColor: 'var(--bg-primary)' },
+    varHeader: {
+        display: 'flex', gap: '6px', alignItems: 'center',
+        marginBottom: '8px', paddingBottom: '6px', borderBottom: '1px solid var(--border)',
+    },
+    varHeaderCell: { fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.03em' },
+    varRow: { display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '6px' },
+    varInput: {
+        padding: '6px 8px', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border)',
+        borderRadius: '4px', color: 'var(--text-primary)', fontSize: '12px', minWidth: 0,
+    },
+    varEmpty: { textAlign: 'center' as const, color: 'var(--text-muted)', fontSize: '12px', padding: '12px 0' },
+    varHint: { fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.6', marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid var(--border)' },
+    varHintCode: { backgroundColor: 'var(--bg-tertiary)', padding: '1px 5px', borderRadius: '3px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--teal-fg)' },
+    varDeleteBtn: {
+        width: '24px', height: '24px', padding: 0, backgroundColor: 'transparent',
+        border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '14px',
+        borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+    },
+    addVarButton: {
+        padding: '6px 12px', backgroundColor: 'var(--accent)', color: 'var(--text-on-accent)',
+        border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 500, marginTop: '4px',
+    },
+    switchLabel: { display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', userSelect: 'none' as const },
+    switchCheckbox: { display: 'none' },
+    switchSlider: { width: '36px', height: '20px', borderRadius: '10px', position: 'relative' as const, transition: 'all 0.2s ease' },
+
+    // 命令区
+    commandsSection: { marginTop: '24px' },
+    sectionHeader: {
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px',
+    },
+    sectionTitleGroup: { display: 'flex', alignItems: 'center', gap: '12px' },
+    sectionTitle: { fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' },
+    sectionSubtitle: {
+        fontSize: '12px', color: 'var(--text-muted)', backgroundColor: 'var(--bg-tertiary)',
+        padding: '2px 8px', borderRadius: '12px', fontWeight: 500,
+    },
+    addButtonStyle: {
+        padding: '8px 16px', backgroundColor: 'var(--accent)', color: 'var(--text-on-accent)',
+        border: 'none', borderRadius: '6px', cursor: 'pointer',
+        fontSize: '13px', fontWeight: 500,
+    },
+    addFirstButton: {
+        width: '100%', padding: '24px', backgroundColor: 'var(--bg-secondary)',
+        color: 'var(--accent)', border: '2px dashed var(--border)', borderRadius: '8px',
+        cursor: 'pointer', fontSize: '14px', fontWeight: 500, marginBottom: '8px',
+    },
+    insertButton: {
+        width: '28px', height: '28px', padding: 0,
+        backgroundColor: 'var(--accent)', color: 'var(--text-on-accent)',
+        border: 'none', borderRadius: '4px', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontWeight: 700,
+    },
+    commandsList: { display: 'flex', flexDirection: 'column' as const, gap: '8px' },
+
+    // 命令卡片
+    commandCard: {
+        display: 'flex', gap: '10px', padding: '12px 16px', backgroundColor: 'var(--bg-secondary)',
+        border: '1px solid var(--border)', borderRadius: '8px', alignItems: 'flex-start',
+        transition: 'all 0.15s ease',
+    },
+    stepLeft: {
+        display: 'flex', flexDirection: 'column' as const, alignItems: 'center',
+        gap: '6px', paddingTop: '4px', minWidth: '36px',
+    },
+    stepIndex: {
+        width: '24px', height: '24px', minWidth: '24px',
+        backgroundColor: 'var(--bg-input)', borderRadius: '50%',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '11px', fontWeight: 700, color: 'var(--text-tertiary)',
+    },
+    commandContent: { flex: 1, display: 'flex', flexDirection: 'column' as const, gap: '6px', minWidth: 0 },
+    commandInputRow: { position: 'relative' as const, display: 'flex', flexDirection: 'column' as const },
+    commandInput: {
+        width: '100%', padding: '10px 14px', backgroundColor: 'var(--bg-primary)',
+        border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text-primary)',
+        fontSize: '14px', fontFamily: 'var(--font-mono)', boxSizing: 'border-box' as const,
+    },
+    varTags: {
+        position: 'absolute' as const, right: '8px', top: '50%', transform: 'translateY(-50%)',
+        display: 'flex', gap: '3px', pointerEvents: 'none' as const,
+    },
+    varTag: {
+        padding: '1px 6px', backgroundColor: 'var(--chip-code-bg)', color: 'var(--teal-fg)',
+        borderRadius: '3px', fontSize: '10px', fontFamily: 'var(--font-mono)',
+        whiteSpace: 'nowrap' as const,
+    },
+    commandMetadata: { display: 'flex', gap: '10px', alignItems: 'center' },
+    commentInput: {
+        flex: 1, padding: '6px 10px', backgroundColor: 'var(--bg-primary)',
+        border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-secondary)',
+        fontSize: '12px', boxSizing: 'border-box' as const,
+    },
+    delayInputGroup: {
+        display: 'flex', alignItems: 'center', backgroundColor: 'var(--bg-primary)',
+        border: '1px solid var(--border)', borderRadius: '4px', overflow: 'hidden',
+        flexShrink: 0,
+    },
+    delayLabel: { padding: '0 6px', fontSize: '11px', color: 'var(--text-disabled)' },
+    delayInput: {
+        width: '48px', padding: '6px 4px', backgroundColor: 'transparent',
+        border: 'none', color: 'var(--text-primary)', fontSize: '12px', boxSizing: 'border-box' as const, outline: 'none',
+    },
+    delayUnit: { padding: '0 6px', fontSize: '11px', color: 'var(--text-muted)', backgroundColor: 'var(--bg-tertiary)', height: '100%', display: 'flex', alignItems: 'center' },
+    metadataSpacer: { flex: 1 },
+    commandActions: { display: 'flex', flexDirection: 'column' as const, gap: '6px', paddingTop: '4px', alignItems: 'center' },
+    actionRow: { display: 'flex', gap: '2px' },
+    moveButton: {
+        width: '28px', height: '28px', padding: 0, backgroundColor: 'transparent',
+        border: 'none', color: 'var(--text-disabled)', borderRadius: '4px', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+    },
+    actionButton: {
+        width: '28px', height: '28px', padding: 0, backgroundColor: 'transparent',
+        border: 'none', color: 'var(--text-muted)', borderRadius: '4px', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+    },
+
+    // 底部
+    footer: {
+        display: 'flex', justifyContent: 'flex-end', gap: '12px',
+        padding: '20px 24px', borderTop: '1px solid var(--border)',
+    },
+    cancelButton: {
+        padding: '10px 20px', backgroundColor: 'transparent', color: 'var(--text-secondary)',
+        border: '1px solid var(--border-strong)', borderRadius: '6px', cursor: 'pointer',
+        fontSize: '14px', fontWeight: 500,
+    },
+    saveButton: {
+        padding: '10px 20px', backgroundColor: 'var(--accent)', color: 'var(--text-on-accent)',
+        border: 'none', borderRadius: '6px', cursor: 'pointer',
+        fontSize: '14px', fontWeight: 500,
+    },
+};
+
+export default ScriptEditorModal;

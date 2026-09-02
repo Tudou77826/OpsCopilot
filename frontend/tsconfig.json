@@ -15,6 +15,11 @@
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "moduleResolution": "Node",
+    "baseUrl": ".",
+    "paths": {
+      "@opscopilot/shell-terminal/ui": ["../frontend-shell/src/ui/index.ts"],
+      "@opscopilot/shell-terminal/ui/*": ["../frontend-shell/src/ui/*"]
+    },
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,

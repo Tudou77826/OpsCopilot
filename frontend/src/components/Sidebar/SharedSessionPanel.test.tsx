@@ -5,7 +5,7 @@ import SharedSessionPanel from './SharedSessionPanel';
 // Mock Toast（组件在 Provider 外渲染，避免依赖上下文）
 const mockToastError = vi.fn();
 const mockToastSuccess = vi.fn();
-vi.mock('../Toast/Toast', () => ({
+vi.mock('../../../../frontend-shell/src/ui/feedback/Toast', () => ({
     useToast: () => ({ error: mockToastError, success: mockToastSuccess, info: vi.fn(), warning: vi.fn() }),
 }));
 

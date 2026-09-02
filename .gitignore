@@ -100,3 +100,9 @@ mcp-server.exe~
 AGENTS.md
 .sdd/
 OpsCopilot_效率改进申报材料.md
+
+# Shared Shell build outputs and local development state.
+frontend-shell/node_modules/
+frontend-shell/dist/
+frontend-shell/data/
+shellsidecar.exe

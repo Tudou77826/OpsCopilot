@@ -10,6 +10,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@opscopilot/shell-terminal": "file:../frontend-shell",
     "@fontsource/fira-code": "^5.2.7",
     "@fontsource/ibm-plex-mono": "^5.2.7",
     "@fontsource/inconsolata": "^5.2.8",

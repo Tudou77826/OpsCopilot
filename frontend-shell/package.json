@@ -1,0 +1,46 @@
+{
+  "name": "@opscopilot/shell-terminal",
+  "private": true,
+  "version": "0.1.0",
+  "description": "OpsCopilot Shell 插件前端核心包：xterm 终端视图 + sidecar 客户端。平台无关，dev harness 独立可跑。",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fontsource/fira-code": "^5.2.7",
+    "@fontsource/ibm-plex-mono": "^5.2.7",
+    "@fontsource/inconsolata": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
+    "@fontsource/source-code-pro": "^5.2.7",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-search": "^0.16.0",
+    "@xterm/xterm": "^6.0.0",
+    "flexlayout-react": "^0.9.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-icons": "^5.5.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.17",
+    "@types/react-dom": "^18.0.17",
+    "@vitejs/plugin-react": "^4.7.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.1",
+    "jsdom": "^27.4.0",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.21",
+    "vitest": "^4.0.16"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./core": "./src/core/index.ts",
+    "./ui": "./src/ui/index.ts",
+    "./sidecar-app": "./src/dev/App.tsx",
+    "./ui/styles.css": "./src/ui/styles.css",
+    "./ui/settingsStyles": "./src/ui/settings/settingsStyles.ts"
+  }
+}
