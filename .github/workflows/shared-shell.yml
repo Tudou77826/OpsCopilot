@@ -21,13 +21,33 @@ jobs:
           cache-dependency-path: |
             frontend/package-lock.json
             frontend-shell/package-lock.json
+            plugins/teams-opscopilot/package-lock.json
       - run: npm --prefix frontend-shell ci
       - run: npm --prefix frontend ci
+      - run: npm --prefix plugins/teams-opscopilot ci
       - run: npm --prefix frontend-shell run typecheck
       - run: npm --prefix frontend-shell test -- --maxWorkers=2
       - run: npm --prefix frontend test -- --run --maxWorkers=2
       - run: npm --prefix frontend-shell run build
       - run: npm --prefix frontend run build
+      - run: npm --prefix plugins/teams-opscopilot run typecheck
+      - run: npm --prefix plugins/teams-opscopilot test
+      - run: npm --prefix plugins/teams-opscopilot run test:integration
+      - run: npm --prefix plugins/teams-opscopilot run package
       - run: go test ./...
       - run: go vet ./...
       - run: go build ./cmd/shellsidecar
+
+  shared-storage:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Repeated multi-process storage and installation lifecycle regression
+        run: go test -count=3 -timeout=180s -run "Shared|Process|ReadOnly|Merge|Runtime|OtherProcess|LeaseHelper" ./pkg/filetxn ./pkg/installguard ./pkg/config ./pkg/sessionmanager ./pkg/script

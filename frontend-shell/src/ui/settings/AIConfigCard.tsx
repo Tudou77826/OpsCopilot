@@ -25,6 +25,7 @@ export interface AIConfigUpdateInput {
 }
 
 export interface AIConfigRuntime {
+    persistence?: 'session' | 'local';
     status(): Promise<AIConfigStatus>;
     save(update: AIConfigUpdateInput): Promise<AIConfigStatus>;
 }
@@ -74,7 +75,7 @@ const AIConfigCard: React.FC<AIConfigCardProps> = ({ runtime }) => {
         }
     };
 
-    const sourceLabel = status?.source === 'env' ? '环境变量' : status?.source === 'file' ? '本地配置' : '未配置';
+    const sourceLabel = status?.source === 'session' ? '当前运行时' : status?.source === 'env' ? '环境变量' : status?.source === 'file' ? '本地配置' : '未配置';
 
     return (
         <div style={styles.card}>
@@ -83,7 +84,7 @@ const AIConfigCard: React.FC<AIConfigCardProps> = ({ runtime }) => {
                 <div style={styles.rowLeft}>
                     <div style={styles.rowLabel}>API 密钥</div>
                     <div style={styles.rowDesc}>
-                        {status?.configured
+                        {runtime.persistence === 'session' ? '仅用于本次运行时，不写入配置文件；插件或客户端重启后需重新填写。仅发送你主动提交给 AI 的内容。' : status?.configured
                             ? `已配置（${status.keyHint ?? ''} · ${sourceLabel}）。密钥只在本地后台保存，读取不回明文；留空表示保留现有密钥。`
                             : '未配置。密钥只在本地后台保存，用于命令生成与诊断等 AI 能力。'}
                     </div>

@@ -43,8 +43,7 @@ const CommandGrid: React.FC<CommandGridProps> = ({
     useEffect(() => {
         if (!contextMenu) return;
         const handler = (e: PointerEvent) => {
-            const menuEl = document.querySelector('[data-testid="command-context-menu"]');
-            if (menuEl && menuEl.contains(e.target as Node)) return;
+            if (e.composedPath().some(node => node instanceof Element && node.getAttribute('data-testid') === 'command-context-menu')) return;
             setContextMenu(null);
         };
         document.addEventListener('pointerdown', handler);

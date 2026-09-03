@@ -76,6 +76,33 @@ const getPaneContainingText = (text: string) => {
     return pane as HTMLElement;
 };
 
+describe('browser transfer capabilities in the original FilesPanel', () => {
+    it('does not add browser controls to the desktop host', async () => {
+        renderPanel(1200);
+        await screen.findByText('local.txt');
+        expect(screen.queryByRole('button', { name: '导入本机文件' })).toBeNull();
+        expect(screen.queryByRole('button', { name: '下载到本机' })).toBeNull();
+    });
+    it('imports through the host port and refreshes the original file list', async () => {
+        const backend = { ...makeBackend(), ImportFile: vi.fn(async (_dir: string, _file: File, _signal: AbortSignal, progress: (value: number) => void) => { progress(100); }) };
+        renderPanel(1200, backend);
+        await screen.findByText('local.txt');
+        const before = backend.LocalList.mock.calls.length;
+        const file = new File(['test'], 'test.txt', { type: 'text/plain' });
+        fireEvent.change(screen.getByLabelText('导入本机文件'), { target: { files: [file] } });
+        await waitFor(() => expect(backend.ImportFile).toHaveBeenCalledWith(expect.any(String), file, expect.any(AbortSignal), expect.any(Function)));
+        await screen.findByText('已导入 test.txt');
+        expect(backend.LocalList.mock.calls.length).toBeGreaterThan(before);
+    });
+    it('downloads the selected local file through the host port', async () => {
+        const backend = { ...makeBackend(), ExportFile: vi.fn(async (_path: string) => {}) };
+        renderPanel(1200, backend);
+        fireEvent.click(await screen.findByText('local.txt'));
+        fireEvent.click(screen.getByRole('button', { name: '下载到本机' }));
+        await waitFor(() => expect(backend.ExportFile).toHaveBeenCalledWith('C:\\Users\\tester\\local.txt'));
+    });
+});
+
 describe('FilesPanel responsive layout', () => {
     afterEach(() => {
         vi.restoreAllMocks();

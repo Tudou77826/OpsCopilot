@@ -26,6 +26,7 @@ type ConnectConfig struct {
 	Port         int            `json:"port"`
 	User         string         `json:"user"`
 	Password     string         `json:"password"`
+	HostKey      string         `json:"host_key,omitempty"` // OpenSSH authorized-key form; pinned before authentication.
 	RootPassword string         `json:"root_password"`
 	Bastion      *ConnectConfig `json:"bastion"`
 	Group        string         `json:"group,omitempty"` // UI 分组

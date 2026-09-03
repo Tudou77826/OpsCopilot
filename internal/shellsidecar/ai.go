@@ -6,8 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"opscopilot/pkg/ai"
+	"opscopilot/pkg/config"
 	"opscopilot/pkg/llm"
 	"opscopilot/pkg/remote"
 )
@@ -20,7 +22,10 @@ import (
 //   - 文件未配置时可回退读取 LLM_API_KEY / LLM_BASE_URL 等环境变量（与 Wails/CLI 同名），
 //     文件配置优先于环境变量。
 type AIConfigService struct {
-	path string
+	desktopRoot string
+	path        string
+	mu          sync.RWMutex
+	session     *aiConfigFile
 }
 
 // AIConfigStatus 是 shell.ai.getConfig 的返回形态：脱敏，永不含明文密钥。
@@ -80,6 +85,11 @@ func (s *AIConfigService) Status() AIConfigStatus {
 	if key == "" {
 		source = aiSourceNone
 	}
+	s.mu.RLock()
+	if s.session != nil {
+		source = "session"
+	}
+	s.mu.RUnlock()
 
 	baseURL := firstNonEmpty(file.BaseURL, os.Getenv("LLM_BASE_URL"), aiDefaultBaseURL)
 	fastModel := firstNonEmpty(file.FastModel, os.Getenv("LLM_FAST_MODEL"), aiDefaultModel)
@@ -98,6 +108,9 @@ func (s *AIConfigService) Status() AIConfigStatus {
 // Save 落盘配置；更新值为空的字段一律保留已存值（与 apiKey 同语义，
 // 避免调用方只改部分字段时误清其余配置）。返回保存后的脱敏状态。
 func (s *AIConfigService) Save(update AIConfigUpdate) (AIConfigStatus, error) {
+	if s.desktopRoot != "" {
+		return AIConfigStatus{}, errors.New("Teams 模型覆盖仅限本次进程；永久配置请在本地 Ops 中保存")
+	}
 	file := s.load()
 	if v := strings.TrimSpace(update.ApiKey); v != "" {
 		file.APIKey = v
@@ -125,13 +138,50 @@ func (s *AIConfigService) Save(update AIConfigUpdate) (AIConfigStatus, error) {
 
 // load 读取落盘配置；缺失/损坏时返回空结构（回退逻辑在 Status）。
 func (s *AIConfigService) load() aiConfigFile {
+	s.mu.RLock()
+	if s.session != nil {
+		value := *s.session
+		s.mu.RUnlock()
+		return value
+	}
+	s.mu.RUnlock()
 	var file aiConfigFile
+	if s.desktopRoot != "" {
+		m := config.NewManagerWithDir(s.desktopRoot)
+		m.SetReadOnly(true)
+		if m.Load() != nil {
+			return file
+		}
+		c := m.Config.LLM
+		return aiConfigFile{BaseURL: c.BaseURL, APIKey: c.APIKey, FastModel: c.FastModel, ComplexModel: c.ComplexModel}
+	}
 	data, err := os.ReadFile(s.path)
 	if err != nil {
 		return file
 	}
 	_ = json.Unmarshal(data, &file)
 	return file
+}
+
+// SaveSession configures this process only. Teams never persists API secrets.
+func (s *AIConfigService) SaveSession(update AIConfigUpdate) AIConfigStatus {
+	file := s.load()
+	if update.ApiKey != "" {
+		file.APIKey = update.ApiKey
+	}
+	if update.BaseURL != "" {
+		file.BaseURL = update.BaseURL
+	}
+	if update.FastModel != "" {
+		file.FastModel = update.FastModel
+	}
+	if update.ComplexModel != "" {
+		file.ComplexModel = update.ComplexModel
+	}
+	s.mu.Lock()
+	s.session = &file
+	s.mu.Unlock()
+	return s.Status()
 }
 
 // errAINotConfigured 在未配置密钥（文件与环境变量均无）时返回。

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { TbClock, TbScreenShare, TbStethoscope, TbMessageChatbot, TbCode, TbBolt, TbBook } from 'react-icons/tb';
 import { useToast } from './components/Toast/Toast';
 import './App.css';
-import logo from './assets/images/logo-universal.png';
+import { ProductFrame, ProductToolbar, ProductNavigation } from '../../frontend-shell/src/ui/product/ProductChrome';
 import { TerminalRef } from './components/Terminal/Terminal';
 import FlexLayoutAdapter from './components/FlexLayout/FlexLayoutAdapter';
 import QuickCommandPanel from './components/QuickCommandPanel/QuickCommandPanel';
@@ -11,7 +11,10 @@ import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal'
 import Sidebar from './components/Sidebar/Sidebar';
 import SettingsModal from './components/SettingsModal/SettingsModal';
 import ConfirmCloseModal from './components/ConfirmCloseModal/ConfirmCloseModal';
-import CommandQueryOverlay, { CommandQueryResult } from './components/CommandQueryOverlay/CommandQueryOverlay';
+import CommandQueryOverlay from './components/CommandQueryOverlay/CommandQueryOverlay';
+import { useCommandQuery } from '../../frontend-shell/src/ui/product/useCommandQuery';
+import { useProductNavigation } from '../../frontend-shell/src/ui/product/useProductNavigation';
+import { generateWailsCommand } from './shell-adapter/wailsCommandQuery';
 import ConnectErrorModal from './components/ConnectErrorModal/ConnectErrorModal';
 import { ConnectionConfig, SessionStatus, SessionDisconnectedEvent } from './types';
 import { HighlightRule, TerminalConfig } from './components/Terminal/highlightTypes';
@@ -46,9 +49,8 @@ function App() {
     const toast = useToast();
     const [status, setStatus] = useState("就绪");
     const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
-    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [sidebarTab, setSidebarTab] = useState<'sessions' | 'troubleshoot' | 'chat' | 'script' | 'knowledge'>('sessions');
+    const { settingsOpen:isSettingsOpen, setSettingsOpen:setIsSettingsOpen, sidebarOpen:isSidebarOpen, setSidebarOpen:setIsSidebarOpen,
+        tab:sidebarTab, setTab:setSidebarTab, quickOpen:isQuickCommandOpen, setQuickOpen:setIsQuickCommandOpen, toggleSidebar } = useProductNavigation({sidebarOpen:false,quickOpen:false});
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
     const [knowledgeTarget, setKnowledgeTarget] = useState<KnowledgeTarget | null>(null);
@@ -68,12 +70,13 @@ function App() {
         () => highlightRules.some(r => !assessPattern(r.pattern || '').canEnable),
         [highlightRules]
     );
-    const [isCommandQueryOpen, setIsCommandQueryOpen] = useState(false);
-    const [commandQueryText, setCommandQueryText] = useState('');
-    const [commandQueryLoading, setCommandQueryLoading] = useState(false);
-    const [commandQueryResult, setCommandQueryResult] = useState<CommandQueryResult | null>(null);
-    const [commandQueryError, setCommandQueryError] = useState('');
     const commandQueryShortcut = 'Ctrl+K';
+    const { visible:isCommandQueryOpen, setVisible:setIsCommandQueryOpen, query:commandQueryText, setQuery:setCommandQueryText,
+        loading:commandQueryLoading, result:commandQueryResult, error:commandQueryError, generate:generateCommand,
+        copy:copyGeneratedCommand, type:typeGeneratedCommand } = useCommandQuery({
+        generate:generateWailsCommand, type:command => handleQuickCommand(command),
+        copy:command => navigator.clipboard.writeText(command), warn:message => toast.warning(message),
+    }, activeTerminalId, commandQueryShortcut);
     // connectError 携带的额外信息：reopenNewConnect 标记「新建连接失败」（区别于重连失败），
     // failedConfigs 保存失败的配置，供关闭错误弹窗后带回 SmartConnectModal 编辑重试。
     const [connectErrors, setConnectErrors] = useState<{ title: string; message: string; reopenNewConnect?: boolean; failedConfigs?: ConnectionConfig[] }[]>([]);
@@ -317,103 +320,6 @@ function App() {
             }
         };
     }, []);
-
-    useEffect(() => {
-        const isEditableTarget = (target: EventTarget | null) => {
-            const el = target as HTMLElement | null;
-            if (!el) return false;
-            if (el.classList?.contains('xterm-helper-textarea')) return false;
-            if (el.closest?.('.xterm')) return false;
-            const tag = el.tagName?.toLowerCase();
-            if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
-            if ((el as any).isContentEditable) return true;
-            return false;
-        };
-
-        const eventToShortcut = (e: KeyboardEvent) => {
-            const parts: string[] = [];
-            if (e.ctrlKey) parts.push('Ctrl');
-            if (e.altKey) parts.push('Alt');
-            if (e.shiftKey) parts.push('Shift');
-            if (e.metaKey) parts.push('Meta');
-
-            if (e.key === 'Control' || e.key === 'Alt' || e.key === 'Shift' || e.key === 'Meta') return '';
-            const mainKey = e.key.length === 1 ? e.key.toUpperCase() : e.key;
-            parts.push(mainKey);
-            return parts.join('+');
-        };
-
-        const matchesShortcut = (e: KeyboardEvent, shortcut: string) => {
-            const normalized = (shortcut || '').trim();
-            if (!normalized) return false;
-            return eventToShortcut(e).toLowerCase() === normalized.toLowerCase();
-        };
-
-        const openCommandQuery = () => {
-            if (!activeTerminalId) {
-                toast.warning("请先选择一个激活的终端");
-                return;
-            }
-            setCommandQueryText('');
-            setCommandQueryError('');
-            setCommandQueryResult(null);
-            setIsCommandQueryOpen(true);
-        };
-
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (isEditableTarget(e.target)) return;
-            if (matchesShortcut(e, commandQueryShortcut)) {
-                e.preventDefault();
-                e.stopPropagation();
-                openCommandQuery();
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown, true);
-        return () => window.removeEventListener('keydown', handleKeyDown, true);
-    }, [activeTerminalId]);
-
-    const generateCommand = async (overrideText?: string) => {
-        const text = (overrideText ?? commandQueryText).trim();
-        if (!text) return;
-        setCommandQueryText(overrideText ?? commandQueryText);
-        setCommandQueryLoading(true);
-        setCommandQueryError('');
-        try {
-            // @ts-ignore
-            if (!window.go || !window.go.main || !window.go.main.App || !window.go.main.App.GenerateLinuxCommand) {
-                setCommandQueryError('Wails 运行时未就绪');
-                return;
-            }
-            // @ts-ignore
-            const resp = await window.go.main.App.GenerateLinuxCommand(text);
-            if (typeof resp === 'string' && resp.startsWith('Error:')) {
-                setCommandQueryError(resp);
-                setCommandQueryResult(null);
-                return;
-            }
-            const parsed = JSON.parse(resp) as CommandQueryResult;
-            setCommandQueryResult(parsed);
-        } catch (e: any) {
-            setCommandQueryError(e?.toString?.() || '生成失败');
-            setCommandQueryResult(null);
-        } finally {
-            setCommandQueryLoading(false);
-        }
-    };
-
-    const copyGeneratedCommand = () => {
-        const cmd = commandQueryResult?.command?.trim();
-        if (!cmd) return;
-        navigator.clipboard.writeText(cmd);
-    };
-
-    const typeGeneratedCommand = () => {
-        const cmd = commandQueryResult?.command?.trim();
-        if (!cmd) return;
-        setIsCommandQueryOpen(false);
-        handleQuickCommand(cmd);
-    };
 
     const removeTerminal = useCallback((id: string) => {
         setTerminals(prev => prev.filter(t => t.id !== id));
@@ -725,23 +631,10 @@ function App() {
         scheduleFitAll(300);
     }, [isSidebarOpen, scheduleFitAll]);
 
-    const [isQuickCommandOpen, setIsQuickCommandOpen] = useState(false);
-
     // Force terminal resize when QuickCommandPanel toggles
     useEffect(() => {
         scheduleFitAll(350);
     }, [isQuickCommandOpen, scheduleFitAll]);
-
-    const toggleSidebar = (tab: 'sessions' | 'troubleshoot' | 'chat' | 'script' | 'knowledge') => {
-        if (isSidebarOpen && sidebarTab === tab) {
-            // If clicking the active tab, close it
-            setIsSidebarOpen(false);
-        } else {
-            // Open and switch tab
-            setIsSidebarOpen(true);
-            setSidebarTab(tab);
-        }
-    };
 
     const handleConfirmClose = () => {
         console.debug("[App] User confirmed close");
@@ -760,88 +653,9 @@ function App() {
     };
 
     return (
-        <div id="app" style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-            <div style={{
-                padding: '6px 12px',
-                background: 'var(--bg-elevated)',
-                borderBottom: '1px solid var(--bg-primary)',
-                color: 'var(--text-primary)',
-                display: 'flex',
-                gap: '12px',
-                alignItems: 'center',
-                justifyContent: 'space-between'
-            }}>
-                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                    {status === '就绪' || status === '已连接' || status === '已重连' ? (
-                        <img src={logo} alt="OpsCopilot" className="shell-brand-logo" style={{ width: 28, height: 28 }} />
-                    ) : null}
-                    {status !== '就绪' && status !== '已连接' && status !== '已重连' && (
-                        <div style={{
-                            ...styles.loadingIndicator,
-                            color: (status.includes('失败') || status.includes('请先')) ? 'var(--danger)' : 'var(--text-muted)',
-                        }}>
-                            {!status.includes('失败') && !status.includes('请先') && (
-                                <svg className="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                                    <path d="M12 2a10 10 0 0 1 10 10" />
-                                </svg>
-                            )}
-                            <span>{status}</span>
-                        </div>
-                    )}
-                    <button onClick={() => setIsSmartModalOpen(true)} style={styles.primaryBtn}>
-                        + 新建连接
-                    </button>
-                    <button onClick={handleThemeToggle} style={styles.iconBtnUnified} title={theme === 'dark' ? '切换到亮色' : '切换到暗色'}>
-                        {theme === 'dark' ? (
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="4" />
-                                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-                            </svg>
-                        ) : (
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                            </svg>
-                        )}
-                    </button>
-                    <button onClick={() => setIsSettingsOpen(true)} style={{ ...styles.iconBtnUnified, position: 'relative' }} title="设置">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="3"></circle>
-                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                        </svg>
-                        {(updateAvailable || highlightNeedsAttention) && (
-                            <span style={{
-                                position: 'absolute',
-                                top: '2px',
-                                right: '2px',
-                                width: '8px',
-                                height: '8px',
-                                borderRadius: '50%',
-                                backgroundColor: ATTENTION_DOT_COLOR,
-                                border: '1px solid var(--bg-primary)',
-                            }} />
-                        )}
-                    </button>
-                    {parsedTimestamp && (
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '2px 8px',
-                            background: 'var(--bg-input)',
-                            borderRadius: '4px',
-                            fontSize: '0.75rem',
-                        }}>
-                            <span style={{ color: 'var(--text-muted)' }}>{TbClock({ size: 12 })}</span>
-                            <span style={{ color: 'var(--text-secondary)' }}>{parsedTimestamp.local}</span>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            <div style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'row' }}>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
-                    <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-                        <FlexLayoutAdapter
+        <ProductFrame id="app"
+            toolbar={<ProductToolbar status={status} theme={theme} onNewConnection={() => setIsSmartModalOpen(true)} onThemeToggle={handleThemeToggle} onSettings={() => setIsSettingsOpen(true)} updateAvailable={updateAvailable} highlightNeedsAttention={highlightNeedsAttention} parsedTimestamp={parsedTimestamp} />}
+            terminal={<FlexLayoutAdapter
                             terminals={terminals}
                             onTerminalData={handleTerminalData}
                             terminalRefs={terminalRefs}
@@ -861,16 +675,12 @@ function App() {
                             highlightRules={highlightRules}
                             theme={theme}
                             onSelectionParsed={setParsedTimestamp}
-                        />
-                    </div>
-
-                    <QuickCommandPanel
+                        />}
+            quickCommands={<QuickCommandPanel
                         isOpen={isQuickCommandOpen}
                         onExecute={handleQuickCommand}
-                    />
-                </div>
-
-                <Sidebar
+                    />}
+            sidebar={<Sidebar
                     isOpen={isSidebarOpen}
                     activeTab={sidebarTab}
                     onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -880,82 +690,10 @@ function App() {
                     onTypeCommand={handleQuickCommand}
                     onOpenKnowledgeSource={handleOpenKnowledgeSource}
                     knowledgeTarget={knowledgeTarget}
-                />
-
-                {/* Right Nav (Icon Bar) */}
-                <div style={styles.rightNav}>
-                    <div
-                        style={{
-                            ...styles.navIcon,
-                            backgroundColor: (isSidebarOpen && sidebarTab === 'sessions') ? 'var(--bg-elevated)' : 'transparent',
-                            borderRight: (isSidebarOpen && sidebarTab === 'sessions') ? '2px solid var(--accent)' : '2px solid transparent'
-                        }}
-                        onClick={() => toggleSidebar('sessions')}
-                        title="会话管理"
-                    >
-                        {TbScreenShare({ size: 20 })}
-                    </div>
-                    <div
-                        style={{
-                            ...styles.navIcon,
-                            backgroundColor: (isSidebarOpen && sidebarTab === 'troubleshoot') ? 'var(--bg-elevated)' : 'transparent',
-                            borderRight: (isSidebarOpen && sidebarTab === 'troubleshoot') ? '2px solid var(--accent)' : '2px solid transparent'
-                        }}
-                        onClick={() => toggleSidebar('troubleshoot')}
-                        title="定位助手"
-                    >
-                        {TbStethoscope({ size: 20 })}
-                    </div>
-                    <div
-                        style={{
-                            ...styles.navIcon,
-                            backgroundColor: (isSidebarOpen && sidebarTab === 'chat') ? 'var(--bg-elevated)' : 'transparent',
-                            borderRight: (isSidebarOpen && sidebarTab === 'chat') ? '2px solid var(--accent)' : '2px solid transparent'
-                        }}
-                        onClick={() => toggleSidebar('chat')}
-                        title="AI 问答"
-                    >
-                        {TbMessageChatbot({ size: 20 })}
-                    </div>
-                    <div
-                        style={{
-                            ...styles.navIcon,
-                            backgroundColor: (isSidebarOpen && sidebarTab === 'knowledge') ? 'var(--bg-elevated)' : 'transparent',
-                            borderRight: (isSidebarOpen && sidebarTab === 'knowledge') ? '2px solid var(--accent)' : '2px solid transparent'
-                        }}
-                        onClick={() => toggleSidebar('knowledge')}
-                        title="知识库"
-                    >
-                        {TbBook({ size: 20 })}
-                    </div>
-                    <div
-                        style={{
-                            ...styles.navIcon,
-                            backgroundColor: (isSidebarOpen && sidebarTab === 'script') ? 'var(--bg-elevated)' : 'transparent',
-                            borderRight: (isSidebarOpen && sidebarTab === 'script') ? '2px solid var(--accent)' : '2px solid transparent'
-                        }}
-                        onClick={() => toggleSidebar('script')}
-                        title="脚本录制"
-                    >
-                        {TbCode({ size: 20 })}
-                    </div>
-                    <div style={{ flex: 1 }} />
-                    <div
-                        style={{
-                            ...styles.navIcon,
-                            backgroundColor: isQuickCommandOpen ? 'var(--bg-elevated)' : 'transparent',
-                            borderRight: isQuickCommandOpen ? '2px solid var(--accent)' : '2px solid transparent',
-                        }}
-                        onClick={() => setIsQuickCommandOpen(!isQuickCommandOpen)}
-                        title="快捷命令"
-                        data-testid="nav-icon-quickcommands"
-                    >
-                        {TbBolt({ size: 20 })}
-                    </div>
-                </div>
-            </div>
-
-            <BottomBar />
+                />}
+            navigation={<ProductNavigation isSidebarOpen={isSidebarOpen} sidebarTab={sidebarTab} toggleSidebar={toggleSidebar} isQuickCommandOpen={isQuickCommandOpen} onToggleQuickCommands={() => setIsQuickCommandOpen(!isQuickCommandOpen)} />}
+            footer={<BottomBar />}
+        >
 
             <SmartConnectModal
                 isOpen={isSmartModalOpen}
@@ -1012,66 +750,9 @@ function App() {
                     handleQuickCommand(entry.command);
                 }}
             />
-        </div>
+        </ProductFrame>
     );
 }
 
-const styles = {
-    primaryBtn: {
-        height: '28px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '4px',
-        padding: '0 12px',
-        backgroundColor: 'var(--accent)',
-        border: 'none',
-        borderRadius: '4px',
-        color: 'var(--text-on-accent)',
-        cursor: 'pointer',
-        fontSize: '0.82rem',
-        fontWeight: 500 as const,
-        transition: 'background-color 0.15s',
-    },
-    iconBtnUnified: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'transparent',
-        border: 'none',
-        borderRadius: '4px',
-        color: 'var(--text-tertiary)',
-        cursor: 'pointer',
-        padding: '4px',
-        transition: 'color 0.15s',
-    },
-    loadingIndicator: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        fontSize: '0.8rem',
-    },
-    rightNav: {
-        width: '40px',
-        backgroundColor: 'var(--bg-secondary)',
-        display: 'flex',
-        flexDirection: 'column' as const,
-        alignItems: 'center',
-        borderLeft: '1px solid var(--border)',
-        paddingTop: '10px',
-        paddingBottom: '10px',
-    },
-    navIcon: {
-        width: '100%',
-        height: '42px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: 'pointer',
-        fontSize: '24px',
-        marginBottom: '4px',
-        transition: 'background-color 0.2s',
-    }
-};
 
 export default App;

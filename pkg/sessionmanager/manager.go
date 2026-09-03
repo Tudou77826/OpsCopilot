@@ -3,8 +3,8 @@ package sessionmanager
 import (
 	"encoding/json"
 	"fmt"
+	"opscopilot/pkg/filetxn"
 	"opscopilot/pkg/remote"
-	"os"
 	"strings"
 	"sync"
 
@@ -27,9 +27,11 @@ type Session struct {
 }
 
 type Manager struct {
-	filePath string
-	Sessions []*Session
-	mu       sync.RWMutex
+	filePath            string
+	Sessions            []*Session
+	mu                  sync.RWMutex
+	baseline            []byte
+	PreserveCredentials bool
 }
 
 func NewManager() *Manager {
@@ -50,37 +52,77 @@ func NewManagerWithPath(filePath string) *Manager {
 func (m *Manager) Load() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
-	data, err := os.ReadFile(m.filePath)
-	if os.IsNotExist(err) {
-		m.Sessions = []*Session{}
-		return m.Save()
-	}
+	return m.reload()
+}
+func (m *Manager) reload() error {
+	data, err := filetxn.Read(m.filePath)
 	if err != nil {
 		return err
 	}
-
-	return json.Unmarshal(data, &m.Sessions)
+	next := []*Session{}
+	if len(data) > 0 {
+		if err = json.Unmarshal(data, &next); err != nil {
+			return err
+		}
+	}
+	m.Sessions = next
+	m.baseline = append([]byte(nil), data...)
+	return nil
 }
-
 func (m *Manager) Save() error {
-	// Assumes lock is held by caller or public method
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	data, err := json.MarshalIndent(m.Sessions, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(m.filePath, data, 0644)
+	merged, err := filetxn.Merge(m.filePath, m.baseline, data)
+	if err != nil {
+		return err
+	}
+	m.baseline = merged
+	return json.Unmarshal(merged, &m.Sessions)
+}
+func (m *Manager) saveLocked() error {
+	data, err := json.MarshalIndent(m.Sessions, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err = filetxn.Write(m.filePath, data); err != nil {
+		return err
+	}
+	m.baseline = data
+	return nil
+}
+func (m *Manager) beginMutation() (func(), error) {
+	release, err := filetxn.Lock(m.filePath)
+	if err != nil {
+		return nil, err
+	}
+	if err = m.reload(); err != nil {
+		release()
+		return nil, err
+	}
+	return release, nil
 }
 
 func (m *Manager) GetSessions() []*Session {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.Sessions
+	data, _ := json.Marshal(m.Sessions)
+	var out []*Session
+	_ = json.Unmarshal(data, &out)
+	return out
 }
 
 func (m *Manager) DeleteSession(id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	release, err := m.beginMutation()
+	if err != nil {
+		return err
+	}
+	defer release()
 
 	// Recursive deletion helper
 	var deleteNode func(nodes []*Session) []*Session
@@ -99,12 +141,17 @@ func (m *Manager) DeleteSession(id string) error {
 	}
 
 	m.Sessions = deleteNode(m.Sessions)
-	return m.Save()
+	return m.saveLocked()
 }
 
 func (m *Manager) RenameSession(id, newName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	release, err := m.beginMutation()
+	if err != nil {
+		return err
+	}
+	defer release()
 
 	var renameNode func(nodes []*Session) bool
 	renameNode = func(nodes []*Session) bool {
@@ -126,7 +173,7 @@ func (m *Manager) RenameSession(id, newName string) error {
 	}
 
 	if renameNode(m.Sessions) {
-		return m.Save()
+		return m.saveLocked()
 	}
 	return fmt.Errorf("session not found")
 }
@@ -163,6 +210,11 @@ func sameEndpoint(a, b *remote.ConnectConfig) bool {
 func (m *Manager) Upsert(config remote.ConnectConfig, groupName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	release, err := m.beginMutation()
+	if err != nil {
+		return err
+	}
+	defer release()
 
 	// 归一化 Protocol:空值视为 SSH,保证去重比较一致。
 	if config.Protocol == "" {
@@ -189,6 +241,9 @@ func (m *Manager) Upsert(config remote.ConnectConfig, groupName string) error {
 	}
 	m.Sessions = removeByHost(m.Sessions)
 
+	if m.PreserveCredentials && removed != nil {
+		preserveCredentials(&config, removed.Config)
+	}
 	// Connections opened from the saved-session tree carry the stored config.
 	// Preserve the node's display name when that config still has the old/empty name.
 	targetName := config.Name
@@ -246,12 +301,17 @@ func (m *Manager) Upsert(config remote.ConnectConfig, groupName string) error {
 		m.Sessions = append(m.Sessions, newNode)
 	}
 
-	return m.Save()
+	return m.saveLocked()
 }
 
 func (m *Manager) UpdateSession(id string, config remote.ConnectConfig, groupName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	release, err := m.beginMutation()
+	if err != nil {
+		return err
+	}
+	defer release()
 
 	// 归一化 Protocol:空值视为 SSH,保证去重比较一致。
 	if config.Protocol == "" {
@@ -279,6 +339,9 @@ func (m *Manager) UpdateSession(id string, config remote.ConnectConfig, groupNam
 		return fmt.Errorf("session not found")
 	}
 
+	if m.PreserveCredentials {
+		preserveCredentials(&config, removed.Config)
+	}
 	config.Group = groupName
 
 	// 重复检测:key 为 (Host, Port, Protocol) 三元组,允许同 host 不同协议共存。
@@ -344,7 +407,7 @@ func (m *Manager) UpdateSession(id string, config remote.ConnectConfig, groupNam
 		m.Sessions = append(m.Sessions, newNode)
 	}
 
-	return m.Save()
+	return m.saveLocked()
 }
 
 // CreateFolder creates an empty folder at root level.
@@ -355,6 +418,11 @@ func (m *Manager) CreateFolder(name string) error {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	release, err := m.beginMutation()
+	if err != nil {
+		return err
+	}
+	defer release()
 
 	for _, s := range m.Sessions {
 		if s.Type == TypeFolder && s.Name == name {
@@ -369,5 +437,25 @@ func (m *Manager) CreateFolder(name string) error {
 		Children: []*Session{},
 	}
 	m.Sessions = append(m.Sessions, folder)
-	return m.Save()
+	return m.saveLocked()
+}
+
+// Shared plugin edits never erase a stored secret because the browser cannot read it.
+func preserveCredentials(next, old *remote.ConnectConfig) {
+	if old == nil {
+		return
+	}
+	// Never carry an old server's password to a different target or account.
+	if !sameEndpoint(next, old) || next.User != old.User {
+		return
+	}
+	if next.Password == "" {
+		next.Password = old.Password
+	}
+	if next.RootPassword == "" {
+		next.RootPassword = old.RootPassword
+	}
+	if next.Bastion == nil {
+		next.Bastion = old.Bastion
+	}
 }

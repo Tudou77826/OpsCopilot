@@ -1,25 +1,16 @@
-import React, { useEffect, useState } from 'react';
-import { TbInfoCircle } from 'react-icons/tb';
-import { assessPattern } from '../Terminal/highlight/regexSafety';
-import type { HighlightRule } from '../Terminal/highlightTypes';
-import type { TerminalConfig } from '../Terminal/highlightTypes';
-import { normalizeTerminalConfig } from '../Terminal/terminalAppearance';
+import React, { useEffect, useRef, useState } from 'react';
+import { TbRobot, TbSun, TbPalette, TbKeyboard, TbSettings } from 'react-icons/tb';
+import type { TerminalConfig, HighlightRule } from '../Terminal/highlightTypes';
 import type { Theme } from '../appearanceTypes';
-import { useToast } from '../feedback/Toast';
-import ThemeChoiceCard from './ThemeChoiceCard';
-import TerminalAppearanceCard from './TerminalAppearanceCard';
-import HighlightRulesModal from './HighlightRulesModal';
-import AIConfigCard from './AIConfigCard';
 import type { AIConfigRuntime } from './AIConfigCard';
-import Switch from './Switch';
-import { colors, radius, font } from './settingsStyles';
+import { assessPattern } from '../Terminal/highlight/regexSafety';
+import { ProductSettingsFrame, type SettingsNavGroup } from './ProductSettingsFrame';
+import { ProductShellSettingsPage } from './ProductShellSettingsPage';
+import { ProductLLMSettings, type ProductLLMConfig } from './ProductLLMSettings';
+import { CompletionDelayCard } from './CompletionDelayCard';
 
-/**
- * Shell 设置切片：主题 / 终端外观 / 补全延迟 / 高亮规则。
- * Wails 在其完整设置弹窗中复用同一组 section 组件；
- * Sidecar/插件宿主直接使用本弹窗（ShellSettingsRuntime 负责持久化）。
- */
 export interface ShellSettings {
+    revision?: string;
     theme: Theme;
     terminal: TerminalConfig;
     completionDelay: number;
@@ -34,7 +25,9 @@ export interface ShellSettingsRuntime {
 }
 
 export interface ShellSettingsModalProps {
+    hostSettings?: React.ReactNode;
     isOpen: boolean;
+    embedded?: boolean;
     onClose: () => void;
     runtime: ShellSettingsRuntime;
     /** 宿主实时应用回调（主题/终端/补全/高亮）；保存由 runtime 负责 */
@@ -45,285 +38,97 @@ export interface ShellSettingsModalProps {
     aiRuntime?: AIConfigRuntime;
 }
 
-interface HighlightIssue { name: string; issues: string[] }
 
-const computeHighlightIssues = (rules: HighlightRule[]): HighlightIssue[] => {
-    const out: HighlightIssue[] = [];
-    for (const r of rules) {
-        const risk = assessPattern(r.pattern || '');
-        const issues: string[] = [];
-        if (risk.syntaxError) issues.push('语法错误');
-        if (risk.level === 'severe') issues.push('灾难性正则');
-        if (issues.length) out.push({ name: r.name, issues });
-    }
-    return out;
-};
-
-const ShellSettingsModal: React.FC<ShellSettingsModalProps> = ({ isOpen, onClose, runtime, onApply, initial, aiRuntime }) => {
-    const toast = useToast();
-    const [settings, setSettings] = useState<ShellSettings | null>(initial ?? null);
-    const [saving, setSaving] = useState(false);
-
-    useEffect(() => {
-        if (!isOpen) return;
-        if (initial) { setSettings(initial); return; }
-        let cancelled = false;
-        runtime.load().then((s) => { if (!cancelled) setSettings(s); })
-            .catch((e) => toast.error('读取设置失败: ' + (e?.message || e)));
-        return () => { cancelled = true; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen, runtime]);
-
-    if (!isOpen) return null;
-
-    const update = (patch: Partial<ShellSettings>) => {
-        setSettings((prev) => {
-            if (!prev) return prev;
-            const next = { ...prev, ...patch };
-            onApply(next);
-            return next;
-        });
-    };
-
-    const handleSave = async () => {
-        if (!settings) return;
-        setSaving(true);
-        try {
-            await runtime.save(settings);
-            toast.success('设置已保存');
-            onClose();
-        } catch (e: any) {
-            toast.error('保存失败: ' + (e?.message || e));
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const issues = settings ? computeHighlightIssues(settings.highlightRules) : [];
-
-    return (
-        <div style={styles.overlay}>
-            <div style={styles.modal}>
-                <div style={styles.header}>
-                    <h2 style={styles.title}>Shell 设置</h2>
-                    <button style={styles.closeButton} onClick={onClose} aria-label="关闭">×</button>
-                </div>
-                <div style={styles.body}>
-                    {!settings ? (
-                        <div style={styles.loading}>加载中...</div>
-                    ) : (
-                        <>
-                            <ThemeChoiceCard
-                                theme={settings.theme}
-                                onThemeChange={(theme) => update({ theme })}
-                            />
-                            <TerminalAppearanceCard
-                                terminal={normalizeTerminalConfig(settings.terminal)}
-                                onChange={(terminal) => update({ terminal })}
-                            />
-                            {aiRuntime && <AIConfigCard runtime={aiRuntime} />}
-                            <div style={styles.card}>
-                                <div style={styles.cardTitle}>补全延迟</div>
-                                <div style={styles.row}>
-                                    <div style={styles.rowLeft}>
-                                        <div style={styles.rowLabel}>命令补全延迟</div>
-                                        <div style={styles.rowDesc}>
-                                            输入停顿多久后弹出补全建议（0–2000ms），值越小响应越快、请求越频繁。
-                                        </div>
-                                    </div>
-                                    <div style={styles.rowRight}>
-                                        <input
-                                            type="number"
-                                            min={0}
-                                            max={2000}
-                                            step={10}
-                                            style={styles.numberInput}
-                                            value={settings.completionDelay}
-                                            onChange={(e) => update({ completionDelay: Math.max(0, Math.min(2000, Number(e.target.value) || 0)) })}
-                                        />
-                                        <span style={styles.unit}>ms</span>
-                                    </div>
-                                </div>
-                                <div style={styles.row}>
-                                    <div style={styles.rowLeft}>
-                                        <label style={styles.rowLabel} htmlFor="shared-command-query-shortcut">命令查询快捷键</label>
-                                        <div style={styles.rowDesc}>
-                                            呼出 AI 命令生成弹窗的快捷键（支持 Ctrl+字母、Ctrl+Shift+字母 等格式）。
-                                        </div>
-                                    </div>
-                                    <div style={styles.rowRight}>
-                                        <input
-                                            id="shared-command-query-shortcut"
-                                            style={styles.shortcutInput}
-                                            value={settings.commandQueryShortcut ?? 'Ctrl+K'}
-                                            onChange={(e) => update({ commandQueryShortcut: e.target.value })}
-                                            placeholder="例如：Ctrl+K"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                            <div style={styles.card}>
-                                <div style={styles.cardTitle}>终端行为</div>
-                                <div style={styles.row}>
-                                    <div style={styles.rowLeft}>
-                                        <div style={styles.rowLabel}>滚动回滚行数</div>
-                                        <div style={styles.rowDesc}>
-                                            终端保留的历史输出行数（500–10000），超出部分自动丢弃。
-                                        </div>
-                                    </div>
-                                    <div style={styles.rowRight}>
-                                        <input
-                                            type="number"
-                                            min={500}
-                                            max={10000}
-                                            step={500}
-                                            style={styles.numberInput}
-                                            value={settings.terminal.scrollback || 5000}
-                                            onChange={(e) => {
-                                                const next = Math.max(500, Math.min(10000, Math.round(Number(e.target.value) || 5000) / 500 * 500));
-                                                update({ terminal: { ...settings.terminal, scrollback: next } });
-                                            }}
-                                        />
-                                        <span style={styles.unit}>行</span>
-                                    </div>
-                                </div>
-                                <div style={styles.row}>
-                                    <div style={styles.rowLeft}>
-                                        <div style={styles.rowLabel}>搜索</div>
-                                        <div style={styles.rowDesc}>
-                                            在终端内启用 Ctrl+F 搜索输出内容。
-                                        </div>
-                                    </div>
-                                    <div style={styles.rowRight}>
-                                        <Switch
-                                            checked={settings.terminal.search_enabled ?? true}
-                                            onChange={(search_enabled) => update({ terminal: { ...settings.terminal, search_enabled } })}
-                                        />
-                                    </div>
-                                </div>
-                                <div style={styles.row}>
-                                    <div style={styles.rowLeft}>
-                                        <div style={styles.rowLabel}>高亮</div>
-                                        <div style={styles.rowDesc}>
-                                            按下方规则高亮匹配到的终端输出内容。
-                                        </div>
-                                    </div>
-                                    <div style={styles.rowRight}>
-                                        <Switch
-                                            checked={settings.terminal.highlight_enabled ?? true}
-                                            onChange={(highlight_enabled) => update({ terminal: { ...settings.terminal, highlight_enabled } })}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                            <div style={styles.card}>
-                                <div style={styles.cardTitle}>突出显示规则</div>
-                                {issues.length > 0 && (
-                                    <div style={styles.issueBanner}>
-                                        <span style={{ color: colors.warning, display: 'inline-flex' }}>{TbInfoCircle({ size: 16 })}</span>
-                                        <div style={{ fontSize: font.sm, color: colors.textSecondary }}>
-                                            {issues.length} 条规则存在语法错误或灾难性正则，已自动失效，建议修改。
-                                        </div>
-                                    </div>
-                                )}
-                                <HighlightRulesModal
-                                    isOpen={true}
-                                    rules={settings.highlightRules}
-                                    onChange={(highlightRules) => update({ highlightRules })}
-                                    onClose={() => {}}
-                                    embedded
-                                />
-                            </div>
-                        </>
-                    )}
-                </div>
-                <div style={styles.footer}>
-                    <button style={styles.cancelButton} onClick={onClose} disabled={saving}>取消</button>
-                    <button style={styles.saveButton} onClick={handleSave} disabled={saving || !settings}>
-                        {saving ? '保存中...' : '保存'}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const styles: Record<string, React.CSSProperties> = {
-    overlay: {
-        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: 'var(--overlay)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        zIndex: 1200,
-    },
-    modal: {
-        width: 'min(680px, calc(100vw - 48px))',
-        maxHeight: '86vh',
-        backgroundColor: 'var(--bg-primary)',
-        border: `1px solid ${colors.borderPrimary}`,
-        borderRadius: radius.lg,
-        display: 'flex', flexDirection: 'column',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-    },
-    header: {
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '16px 20px', borderBottom: `1px solid ${colors.borderSubtle}`,
-    },
-    title: { margin: 0, fontSize: '16px', fontWeight: 600, color: colors.textPrimary },
-    closeButton: {
-        border: 'none', background: 'transparent', color: colors.textTertiary,
-        fontSize: '20px', cursor: 'pointer', padding: '0 4px', lineHeight: 1,
-    },
-    body: { flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '12px' },
-    loading: { textAlign: 'center', padding: '48px', color: colors.textTertiary, fontSize: font.base },
-    card: {
-        backgroundColor: 'var(--bg-secondary)',
-        border: `1px solid ${colors.borderSubtle}`,
-        borderRadius: radius.md,
-        padding: '16px',
-        display: 'flex', flexDirection: 'column', gap: '12px',
-    },
-    cardTitle: { fontSize: font.lg, fontWeight: 600, color: colors.textPrimary },
-    row: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' },
-    rowLeft: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 },
-    rowRight: { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexShrink: 0, gap: '6px' },
-    rowLabel: { fontSize: font.base, color: colors.textPrimary, fontWeight: 500 },
-    rowDesc: { fontSize: font.sm, color: colors.textTertiary },
-    numberInput: {
-        width: '76px', padding: '6px 8px', textAlign: 'right',
-        borderRadius: radius.sm, border: `1px solid ${colors.borderPrimary}`,
-        backgroundColor: 'var(--bg-primary)', color: colors.textPrimary,
-        fontSize: font.base, outline: 'none',
-    },
-    unit: { fontSize: font.sm, color: colors.textTertiary },
-    shortcutInput: {
-        width: '110px', padding: '6px 8px', textAlign: 'left',
-        borderRadius: radius.sm, border: `1px solid ${colors.borderPrimary}`,
-        backgroundColor: 'var(--bg-primary)', color: colors.textPrimary,
-        fontSize: font.base, outline: 'none',
-    },
-    issueBanner: {
-        display: 'flex', gap: '8px', alignItems: 'flex-start',
-        padding: '8px 10px',
-        borderRadius: radius.sm,
-        backgroundColor: 'var(--bg-hover)',
-        borderLeft: `3px solid ${colors.warning}`,
-    },
-    footer: {
-        display: 'flex', justifyContent: 'flex-end', gap: '10px',
-        padding: '14px 20px', borderTop: `1px solid ${colors.borderSubtle}`,
-    },
-    cancelButton: {
-        padding: '8px 16px', borderRadius: radius.sm,
-        border: `1px solid ${colors.borderPrimary}`,
-        backgroundColor: 'transparent', color: colors.textSecondary,
-        cursor: 'pointer', fontSize: font.base,
-    },
-    saveButton: {
-        padding: '8px 20px', borderRadius: radius.sm,
-        border: 'none', backgroundColor: colors.accent,
-        color: 'var(--text-on-accent)',
-        cursor: 'pointer', fontSize: font.base, fontWeight: 500,
-    },
-};
-
-export default ShellSettingsModal;
+type Tab = 'host' | 'llm' | 'appearance' | 'highlight' | 'shortcuts' | 'experimental';
+const emptyLLM: ProductLLMConfig = { APIKey: '', BaseURL: '', FastModel: '', ComplexModel: '' };
+/** Host persistence adapter; all rendered pages and chrome come from the desktop product. */
+export default function ShellSettingsModal({ hostSettings, isOpen, embedded, onClose, runtime, onApply, initial, aiRuntime }: ShellSettingsModalProps) {
+ const [settings, setSettings] = useState<ShellSettings | null>(null);
+ const [saved, setSaved] = useState<ShellSettings | null>(null);
+ const [llm, setLLM] = useState(emptyLLM);
+ const [savedLLM, setSavedLLM] = useState(emptyLLM);
+ const [activeTab, setActiveTab] = useState<Tab>('llm');
+ const [searchQuery, setSearchQuery] = useState('');
+ const searchInputRef = useRef<HTMLInputElement>(null);
+ const [loading, setLoading] = useState(false);
+ const [msg, setMsg] = useState('');
+ const [loadError, setLoadError] = useState(false);
+ const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
+ useEffect(() => {
+   if (!isOpen) return;
+   let cancelled = false;
+   setSettings(null); setSaved(null); setLLM(emptyLLM); setSavedLLM(emptyLLM);
+   setMsg(''); setLoadError(false); setSearchQuery(''); setShowUnsavedConfirm(false); setActiveTab(aiRuntime ? 'llm' : 'appearance');
+   void Promise.all([runtime.load(), aiRuntime?.status()]).then(([next, ai]) => {
+     if (cancelled) return;
+     setSettings(next); setSaved(next);
+     const model = ai ? { APIKey: '', BaseURL: ai.baseURL, FastModel: ai.fastModel, ComplexModel: ai.complexModel } : emptyLLM;
+     setLLM(model); setSavedLLM(model);
+   }).catch(e => { if (!cancelled) {setLoadError(true); setMsg('读取设置失败: ' + e.message);} });
+   return () => {cancelled = true;};
+   // Initial values are captured only when the dialog opens, not on live preview.
+   // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [isOpen, runtime, aiRuntime]);
+ const dirty = JSON.stringify(settings) !== JSON.stringify(saved) || JSON.stringify(llm) !== JSON.stringify(savedLLM);
+ const discard = () => { if (saved) onApply(saved); onClose(); };
+ const handleClose = () => { if (dirty) setShowUnsavedConfirm(true); else onClose(); };
+ const persistConfig = async (close: boolean) => {
+   if (!settings || loadError) return;
+   setLoading(true); setMsg('');
+   try {
+     if (aiRuntime && JSON.stringify(llm) !== JSON.stringify(savedLLM)) {
+       const ai = await aiRuntime.save({apiKey: llm.APIKey, baseURL: llm.BaseURL, fastModel: llm.FastModel, complexModel: llm.ComplexModel});
+       const model = {APIKey:'',BaseURL:ai.baseURL,FastModel:ai.fastModel,ComplexModel:ai.complexModel};
+       setLLM(model); setSavedLLM(model);
+     }
+     await runtime.save(settings); setSaved(settings); onApply(settings); setMsg('设置已保存');
+     if (close) onClose();
+   } catch(e) {setMsg('保存失败: ' + (e as Error).message);} finally {setLoading(false);}
+ };
+ useEffect(() => {
+   if (!isOpen) return;
+   const keydown = (e: KeyboardEvent) => {
+     if ((e.ctrlKey || e.metaKey) && e.key === 's') {e.preventDefault(); if (activeTab !== 'host') void persistConfig(false);}
+     if (e.key === 'Escape') handleClose();
+     if ((e.ctrlKey || e.metaKey) && e.key === 'f') {e.preventDefault(); searchInputRef.current?.focus();}
+   };
+   window.addEventListener('keydown', keydown);
+   return () => window.removeEventListener('keydown', keydown);
+ });
+ const nav = [
+   ...(aiRuntime ? [{id:'llm' as Tab,label:'模型服务',icon:TbRobot({}),category:'AI',keywords:[]}] : []),
+   {id:'appearance' as Tab,label:'外观',icon:TbSun({}),category:'终端',keywords:['终端外观','终端','字体','字号','theme','主题']},
+   {id:'highlight' as Tab,label:'突出显示',icon:TbPalette({}),category:'终端',keywords:[]},
+   {id:'shortcuts' as Tab,label:'快捷键',icon:TbKeyboard({}),category:'交互',keywords:[]},
+   {id:'experimental' as Tab,label:'高级选项',icon:TbSettings({}),category:'系统',keywords:['补全','延迟']},
+   ...(hostSettings ? [{id:'host' as Tab,label:'本地 Ops',icon:TbSettings({}),category:'系统',keywords:['安装','路径','程序']}] : []),
+ ].filter(item => [item.label,item.category,item.id,...item.keywords].some(text => text.toLowerCase().includes(searchQuery.trim().toLowerCase())));
+ useEffect(() => { if (isOpen && searchQuery && nav.length && !nav.some(item=>item.id===activeTab)) setActiveTab(nav[0].id); }, [isOpen,searchQuery,activeTab]);
+ useEffect(() => { if (isOpen) searchInputRef.current?.focus(); }, [isOpen,activeTab]);
+ if (!isOpen) return null;
+ const highlightIssues = (settings?.highlightRules || []).flatMap(rule => {
+   const risk = assessPattern(rule.pattern || '');
+   const issues = [risk.syntaxError ? '语法错误' : '', risk.level === 'severe' ? '灾难性正则' : ''].filter(Boolean);
+   return issues.length ? [{name:rule.name,issues}] : [];
+ });
+ const groups: SettingsNavGroup<Tab>[] = [];
+ for (const item of nav) {
+   const next = {...item,badge:item.id==='highlight' && highlightIssues.length>0};
+   const last = groups[groups.length-1];
+   if (last?.category===item.category) last.items.push(next); else groups.push({category:item.category,items:[next]});
+ }
+ const update = (next: ShellSettings) => {setSettings(next);onApply(next);};
+ return <ProductSettingsFrame<Tab> embedded={embedded} showSaveAction={activeTab !== 'host'} handleClose={handleClose} searchInputRef={searchInputRef}
+   searchQuery={searchQuery} setSearchQuery={setSearchQuery} groupedNavItems={groups} activeTab={activeTab} setActiveTab={setActiveTab}
+   msg={msg} handleSave={()=>void persistConfig(false)} loading={loading || !settings || loadError}
+   showUnsavedConfirm={showUnsavedConfirm} setShowUnsavedConfirm={setShowUnsavedConfirm} onClose={discard} persistConfig={persistConfig}>
+   {activeTab === 'host' ? hostSettings : !settings ? (loadError ? '设置暂不可用' : '加载中...') :
+     activeTab === 'llm' ? <ProductLLMSettings value={llm} onChange={setLLM} keyDescription={aiRuntime?.persistence==='session'
+       ? '仅用于本次运行时，不写入配置文件；留空保留现有密钥。仅发送你主动提交给 AI 的内容。'
+       : '密钥保存在本地后台，读取不回明文；留空保留现有密钥。'}/> :
+     activeTab === 'experimental' ? <CompletionDelayCard value={settings.completionDelay} onChange={completionDelay=>update({...settings,completionDelay})}/> :
+     <ProductShellSettingsPage activeTab={activeTab} config={{terminal:settings.terminal,highlight_rules:settings.highlightRules,command_query_shortcut:settings.commandQueryShortcut || 'Ctrl+K'}}
+       setConfig={next=>update({...settings,terminal:next.terminal!,highlightRules:next.highlight_rules!,commandQueryShortcut:next.command_query_shortcut})}
+       theme={settings.theme} onThemeChange={theme=>update({...settings,theme})} highlightIssues={highlightIssues}/>}
+ </ProductSettingsFrame>;
+}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useStyleRoot } from '../Surface';
 import { useToast } from '../feedback/Toast';
 import { confirmDialog } from '../feedback/ConfirmDialog';
 import type { ScriptRuntime, ScriptData, ScriptStep, ScriptVariable } from './types';
@@ -26,6 +27,7 @@ const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
     runtime,
 }) => {
     const [script, setScript] = useState<EditableScript | null>(null);
+    const styleRoot = useStyleRoot();
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [varsExpanded, setVarsExpanded] = useState(true);
@@ -58,9 +60,9 @@ const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
             .se-command-card:hover { border-color: var(--border-strong); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
             .se-meta-input:hover, .se-delay-group:hover { border-color: var(--border-strong); }
         `;
-        document.head.appendChild(style);
-        return () => { try { document.head.removeChild(style); } catch {} };
-    }, []);
+        styleRoot.appendChild(style);
+        return () => { style.remove(); };
+    }, [styleRoot]);
 
     useEffect(() => {
         if (isOpen && scriptId) loadScript();

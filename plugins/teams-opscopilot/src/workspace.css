@@ -1,0 +1,11 @@
+:host {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  --font-mono: 'JetBrains Mono', monospace;
+  position: relative;
+}
+.ops-root { display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
+.ops-terminal { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.ops-terminal > div:last-child { flex: 1; min-height: 0; }
+.ops-terminal-alert { color: var(--text-primary); background: var(--bg-secondary); font-size: 12px; }

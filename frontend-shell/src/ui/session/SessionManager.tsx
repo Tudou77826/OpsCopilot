@@ -8,12 +8,17 @@ import { confirmDialog } from '../feedback/ConfirmDialog';
 
 interface SessionManagerProps {
     onConnect: (config: ConnectionConfig) => void;
+    onConnectSession?: (session: SessionNode) => void;
     runtime: SessionManagerRuntime;
     /** 团队共享会话宿主能力（Wails 专有，可选）。Sidecar 不提供时不显示。 */
     sharedRuntime?: SharedSessionRuntime | null;
 }
 
-const SessionManager: React.FC<SessionManagerProps> = ({ onConnect, runtime, sharedRuntime }) => {
+const SessionManager: React.FC<SessionManagerProps> = ({ onConnect, onConnectSession, runtime, sharedRuntime }) => {
+    const connectSession = (session: SessionNode) => {
+        if (onConnectSession) onConnectSession(session);
+        else if (session.config) onConnect(session.config);
+    };
     const [sessions, setSessions] = useState<SessionNode[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -38,8 +43,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect, runtime, sha
     useEffect(() => {
         if (!contextMenu) return;
         const handler = (e: PointerEvent) => {
-            const menuEl = document.querySelector('[data-session-context-menu]');
-            if (menuEl && menuEl.contains(e.target as Node)) return;
+            if (e.composedPath().some(node => node instanceof HTMLElement && node.hasAttribute('data-session-context-menu'))) return;
             setContextMenu(null);
         };
         document.addEventListener('pointerdown', handler);
@@ -254,7 +258,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect, runtime, sha
             const ok = await confirmDialog.show({ message: `该文件夹共有 ${all.length} 个会话，最多同时连接 ${max} 个，是否继续？` });
             if (!ok) return;
         }
-        toConnect.forEach(s => { if (s.config) onConnect(s.config); });
+        toConnect.forEach(connectSession);
     };
 
     // Recursive render
@@ -291,7 +295,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect, runtime, sha
                         onMouseLeave={() => setHoveredNodeId(null)}
                         onContextMenu={(e) => handleContextMenu(e, node)}
                         onClick={() => isFolder ? handleToggleFolder(node.id) : null}
-                        onDoubleClick={() => !isFolder && node.config && onConnect(node.config)}
+                        onDoubleClick={() => !isFolder && node.config && connectSession(node)}
                     >
                         <span style={{marginRight: '8px', userSelect: 'none', display: 'inline-flex', alignItems: 'center', color: isFolder ? 'var(--icon-folder-fg)' : 'var(--text-muted)'}}>{isFolder ? (isExpanded ? TbFolderOpen({size: 16}) : TbFolder({size: 16})) : TbTerminal2({size: 16})}</span>
 
@@ -439,7 +443,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect, runtime, sha
                             onMouseEnter={() => setHoveredMenuItem('connect')}
                             onMouseLeave={() => setHoveredMenuItem(null)}
                             onClick={() => {
-                                if (contextMenu.node!.config) onConnect(contextMenu.node!.config);
+                                if (contextMenu.node!.config) connectSession(contextMenu.node!);
                                 setContextMenu(null);
                             }}
                         >打开连接</div>

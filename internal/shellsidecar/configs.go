@@ -23,7 +23,10 @@ func NewConfigService(dataDir string) (*ConfigService, error) {
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return nil, fmt.Errorf("创建数据目录失败: %w", err)
 	}
-	path := filepath.Join(dataDir, "saved-connections.json")
+	return NewConfigServiceWithPath(filepath.Join(dataDir, "saved-connections.json"))
+}
+
+func NewConfigServiceWithPath(path string) (*ConfigService, error) {
 	mgr := sessionmanager.NewManagerWithPath(path)
 	if err := mgr.Load(); err != nil {
 		return nil, fmt.Errorf("读取连接配置失败: %w", err)
@@ -60,6 +63,9 @@ func convertTree(sessions []*sessionmanager.Session) []SavedSession {
 func (s *ConfigService) List() ([]SavedSession, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.mgr.Load(); err != nil {
+		return nil, err
+	}
 	return convertTree(s.mgr.GetSessions()), nil
 }
 
@@ -72,6 +78,7 @@ type SaveInput struct {
 	Port         int                   `json:"port"`
 	User         string                `json:"user"`
 	Password     string                `json:"password"`
+	HostKey      string                `json:"host_key,omitempty"`
 	RootPassword string                `json:"rootPassword,omitempty"`
 	Bastion      *remote.ConnectConfig `json:"bastion,omitempty"`
 	Group        string                `json:"group,omitempty"`
@@ -87,7 +94,8 @@ func (s *ConfigService) Save(in SaveInput) (string, error) {
 	cfg := remote.ConnectConfig{
 		Name: in.Name, Host: in.Host, Port: in.Port, User: in.User,
 		Password: in.Password, RootPassword: in.RootPassword,
-		Bastion: in.Bastion,
+		HostKey:  in.HostKey,
+		Bastion:  in.Bastion,
 		Protocol: in.Protocol,
 	}
 	if cfg.Protocol == "" {
@@ -97,9 +105,6 @@ func (s *ConfigService) Save(in SaveInput) (string, error) {
 	defer s.mu.Unlock()
 	if err := s.mgr.Upsert(cfg, in.Group); err != nil {
 		return "", err
-	}
-	if err := s.mgr.Save(); err != nil {
-		return "", fmt.Errorf("保存连接配置失败: %w", err)
 	}
 	return s.findID(in.Host, in.Port, in.User)
 }
@@ -111,7 +116,7 @@ func (s *ConfigService) Update(id string, config remote.ConnectConfig, group str
 	if err := s.mgr.UpdateSession(id, config, group); err != nil {
 		return err
 	}
-	return s.mgr.Save()
+	return nil
 }
 
 // CreateFolder 在根级新建一个空文件夹。
@@ -121,7 +126,7 @@ func (s *ConfigService) CreateFolder(name string) error {
 	if err := s.mgr.CreateFolder(name); err != nil {
 		return err
 	}
-	return s.mgr.Save()
+	return nil
 }
 
 // Delete 删除一条已保存配置（按 ID）。
@@ -131,7 +136,7 @@ func (s *ConfigService) Delete(id string) error {
 	if err := s.mgr.DeleteSession(id); err != nil {
 		return err
 	}
-	return s.mgr.Save()
+	return nil
 }
 
 // Rename 改显示名。
@@ -141,7 +146,7 @@ func (s *ConfigService) Rename(id, name string) error {
 	if err := s.mgr.RenameSession(id, name); err != nil {
 		return err
 	}
-	return s.mgr.Save()
+	return nil
 }
 
 func (s *ConfigService) findID(host string, port int, user string) (string, error) {

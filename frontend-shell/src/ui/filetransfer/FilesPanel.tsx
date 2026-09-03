@@ -68,6 +68,9 @@ export type FileDropHandler = (x: number, y: number, paths: string[]) => void;
  * 组件据此隐藏对应入口（保存另存为、OS 拖放等）。
  */
 export interface FileTransferHost {
+    ImportFile?: (directory: string, file: File, signal: AbortSignal, progress: (percent: number) => void) => Promise<void>;
+    ExportFile?: (path: string) => Promise<void>;
+    initialRemotePath?: string;
     FTCheck: (sessionId: string) => Promise<string>;
     FTList: (sessionId: string, remotePath: string) => Promise<string>;
     FTStat: (sessionId: string, remotePath: string) => Promise<string>;
@@ -693,6 +696,27 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
     const [protocol, setProtocol] = useState<string>('');
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
+    const browserPicker = useRef<HTMLInputElement>(null);
+    const browserImport = useRef<AbortController>();
+    const [importing, setImporting] = useState(false);
+    useEffect(() => () => browserImport.current?.abort(), []);
+    const importBrowserFile = async (file?: File) => {
+        if (!file || !host.ImportFile || browserImport.current) return;
+        const controller = new AbortController();
+        browserImport.current = controller; setImporting(true);
+        try {
+            await host.ImportFile(localPath || '/', file, controller.signal, percent => setMsg(`导入 ${file.name} · ${percent}%`));
+            await refreshLocal(localPath); setMsg(`已导入 ${file.name}`);
+        } catch (error) { setMsg((error as Error).message); }
+        finally { browserImport.current = undefined; setImporting(false); }
+    };
+    const exportBrowserFile = async () => {
+        if (!host.ExportFile) return;
+        const selected = localEntries.filter(entry => localSelected.has(entry.path) && !entry.isDir);
+        if (selected.length !== 1) { setMsg('请选择一个本地文件'); return; }
+        try { await host.ExportFile(selected[0].path); setMsg('已交给浏览器下载'); }
+        catch (error) { setMsg((error as Error).message); }
+    };
 
     const [localPath, setLocalPath] = useState<string>('');
     const [localPathInput, setLocalPathInput] = useState<string>('');
@@ -700,8 +724,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
     const [localSelected, setLocalSelected] = useState<Set<string>>(new Set());
     const [localAnchor, setLocalAnchor] = useState<string>('');
 
-    const [remotePath, setRemotePath] = useState<string>('/root');
-    const [remotePathInput, setRemotePathInput] = useState<string>('/root');
+    const [remotePath, setRemotePath] = useState<string>(host.initialRemotePath ?? '/root');
+    const [remotePathInput, setRemotePathInput] = useState<string>(host.initialRemotePath ?? '/root');
     const [remoteEntries, setRemoteEntries] = useState<FileEntry[]>([]);
     const [remoteSelected, setRemoteSelected] = useState<Set<string>>(new Set());
     const [remoteAnchor, setRemoteAnchor] = useState<string>('');
@@ -2161,6 +2185,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
     return (
         <div ref={containerRef} style={panelRootStyle} data-testid="files-panel" data-layout-mode={layoutMode}>
             <div style={styles.topBar}>
+                {host.ImportFile && <>
+                    <input ref={browserPicker} type="file" hidden aria-label="导入本机文件" onChange={event => { void importBrowserFile(event.target.files?.[0]); event.target.value = ''; }} />
+                    <button style={styles.btnSecondary} disabled={importing} onClick={() => browserPicker.current?.click()}>导入本机文件</button>
+                    {importing && <button style={styles.btnSecondary} onClick={() => browserImport.current?.abort()}>取消导入</button>}
+                </>}
+                {host.ExportFile && <button style={styles.btnSecondary} onClick={() => void exportBrowserFile()}>下载到本机</button>}
                 <select style={styles.select} value={sessionId} onChange={(e) => setSessionId(e.target.value)} aria-label="当前会话">
                     {terminals.map(t => (
                         <option key={t.id} value={t.id}>

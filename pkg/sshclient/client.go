@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/pkg/sftp"
-	"opscopilot/pkg/remote"
 	"golang.org/x/crypto/ssh"
+	"opscopilot/pkg/remote"
 )
 
 // ConnectConfig 是 remote.ConnectConfig 的类型别名。
@@ -91,6 +91,13 @@ func NewClient(config *ConnectConfig) (*Client, error) {
 		Auth:            authMethods,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // In production, use ssh.FixedHostKey or similar
 		Timeout:         30 * time.Second,            // 增加超时时间
+	}
+	if config.HostKey != "" {
+		key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(config.HostKey))
+		if err != nil {
+			return nil, fmt.Errorf("invalid pinned SSH host key")
+		}
+		sshConfig.HostKeyCallback = ssh.FixedHostKey(key)
 	}
 
 	// Handle IPv6 brackets if present

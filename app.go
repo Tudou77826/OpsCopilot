@@ -407,6 +407,11 @@ func (a *App) CheckUpdate() string {
 
 // DoUpdate downloads the update, writes a manifest, and relaunches self in update mode.
 func (a *App) DoUpdate(downloadURL string) string {
+	if desktopInstallationLease != nil {
+		if err := desktopInstallationLease.CheckUpdate(); err != nil {
+			return toJSONError(err.Error())
+		}
+	}
 	slog.Info("update: starting", "url", downloadURL)
 
 	exePath, err := os.Executable()
@@ -450,6 +455,11 @@ func (a *App) DoUpdate(downloadURL string) string {
 		return toJSONError(fmt.Sprintf("write manifest: %v", err))
 	}
 
+	if desktopInstallationLease != nil {
+		if err := desktopInstallationLease.CheckUpdate(); err != nil {
+			return toJSONError(err.Error())
+		}
+	}
 	if err := launchSelfUpdate(exePath, manifestPath); err != nil {
 		slog.Error("update: launch self-update failed", "error", err)
 		return toJSONError(fmt.Sprintf("launch updater: %v", err))
@@ -1222,6 +1232,9 @@ func (a *App) AskTroubleshoot(problem string) string {
 }
 
 func (a *App) GetSettings() config.AppConfig {
+	if err := a.configMgr.Load(); err != nil {
+		slog.Warn("settings refresh failed", "error", err)
+	}
 	return *a.configMgr.Config
 }
 
@@ -1561,7 +1574,9 @@ func (a *App) SaveSettings(cfg config.AppConfig) string {
 
 	// 高亮规则独立存储于 highlight_rules.json，主配置 Save() 不覆盖它，
 	// 需要单独落盘，否则开关规则后仅写入内存、重启即丢失。
-	a.configMgr.SetHighlightRules(cfg.HighlightRules)
+	if err := a.configMgr.SetHighlightRules(cfg.HighlightRules); err != nil {
+		return err.Error()
+	}
 
 	// Update AI Service Provider
 	llmConfig := cfg.LLM
@@ -2562,7 +2577,9 @@ func (a *App) GetHighlightRules() []config.HighlightRule {
 }
 
 func (a *App) SaveHighlightRules(rules []config.HighlightRule) string {
-	a.configMgr.SetHighlightRules(rules)
+	if err := a.configMgr.SetHighlightRules(rules); err != nil {
+		return err.Error()
+	}
 	return ""
 }
 
@@ -2576,26 +2593,34 @@ func (a *App) LoadQuickCommands() []config.QuickCommand {
 // 单条操作 + 文件变化热加载保证各窗口近实时一致。
 
 func (a *App) AddQuickCommand(cmd config.QuickCommand) string {
-	a.configMgr.AddQuickCommand(cmd)
+	if err := a.configMgr.AddQuickCommand(cmd); err != nil {
+		return err.Error()
+	}
 	a.emitQuickCommandsUpdated()
 	return ""
 }
 
 func (a *App) UpdateQuickCommand(id string, cmd config.QuickCommand) string {
-	a.configMgr.UpdateQuickCommand(id, cmd)
+	if !a.configMgr.UpdateQuickCommand(id, cmd) {
+		return "命令已变化或保存失败，请重新加载"
+	}
 	a.emitQuickCommandsUpdated()
 	return ""
 }
 
 func (a *App) DeleteQuickCommand(id string) string {
-	a.configMgr.DeleteQuickCommand(id)
+	if !a.configMgr.DeleteQuickCommand(id) {
+		return "命令已变化或保存失败，请重新加载"
+	}
 	a.emitQuickCommandsUpdated()
 	return ""
 }
 
 // ReorderQuickCommands 拖拽排序：按给定 id 顺序重排（其余命令位置不变）
 func (a *App) ReorderQuickCommands(ids []string) string {
-	a.configMgr.ReorderQuickCommands(ids)
+	if len(ids) >= 2 && !a.configMgr.ReorderQuickCommands(ids) {
+		return "排序已变化或保存失败，请重新加载"
+	}
 	a.emitQuickCommandsUpdated()
 	return ""
 }
@@ -2758,6 +2783,7 @@ func (a *App) SummarizeUpdateNotes(notes string) string {
 // --- Saved Session Management ---
 
 func (a *App) GetSavedSessions() []*sessionmanager.Session {
+	_ = a.savedSessionMgr.Load()
 	return a.savedSessionMgr.GetSessions()
 }
 

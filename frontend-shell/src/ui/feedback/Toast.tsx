@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
+import { usePortalRoot } from '../Surface';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
 
@@ -57,6 +58,7 @@ const ToastItemComponent: React.FC<{ item: ToastItem; onClose: (id: number) => v
 };
 
 const ToastContainer: React.FC<{ toasts: ToastItem[]; onClose: (id: number) => void }> = ({ toasts, onClose }) => {
+    const portalRoot = usePortalRoot();
     if (toasts.length === 0) return null;
 
     return ReactDOM.createPortal(
@@ -65,7 +67,7 @@ const ToastContainer: React.FC<{ toasts: ToastItem[]; onClose: (id: number) => v
                 <ToastItemComponent key={item.id} item={item} onClose={onClose} />
             ))}
         </div>,
-        document.body
+        portalRoot
     );
 };
 

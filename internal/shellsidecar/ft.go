@@ -25,31 +25,32 @@ import (
 //   - "本地"文件系统 = sidecar 数据目录沙箱（浏览器宿主读不到用户 OS 路径）；
 //   - 无 LocalCopy / SelectSavePath（无 OS 拖放与原生保存对话框）。
 type FTService struct {
-	mu      sync.Mutex
-	svc     *TerminalService
-	dataDir string
-	notify  func(method string, params any)
-	tasks   map[string]*ftTask
+	mu       sync.Mutex
+	svc      *TerminalService
+	dataDir  string
+	root     *os.Root
+	notify   func(method string, params any)
+	tasks    map[string]*ftTask
 	limiters map[string]chan struct{}
 }
 
 // ftTask 记录进行中的传输任务（取消入口）。
 type ftTask struct {
-	id      string
-	termID  string
-	cancel  context.CancelFunc
+	id     string
+	termID string
+	cancel context.CancelFunc
 }
 
 // ftEnvelope 与 Wails ftResponse/localFSResponse 同构的 JSON 信封。
 type ftEnvelope struct {
-	OK       bool                          `json:"ok"`
-	Message  string                        `json:"message,omitempty"`
-	Error    *filetransfer.TransferError   `json:"error,omitempty"`
-	TaskID   string                        `json:"taskId,omitempty"`
-	Entries  []filetransfer.Entry          `json:"entries,omitempty"`
-	Entry    *filetransfer.Entry           `json:"entry,omitempty"`
-	Content  string                        `json:"content,omitempty"`
-	Result   *filetransfer.TransferResult  `json:"result,omitempty"`
+	OK      bool                         `json:"ok"`
+	Message string                       `json:"message,omitempty"`
+	Error   *filetransfer.TransferError  `json:"error,omitempty"`
+	TaskID  string                       `json:"taskId,omitempty"`
+	Entries []filetransfer.Entry         `json:"entries,omitempty"`
+	Entry   *filetransfer.Entry          `json:"entry,omitempty"`
+	Content string                       `json:"content,omitempty"`
+	Result  *filetransfer.TransferResult `json:"result,omitempty"`
 }
 
 // ftErr 携带产品错误码（面板 formatError 识别 FILE_SIZE_EXCEEDED 等）。
@@ -60,7 +61,7 @@ type ftErr struct {
 
 func (e *ftErr) Error() string { return e.msg }
 
-func ftOK() *ftEnvelope                       { return &ftEnvelope{OK: true} }
+func ftOK() *ftEnvelope { return &ftEnvelope{OK: true} }
 func ftFail(err error) *ftEnvelope {
 	code := filetransfer.ErrorCodeUnknown
 	if fe, ok := err.(*ftErr); ok {
@@ -95,6 +96,9 @@ func (s *FTService) sftpOf(terminalID string) (*sftp.Client, error) {
 // resolveLocal 把面板传入的本地路径限制在数据目录沙箱内。
 // 空路径/./ 根 → 数据目录本身；绝对路径必须已位于数据目录内；相对路径拼接后校验。
 func (s *FTService) resolveLocal(p string) (string, error) {
+	if s.root != nil {
+		return workspacePath(p)
+	}
 	root := filepath.Clean(s.dataDir)
 	if p == "" || p == "." || p == "/" {
 		return root, nil
@@ -196,7 +200,7 @@ func (s *FTService) RemoteRemove(terminalID, remotePath string) *ftEnvelope {
 }
 
 func (s *FTService) removeRemoteRecursive(c *sftp.Client, remotePath string) error {
-	info, err := c.Stat(remotePath)
+	info, err := c.Lstat(remotePath)
 	if err != nil {
 		return err
 	}
@@ -285,7 +289,12 @@ func (s *FTService) LocalList(path string) *ftEnvelope {
 	if err != nil {
 		return ftFail(err)
 	}
-	infos, err := os.ReadDir(dir)
+	f, err := s.localOpen(dir, os.O_RDONLY)
+	if err != nil {
+		return ftFail(err)
+	}
+	defer f.Close()
+	infos, err := f.ReadDir(-1)
 	if err != nil {
 		return ftFail(err)
 	}
@@ -307,7 +316,7 @@ func (s *FTService) LocalStat(path string) *ftEnvelope {
 	if err != nil {
 		return ftFail(err)
 	}
-	info, err := os.Stat(abs)
+	info, err := s.localStat(abs)
 	if err != nil {
 		// ok=false 表示不存在
 		return &ftEnvelope{OK: false, Message: err.Error()}
@@ -321,7 +330,7 @@ func (s *FTService) LocalMkdir(path string) *ftEnvelope {
 	if err != nil {
 		return ftFail(err)
 	}
-	if err := os.MkdirAll(abs, 0o755); err != nil {
+	if err := s.localMkdirAll(abs); err != nil {
 		return ftFail(err)
 	}
 	return ftOK()
@@ -335,7 +344,7 @@ func (s *FTService) LocalRemove(path string) *ftEnvelope {
 	if abs == filepath.Clean(s.dataDir) {
 		return ftFail(fmt.Errorf("不能删除数据目录本身"))
 	}
-	if err := os.RemoveAll(abs); err != nil {
+	if err := s.localRemoveAll(abs); err != nil {
 		return ftFail(err)
 	}
 	return ftOK()
@@ -350,7 +359,7 @@ func (s *FTService) LocalRename(oldPath, newPath string) *ftEnvelope {
 	if err != nil {
 		return ftFail(err)
 	}
-	if err := os.Rename(oldAbs, newAbs); err != nil {
+	if err := s.localRename(oldAbs, newAbs); err != nil {
 		return ftFail(err)
 	}
 	return ftOK()
@@ -364,7 +373,7 @@ func (s *FTService) Upload(terminalID, localPath, remotePath string) *ftEnvelope
 	if err != nil {
 		return ftFail(err)
 	}
-	info, err := os.Stat(localAbs)
+	info, err := s.localStat(localAbs)
 	if err != nil {
 		return ftFail(err)
 	}
@@ -375,7 +384,7 @@ func (s *FTService) Upload(terminalID, localPath, remotePath string) *ftEnvelope
 	ctx, cancel := context.WithCancel(context.Background())
 	s.registerTask(taskID, terminalID, cancel)
 	go s.runTask(ctx, taskID, terminalID, info.Size(), func(c *sftp.Client, progress func(filetransfer.Progress)) error {
-		src, err := os.Open(localAbs)
+		src, err := s.localOpen(localAbs, os.O_RDONLY)
 		if err != nil {
 			return err
 		}
@@ -398,7 +407,7 @@ func (s *FTService) Download(terminalID, remotePath, localPath string) *ftEnvelo
 		return ftFail(err)
 	}
 	if dir := filepath.Dir(localAbs); dir != "" {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := s.localMkdirAll(dir); err != nil {
 			return ftFail(err)
 		}
 	}
@@ -415,7 +424,7 @@ func (s *FTService) Download(terminalID, remotePath, localPath string) *ftEnvelo
 		if err != nil {
 			return err
 		}
-		dst, err := os.Create(localAbs)
+		dst, err := s.localOpen(localAbs, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
 		if err != nil {
 			return err
 		}
@@ -485,6 +494,9 @@ func (s *FTService) runTask(ctx context.Context, taskID, termID string, total in
 	defer c.Close()
 
 	var copied int64
+	// Closing the transfer's SFTP client interrupts a blocked read/write on cancel.
+	stopCancel := context.AfterFunc(ctx, func() { _ = c.Close() })
+	defer stopCancel()
 	progress := func(p filetransfer.Progress) {
 		if total >= 0 {
 			p.BytesTotal = total

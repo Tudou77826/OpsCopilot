@@ -42,6 +42,7 @@ export interface FlexLayoutAdapterProps {
     renderTerminal?: (terminalId: string, attachRef: (value: TerminalRef | null) => void) => React.ReactNode;
     renderFileTransfer?: (activeTerminalId: string | null, terminals: TerminalSession[]) => React.ReactNode;
     onDetachTerminal?: (id: string) => void;
+    filePanelRequest?: number;
 }
 
 const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
@@ -68,6 +69,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
     renderTerminal,
     renderFileTransfer,
     onDetachTerminal,
+    filePanelRequest,
 }) => {
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
 
@@ -75,8 +77,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
     useEffect(() => {
         if (!contextMenu) return;
         const handler = (e: PointerEvent) => {
-            const menuEl = document.querySelector('[data-tab-context-menu]');
-            if (menuEl && menuEl.contains(e.target as Node)) return;
+            if (e.composedPath().some(node => node instanceof Element && node.hasAttribute('data-tab-context-menu'))) return;
             setContextMenu(null);
         };
         document.addEventListener('pointerdown', handler);
@@ -128,6 +129,8 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
             true,
         ));
     }, [findFirstTabsetId, model, onActiveTerminalChange]);
+
+    useEffect(() => { if (filePanelRequest) openFileTransferTab(activeTerminalId); }, [filePanelRequest]);
 
     // --- Sync terminals[] → flexlayout Model ---
     useEffect(() => {
@@ -477,8 +480,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
         <div
             style={{ height: '100%', position: 'relative', overflow: 'hidden' }}
             onPointerDown={(e) => {
-                const menuEl = document.querySelector('[data-tab-context-menu]');
-                if (menuEl && menuEl.contains(e.target as Node)) return;
+                if (e.nativeEvent.composedPath().some(node => node instanceof Element && node.hasAttribute('data-tab-context-menu'))) return;
                 setContextMenu(null);
             }}
         >

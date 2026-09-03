@@ -1,7 +1,10 @@
 package updater
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"opscopilot/pkg/installguard"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +12,49 @@ import (
 	"testing"
 	"time"
 )
+
+func TestSelfUpdateProtectsOtherRuntimeBeforeReplacingFiles(t *testing.T) {
+	root := t.TempDir()
+	source := t.TempDir()
+	fs := newMemFS()
+	exe := filepath.Join(root, "not-an-executable.exe")
+	fs.writeFile(exe, []byte("old"))
+	fs.writeFile(filepath.Join(source, "not-an-executable.exe"), []byte("new"))
+	fs.writeFile(filepath.Join(source, installguard.RuntimeFile), []byte("must-not-replace-lock"))
+	lease, err := installguard.AcquireRuntime(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lease.Close()
+	m := &Manifest{AppDir: root, ExtractedDir: source, ExePath: exe, Version: "test"}
+	if err = SelfUpdate(context.Background(), m, fs, &MockProcessWaiter{}); !errors.Is(err, installguard.ErrBusy) {
+		t.Fatal("must reject other instance", err)
+	}
+	data, _ := fs.getFile(exe)
+	if string(data) != "old" {
+		t.Fatal("live exe replaced")
+	}
+	result, err := readResultFile(filepath.Join(root, resultFile), fs)
+	if err != nil || result.Success {
+		t.Fatal("missing failure result", err)
+	}
+	lease.Close()
+	if err = SelfUpdate(context.Background(), m, fs, &MockProcessWaiter{}); err != nil {
+		t.Fatal(err)
+	}
+	data, _ = fs.getFile(exe)
+	if string(data) != "new" {
+		t.Fatal("update failed after release")
+	}
+	if fs.hasFile(filepath.Join(root, installguard.RuntimeFile)) {
+		t.Fatal("lock file included in update")
+	}
+	next, err := installguard.AcquireRuntime(root)
+	if err != nil {
+		t.Fatal("update leaked lock", err)
+	}
+	next.Close()
+}
 
 // MemFS is an in-memory filesystem for testing.
 type MemFS struct {
@@ -164,9 +210,9 @@ type memDirEntry struct {
 }
 
 func (e *memDirEntry) Name() string               { return e.name }
-func (e *memDirEntry) IsDir() bool                 { return e.isDir }
-func (e *memDirEntry) Type() os.FileMode           { return 0 }
-func (e *memDirEntry) Info() (os.FileInfo, error)  { return nil, nil }
+func (e *memDirEntry) IsDir() bool                { return e.isDir }
+func (e *memDirEntry) Type() os.FileMode          { return 0 }
+func (e *memDirEntry) Info() (os.FileInfo, error) { return nil, nil }
 
 type memFileInfo struct {
 	name string

@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
+import { usePortalRoot } from '../Surface';
 
 export interface ConfirmChoice {
     label: string;
@@ -64,12 +65,17 @@ export const confirmDialog = {
 };
 
 export const ConfirmDialogInternal: React.FC = () => {
+    const portalRoot = usePortalRoot();
     const [state, setState] = useState<ConfirmState>(INITIAL_STATE);
     const stateRef = useRef(state);
     stateRef.current = state;
 
     React.useEffect(() => {
         _setState = setState;
+        return () => {
+            if (_setState === setState) _setState = null;
+            stateRef.current.resolve?.(false);
+        };
     }, []);
 
     const handleConfirm = useCallback(() => {
@@ -130,7 +136,7 @@ export const ConfirmDialogInternal: React.FC = () => {
                 </div>
             </div>
         </div>,
-        document.body
+        portalRoot
     );
 };
 

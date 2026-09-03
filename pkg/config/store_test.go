@@ -7,7 +7,7 @@ import (
 
 func TestConfigLoad(t *testing.T) {
 	// 创建配置管理器
-	mgr := NewManager()
+	mgr := NewManagerWithDir(t.TempDir())
 
 	// 加载配置
 	if err := mgr.Load(); err != nil {
@@ -15,11 +15,11 @@ func TestConfigLoad(t *testing.T) {
 	}
 
 	// 验证配置文件存在
-	if _, err := os.Stat("config.json"); os.IsNotExist(err) {
+	if _, err := os.Stat(mgr.configPath); os.IsNotExist(err) {
 		t.Error("config.json 文件不存在")
 	}
 
-	if _, err := os.Stat("quick_commands.json"); os.IsNotExist(err) {
+	if _, err := os.Stat(mgr.quickCommandsPath); os.IsNotExist(err) {
 		t.Error("quick_commands.json 文件不存在")
 	}
 

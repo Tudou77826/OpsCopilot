@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"opscopilot/pkg/filetxn"
 	"os"
 	"path/filepath"
 	"strings"
@@ -166,6 +167,9 @@ type Manager struct {
 	Config             *AppConfig
 	lastImportMessage  string
 	importing          atomic.Bool
+	configBase         []byte
+	quickBase          []byte
+	highlightBase      []byte
 	readOnly           bool // 只读模式：Load 时不自动创建文件
 	// quickCmdMu 保护快捷命令的读改写；多窗口（多进程）场景下
 	// 各进程通过文件变化检测热加载，操作均为单条意图化增删改。
@@ -255,6 +259,12 @@ func (m *Manager) Load() error {
 	// 加载主配置文件
 	data, err := os.ReadFile(m.configPath)
 	if os.IsNotExist(err) {
+		if err := m.loadQuickCommands(); err != nil {
+			return err
+		}
+		if err := m.loadHighlightRules(); err != nil {
+			return err
+		}
 		if m.readOnly {
 			// 只读模式下不创建文件，使用内存中的默认值
 			return nil
@@ -266,6 +276,7 @@ func (m *Manager) Load() error {
 		return err
 	}
 
+	m.configBase = append([]byte(nil), data...)
 	var raw map[string]any
 	_ = json.Unmarshal(data, &raw)
 	llmRaw, _ := raw["llm"].(map[string]any)
@@ -362,12 +373,16 @@ func (m *Manager) loadQuickCommands() error {
 	if os.IsNotExist(err) {
 		// 文件不存在，初始化为空数组并保存
 		m.Config.QuickCommands = []QuickCommand{}
+		if m.readOnly {
+			return nil
+		}
 		return m.saveQuickCommands()
 	}
 	if err != nil {
 		return err
 	}
 
+	m.quickBase = append([]byte(nil), data...)
 	// 解析 JSON 到 QuickCommands
 	if err := json.Unmarshal(data, &m.Config.QuickCommands); err != nil {
 		return err
@@ -409,6 +424,9 @@ func (m *Manager) migrateQuickCommands() error {
 	}
 
 	// 保存迁移后的数据
+	if m.readOnly {
+		return nil
+	}
 	return m.saveQuickCommands()
 }
 
@@ -448,11 +466,28 @@ func (m *Manager) Save() error {
 	if err != nil {
 		return err
 	}
+	// Clearing the known legacy Model field is an explicit migration, unlike
+	// unknown keys which must survive a shared settings save.
+	var oldFields, nextFields map[string]any
+	_ = json.Unmarshal(m.configBase, &oldFields)
+	if llm, ok := oldFields["llm"].(map[string]any); ok && llm["Model"] != nil && cfg.LLM.Model == "" {
+		_ = json.Unmarshal(data, &nextFields)
+		nextFields["llm"].(map[string]any)["Model"] = ""
+		data, err = json.MarshalIndent(nextFields, "", "  ")
+		if err != nil {
+			return err
+		}
+	}
 	// 内容未变化时跳过写盘，避免无谓刷新 mtime
 	if old, rerr := os.ReadFile(m.configPath); rerr == nil && bytes.Equal(old, data) {
 		return nil
 	}
-	return os.WriteFile(m.configPath, data, 0644)
+	merged, err := filetxn.Merge(m.configPath, m.configBase, data)
+	if err != nil {
+		return err
+	}
+	m.configBase = merged
+	return json.Unmarshal(merged, m.Config)
 }
 
 func (m *Manager) LastImportMessage() string {
@@ -575,10 +610,7 @@ func (m *Manager) ImportFromDirectory(dirPath string) error {
 	}
 
 	if data, err := os.ReadFile(filepath.Join(cleaned, "sessions.json")); err == nil {
-		if err := backupFileIfExists(m.sessionsPath, m.sessionsPath+".bak"); err != nil {
-			warnings = append(warnings, "备份 sessions.json 失败: "+err.Error())
-		}
-		if err := os.WriteFile(m.sessionsPath, data, 0644); err != nil {
+		if err := m.replaceImportedSessions(data); err != nil {
 			warnings = append(warnings, "写入 sessions.json 失败: "+err.Error())
 		} else {
 			imported = append(imported, "sessions.json")
@@ -675,7 +707,12 @@ func (m *Manager) saveQuickCommands() error {
 	if old, rerr := os.ReadFile(m.quickCommandsPath); rerr == nil && bytes.Equal(old, data) {
 		return nil
 	}
-	if err := os.WriteFile(m.quickCommandsPath, data, 0644); err != nil {
+	merged, err := filetxn.Merge(m.quickCommandsPath, m.quickBase, data)
+	if err != nil {
+		return err
+	}
+	m.quickBase = merged
+	if err = json.Unmarshal(merged, &m.Config.QuickCommands); err != nil {
 		return err
 	}
 	m.recordQuickCmdStat()
@@ -702,79 +739,104 @@ func (m *Manager) SetLogDir(dir string) {
 
 // AddQuickCommand 追加一条快捷命令并立即写盘。
 // 单条意图化操作取代旧的全量覆盖保存，避免多窗口互相用旧快照覆盖。
-func (m *Manager) AddQuickCommand(cmd QuickCommand) {
-	m.quickCmdMu.Lock()
-	defer m.quickCmdMu.Unlock()
-	m.Config.QuickCommands = append(m.Config.QuickCommands, cmd)
-	m.saveQuickCommands()
+func (m *Manager) AddQuickCommand(cmd QuickCommand) error {
+	return m.MutateQuickCommands(func(items []QuickCommand) ([]QuickCommand, error) {
+		for _, item := range items {
+			if item.ID == cmd.ID {
+				return nil, fmt.Errorf("命令 ID 已存在")
+			}
+		}
+		return append(items, cmd), nil
+	})
 }
-
-// UpdateQuickCommand 按 id 更新一条命令，返回是否找到目标。
 func (m *Manager) UpdateQuickCommand(id string, updates QuickCommand) bool {
-	m.quickCmdMu.Lock()
-	defer m.quickCmdMu.Unlock()
-	for i := range m.Config.QuickCommands {
-		if m.Config.QuickCommands[i].ID == id {
-			updates.ID = id // id 不可变
-			m.Config.QuickCommands[i] = updates
-			m.saveQuickCommands()
-			return true
+	return m.MutateQuickCommands(func(items []QuickCommand) ([]QuickCommand, error) {
+		for i, item := range items {
+			if item.ID == id {
+				updates.ID = id
+				items[i] = updates
+				return items, nil
+			}
 		}
-	}
-	return false
+		return nil, fmt.Errorf("命令不存在")
+	}) == nil
 }
-
-// DeleteQuickCommand 按 id 删除一条命令，返回是否找到目标。
 func (m *Manager) DeleteQuickCommand(id string) bool {
-	m.quickCmdMu.Lock()
-	defer m.quickCmdMu.Unlock()
-	cmds := m.Config.QuickCommands
-	for i := range cmds {
-		if cmds[i].ID == id {
-			m.Config.QuickCommands = append(cmds[:i:i], cmds[i+1:]...)
-			m.saveQuickCommands()
-			return true
+	return m.MutateQuickCommands(func(items []QuickCommand) ([]QuickCommand, error) {
+		for i, item := range items {
+			if item.ID == id {
+				return append(items[:i:i], items[i+1:]...), nil
+			}
 		}
-	}
-	return false
+		return nil, fmt.Errorf("命令不存在")
+	}) == nil
 }
-
-// ReorderQuickCommands 按给定 id 顺序重排这些命令的相对位置。
-// 这些 id 当前占据的槽位按新顺序回填，其余命令（其它分组）位置不变。
-// ids 中存在未知或重复 id 时拒绝执行，避免产生半重排状态。
 func (m *Manager) ReorderQuickCommands(ids []string) bool {
 	if len(ids) < 2 {
 		return false
 	}
+	return m.MutateQuickCommands(func(items []QuickCommand) ([]QuickCommand, error) {
+		selected := map[string]bool{}
+		byID := map[string]QuickCommand{}
+		for _, item := range items {
+			byID[item.ID] = item
+		}
+		for _, id := range ids {
+			if selected[id] || byID[id].ID == "" {
+				return nil, fmt.Errorf("命令排序已过期")
+			}
+			selected[id] = true
+		}
+		n := 0
+		for i, item := range items {
+			if selected[item.ID] {
+				items[i] = byID[ids[n]]
+				n++
+			}
+		}
+		return items, nil
+	}) == nil
+}
+
+// MutateQuickCommands is shared by desktop and plugin: reload and apply the
+// user's intent under one interprocess lock, without replacing stale arrays.
+func (m *Manager) MutateQuickCommands(fn func([]QuickCommand) ([]QuickCommand, error)) error {
 	m.quickCmdMu.Lock()
 	defer m.quickCmdMu.Unlock()
-	cmds := m.Config.QuickCommands
-	idSet := make(map[string]bool, len(ids))
-	for _, id := range ids {
-		idSet[id] = true
+	release, err := filetxn.Lock(m.quickCommandsPath)
+	if err != nil {
+		return err
 	}
-	pos := make([]int, 0, len(ids))
-	for i, c := range cmds {
-		if idSet[c.ID] {
-			pos = append(pos, i)
+	defer release()
+	data, err := filetxn.Read(m.quickCommandsPath)
+	if err != nil {
+		return err
+	}
+	items := []QuickCommand{}
+	if len(data) > 0 {
+		if err = json.Unmarshal(data, &items); err != nil {
+			return err
 		}
 	}
-	if len(pos) != len(ids) {
-		return false
+	next, err := fn(items)
+	if err != nil {
+		return err
 	}
-	byID := make(map[string]QuickCommand, len(cmds))
-	for _, c := range cmds {
-		byID[c.ID] = c
+	encoded, err := json.MarshalIndent(next, "", "  ")
+	if err != nil {
+		return err
 	}
-	for k, id := range ids {
-		cmds[pos[k]] = byID[id]
+	if err = filetxn.Write(m.quickCommandsPath, encoded); err != nil {
+		return err
 	}
-	m.saveQuickCommands()
-	return true
+	m.Config.QuickCommands = next
+	m.quickBase = encoded
+	m.recordQuickCmdStat()
+	return nil
 }
 
 // CheckQuickCommandsChanged 检测 quick_commands.json 是否被外部修改
-//（多窗口场景下其他进程写入）。变化时重载进内存并返回最新列表。
+// （多窗口场景下其他进程写入）。变化时重载进内存并返回最新列表。
 func (m *Manager) CheckQuickCommandsChanged() (bool, []QuickCommand) {
 	st, err := os.Stat(m.quickCommandsPath)
 	if err != nil {
@@ -794,6 +856,7 @@ func (m *Manager) CheckQuickCommandsChanged() (bool, []QuickCommand) {
 		return false, nil // 损坏的写入（对端写一半），跳过本轮，下轮再试
 	}
 	m.Config.QuickCommands = cmds
+	m.quickBase = append([]byte(nil), data...)
 	m.quickCmdMod = st.ModTime()
 	m.quickCmdSize = st.Size()
 	return true, cmds
@@ -803,12 +866,16 @@ func (m *Manager) loadHighlightRules() error {
 	data, err := os.ReadFile(m.highlightRulesPath)
 	if os.IsNotExist(err) {
 		m.Config.HighlightRules = []HighlightRule{}
+		if m.readOnly {
+			return nil
+		}
 		return m.saveHighlightRules()
 	}
 	if err != nil {
 		return err
 	}
 
+	m.highlightBase = append([]byte(nil), data...)
 	var rules []HighlightRule
 	if err := json.Unmarshal(data, &rules); err != nil {
 		return err
@@ -829,10 +896,33 @@ func (m *Manager) saveHighlightRules() error {
 	if old, rerr := os.ReadFile(m.highlightRulesPath); rerr == nil && bytes.Equal(old, data) {
 		return nil
 	}
-	return os.WriteFile(m.highlightRulesPath, data, 0644)
+	merged, err := filetxn.Merge(m.highlightRulesPath, m.highlightBase, data)
+	if err != nil {
+		return err
+	}
+	m.highlightBase = merged
+	return json.Unmarshal(merged, &m.Config.HighlightRules)
 }
 
-func (m *Manager) SetHighlightRules(rules []HighlightRule) {
+func (m *Manager) SetHighlightRules(rules []HighlightRule) error {
 	m.Config.HighlightRules = rules
-	m.saveHighlightRules()
+	return m.saveHighlightRules()
+}
+
+// Import is an explicit whole-tree replacement, but still participates in the
+// same lock and atomic-write protocol as individual connection edits.
+func (m *Manager) replaceImportedSessions(data []byte) error {
+	var nodes []json.RawMessage
+	if err := json.Unmarshal(data, &nodes); err != nil {
+		return err
+	}
+	release, err := filetxn.Lock(m.sessionsPath)
+	if err != nil {
+		return err
+	}
+	defer release()
+	if err := backupFileIfExists(m.sessionsPath, m.sessionsPath+".bak"); err != nil {
+		return err
+	}
+	return filetxn.Write(m.sessionsPath, data)
 }

@@ -235,7 +235,7 @@ const styles = {
         flexShrink: 0,
         overflow: 'hidden',
         transition: 'max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        borderTop: '1px solid var(--bg-elevated)',
+        borderTop: '1px solid var(--border-strong)',
     },
     body: {
         display: 'flex',

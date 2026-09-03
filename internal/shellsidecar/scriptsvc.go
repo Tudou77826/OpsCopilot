@@ -19,18 +19,29 @@ import (
 // 数据兼容：旧的文本脚本（scripts.json，{id,name,content,group}）在初始化时
 // 迁移为结构化脚本（content 按行拆为 steps），原文件改名为 scripts.json.migrated。
 type StructuredScriptService struct {
-	mu  sync.Mutex
-	svc *TerminalService
-	mgr *script.Manager
-	rec *recorder.Recorder
+	mu     sync.Mutex
+	svc    *TerminalService
+	mgr    *script.Manager
+	rec    *recorder.Recorder
+	jobs   map[string]*replayJob
+	closed bool
 }
 
 func NewStructuredScriptService(svc *TerminalService, dataDir string) (*StructuredScriptService, error) {
-	scriptsDir := filepath.Join(dataDir, "scripts")
+	s, err := NewStructuredScriptServiceWithPaths(svc, filepath.Join(dataDir, "scripts"), filepath.Join(dataDir, "recordings"))
+	if err != nil {
+		return nil, err
+	}
+	if err = s.migrateLegacyTextScripts(dataDir, filepath.Join(dataDir, "scripts")); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+func NewStructuredScriptServiceWithPaths(svc *TerminalService, scriptsDir, recDir string) (*StructuredScriptService, error) {
 	if err := os.MkdirAll(scriptsDir, 0o755); err != nil {
 		return nil, fmt.Errorf("创建脚本目录失败: %w", err)
 	}
-	recDir := filepath.Join(dataDir, "recordings")
 	if err := os.MkdirAll(recDir, 0o755); err != nil {
 		return nil, fmt.Errorf("创建录制目录失败: %w", err)
 	}
@@ -38,11 +49,6 @@ func NewStructuredScriptService(svc *TerminalService, dataDir string) (*Structur
 	s := &StructuredScriptService{svc: svc}
 	s.rec = recorder.NewRecorder(recDir)
 	s.mgr = script.NewManager(s.rec, scriptsDir, s)
-
-	// 旧文本脚本一次性迁移（幂等：迁移后改名）
-	if err := s.migrateLegacyTextScripts(dataDir, scriptsDir); err != nil {
-		return nil, fmt.Errorf("迁移旧文本脚本失败: %w", err)
-	}
 
 	// 录制钩子：终端键入 → LineBuffer → 提交行进入录制会话
 	svc.SetInputRecorder(func(terminalID string, data []byte) {
@@ -107,7 +113,9 @@ func (s *StructuredScriptService) migrateLegacyTextScripts(dataDir, scriptsDir s
 
 func (s *StructuredScriptService) List() ([]*script.Script, error) { return s.mgr.ListScripts() }
 
-func (s *StructuredScriptService) Load(id string) (*script.Script, error) { return s.mgr.LoadScript(id) }
+func (s *StructuredScriptService) Load(id string) (*script.Script, error) {
+	return s.mgr.LoadScript(id)
+}
 
 func (s *StructuredScriptService) Update(sc *script.Script) error { return s.mgr.UpdateScript(sc) }
 
@@ -127,6 +135,16 @@ func (s *StructuredScriptService) ReplayWithVars(id, terminalID string, values m
 
 // StartRecording 开始录制。host/user 取自终端所属连接配置（与 Wails 语义一致）。
 func (s *StructuredScriptService) StartRecording(name, description, terminalID string) (*script.Script, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil, fmt.Errorf("script service closed")
+	}
+	for _, job := range s.jobs {
+		if replayActive(job.snapshot().State) {
+			return nil, fmt.Errorf("script replay is active")
+		}
+	}
 	host, user, err := s.svc.SessionInfo(terminalID)
 	if err != nil {
 		return nil, err

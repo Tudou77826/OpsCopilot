@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"opscopilot/internal/plugincontract"
 	"strings"
 	"sync"
 
 	"opscopilot/pkg/completion"
+	"opscopilot/pkg/filetxn"
 	"opscopilot/pkg/remote"
 	"opscopilot/pkg/script"
 )
@@ -28,8 +30,9 @@ const terminalIDField = "terminalId"
 
 // ControlAPI 是控制面方法集：stdio（平台模式）与 /rpc 镜像（dev 模式）共用。
 type ControlAPI struct {
-	Service *TerminalService
-	Version string
+	LocalInstallation bool
+	Service           *TerminalService
+	Version           string
 	// Token 是数据面鉴权 token，initialize 时随能力信息返回给宿主。
 	Token string
 	// Dev 非 nil 时（--dev 模式），通知同时广播到 dev 控制连接。
@@ -154,8 +157,15 @@ func ServeControl(ctx context.Context, r io.Reader, w *RPCWriter, api *ControlAP
 func (a *ControlAPI) dispatch(ctx context.Context, req *rpcRequest) (any, *rpcError) {
 	switch req.Method {
 	case "initialize":
-		return map[string]any{"protocol": protocolVersion, "version": a.Version, "wsBase": a.wsBase, "token": a.Token}, nil
+		info := plugincontract.Info(a.Version)
+		if !a.LocalInstallation {
+			info["installationLifecycle"] = 0
+		}
+		info["wsBase"], info["token"] = a.wsBase, a.Token
+		return info, nil
 	case "shell.connect":
+		// Existing desktop/dev calls retain their own trust policy. The Teams
+		// business boundary always supplies a user-confirmed pinned host key.
 		var params struct {
 			Config remote.ConnectConfig `json:"config"`
 		}
@@ -222,6 +232,19 @@ func (a *ControlAPI) dispatch(ctx context.Context, req *rpcRequest) (any, *rpcEr
 			return nil, &rpcError{Code: -32000, Message: err.Error()}
 		}
 		return map[string]any{}, nil
+	case "shell.hostKey.probe":
+		var p struct {
+			Host string `json:"host"`
+			Port int    `json:"port"`
+		}
+		if err := json.Unmarshal(req.Params, &p); err != nil {
+			return nil, badParams(err)
+		}
+		key, err := ProbeHostKey(ctx, p.Host, p.Port)
+		if err != nil {
+			return nil, srvErr(err)
+		}
+		return key, nil
 	case "shell.configs.list":
 		if a.Configs == nil {
 			return nil, &rpcError{Code: -32000, Message: "配置服务未启用（缺少 --data-dir）"}
@@ -307,7 +330,11 @@ func (a *ControlAPI) dispatch(ctx context.Context, req *rpcRequest) (any, *rpcEr
 		if a.QuickCmds == nil {
 			return nil, notEnabled()
 		}
-		return map[string]any{"commands": a.QuickCmds.List()}, nil
+		commands, err := a.QuickCmds.ListChecked()
+		if err != nil {
+			return nil, srvErr(err)
+		}
+		return map[string]any{"commands": commands}, nil
 	case "shell.quickcmds.save":
 		if a.QuickCmds == nil {
 			return nil, notEnabled()
@@ -415,6 +442,45 @@ func (a *ControlAPI) dispatch(ctx context.Context, req *rpcRequest) (any, *rpcEr
 			return nil, srvErr(err)
 		}
 		return sc, nil
+	case "shell.script.replayStart":
+		if a.Scripts == nil {
+			return nil, notEnabled()
+		}
+		var p struct {
+			RunID      string            `json:"runId"`
+			ID         string            `json:"id"`
+			TerminalID string            `json:"terminalId"`
+			Values     map[string]string `json:"values"`
+		}
+		if err := json.Unmarshal(req.Params, &p); err != nil {
+			return nil, badParams(err)
+		}
+		state, err := a.Scripts.StartReplay(p.RunID, p.ID, p.TerminalID, p.Values)
+		if err != nil {
+			return nil, srvErr(err)
+		}
+		return state, nil
+	case "shell.script.replayStatus", "shell.script.replayStop":
+		if a.Scripts == nil {
+			return nil, notEnabled()
+		}
+		var p struct {
+			RunID string `json:"runId"`
+		}
+		if err := json.Unmarshal(req.Params, &p); err != nil || p.RunID == "" {
+			return nil, badParams(fmt.Errorf("需要 runId"))
+		}
+		var state ReplayState
+		var err error
+		if req.Method == "shell.script.replayStop" {
+			state, err = a.Scripts.StopReplay(ctx, p.RunID)
+		} else {
+			state, err = a.Scripts.ReplayStatus(p.RunID)
+		}
+		if err != nil {
+			return nil, srvErr(err)
+		}
+		return state, nil
 	case "shell.script.replay":
 		if a.Scripts == nil {
 			return nil, notEnabled()
@@ -654,6 +720,15 @@ func (a *ControlAPI) dispatch(ctx context.Context, req *rpcRequest) (any, *rpcEr
 			return nil, srvErr(err)
 		}
 		return status, nil
+	case "shell.ai.sessionConfig":
+		if a.AI == nil {
+			return nil, notEnabled()
+		}
+		var update AIConfigUpdate
+		if err := json.Unmarshal(req.Params, &update); err != nil {
+			return nil, badParams(err)
+		}
+		return a.AI.SaveSession(update), nil
 	case "shell.ai.generateCommand":
 		if a.AI == nil {
 			return nil, notEnabled()
@@ -871,5 +946,8 @@ func badParams(err error) *rpcError {
 }
 
 func srvErr(err error) *rpcError {
+	if errors.Is(err, filetxn.ErrConflict) {
+		return &rpcError{Code: -32009, Message: "shared data conflict"}
+	}
 	return &rpcError{Code: -32000, Message: err.Error()}
 }
