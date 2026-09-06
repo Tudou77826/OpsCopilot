@@ -71,6 +71,58 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
 }) => {
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
 
+    // Tab 条拖拽边缘自动滚动（Issue #66）：标签超出一屏时，flexlayout 0.9 的
+    // 拖拽不提供边缘滚动，靠边的标签拖不到。库的 Tab 条滚动由
+    // .flexlayout__tabset_tabbar_inner（overflowX:auto）的 scrollLeft 承载，
+    // 这里在拖拽光标进入其左右边缘带时按距离加速滚动；drop/dragend 时停止。
+    const tabStripRef = useRef<HTMLElement | null>(null);
+    const tabAutoScrollRafRef = useRef<number | null>(null);
+    const lastTabDragPointRef = useRef({ x: 0, y: 0 });
+
+    const stopTabAutoScroll = useCallback(() => {
+        if (tabAutoScrollRafRef.current !== null) {
+            cancelAnimationFrame(tabAutoScrollRafRef.current);
+            tabAutoScrollRafRef.current = null;
+        }
+        tabStripRef.current = null;
+    }, []);
+
+    const startTabAutoScroll = useCallback(() => {
+        if (tabAutoScrollRafRef.current !== null) return;
+        const step = () => {
+            const strip = tabStripRef.current;
+            if (!strip || !strip.isConnected) {
+                tabAutoScrollRafRef.current = null;
+                return;
+            }
+            const rect = strip.getBoundingClientRect();
+            const { x } = lastTabDragPointRef.current;
+            const edge = 60;
+            if (x >= rect.left && x <= rect.left + edge) {
+                strip.scrollLeft -= Math.ceil((1 - (x - rect.left) / edge) * 16) + 2;
+            } else if (x <= rect.right && x > rect.right - edge) {
+                strip.scrollLeft += Math.ceil((1 - (rect.right - x) / edge) * 16) + 2;
+            }
+            tabAutoScrollRafRef.current = requestAnimationFrame(step);
+        };
+        tabAutoScrollRafRef.current = requestAnimationFrame(step);
+    }, []);
+
+    const handleLayoutDragOver = useCallback((e: React.DragEvent) => {
+        const target = e.target as HTMLElement | null;
+        const strip = target?.closest?.('.flexlayout__tabset_tabbar_inner') as HTMLElement | null;
+        if (strip && strip.scrollWidth > strip.clientWidth) {
+            tabStripRef.current = strip;
+            lastTabDragPointRef.current = { x: e.clientX, y: e.clientY };
+            startTabAutoScroll();
+        } else {
+            stopTabAutoScroll();
+        }
+    }, [startTabAutoScroll, stopTabAutoScroll]);
+
+    // 卸载时兜底停止滚动循环
+    useEffect(() => () => stopTabAutoScroll(), [stopTabAutoScroll]);
+
     // Close context menu on any outside pointer event (including sidebar, other components)
     useEffect(() => {
         if (!contextMenu) return;
@@ -476,6 +528,9 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
     return (
         <div
             style={{ height: '100%', position: 'relative', overflow: 'hidden' }}
+            onDragOver={handleLayoutDragOver}
+            onDrop={stopTabAutoScroll}
+            onDragEnd={stopTabAutoScroll}
             onPointerDown={(e) => {
                 const menuEl = document.querySelector('[data-tab-context-menu]');
                 if (menuEl && menuEl.contains(e.target as Node)) return;
