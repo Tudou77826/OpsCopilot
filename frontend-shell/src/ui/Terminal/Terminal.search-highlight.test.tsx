@@ -157,7 +157,7 @@ describe('Terminal search/highlight integration', () => {
     it('does not recreate search highlights when output arrives immediately after closing search', async () => {
         vi.useFakeTimers();
         const ref = React.createRef<TerminalRef>();
-        render(<TerminalComponent id="t4" ref={ref} />);
+        const { container } = render(<TerminalComponent id="t4" ref={ref} />);
 
         selectionText = 'error';
         await act(async () => {
@@ -170,7 +170,10 @@ describe('Terminal search/highlight integration', () => {
         registerDecoration.mockClear();
 
         await act(async () => {
-            window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            // Esc 必须发自本终端区域（如终端宿主内）才会关闭搜索框；
+            // 直接派发到 window 的按键不属于任何终端，不应触发关闭。
+            const host = container.querySelector('.terminal-host')!;
+            host.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
             ref.current?.write('error after close');
             await vi.runAllTimersAsync();
         });

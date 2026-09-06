@@ -49,6 +49,9 @@ const NOOP_RUNTIME: TerminalRuntime = { resize: () => undefined };
 
 const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionID, onData, completionDelay = 150, terminalConfig, onFontSizeChange, highlightRules, theme = DEFAULT_THEME, onSelectionParsed, runtime = NOOP_RUNTIME }, ref) => {
     const terminalRef = useRef<HTMLDivElement>(null);
+    // 组件最外层容器（含 xterm 宿主与搜索面板），用于限定 Esc 等全局
+    // 按键的事件来源范围。
+    const rootRef = useRef<HTMLDivElement>(null);
     const xtermRef = useRef<Terminal | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
     const onDataRef = useRef<((data: string) => void) | undefined>(onData);
@@ -206,6 +209,13 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         if (!searchVisible) return;
         const onKeyDown = (e: KeyboardEvent) => {
             if (e.key !== 'Escape') return;
+            // 每个终端实例都把捕获监听挂到 window 上；不限定事件来源的话，
+            // 按一次 Esc 会把所有窗口的搜索框一起关掉（Issue #63）。
+            // 只有按键发自本终端区域（搜索输入框或终端本体）才关闭自己的搜索框。
+            const root = rootRef.current;
+            const target = e.target;
+            if (!(target instanceof Node)) return; // 直接派发到 window 等场景不属于任何终端
+            if (root && !root.contains(target)) return;
             e.preventDefault();
             e.stopPropagation();
             closeSearch();
@@ -1040,7 +1050,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
     }, [highlightRules, terminalConfig?.highlight_enabled]);
 
     return (
-        <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative', backgroundColor: 'var(--bg-primary)' }}>
+        <div ref={rootRef} style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative', backgroundColor: 'var(--bg-primary)' }}>
             <div
                 id={`terminal-${id}`}
                 data-testid={`terminal-container-${id}`}
