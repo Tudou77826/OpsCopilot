@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/pkg/sftp"
+	"opscopilot/pkg/filetransfer"
 	"opscopilot/pkg/remote"
 	"golang.org/x/crypto/ssh"
 )
@@ -248,12 +249,14 @@ func (c *Client) Protocol() string {
 
 // SFTPClient 实现 remote.SFTPCapable:返回底层 SSH 连接上的 SFTP 客户端。
 // 每次调用新建一个 sftp.Client;调用方负责 Close。
-// 文件传输路径(ops/transfer.go、app.go SFTP 相关)通过类型断言查询本方法。
+// 走 filetransfer.DialSFTP 的有界握手:直接用 sftp.NewClient 会在
+// "接受 subsystem 但不响应 SFTP 协议"的设备上永久阻塞(Issue #64),
+// 且 ops.ensureSFTP 在持有连接锁的状态下调用本方法,会把 AI 文件操作一起挂死。
 func (c *Client) SFTPClient() (*sftp.Client, error) {
 	if c.client == nil {
 		return nil, fmt.Errorf("client is not connected")
 	}
-	return sftp.NewClient(c.client)
+	return filetransfer.DialSFTP(context.Background(), c.client, 0)
 }
 
 // startShellSession 建立 PTY 会话,返回 session、stdin、合并后的 stdout。

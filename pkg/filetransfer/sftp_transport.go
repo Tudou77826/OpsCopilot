@@ -9,10 +9,15 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
+
+// sftpHandshakeTimeout SFTP 版本握手的最长等待时间。
+// 默认值可通过测试临时覆写（包内 var 而非 const）。
+var sftpHandshakeTimeout = 10 * time.Second
 
 type SFTPTransport struct {
 	client *ssh.Client
@@ -63,7 +68,7 @@ func NewSFTPTransport(client *ssh.Client) *SFTPTransport {
 }
 
 func (t *SFTPTransport) Check(ctx context.Context) (bool, string, error) {
-	c, err := t.newClient()
+	c, err := t.newClient(ctx)
 	if err != nil {
 		slog.Debug("sftp availability check failed", "error", err)
 		var te *TransferError
@@ -78,7 +83,7 @@ func (t *SFTPTransport) Check(ctx context.Context) (bool, string, error) {
 }
 
 func (t *SFTPTransport) List(ctx context.Context, remotePath string) ([]Entry, error) {
-	c, err := t.newClient()
+	c, err := t.newClient(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +114,7 @@ func (t *SFTPTransport) List(ctx context.Context, remotePath string) ([]Entry, e
 }
 
 func (t *SFTPTransport) Stat(ctx context.Context, remotePath string) (Entry, error) {
-	c, err := t.newClient()
+	c, err := t.newClient(ctx)
 	if err != nil {
 		return Entry{}, err
 	}
@@ -141,7 +146,7 @@ func sftpOwnerGroup(fi os.FileInfo) (string, string) {
 }
 
 func (t *SFTPTransport) Upload(ctx context.Context, localPath, remotePath string, progress func(Progress)) (TransferResult, error) {
-	c, err := t.newClient()
+	c, err := t.newClient(ctx)
 	if err != nil {
 		return TransferResult{}, err
 	}
@@ -177,7 +182,7 @@ func (t *SFTPTransport) Upload(ctx context.Context, localPath, remotePath string
 }
 
 func (t *SFTPTransport) Download(ctx context.Context, remotePath, localPath string, progress func(Progress)) (TransferResult, error) {
-	c, err := t.newClient()
+	c, err := t.newClient(ctx)
 	if err != nil {
 		return TransferResult{}, err
 	}
@@ -215,7 +220,7 @@ func (t *SFTPTransport) Download(ctx context.Context, remotePath, localPath stri
 }
 
 func (t *SFTPTransport) Mkdir(ctx context.Context, remotePath string) error {
-	c, err := t.newClient()
+	c, err := t.newClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -229,7 +234,7 @@ func (t *SFTPTransport) Mkdir(ctx context.Context, remotePath string) error {
 }
 
 func (t *SFTPTransport) Rename(ctx context.Context, oldPath, newPath string) error {
-	c, err := t.newClient()
+	c, err := t.newClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -244,7 +249,7 @@ func (t *SFTPTransport) Rename(ctx context.Context, oldPath, newPath string) err
 }
 
 func (t *SFTPTransport) Remove(ctx context.Context, remotePath string, recursive bool) error {
-	c, err := t.newClient()
+	c, err := t.newClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -272,7 +277,7 @@ func (t *SFTPTransport) Remove(ctx context.Context, remotePath string, recursive
 }
 
 func (t *SFTPTransport) ReadFile(ctx context.Context, remotePath string, maxBytes int64) ([]byte, error) {
-	c, err := t.newClient()
+	c, err := t.newClient(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -300,7 +305,7 @@ func (t *SFTPTransport) ReadFile(ctx context.Context, remotePath string, maxByte
 }
 
 func (t *SFTPTransport) WriteFile(ctx context.Context, remotePath string, content []byte) error {
-	c, err := t.newClient()
+	c, err := t.newClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -320,12 +325,90 @@ func (t *SFTPTransport) WriteFile(ctx context.Context, remotePath string, conten
 	return nil
 }
 
-func (t *SFTPTransport) newClient() (*sftp.Client, error) {
-	c, err := sftp.NewClient(t.client)
+// DialSFTP 建立带超时与取消能力的 SFTP 客户端。
+//
+// 不能直接用 sftp.NewClient：它发出 init 包后无超时地等对端回版本包，
+// 在"接受 subsystem 请求但从不响应 SFTP 协议"的设备（网络设备/嵌入式
+// sshd 等）上会永久阻塞——这是 Issue #64 应用卡死的根因。这里手动走
+// sftp.NewClient 的内部步骤并加上边界：
+//  1. NewSession + RequestSubsystem("sftp")：对端明确拒绝时此处快速失败；
+//  2. sftp.NewClientPipe 做版本握手，放入独立 goroutine；
+//  3. select 等待握手完成 / ctx 取消 / 超时；超时或取消时关闭 session，
+//     管道读随之报错，握手 goroutine 随即退出。
+//
+// 返回的客户端 Close 时会连带关闭底层 session（经由包装的 stdin 管道），
+// 调用方无需额外清理。
+func DialSFTP(ctx context.Context, client *ssh.Client, timeout time.Duration) (*sftp.Client, error) {
+	if timeout <= 0 {
+		timeout = sftpHandshakeTimeout
+	}
+	session, err := client.NewSession()
 	if err != nil {
 		return nil, toTransferError(err)
 	}
-	return c, nil
+	if err := session.RequestSubsystem("sftp"); err != nil {
+		session.Close()
+		return nil, toTransferError(err)
+	}
+	rd, err := session.StdoutPipe()
+	if err != nil {
+		session.Close()
+		return nil, toTransferError(err)
+	}
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		session.Close()
+		return nil, toTransferError(err)
+	}
+	// sftp.Client.Close 只关闭 stdin 管道；挂钩一次，让 session 一并关闭。
+	wr := &sessionCloseHookWriter{WriteCloser: stdin, session: session}
+
+	type dialResult struct {
+		client *sftp.Client
+		err    error
+	}
+	done := make(chan dialResult, 1)
+	go func() {
+		c, err := sftp.NewClientPipe(rd, wr)
+		done <- dialResult{client: c, err: err}
+	}()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case res := <-done:
+		if res.err != nil {
+			session.Close()
+			return nil, toTransferError(res.err)
+		}
+		return res.client, nil
+	case <-timer.C:
+		session.Close()
+		<-done
+		return nil, &TransferError{Code: ErrorCodeSFTPNotSupported, Message: "SFTP 握手超时，对端可能不支持 SFTP"}
+	case <-ctx.Done():
+		session.Close()
+		<-done
+		return nil, &TransferError{Code: ErrorCodeUnknown, Message: "传输已取消"}
+	}
+}
+
+// sessionCloseHookWriter 在 Close 时连带关闭 SSH session。
+// sftp.Client.Close 只会关闭传入的 stdin 管道，session 会一直挂着
+// 占用服务端 MaxSessions 配额，因此在这里兜底。
+type sessionCloseHookWriter struct {
+	io.WriteCloser
+	session *ssh.Session
+}
+
+func (w *sessionCloseHookWriter) Close() error {
+	err := w.WriteCloser.Close()
+	_ = w.session.Close()
+	return err
+}
+
+func (t *SFTPTransport) newClient(ctx context.Context) (*sftp.Client, error) {
+	return DialSFTP(ctx, t.client, 0)
 }
 
 func normalizeRemotePath(p string) string {

@@ -24,6 +24,10 @@ type testSSHServerOptions struct {
 	RootDir    string
 	EnableSFTP bool
 	EnableSCP  bool
+	// SilentSFTP 模拟"接受 sftp subsystem 请求但从不响应 SFTP 协议"的设备
+	// (网络设备/嵌入式 sshd 等)：无超时的 sftp.NewClient 握手会在其上永久
+	// 阻塞，即 Issue #64 的卡死源。用于回归验证有界握手。
+	SilentSFTP bool
 }
 
 type testSSHServer struct {
@@ -156,6 +160,13 @@ func (s *testSSHServer) handleSession(ch ssh.Channel, requests <-chan *ssh.Reque
 					return
 				}
 				_ = srv.Serve()
+				return
+			}
+			if payload.Name == "sftp" && s.opts.SilentSFTP {
+				// 接受 subsystem 请求后装死：不回任何 SFTP 协议字节，
+				// 也不关闭通道，直到服务关闭。
+				_ = req.Reply(true, nil)
+				<-s.closed
 				return
 			}
 			_ = req.Reply(false, nil)
