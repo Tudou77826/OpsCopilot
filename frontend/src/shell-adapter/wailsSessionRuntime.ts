@@ -7,6 +7,7 @@ type WailsWindow = Window & {
         RenameSavedSession?: (id: string, newName: string) => Promise<string>;
         UpdateSavedSession?: (id: string, config: ConnectionConfig) => Promise<string>;
         CreateSavedFolder?: (name: string) => Promise<string>;
+        DuplicateSavedSession?: (id: string) => Promise<string>;
     } } };
 };
 
@@ -29,6 +30,10 @@ export const wailsSessionRuntime: SessionManagerRuntime = {
     },
     async createFolder(name) {
         const err = await (window as WailsWindow).go?.main?.App?.CreateSavedFolder?.(name);
+        if (err) throw new Error(err);
+    },
+    async duplicateSession(id) {
+        const err = await (window as WailsWindow).go?.main?.App?.DuplicateSavedSession?.(id);
         if (err) throw new Error(err);
     },
 };

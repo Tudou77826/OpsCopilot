@@ -454,3 +454,145 @@ func TestUpdateSession_NotFoundLeavesStateIntact(t *testing.T) {
 		t.Errorf("in-memory tree mutated by not-found error: %d top-level nodes", len(m.Sessions))
 	}
 }
+
+// TestDuplicateSession_CreatesIndependentCopyInSameFolder 覆盖用户流程（Issue #68）：
+// "在会话管理里复制一条连接 → 得到完整配置的副本，落在同一文件夹，可直接编辑"。
+// 副本必须与源节点完全独立（新 ID、深拷贝配置），且落盘可重载。
+func TestDuplicateSession_CreatesIndependentCopyInSameFolder(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
+	m := seedMoveTestTree(t, tmpFile)
+
+	// 给源会话补一个跳板机，验证深拷贝。
+	web1 := findNodeByID(m.Sessions, "s-web1")
+	web1.Config.Bastion = &sshclient.ConnectConfig{Host: "10.0.0.254", Port: 22, User: "jump", Password: "jp"}
+	if err := m.Save(); err != nil {
+		t.Fatalf("seed bastion save: %v", err)
+	}
+
+	if err := m.DuplicateSession("s-web1"); err != nil {
+		t.Fatalf("duplicate failed: %v", err)
+	}
+
+	// 副本在"生产"文件夹内、紧跟源节点之后。
+	folder := findNodeByID(m.Sessions, "f-prod")
+	if folder == nil {
+		t.Fatalf("folder missing")
+	}
+	var idxSrc, idxCopy = -1, -1
+	var copyNode *Session
+	for i, n := range folder.Children {
+		if n.ID == "s-web1" {
+			idxSrc = i
+		}
+		if n.Name == "web-1-副本" {
+			idxCopy = i
+			copyNode = n
+		}
+	}
+	if idxSrc < 0 || idxCopy < 0 {
+		t.Fatalf("copy not found inside 生产 folder (srcIdx=%d copyIdx=%d)", idxSrc, idxCopy)
+	}
+	if idxCopy != idxSrc+1 {
+		t.Errorf("copy should be right after source, src=%d copy=%d", idxSrc, idxCopy)
+	}
+	if copyNode.ID == "s-web1" {
+		t.Errorf("copy must have a new ID")
+	}
+	cfg := copyNode.Config
+	if cfg == nil {
+		t.Fatalf("copy has no config")
+	}
+	if cfg.Host != "10.0.0.1" || cfg.User != "root" || cfg.Password != "p1" || cfg.RootPassword != "rp1" {
+		t.Errorf("copy config not faithful: %+v", cfg)
+	}
+	if cfg.Bastion == nil || cfg.Bastion.Host != "10.0.0.254" {
+		t.Fatalf("copy lost bastion config")
+	}
+	// 深拷贝：改副本的跳板机不影响源节点。
+	cfg.Bastion.Host = "9.9.9.9"
+	if findNodeByID(m.Sessions, "s-web1").Config.Bastion.Host != "10.0.0.254" {
+		t.Errorf("copy shares bastion state with source")
+	}
+
+	// 落盘可重载。
+	m2 := NewManagerWithPath(tmpFile)
+	if err := m2.Load(); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	dup := findNodeByID(m2.Sessions, copyNode.ID)
+	if dup == nil || dup.Config == nil || dup.Config.Bastion == nil {
+		t.Fatalf("duplicated session not persisted")
+	}
+}
+
+// TestDuplicateSession_AllowsSameEndpoint 覆盖复制的关键语义：
+// 副本与源同 (Host, Port, Protocol) 必须放行——用户复制后就是要改主机/端口，
+// Upsert/UpdateSession 的端点去重不适用于复制。
+func TestDuplicateSession_AllowsSameEndpoint(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
+	m := seedMoveTestTree(t, tmpFile)
+
+	if err := m.DuplicateSession("s-web1"); err != nil {
+		t.Fatalf("duplicate with same endpoint should be allowed: %v", err)
+	}
+	count := 0
+	var countFn func(nodes []*Session)
+	countFn = func(nodes []*Session) {
+		for _, n := range nodes {
+			if n.Type == TypeSession && n.Config != nil && n.Config.Host == "10.0.0.1" {
+				count++
+			}
+			if n.Type == TypeFolder {
+				countFn(n.Children)
+			}
+		}
+	}
+	countFn(m.Sessions)
+	if count != 2 {
+		t.Errorf("expected 2 sessions with same host after duplicate, got %d", count)
+	}
+}
+
+// TestDuplicateSession_RootSessionCopiedAtRoot 根会话的副本仍在根目录。
+func TestDuplicateSession_RootSessionCopiedAtRoot(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
+	m := seedMoveTestTree(t, tmpFile)
+
+	if err := m.DuplicateSession("s-db1"); err != nil {
+		t.Fatalf("duplicate failed: %v", err)
+	}
+	// 找到副本节点（db-1-副本）。
+	var copyNode *Session
+	for _, n := range m.Sessions {
+		if n.Name == "db-1-副本" {
+			copyNode = n
+		}
+	}
+	if copyNode == nil {
+		t.Fatalf("root copy not found")
+	}
+	if loc := sessionLocation(t, m, copyNode.ID); loc != "<root>" {
+		t.Errorf("root session copy should be at root, got %q", loc)
+	}
+}
+
+// TestDuplicateSession_NotFoundLeavesStateIntact 复制不存在的会话必须报错且不留状态变化。
+func TestDuplicateSession_NotFoundLeavesStateIntact(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
+	m := seedMoveTestTree(t, tmpFile)
+
+	before, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("read before: %v", err)
+	}
+	if err := m.DuplicateSession("no-such-id"); err == nil {
+		t.Fatalf("expected not-found error, got nil")
+	}
+	after, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("read after: %v", err)
+	}
+	if string(after) != string(before) {
+		t.Errorf("sessions.json changed despite not-found error")
+	}
+}

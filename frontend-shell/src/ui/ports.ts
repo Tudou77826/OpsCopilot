@@ -57,6 +57,11 @@ export interface SessionManagerRuntime {
   renameSession(id: string, newName: string): Promise<void>;
   updateSession(id: string, config: ConnectionConfig, group: string): Promise<void>;
   createFolder(name: string): Promise<void>;
+  /**
+   * 复制一条已保存会话为新的连接条目（完整配置副本，落同一文件夹）。
+   * 可选能力：宿主未提供时右键菜单不显示"复制连接信息"。
+   */
+  duplicateSession?(id: string): Promise<void>;
 }
 
 /** 团队共享会话宿主能力（Wails 专有，可选）。Sidecar 不提供时组件不渲染。 */

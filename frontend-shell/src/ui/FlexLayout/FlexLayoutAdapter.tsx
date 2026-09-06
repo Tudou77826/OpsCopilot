@@ -778,19 +778,6 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, terminalId, terminals, 
                 关闭右侧全部
             </div>
             <div style={menuSeparatorStyle} />
-            <div style={menuItemStyle} onClick={() => {
-                if (term?.config) {
-                    const cfg = term.config;
-                    let text = `${cfg.user}@${cfg.host}:${cfg.port}`;
-                    if (cfg.bastion?.host) {
-                        text += ` (via ${cfg.bastion.user}@${cfg.bastion.host}:${cfg.bastion.port})`;
-                    }
-                    navigator.clipboard.writeText(text);
-                }
-                onClose();
-            }}>
-                复制连接信息
-            </div>
             {onOpenFileTransfer && (
                 <div style={menuItemStyle} onClick={() => {
                     onOpenFileTransfer(terminalId);

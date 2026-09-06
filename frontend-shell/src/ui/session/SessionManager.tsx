@@ -468,6 +468,28 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect, runtime, sha
                             }}
                         >编辑连接</div>
                     )}
+                    {contextMenu.node && contextMenu.node.type === 'session' && runtime.duplicateSession && (
+                        <div
+                            style={{
+                                ...styles.menuItem,
+                                backgroundColor: hoveredMenuItem === 'duplicate' ? 'var(--bg-active)' : 'transparent',
+                                color: hoveredMenuItem === 'duplicate' ? 'var(--text-on-accent)' : 'var(--text-secondary)'
+                            }}
+                            onMouseEnter={() => setHoveredMenuItem('duplicate')}
+                            onMouseLeave={() => setHoveredMenuItem(null)}
+                            onClick={() => {
+                                // 完整复制为新的连接条目（同配置副本，落同一文件夹），
+                                // 用户随后编辑副本的主机/端口等信息。
+                                runtime.duplicateSession!(contextMenu.node!.id)
+                                    .then(() => loadSessions())
+                                    .catch((err) => {
+                                        alert(err?.message || String(err));
+                                        loadSessions();
+                                    });
+                                setContextMenu(null);
+                            }}
+                        >复制连接信息</div>
+                    )}
                     {contextMenu.node && contextMenu.node.type === 'session' && !!contextMenu.node.config?.group && (
                         <div
                             style={{

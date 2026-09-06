@@ -2833,6 +2833,16 @@ func (a *App) CreateSavedFolder(name string) string {
 	return ""
 }
 
+// DuplicateSavedSession 复制一条已保存会话为新的连接条目（完整配置副本，
+// 落在同一文件夹）。副本与源同 endpoint 是预期中间态（用户随后编辑副本），
+// 不走端点去重。
+func (a *App) DuplicateSavedSession(id string) string {
+	if err := a.savedSessionMgr.DuplicateSession(id); err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	return ""
+}
+
 // HasActiveWork checks if there are active terminal sessions or ongoing troubleshooting session
 func (a *App) HasActiveWork() map[string]interface{} {
 	hasTerminals := len(a.sessionMgr.List()) > 0

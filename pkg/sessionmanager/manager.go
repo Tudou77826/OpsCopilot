@@ -370,6 +370,66 @@ func (m *Manager) UpdateSession(id string, config remote.ConnectConfig, groupNam
 	return m.Save()
 }
 
+// DuplicateSession 复制一条已保存会话：新 ID、名称加"-副本"后缀、完整配置
+// 深拷贝（含跳板机），副本落在源节点同一文件夹（根会话副本仍在根）。
+// 与 Upsert/UpdateSession 不同，复制允许与源节点同 endpoint——用户复制后通常
+// 会立刻修改副本的主机/端口，端点去重在这里是错误语义。
+func (m *Manager) DuplicateSession(id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// 查找源节点及其所在兄弟列表（副本要插到源节点之后，保持相邻）。
+	var src *Session
+	var siblings *[]*Session
+	var findById func(nodes *[]*Session) bool
+	findById = func(nodes *[]*Session) bool {
+		for _, node := range *nodes {
+			if node.ID == id {
+				src = node
+				siblings = nodes
+				return true
+			}
+			if node.Type == TypeFolder {
+				if findById(&node.Children) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	if !findById(&m.Sessions) || src == nil {
+		return fmt.Errorf("session not found")
+	}
+	if src.Type != TypeSession || src.Config == nil {
+		return fmt.Errorf("only sessions can be duplicated")
+	}
+
+	cfg := *src.Config
+	if src.Config.Bastion != nil {
+		bastion := *src.Config.Bastion
+		cfg.Bastion = &bastion
+	}
+	copyNode := &Session{
+		ID:     uuid.New().String(),
+		Name:   src.Name + "-副本",
+		Type:   TypeSession,
+		Config: &cfg,
+	}
+
+	// 插入到源节点之后：先扩容一位，再把 idx 之后的元素整体右移一格。
+	idx := -1
+	for i, node := range *siblings {
+		if node.ID == id {
+			idx = i
+			break
+		}
+	}
+	*siblings = append(*siblings, nil)
+	copy((*siblings)[idx+2:], (*siblings)[idx+1:])
+	(*siblings)[idx+1] = copyNode
+	return m.Save()
+}
+
 // CreateFolder creates an empty folder at root level.
 func (m *Manager) CreateFolder(name string) error {
 	if strings.TrimSpace(name) == "" {
