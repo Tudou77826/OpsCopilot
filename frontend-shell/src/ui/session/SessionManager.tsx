@@ -97,6 +97,10 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect, runtime, sha
 
     const handleDrop = async (e: React.DragEvent, folder: SessionNode) => {
         e.preventDefault();
+        // 文件夹行已消化本次 drop,必须阻断冒泡:树容器兜底的 handleTreeDrop 语义是
+        // "移出分组",若放行会在本处理器之后再次提交 updateSession(group=''),
+        // 把刚移入文件夹的会话又弹回根目录(见 Issue #70)。
+        e.stopPropagation();
         if (autoExpandTimerRef.current) {
             clearTimeout(autoExpandTimerRef.current);
             autoExpandTimerRef.current = null;
@@ -131,6 +135,9 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect, runtime, sha
     // Drop on tree container blank area = remove group (move to root)
     const handleTreeDrop = async (e: React.DragEvent) => {
         e.preventDefault();
+        // 只响应真正落在容器空白处的 drop(按下目标即容器本身);
+        // 落在会话行等其他子元素上的冒泡 drop 不做任何事,避免误触发"移出分组"。
+        if (e.target !== e.currentTarget) return;
         const sessionId = e.dataTransfer.getData('text/plain');
         if (!sessionId) return;
         const session = findSessionById(sessions, sessionId);
