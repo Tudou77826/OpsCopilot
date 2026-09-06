@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ConnectionConfig } from '../types';
 import ConnectionConfigForm from '../connection/ConnectionConfigForm';
 import { SessionManagerRuntime } from '../ports';
@@ -17,6 +17,10 @@ const EditSavedSessionModal: React.FC<Props> = ({ isOpen, sessionId, initialConf
     const [config, setConfig] = useState<ConnectionConfig>(initialConfig);
     const [saving, setSaving] = useState(false);
     const toast = useToast();
+    // 遮罩误关防护:记录 mousedown 起点,只有按下与松开(即 click)都发生在遮罩自身
+    // 才关闭。否则在输入框内拖选文本、鼠标越过弹窗边界后松开时,浏览器会把 click
+    // 派发到遮罩(公共祖先),直接 onClose 会丢掉整个弹窗的编辑内容。
+    const overlayPressValidRef = useRef(false);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -79,7 +83,18 @@ const EditSavedSessionModal: React.FC<Props> = ({ isOpen, sessionId, initialConf
     };
 
     return (
-        <div style={styles.overlay} onClick={onClose}>
+        <div
+            style={styles.overlay}
+            onMouseDown={(e) => {
+                overlayPressValidRef.current = e.target === e.currentTarget;
+            }}
+            onClick={(e) => {
+                if (e.target === e.currentTarget && overlayPressValidRef.current) {
+                    onClose();
+                }
+                overlayPressValidRef.current = false;
+            }}
+        >
             <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
                 <div style={styles.header}>
                     <h2 style={styles.title}>编辑连接</h2>
