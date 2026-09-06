@@ -6,7 +6,7 @@
  * 核心回归约束：文件夹内会话无论拖到哪里，都绝不允许被"移出分组"覆盖。
  */
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, createEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import '@testing-library/jest-dom';
 import { ToastProvider } from '@opscopilot/shell-terminal/ui';
@@ -165,5 +165,124 @@ describe('会话拖拽业务流程', () => {
 
         await new Promise((r) => setTimeout(r, 30));
         expect(UpdateSavedSession).not.toHaveBeenCalled();
+    });
+});
+
+describe('拖拽边缘自动滚动（#69）', () => {
+    // jsdom 的 DragEvent 不支持 clientY 初始化（真实浏览器无此问题），
+    // 用 createEvent + defineProperty 强制注入光标坐标。
+    function dragOverAt(el: HTMLElement, clientY: number, dt: unknown) {
+        const event = createEvent.dragOver(el, { dataTransfer: dt } as any);
+        Object.defineProperty(event, 'clientY', { value: clientY });
+        fireEvent(el, event);
+    }
+
+    // jsdom 无布局，用可控的 rAF 手动驱动帧，并 mock 容器矩形。
+    function installFrameDriver() {
+        const pending = new Map<number, FrameRequestCallback>();
+        let seed = 0;
+        const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(((cb: FrameRequestCallback) => {
+            seed += 1;
+            pending.set(seed, cb);
+            return seed;
+        }) as typeof window.requestAnimationFrame);
+        const cafSpy = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(((id: number) => {
+            pending.delete(id);
+        }) as typeof window.cancelAnimationFrame);
+        const runFrames = async (n: number) => {
+            await act(async () => {
+                for (let i = 0; i < n; i++) {
+                    const cbs = [...pending.values()];
+                    pending.clear();
+                    cbs.forEach((cb) => cb(performance.now()));
+                }
+                await Promise.resolve();
+            });
+        };
+        return {
+            runFrames,
+            restore: () => {
+                rafSpy.mockRestore();
+                cafSpy.mockRestore();
+            },
+        };
+    }
+
+    function mockRect(el: HTMLElement, top: number, bottom: number) {
+        vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+            top,
+            bottom,
+            height: bottom - top,
+            width: 100,
+            left: 0,
+            right: 100,
+            x: 0,
+            y: top,
+            toJSON: () => ({}),
+        } as DOMRect);
+    }
+
+    it('拖拽光标停在容器底部边缘带时持续向下滚动，dragEnd 后停止', async () => {
+        const driver = installFrameDriver();
+        try {
+            await renderTree();
+            const container = treeContainer();
+            mockRect(container, 0, 200);
+
+            const row = rowOf('web-1');
+            const dt = makeDataTransfer('s-web1');
+            fireEvent.dragStart(row, { dataTransfer: dt } as any);
+            // clientY=185，距底边 15px < 40px 边缘带 → 向下滚动。
+            dragOverAt(container, 185, dt);
+
+            await driver.runFrames(2);
+            expect(container.scrollTop).toBeGreaterThan(0);
+            const scrolled = container.scrollTop;
+
+            fireEvent.dragEnd(row, { dataTransfer: dt } as any);
+            await driver.runFrames(2);
+            expect(container.scrollTop).toBe(scrolled);
+        } finally {
+            driver.restore();
+        }
+    });
+
+    it('拖拽光标停在容器顶部边缘带时向上滚动', async () => {
+        const driver = installFrameDriver();
+        try {
+            await renderTree();
+            const container = treeContainer();
+            mockRect(container, 0, 200);
+            container.scrollTop = 100;
+
+            const row = rowOf('web-1');
+            const dt = makeDataTransfer('s-web1');
+            fireEvent.dragStart(row, { dataTransfer: dt } as any);
+            dragOverAt(container, 10, dt);
+
+            await driver.runFrames(2);
+            expect(container.scrollTop).toBeLessThan(100);
+        } finally {
+            driver.restore();
+        }
+    });
+
+    it('光标在容器中部时不滚动', async () => {
+        const driver = installFrameDriver();
+        try {
+            await renderTree();
+            const container = treeContainer();
+            mockRect(container, 0, 200);
+
+            const row = rowOf('web-1');
+            const dt = makeDataTransfer('s-web1');
+            fireEvent.dragStart(row, { dataTransfer: dt } as any);
+            dragOverAt(container, 100, dt);
+
+            await driver.runFrames(2);
+            expect(container.scrollTop).toBe(0);
+        } finally {
+            driver.restore();
+        }
     });
 });

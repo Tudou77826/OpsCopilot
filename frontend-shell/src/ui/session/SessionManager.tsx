@@ -26,6 +26,37 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect, runtime, sha
     const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
     const dragNodeIdRef = useRef<string | null>(null);
     const autoExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // 拖拽边缘自动滚动：rAF 循环滚动会话树，dragEnd/drop 时停止。
+    const autoScrollRafRef = useRef<number | null>(null);
+    const treeContainerRef = useRef<HTMLElement | null>(null);
+    const lastDragPointRef = useRef({ x: 0, y: 0 });
+
+    const stopTreeAutoScroll = () => {
+        if (autoScrollRafRef.current !== null) {
+            cancelAnimationFrame(autoScrollRafRef.current);
+            autoScrollRafRef.current = null;
+        }
+        treeContainerRef.current = null;
+    };
+
+    const startTreeAutoScroll = () => {
+        if (autoScrollRafRef.current !== null) return;
+        const step = () => {
+            const container = treeContainerRef.current;
+            if (!container) return;
+            const rect = container.getBoundingClientRect();
+            const { y } = lastDragPointRef.current;
+            // 光标进入容器上下 40px 边缘带时滚动，越靠近边界越快。
+            const edge = 40;
+            if (y >= rect.top && y <= rect.top + edge) {
+                container.scrollTop -= Math.ceil((1 - (y - rect.top) / edge) * 14) + 2;
+            } else if (y <= rect.bottom && y > rect.bottom - edge) {
+                container.scrollTop += Math.ceil((1 - (rect.bottom - y) / edge) * 14) + 2;
+            }
+            autoScrollRafRef.current = requestAnimationFrame(step);
+        };
+        autoScrollRafRef.current = requestAnimationFrame(step);
+    };
 
     useEffect(() => {
         loadSessions();
@@ -50,6 +81,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect, runtime, sha
     useEffect(() => {
         return () => {
             if (autoExpandTimerRef.current) clearTimeout(autoExpandTimerRef.current);
+            stopTreeAutoScroll();
         };
     }, []);
 
@@ -110,6 +142,8 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect, runtime, sha
         const sessionId = e.dataTransfer.getData('text/plain');
         if (!sessionId) return;
 
+        stopTreeAutoScroll();
+
         const session = findSessionById(sessions, sessionId);
         if (!session?.config) return;
         if (session.config.group === folder.name) return;
@@ -126,6 +160,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect, runtime, sha
     const handleDragEnd = () => {
         dragNodeIdRef.current = null;
         setDragOverFolderId(null);
+        stopTreeAutoScroll();
         if (autoExpandTimerRef.current) {
             clearTimeout(autoExpandTimerRef.current);
             autoExpandTimerRef.current = null;
@@ -135,6 +170,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect, runtime, sha
     // Drop on tree container blank area = remove group (move to root)
     const handleTreeDrop = async (e: React.DragEvent) => {
         e.preventDefault();
+        stopTreeAutoScroll();
         // 只响应真正落在容器空白处的 drop(按下目标即容器本身);
         // 落在会话行等其他子元素上的冒泡 drop 不做任何事,避免误触发"移出分组"。
         if (e.target !== e.currentTarget) return;
@@ -398,8 +434,16 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect, runtime, sha
 
             <div
                 style={styles.treeContainer}
+                ref={(el) => { treeContainerRef.current = el; }}
                 onContextMenu={(e) => handleContextMenu(e)}
-                onDragOver={(e) => { if (dragNodeIdRef.current) e.preventDefault(); }}
+                onDragOver={(e) => {
+                    if (!dragNodeIdRef.current) return;
+                    e.preventDefault();
+                    // 记录拖拽光标位置并启动边缘自动滚动循环（Issue #69：
+                    // 列表超出一屏时，底部的会话无法拖到顶部的文件夹）。
+                    lastDragPointRef.current = { x: e.clientX, y: e.clientY };
+                    startTreeAutoScroll();
+                }}
                 onDrop={handleTreeDrop}
             >
                 {renderTree(displayedSessions)}
