@@ -2794,8 +2794,33 @@ func (a *App) RenameSavedSession(id, newName string) string {
 	return ""
 }
 
-func (a *App) UpdateSavedSession(id string, config sshclient.ConnectConfig) string {
-	if err := a.savedSessionMgr.UpdateSession(id, config, config.Group); err != nil {
+// UpdateSavedSession 更新已保存会话。
+// 入参必须是 app 侧驼峰 ConnectConfig(Wails 边界约定),显式转换为持久化用的
+// remote.ConnectConfig(下划线 JSON tag),与 Connect/ConnectWithID 同一模式。
+// 若直接用 sshclient.ConnectConfig(= remote.ConnectConfig 别名)接 Wails 入参,
+// 前端的 rootPassword 会被下划线 tag 静默丢弃,整体替换保存时清空已存 root 密码。
+func (a *App) UpdateSavedSession(id string, config ConnectConfig) string {
+	clientConfig := remote.ConnectConfig{
+		Name:         config.Name,
+		Protocol:     config.Protocol,
+		Host:         config.Host,
+		Port:         config.Port,
+		User:         config.User,
+		Password:     config.Password,
+		RootPassword: config.RootPassword,
+		Group:        config.Group,
+	}
+	if config.Bastion != nil {
+		clientConfig.Bastion = &remote.ConnectConfig{
+			Name:     config.Bastion.Name,
+			Protocol: config.Bastion.Protocol,
+			Host:     config.Bastion.Host,
+			Port:     config.Bastion.Port,
+			User:     config.Bastion.User,
+			Password: config.Bastion.Password,
+		}
+	}
+	if err := a.savedSessionMgr.UpdateSession(id, clientConfig, clientConfig.Group); err != nil {
 		return fmt.Sprintf("Error: %v", err)
 	}
 	return ""

@@ -257,7 +257,72 @@ func (m *Manager) UpdateSession(id string, config remote.ConnectConfig, groupNam
 	if config.Protocol == "" {
 		config.Protocol = remote.ProtocolSSH
 	}
+	config.Group = groupName
 
+	// Step 1: 定位目标节点(只读,不改动树)。定位/校验全部通过后才允许变更内存树,
+	// 保证任何错误返回时 m.Sessions 与磁盘文件保持一致——否则前端 5 秒轮询会把
+	// 被污染的内存树当最新数据渲染,用户会看到"保存失败且会话消失"。
+	var existing *Session
+	var findById func(nodes []*Session) *Session
+	findById = func(nodes []*Session) *Session {
+		for _, node := range nodes {
+			if node.ID == id {
+				return node
+			}
+			if node.Type == TypeFolder {
+				if found := findById(node.Children); found != nil {
+					return found
+				}
+			}
+		}
+		return nil
+	}
+	existing = findById(m.Sessions)
+	if existing == nil {
+		return fmt.Errorf("session not found")
+	}
+
+	// Step 2: 重复检测:key 为 (Host, Port, Protocol) 三元组,允许同 host 不同协议共存。
+	var hasDuplicateHost func(nodes []*Session) bool
+	hasDuplicateHost = func(nodes []*Session) bool {
+		for _, node := range nodes {
+			if node.Type == TypeSession && node.Config != nil && sameEndpoint(node.Config, &config) && node.ID != id {
+				return true
+			}
+			if node.Type == TypeFolder && hasDuplicateHost(node.Children) {
+				return true
+			}
+		}
+		return false
+	}
+	if hasDuplicateHost(m.Sessions) {
+		return fmt.Errorf("a session with the same host already exists")
+	}
+
+	oldDisplayName := existing.Name
+	oldHost := ""
+	if existing.Config != nil {
+		oldHost = existing.Config.Host
+	}
+
+	displayName := config.Name
+	if displayName == "" {
+		displayName = config.Host
+	}
+	if oldDisplayName != "" && oldHost != "" && oldDisplayName != oldHost {
+		if config.Name == "" || config.Name == oldHost || config.Name == oldDisplayName {
+			displayName = oldDisplayName
+		}
+	}
+	config.Name = displayName
+
+	// Step 3: 校验通过,开始变更:先摘除旧位置,再插入目标位置。
+	newNode := &Session{
+		ID:     id,
+		Name:   displayName,
+		Type:   TypeSession,
+		Config: &config,
+	}
 	var removed *Session
 	var removeByID func(nodes []*Session) []*Session
 	removeByID = func(nodes []*Session) []*Session {
@@ -276,50 +341,8 @@ func (m *Manager) UpdateSession(id string, config remote.ConnectConfig, groupNam
 	}
 	m.Sessions = removeByID(m.Sessions)
 	if removed == nil {
+		// 理论不可达(Step 1 已定位);防御:未摘到节点时不落盘,避免状态不一致。
 		return fmt.Errorf("session not found")
-	}
-
-	config.Group = groupName
-
-	// 重复检测:key 为 (Host, Port, Protocol) 三元组,允许同 host 不同协议共存。
-	var hasDuplicateHost func(nodes []*Session) bool
-	hasDuplicateHost = func(nodes []*Session) bool {
-		for _, node := range nodes {
-			if node.Type == TypeSession && node.Config != nil && sameEndpoint(node.Config, &config) && node.ID != id {
-				return true
-			}
-			if node.Type == TypeFolder && hasDuplicateHost(node.Children) {
-				return true
-			}
-		}
-		return false
-	}
-	if hasDuplicateHost(m.Sessions) {
-		return fmt.Errorf("a session with the same host already exists")
-	}
-
-	oldDisplayName := removed.Name
-	oldHost := ""
-	if removed.Config != nil {
-		oldHost = removed.Config.Host
-	}
-
-	displayName := config.Name
-	if displayName == "" {
-		displayName = config.Host
-	}
-	if oldDisplayName != "" && oldHost != "" && oldDisplayName != oldHost {
-		if config.Name == "" || config.Name == oldHost || config.Name == oldDisplayName {
-			displayName = oldDisplayName
-		}
-	}
-	config.Name = displayName
-
-	newNode := &Session{
-		ID:     id,
-		Name:   displayName,
-		Type:   TypeSession,
-		Config: &config,
 	}
 
 	if groupName != "" {

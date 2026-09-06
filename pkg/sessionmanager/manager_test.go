@@ -238,3 +238,219 @@ func TestRecursiveDelete(t *testing.T) {
 		t.Errorf("Expected root empty after group delete, got %d", len(m.Sessions))
 	}
 }
+
+// --- 会话移动/编辑业务流程防护用例 ---
+// 覆盖用户操作流：拖拽移动会话、编辑保存失败不留脏状态。
+// 背景（Issue #70/#71）：UpdateSession 曾"先摘节点后校验"，失败时内存树被污染，
+// 前端 5 秒轮询把坏树当最新数据渲染，用户看到"会话消失"。
+
+// seedMoveTestTree 构造标准测试树并落盘：
+//   生产(folder) ── web-1(session, 10.0.0.1)
+//   测试(folder) ── (空)
+//   db-1(session, 10.0.0.2, 根目录)
+func seedMoveTestTree(t *testing.T, filePath string) *Manager {
+	t.Helper()
+	m := NewManagerWithPath(filePath)
+	m.Sessions = []*Session{
+		{ID: "f-prod", Name: "生产", Type: TypeFolder, Children: []*Session{
+			{ID: "s-web1", Name: "web-1", Type: TypeSession, Config: &sshclient.ConnectConfig{
+				Host: "10.0.0.1", Port: 22, User: "root", Password: "p1", RootPassword: "rp1",
+			}},
+		}},
+		{ID: "f-test", Name: "测试", Type: TypeFolder, Children: []*Session{}},
+		{ID: "s-db1", Name: "db-1", Type: TypeSession, Config: &sshclient.ConnectConfig{
+			Host: "10.0.0.2", Port: 22, User: "root",
+		}},
+	}
+	if err := m.Save(); err != nil {
+		t.Fatalf("seed save: %v", err)
+	}
+	return m
+}
+
+// findNodeByID 在树中递归查找节点。
+func findNodeByID(nodes []*Session, id string) *Session {
+	for _, node := range nodes {
+		if node.ID == id {
+			return node
+		}
+		if node.Type == TypeFolder {
+			if found := findNodeByID(node.Children, id); found != nil {
+				return found
+			}
+		}
+	}
+	return nil
+}
+
+// sessionLocation 返回 session 所在位置的描述（根目录 / 文件夹名）。
+func sessionLocation(t *testing.T, m *Manager, id string) string {
+	t.Helper()
+	for _, node := range m.Sessions {
+		if node.ID == id {
+			return "<root>"
+		}
+		if node.Type == TypeFolder {
+			if findNodeByID(node.Children, id) != nil {
+				return node.Name
+			}
+		}
+	}
+	t.Fatalf("session %s not found in tree", id)
+	return ""
+}
+
+// TestUpdateSession_MoveBetweenFolders 覆盖用户流程："把会话从文件夹 A 拖到文件夹 B"。
+// 移动后必须恰好存在一个副本，位于目标文件夹内；重载磁盘后结果一致。
+func TestUpdateSession_MoveBetweenFolders(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
+	m := seedMoveTestTree(t, tmpFile)
+
+	web1 := findNodeByID(m.Sessions, "s-web1")
+	if web1 == nil || web1.Config == nil {
+		t.Fatalf("seed failed: s-web1 missing")
+	}
+	movedCfg := *web1.Config
+
+	if err := m.UpdateSession("s-web1", movedCfg, "测试"); err != nil {
+		t.Fatalf("move to 测试 failed: %v", err)
+	}
+
+	if loc := sessionLocation(t, m, "s-web1"); loc != "测试" {
+		t.Errorf("session should be in 测试, got %q", loc)
+	}
+	if findNodeByID(m.Sessions, "s-web1").Config.Host != "10.0.0.1" {
+		t.Errorf("config lost during move")
+	}
+
+	// 磁盘一致性：重新加载后位置不变。
+	m2 := NewManagerWithPath(tmpFile)
+	if err := m2.Load(); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if loc := sessionLocation(t, m2, "s-web1"); loc != "测试" {
+		t.Errorf("after reload session should be in 测试, got %q", loc)
+	}
+}
+
+// TestUpdateSession_SameFolderStaysPut 覆盖用户流程："把会话拖到它自己所在的文件夹"。
+// 结果必须是原地不动、单副本——绝不能被弹到根目录（Issue #70 的可见症状）。
+func TestUpdateSession_SameFolderStaysPut(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
+	m := seedMoveTestTree(t, tmpFile)
+
+	web1 := findNodeByID(m.Sessions, "s-web1")
+	movedCfg := *web1.Config
+	movedCfg.Group = "生产"
+
+	if err := m.UpdateSession("s-web1", movedCfg, "生产"); err != nil {
+		t.Fatalf("same-folder update failed: %v", err)
+	}
+
+	if loc := sessionLocation(t, m, "s-web1"); loc != "生产" {
+		t.Errorf("session should stay in 生产, got %q", loc)
+	}
+	// 全树恰好一个 s-web1，不允许移动产生副本。
+	count := 0
+	var countNode func(nodes []*Session)
+	countNode = func(nodes []*Session) {
+		for _, n := range nodes {
+			if n.ID == "s-web1" {
+				count++
+			}
+			if n.Type == TypeFolder {
+				countNode(n.Children)
+			}
+		}
+	}
+	countNode(m.Sessions)
+	if count != 1 {
+		t.Errorf("expected exactly 1 copy of s-web1, got %d", count)
+	}
+}
+
+// TestUpdateSession_MoveToRoot 覆盖用户流程："把会话拖到树空白处移出分组"。
+func TestUpdateSession_MoveToRoot(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
+	m := seedMoveTestTree(t, tmpFile)
+
+	web1 := findNodeByID(m.Sessions, "s-web1")
+	movedCfg := *web1.Config
+	movedCfg.Group = ""
+
+	if err := m.UpdateSession("s-web1", movedCfg, ""); err != nil {
+		t.Fatalf("ungroup failed: %v", err)
+	}
+
+	if loc := sessionLocation(t, m, "s-web1"); loc != "<root>" {
+		t.Errorf("session should be at root after ungroup, got %q", loc)
+	}
+}
+
+// TestUpdateSession_DuplicateErrorLeavesStateIntact 防护编辑流程的数据一致性：
+// 改主机地址撞上已有会话时必须报错，且内存树与磁盘文件都不能有任何变化——
+// 前端轮询渲染的是内存树，脏状态会让会话从列表里"消失"。
+func TestUpdateSession_DuplicateErrorLeavesStateIntact(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
+	m := seedMoveTestTree(t, tmpFile)
+
+	before, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("read before: %v", err)
+	}
+	beforeTree := string(before)
+
+	// 把 web-1 的主机改成与 db-1 相同 → 重名冲突。
+	web1 := findNodeByID(m.Sessions, "s-web1")
+	conflictCfg := *web1.Config
+	conflictCfg.Host = "10.0.0.2"
+
+	err = m.UpdateSession("s-web1", conflictCfg, "生产")
+	if err == nil {
+		t.Fatalf("expected duplicate-host error, got nil")
+	}
+
+	// 内存树必须完好：web-1 仍在生产文件夹、配置仍是原主机。
+	if loc := sessionLocation(t, m, "s-web1"); loc != "生产" {
+		t.Errorf("session vanished from 生产 after failed update, now at %q", loc)
+	}
+	if got := findNodeByID(m.Sessions, "s-web1").Config.Host; got != "10.0.0.1" {
+		t.Errorf("in-memory config mutated by failed update: host=%q", got)
+	}
+	// 磁盘文件必须逐字节不变。
+	after, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("read after: %v", err)
+	}
+	if string(after) != beforeTree {
+		t.Errorf("sessions.json changed despite failed update")
+	}
+}
+
+// TestUpdateSession_NotFoundLeavesStateIntact 防护异常路径：更新不存在的会话
+// 必须报错且不留任何状态变化。
+func TestUpdateSession_NotFoundLeavesStateIntact(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
+	m := seedMoveTestTree(t, tmpFile)
+
+	before, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("read before: %v", err)
+	}
+
+	err = m.UpdateSession("no-such-id", sshclient.ConnectConfig{Host: "9.9.9.9", Port: 22}, "")
+	if err == nil {
+		t.Fatalf("expected session-not-found error, got nil")
+	}
+
+	after, err := os.ReadFile(tmpFile)
+	if err != nil {
+		t.Fatalf("read after: %v", err)
+	}
+	if string(after) != string(before) {
+		t.Errorf("sessions.json changed despite not-found error")
+	}
+	if len(m.Sessions) != 3 {
+		t.Errorf("in-memory tree mutated by not-found error: %d top-level nodes", len(m.Sessions))
+	}
+}
