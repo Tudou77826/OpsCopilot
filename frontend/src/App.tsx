@@ -20,6 +20,7 @@ import { normalizeTerminalConfig } from './components/Terminal/terminalAppearanc
 import { Theme } from './components/appearanceTypes';
 import { DEFAULT_THEME, normalizeTheme, persistTheme, readPersistedTheme } from './components/appearance';
 import { TimestampResult } from './utils/timestampParser';
+import { writeTerminalModeReset } from './terminalModeReset';
 import { KnowledgeTarget } from './components/AI';
 
 interface TerminalSession {
@@ -494,6 +495,13 @@ function App() {
                 const result = await window.go.main.App.ReconnectSession(sessionId);
 
                 if (result.success) {
+                    // 重连复用同一个 xterm 实例：上一条会话若在全屏程序（vim/less/top）
+                    // 运行中断线，备用屏(1049)/应用光标键(DECCKM)/鼠标上报/括号粘贴等
+                    // 模式会残留在实例上，新会话的输出会被画进残留屏——滚动条消失、
+                    // 滚轮被翻译成 ^[OA/^[OB、提示符卡在屏中部无法滚到底（Issue #65/#67）。
+                    // 必须在新会话数据到达前（注册监听之前）先写入复位序列。
+                    writeTerminalModeReset(terminalRefs.current.get(sessionId));
+
                     setStatus("已重连");
                     // 更新状态为已连接
                     setTerminals(prev => prev.map(t =>
