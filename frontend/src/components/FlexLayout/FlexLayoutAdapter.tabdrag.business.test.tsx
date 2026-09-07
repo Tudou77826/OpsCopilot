@@ -9,7 +9,7 @@ import React from 'react';
 import { render, fireEvent, createEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import '@testing-library/jest-dom';
-import { FlexLayoutAdapter } from '@opscopilot/shell-terminal/ui';
+import { FlexLayoutAdapter, SessionStatus } from '@opscopilot/shell-terminal/ui';
 
 vi.mock('@xterm/xterm', () => {
     return {
@@ -68,8 +68,8 @@ function renderAdapter() {
     return render(
         <FlexLayoutAdapter
             terminals={[
-                { id: 't1', title: 'conn-1', status: 'connected' },
-                { id: 't2', title: 'conn-2', status: 'connected' },
+                { id: 't1', title: 'conn-1', status: SessionStatus.CONNECTED },
+                { id: 't2', title: 'conn-2', status: SessionStatus.CONNECTED },
             ]}
             onTerminalData={vi.fn()}
             terminalRefs={{ current: new Map() }}
@@ -197,7 +197,7 @@ describe('Tab 条拖拽边缘自动滚动（#66）', () => {
             mockStripMetrics(strip);
 
             // 派发到布局容器（Tab 条外）
-            dragOverAt(container.firstElementChild!, 280);
+            dragOverAt(container.firstElementChild as HTMLElement, 280);
 
             await driver.runFrames(2);
             expect(strip.scrollLeft).toBe(0);
