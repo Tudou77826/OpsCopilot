@@ -115,14 +115,14 @@ const ConnectionConfigForm: React.FC<Props> = ({ config, onChange, idPrefix = 'c
                     {renderField('用户名', config.user, (v) => updateRoot('user', v), 'text', '', `${idPrefix}-user`)}
                 </div>
                 <div style={{ flex: 1 }}>
-                    {renderField('密码', config.password || '', (v) => updateRoot('password', v), 'password', '', `${idPrefix}-password`)}
+                    {renderField('密码', config.password || '', (v) => updateRoot('password', v), 'text', '', `${idPrefix}-password`)}
                 </div>
             </div>
             {/* Root 密码:仅 SSH 显示(telnet 无标准 sudo 流程)。值保留在对象里,切回 SSH 仍在。 */}
             {!isTelnet && (
                 <div style={styles.row}>
                     <div style={{ flex: 1 }}>
-                        {renderField('Root 密码', config.rootPassword || '', (v) => updateRoot('rootPassword', v), 'password', '可选 (用于 sudo)', `${idPrefix}-root-password`)}
+                        {renderField('Root 密码', config.rootPassword || '', (v) => updateRoot('rootPassword', v), 'text', '可选 (用于 sudo)', `${idPrefix}-root-password`)}
                     </div>
                 </div>
             )}
@@ -162,7 +162,7 @@ const ConnectionConfigForm: React.FC<Props> = ({ config, onChange, idPrefix = 'c
                                     {renderField('跳板机用户', config.bastion.user, (v) => updateBastion('user', v), 'text', '', `${idPrefix}-bastion-user`)}
                                 </div>
                                 <div style={{ flex: 1 }}>
-                                    {renderField('跳板机密码', config.bastion.password || '', (v) => updateBastion('password', v), 'password', '', `${idPrefix}-bastion-password`)}
+                                    {renderField('跳板机密码', config.bastion.password || '', (v) => updateBastion('password', v), 'text', '', `${idPrefix}-bastion-password`)}
                                 </div>
                             </div>
                         </div>

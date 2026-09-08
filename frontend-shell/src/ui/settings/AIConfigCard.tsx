@@ -90,7 +90,7 @@ const AIConfigCard: React.FC<AIConfigCardProps> = ({ runtime }) => {
                 </div>
                 <div style={styles.rowRight}>
                     <input
-                        type="password"
+                        type="text"
                         style={styles.input}
                         value={apiKey}
                         onChange={(e) => setApiKey(e.target.value)}

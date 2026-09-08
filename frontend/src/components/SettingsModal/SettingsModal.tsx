@@ -1045,7 +1045,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 <div style={styles.rowRight}>
                                     <input
                                         style={styles.inputWide}
-                                        type="password"
+                                        type="text"
                                         value={config.llm.APIKey}
                                         onChange={(e) => handleChange('llm', 'APIKey', e.target.value)}
                                     />
@@ -1407,7 +1407,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 <div style={styles.rowRight}>
                                     <input
                                         style={styles.inputWide}
-                                        type="password"
+                                        type="text"
                                         value={config.session_share?.secret_key || ''}
                                         onChange={(e) => handleSessionShareChange('secret_key', e.target.value)}
                                         placeholder="团队约定的共享密钥"
