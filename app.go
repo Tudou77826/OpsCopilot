@@ -608,6 +608,9 @@ type SessionState struct {
 	Config           ConnectConfig
 	Status           string // "active", "disconnected"
 	DisconnectReason string
+	// Output 会话首段输出闸门：连接建立瞬间远端就吐出的输出（motd/banner/设备菜单），
+	// 在前端监听尚未就绪时先暂存，待前端 TerminalOutputReady 后冲刷，避免首帧丢失。
+	Output *terminalOutputGate
 }
 
 type ConnectResult struct {
@@ -726,7 +729,9 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 	a.setConfig(sessionID, config)
 
 	// Store session state for reconnection
-	a.storeSessionState(sessionID, config)
+	// 首段输出闸门：会话建立初期（前端监听尚未就绪）的输出先暂存，
+	// 待前端 TerminalOutputReady 后冲刷，避免 motd/banner 丢失。
+	gate := a.storeSessionState(sessionID, config).Output
 
 	// 创建命令提取器（用于 Tab 补全修正）
 	a.extractorMu.Lock()
@@ -787,7 +792,6 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 			}
 			if n > 0 {
 				dataStr := readTerminalChunk(stdout, buf, n)
-				runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, dataStr)
 
 				// Record output
 				if a.coreRecorder != nil {
@@ -811,6 +815,13 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 						}
 					}
 				}
+
+				// 首段输出闸门：监听未就绪时暂存（不丢首帧），等 TerminalOutputReady 冲刷。
+				// 记录与命令提取不受影响（与用户可见顺序无关）。
+				if gate != nil && !gate.feed(dataStr) {
+					continue
+				}
+				runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, dataStr)
 			}
 		}
 	}()
@@ -3006,15 +3017,18 @@ func (a *App) GetScriptRecordingStatus() script.ScriptStatus {
 }
 
 // storeSessionState 存储会话状态（在Connect成功后调用）
-func (a *App) storeSessionState(sessionID string, config ConnectConfig) {
+func (a *App) storeSessionState(sessionID string, config ConnectConfig) *SessionState {
 	a.sessionStateMu.Lock()
 	defer a.sessionStateMu.Unlock()
 
-	a.sessionStates[sessionID] = &SessionState{
+	st := &SessionState{
 		ID:     sessionID,
 		Config: config,
 		Status: "active",
+		Output: newTerminalOutputGate(),
 	}
+	a.sessionStates[sessionID] = st
+	return st
 }
 
 // updateSessionState 更新会话状态
@@ -3078,6 +3092,71 @@ func readTerminalChunk(r io.Reader, buf []byte, n int) string {
 		}
 	}
 	return agg.String()
+}
+
+// terminalOutputGate 会话首段输出闸门。
+//
+// 背景：连接建立瞬间远端往往立刻吐出一批输出（SSH motd/登录 shell 欢迎语/网络设备
+// 初始菜单），而前端要等 Connect 返回、创建终端组件、挂上数据监听后才能真正收到。
+// 这段窗口内 Wails EventsEmit 因无监听者而直接丢弃——首屏信息就此丢失。闸门在
+// "前端监听就绪"之前暂存输出，前端挂好终端后调用 TerminalOutputReady 一次性冲刷，
+// 保证首段输出零丢失。
+//
+// 安全阀：暂存超过 terminalOutputGateMax 后不再累积、直接透传（防止前端迟迟不就绪
+// 时无限积压或永久卡住首段输出）；TerminalOutputReady 幂等。
+type terminalOutputGate struct {
+	mu      sync.Mutex
+	ready   bool
+	buf     []string
+	bufLen  int
+}
+
+const terminalOutputGateMax = 512 << 10 // 512KB
+
+func newTerminalOutputGate() *terminalOutputGate {
+	return &terminalOutputGate{}
+}
+
+// feed 处理一段输出。返回 true 表示调用方应立即转发给监听（直接 emit）；
+// 返回 false 表示已暂存，等待 TerminalOutputReady 冲刷。
+func (g *terminalOutputGate) feed(data string) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.ready || g.bufLen+len(data) > terminalOutputGateMax {
+		return true
+	}
+	g.buf = append(g.buf, data)
+	g.bufLen += len(data)
+	return false
+}
+
+// markReady 标记前端监听已就绪，返回需冲刷的暂存输出（按到达顺序）。
+// 幂等：第二次调用返回 nil。
+func (g *terminalOutputGate) markReady() []string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.ready {
+		return nil
+	}
+	g.ready = true
+	out := g.buf
+	g.buf = nil
+	g.bufLen = 0
+	return out
+}
+
+// TerminalOutputReady 前端在创建终端并挂好数据监听后调用：冲刷会话建立初期
+// 暂存的输出（motd/banner 等），修复连接首包在监听就绪前丢失的问题。
+func (a *App) TerminalOutputReady(sessionID string) {
+	a.sessionStateMu.RLock()
+	state := a.sessionStates[sessionID]
+	a.sessionStateMu.RUnlock()
+	if state == nil || state.Output == nil {
+		return
+	}
+	for _, data := range state.Output.markReady() {
+		runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, data)
+	}
 }
 
 // initPatchStore 根据配置初始化补丁存储

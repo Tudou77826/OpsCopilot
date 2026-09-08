@@ -21,6 +21,7 @@ import { Theme } from './components/appearanceTypes';
 import { DEFAULT_THEME, normalizeTheme, persistTheme, readPersistedTheme } from './components/appearance';
 import { TimestampResult } from './utils/timestampParser';
 import { writeTerminalModeReset } from './terminalModeReset';
+import { flushTerminalInitialOutput } from './terminalOutputFlush';
 import { KnowledgeTarget } from './components/AI';
 
 interface TerminalSession {
@@ -453,6 +454,8 @@ function App() {
                         terminalRefs.current.get(newSessionId)?.write(data);
                     });
                     unlisteners.current.set(newSessionId, cancel);
+                    // 冲刷连接建立瞬间暂存的首段输出（终端挂载后触发）
+                    flushTerminalInitialOutputFor(newSessionId);
 
                 } else {
                     setStatus("就绪");
@@ -522,6 +525,8 @@ function App() {
                         terminalRefs.current.get(sessionId)?.write(data);
                     });
                     unlisteners.current.set(sessionId, cancel);
+                    // 冲刷重连瞬间暂存的首段输出（终端已挂载，ref 立即可用）
+                    flushTerminalInitialOutputFor(sessionId);
                 } else {
                     setStatus("重连失败");
                     enqueueConnectError("重连失败", result.message || '未知错误');
@@ -574,6 +579,22 @@ function App() {
             }
         }
     }, []);
+
+    // 会话建立瞬间的首段输出（motd/banner/设备菜单）在后端闸门中暂存，
+    // 等这里确认终端已挂载后触发冲刷，修复"连接首帧丢失"问题。
+    const flushTerminalInitialOutputFor = (sessionId: string) => {
+        flushTerminalInitialOutput(
+            sessionId,
+            () => terminalRefs.current.has(sessionId),
+            (sid) => {
+                // @ts-ignore
+                if (window.go && window.go.main && window.go.main.App && window.go.main.App.TerminalOutputReady) {
+                    // @ts-ignore
+                    window.go.main.App.TerminalOutputReady(sid);
+                }
+            },
+        );
+    };
 
     const handleToggleBroadcast = (enabled: boolean) => {
         setIsBroadcastMode(enabled);
@@ -719,6 +740,8 @@ function App() {
                         terminalRefs.current.get(result.sessionId)?.write(data);
                     });
                     unlisteners.current.set(result.sessionId, cancel);
+                    // 冲刷复制会话连接建立瞬间暂存的首段输出
+                    flushTerminalInitialOutputFor(result.sessionId);
                 } else {
                     toast.error("复制失败: " + result.message);
                 }
