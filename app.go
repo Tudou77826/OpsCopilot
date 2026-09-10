@@ -645,38 +645,18 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 		_ = a.secretStore.Set("OpsCopilot-SSH", config.Host+":"+config.User, config.Password)
 	}
 
-	// 构造协议无关配置(remote.ConnectConfig 是 sshclient.ConnectConfig 的别名,
-	// JSON tag 一致,持久化向后兼容)。Protocol 字段由前端传入,空值走 SSH。
-	clientConfig := &remote.ConnectConfig{
-		Name:         config.Name,
-		Protocol:     config.Protocol,
-		Host:         config.Host,
-		Port:         config.Port,
-		User:         config.User,
-		Password:     config.Password,
-		RootPassword: config.RootPassword,
-		Group:        config.Group,
-	}
+	// 构造协议无关配置。Wails 边界的驼峰入参必须逐字段转换，原因见 toRemoteConfig。
+	clientConfig := toRemoteConfig(config)
 
-	// 递归构建 Bastion 配置
-	if config.Bastion != nil {
-		clientConfig.Bastion = &remote.ConnectConfig{
-			Name:     config.Bastion.Name,
-			Host:     config.Bastion.Host,
-			Port:     config.Bastion.Port,
-			User:     config.Bastion.User,
-			Password: config.Bastion.Password,
-		}
-		// 保存 Bastion 密码
-		if config.Bastion.Password != "" {
-			_ = a.secretStore.Set("OpsCopilot-SSH", config.Bastion.Host+":"+config.Bastion.User, config.Bastion.Password)
-		}
+	// 保存 Bastion 密码
+	if config.Bastion != nil && config.Bastion.Password != "" {
+		_ = a.secretStore.Set("OpsCopilot-SSH", config.Bastion.Host+":"+config.Bastion.User, config.Bastion.Password)
 	}
 
 	// 通过统一工厂分派:Protocol=="ssh"(或空)走 SSH,"telnet" 走 Telnet。
 	// remote 包用注册表,app.go 不直接 import 协议实现包(除类型断言需用
 	// *sshclient.Client 的 SSH 路径外)。
-	conn, err := remote.Dial(clientConfig)
+	conn, err := remote.Dial(&clientConfig)
 	if err != nil {
 		return ConnectResult{Success: false, Message: fmt.Sprintf("Error connecting: %v", err)}
 	}
@@ -738,9 +718,13 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 	a.commandExtractors[sessionID] = terminal.NewCommandExtractor()
 	a.extractorMu.Unlock()
 
-	// Auto-save session to persistent storage
-	if err := a.savedSessionMgr.Upsert(*clientConfig, config.Group); err != nil {
-		fmt.Fprintf(os.Stderr, "[WARN] Failed to auto-save session: %v\n", err)
+	// 自动落库到会话树。config.Group 是"保存到分组"的便捷输入（支持 A/B 形式
+	// 的多层路径），在此解析为文件夹 ID——结构才是归属的唯一真相。
+	groupID, groupErr := a.savedSessionMgr.EnsureFolderByNamePath(config.Group)
+	if groupErr != nil {
+		fmt.Fprintf(os.Stderr, "[WARN] 解析保存分组失败: %v\n", groupErr)
+	} else if _, saveErr := a.savedSessionMgr.UpsertByEndpoint(clientConfig, groupID); saveErr != nil {
+		fmt.Fprintf(os.Stderr, "[WARN] 自动保存会话失败: %v\n", saveErr)
 	}
 
 	// 会话共享：记录本次成功登录并异步推送（未启用时 nil 守卫直接返回）
@@ -2766,92 +2750,100 @@ func (a *App) SummarizeUpdateNotes(notes string) string {
 	return ""
 }
 
-// --- Saved Session Management ---
+// --- 已保存连接树管理 ---
+//
+// 本层只是门面：不做任何领域判断，全部转发给 pkg/connectionstore。
+// 方法一律用 (T, error) 返回，前端适配器据 Promise reject 处理错误，
+// 不再依赖"返回串里是否含某段文案"这种脆弱协议。
 
-func (a *App) GetSavedSessions() []*connectionstore.Node {
-	return a.savedSessionMgr.GetSessions()
-}
-
-func (a *App) DeleteSavedSession(id string) string {
-	if err := a.savedSessionMgr.DeleteSession(id); err != nil {
-		return fmt.Sprintf("Error: %v", err)
+// toRemoteConfig 把 Wails 边界的驼峰 ConnectConfig 转为持久化用的
+// remote.ConnectConfig（下划线 JSON tag），Bastion 递归转换。
+//
+// 必须逐字段显式转换：Wails 按 JSON tag 反序列化入参，若直接把
+// remote.ConnectConfig 当作 Wails 入参类型，前端的 rootPassword 会因 tag
+// 不匹配（root_password）被静默丢弃，整体替换保存时清空已存的 root 密码。
+func toRemoteConfig(in ConnectConfig) remote.ConnectConfig {
+	out := remote.ConnectConfig{
+		Name:         in.Name,
+		Protocol:     in.Protocol,
+		Host:         in.Host,
+		Port:         in.Port,
+		User:         in.User,
+		Password:     in.Password,
+		RootPassword: in.RootPassword,
+		Group:        in.Group,
 	}
-	return ""
+	if in.Bastion != nil {
+		bastion := toRemoteConfig(*in.Bastion)
+		out.Bastion = &bastion
+	}
+	return out
 }
 
-func (a *App) DuplicateSession(sessionID string) ConnectResult {
-	// 1. Get original session to ensure it exists
+// GetConnectionTree 返回已保存连接树的深拷贝快照（含任意层级的文件夹）。
+func (a *App) GetConnectionTree() ([]*connectionstore.Node, error) {
+	return a.savedSessionMgr.Snapshot(), nil
+}
+
+// CreateSavedFolder 在 parentID 指定的文件夹下新建文件夹；parentID 为空表示根。
+func (a *App) CreateSavedFolder(name, parentID string) (*connectionstore.Node, error) {
+	return a.savedSessionMgr.CreateFolder(name, parentID)
+}
+
+// CreateSavedConnection 保存一条新连接而不建立实际会话（"新建会话"入口）。
+func (a *App) CreateSavedConnection(config ConnectConfig, parentID string) (*connectionstore.Node, error) {
+	return a.savedSessionMgr.CreateConnection(toRemoteConfig(config), parentID)
+}
+
+// RenameTreeNode 改显示名，文件夹与连接通用。
+func (a *App) RenameTreeNode(id, newName string) error {
+	return a.savedSessionMgr.RenameNode(id, newName)
+}
+
+// UpdateSavedConnection 更新连接配置，节点位置不变（移动请用 MoveTreeNode）。
+func (a *App) UpdateSavedConnection(id string, config ConnectConfig) error {
+	return a.savedSessionMgr.UpdateConnection(id, toRemoteConfig(config))
+}
+
+// MoveTreeNode 把节点移动到 newParentID 下的第 index 位（空 parentID 表示根）。
+func (a *App) MoveTreeNode(id, newParentID string, index int) error {
+	return a.savedSessionMgr.MoveNode(id, newParentID, index)
+}
+
+// ReorderTreeChildren 按 orderedIDs 重排某层子节点。
+// 顺序由前端计算（浏览器的 localeCompare 能正确处理中文拼音序），见 ReorderNodes。
+func (a *App) ReorderTreeChildren(parentID string, orderedIDs []string) error {
+	return a.savedSessionMgr.ReorderNodes(parentID, orderedIDs)
+}
+
+// DeleteTreeNode 删除节点；删除文件夹会连带删除其整棵子树。
+func (a *App) DeleteTreeNode(id string) error {
+	return a.savedSessionMgr.DeleteNode(id)
+}
+
+// DuplicateSavedConnection 复制一条已保存连接为新的连接条目（完整配置副本，
+// 落在同一文件夹）。副本与源同端点是预期中间态（用户随后编辑副本），不走端点去重。
+func (a *App) DuplicateSavedConnection(id string) (*connectionstore.Node, error) {
+	return a.savedSessionMgr.DuplicateConnection(id)
+}
+
+// DuplicateTerminalSession 以同配置再开一个终端会话（标签页"复制标签"）。
+// 入参是运行态会话 ID，与已保存节点无关——复制已保存连接请用 DuplicateSavedConnection。
+func (a *App) DuplicateTerminalSession(sessionID string) ConnectResult {
+	// 1. 确认运行态会话存在
 	_, ok := a.sessionMgr.Get(sessionID)
 	if !ok {
 		return ConnectResult{Success: false, Message: "Original session not found"}
 	}
 
-	// 2. Retrieve config
+	// 2. 取回该会话的连接配置
 	config, ok := a.getConfig(sessionID)
 	if !ok {
 		return ConnectResult{Success: false, Message: "Session configuration not found"}
 	}
 
-	// 3. Connect using the same config
-	// Note: This will prompt for password again if it wasn't saved in config (e.g. keyboard interactive),
-	// but our ConnectConfig stores Password.
+	// 3. 用同一配置重新连接
 	return a.Connect(config)
-}
-
-func (a *App) RenameSavedSession(id, newName string) string {
-	if err := a.savedSessionMgr.RenameSession(id, newName); err != nil {
-		return fmt.Sprintf("Error: %v", err)
-	}
-	return ""
-}
-
-// UpdateSavedSession 更新已保存会话。
-// 入参必须是 app 侧驼峰 ConnectConfig(Wails 边界约定),显式转换为持久化用的
-// remote.ConnectConfig(下划线 JSON tag),与 Connect/ConnectWithID 同一模式。
-// 若直接用 sshclient.ConnectConfig(= remote.ConnectConfig 别名)接 Wails 入参,
-// 前端的 rootPassword 会被下划线 tag 静默丢弃,整体替换保存时清空已存 root 密码。
-func (a *App) UpdateSavedSession(id string, config ConnectConfig) string {
-	clientConfig := remote.ConnectConfig{
-		Name:         config.Name,
-		Protocol:     config.Protocol,
-		Host:         config.Host,
-		Port:         config.Port,
-		User:         config.User,
-		Password:     config.Password,
-		RootPassword: config.RootPassword,
-		Group:        config.Group,
-	}
-	if config.Bastion != nil {
-		clientConfig.Bastion = &remote.ConnectConfig{
-			Name:     config.Bastion.Name,
-			Protocol: config.Bastion.Protocol,
-			Host:     config.Bastion.Host,
-			Port:     config.Bastion.Port,
-			User:     config.Bastion.User,
-			Password: config.Bastion.Password,
-		}
-	}
-	if err := a.savedSessionMgr.UpdateSession(id, clientConfig, clientConfig.Group); err != nil {
-		return fmt.Sprintf("Error: %v", err)
-	}
-	return ""
-}
-
-func (a *App) CreateSavedFolder(name string) string {
-	if err := a.savedSessionMgr.CreateFolder(name); err != nil {
-		return fmt.Sprintf("Error: %v", err)
-	}
-	return ""
-}
-
-// DuplicateSavedSession 复制一条已保存会话为新的连接条目（完整配置副本，
-// 落在同一文件夹）。副本与源同 endpoint 是预期中间态（用户随后编辑副本），
-// 不走端点去重。
-func (a *App) DuplicateSavedSession(id string) string {
-	if err := a.savedSessionMgr.DuplicateSession(id); err != nil {
-		return fmt.Sprintf("Error: %v", err)
-	}
-	return ""
 }
 
 // HasActiveWork checks if there are active terminal sessions or ongoing troubleshooting session

@@ -125,7 +125,7 @@ func NewManager(config *Config) (*Manager, error) {
 
 // GetAvailableServers 获取所有可用的服务器配置
 func (m *Manager) GetAvailableServers() []*connectionstore.Node {
-	return m.sessionMgr.GetSessions()
+	return m.sessionMgr.Snapshot()
 }
 
 // Shutdown 关闭管理器

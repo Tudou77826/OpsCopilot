@@ -179,7 +179,7 @@ func TestSessionShareEndToEnd(t *testing.T) {
 	if err := app.SaveSharedSessionToLocal(entry.EntryKey); err != "" {
 		t.Fatalf("SaveSharedSessionToLocal: %s", err)
 	}
-	saved := app.savedSessionMgr.GetSessions()
+	saved := app.savedSessionMgr.Snapshot()
 	if len(saved) != 1 || saved[0].Config == nil {
 		t.Fatalf("saved session tree should contain 1 node, got %+v", saved)
 	}

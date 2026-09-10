@@ -224,29 +224,107 @@ func (a *ControlAPI) dispatch(ctx context.Context, req *rpcRequest) (any, *rpcEr
 		return map[string]any{}, nil
 	case "shell.configs.list":
 		if a.Configs == nil {
-			return nil, &rpcError{Code: -32000, Message: "配置服务未启用（缺少 --data-dir）"}
+			return nil, notEnabled()
 		}
-		sessions, err := a.Configs.List()
+		nodes, err := a.Configs.List()
 		if err != nil {
 			return nil, &rpcError{Code: -32000, Message: err.Error()}
 		}
-		return map[string]any{"sessions": sessions}, nil
+		return map[string]any{"nodes": nodes}, nil
 	case "shell.configs.save":
 		if a.Configs == nil {
-			return nil, &rpcError{Code: -32000, Message: "配置服务未启用（缺少 --data-dir）"}
+			return nil, notEnabled()
 		}
-		var params SaveInput
+		var params ConnectionInput
 		if err := json.Unmarshal(req.Params, &params); err != nil {
-			return nil, &rpcError{Code: -32602, Message: "参数错误: " + err.Error()}
+			return nil, badParams(err)
 		}
 		id, err := a.Configs.Save(params)
 		if err != nil {
 			return nil, &rpcError{Code: -32000, Message: err.Error()}
 		}
 		return map[string]string{"id": id}, nil
-	case "shell.configs.delete":
+	case "shell.configs.createConnection":
 		if a.Configs == nil {
-			return nil, &rpcError{Code: -32000, Message: "配置服务未启用（缺少 --data-dir）"}
+			return nil, notEnabled()
+		}
+		var params struct {
+			Config   ConnectionInput `json:"config"`
+			ParentID string          `json:"parentId"`
+		}
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, badParams(err)
+		}
+		id, err := a.Configs.CreateConnection(params.Config, params.ParentID)
+		if err != nil {
+			return nil, &rpcError{Code: -32000, Message: err.Error()}
+		}
+		return map[string]string{"id": id}, nil
+	case "shell.configs.updateConnection":
+		if a.Configs == nil {
+			return nil, notEnabled()
+		}
+		var params struct {
+			ID     string          `json:"id"`
+			Config ConnectionInput `json:"config"`
+		}
+		if err := json.Unmarshal(req.Params, &params); err != nil || params.ID == "" {
+			return nil, &rpcError{Code: -32602, Message: "参数错误: 需要 id 与 config"}
+		}
+		if err := a.Configs.UpdateConnection(params.ID, params.Config); err != nil {
+			return nil, &rpcError{Code: -32000, Message: err.Error()}
+		}
+		return map[string]any{}, nil
+	case "shell.configs.createFolder":
+		if a.Configs == nil {
+			return nil, notEnabled()
+		}
+		var params struct {
+			Name     string `json:"name"`
+			ParentID string `json:"parentId"`
+		}
+		if err := json.Unmarshal(req.Params, &params); err != nil || params.Name == "" {
+			return nil, &rpcError{Code: -32602, Message: "参数错误: 需要 name"}
+		}
+		id, err := a.Configs.CreateFolder(params.Name, params.ParentID)
+		if err != nil {
+			return nil, &rpcError{Code: -32000, Message: err.Error()}
+		}
+		return map[string]string{"id": id}, nil
+	case "shell.configs.moveNode":
+		if a.Configs == nil {
+			return nil, notEnabled()
+		}
+		var params struct {
+			ID          string `json:"id"`
+			NewParentID string `json:"newParentId"`
+			Index       int    `json:"index"`
+		}
+		if err := json.Unmarshal(req.Params, &params); err != nil || params.ID == "" {
+			return nil, &rpcError{Code: -32602, Message: "参数错误: 需要 id"}
+		}
+		if err := a.Configs.MoveNode(params.ID, params.NewParentID, params.Index); err != nil {
+			return nil, &rpcError{Code: -32000, Message: err.Error()}
+		}
+		return map[string]any{}, nil
+	case "shell.configs.reorderNodes":
+		if a.Configs == nil {
+			return nil, notEnabled()
+		}
+		var params struct {
+			ParentID   string   `json:"parentId"`
+			OrderedIDs []string `json:"orderedIds"`
+		}
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return nil, badParams(err)
+		}
+		if err := a.Configs.ReorderNodes(params.ParentID, params.OrderedIDs); err != nil {
+			return nil, &rpcError{Code: -32000, Message: err.Error()}
+		}
+		return map[string]any{}, nil
+	case "shell.configs.deleteNode":
+		if a.Configs == nil {
+			return nil, notEnabled()
 		}
 		var params struct {
 			ID string `json:"id"`
@@ -258,9 +336,9 @@ func (a *ControlAPI) dispatch(ctx context.Context, req *rpcRequest) (any, *rpcEr
 			return nil, &rpcError{Code: -32000, Message: err.Error()}
 		}
 		return map[string]any{}, nil
-	case "shell.configs.rename":
+	case "shell.configs.renameNode":
 		if a.Configs == nil {
-			return nil, &rpcError{Code: -32000, Message: "配置服务未启用（缺少 --data-dir）"}
+			return nil, notEnabled()
 		}
 		var params struct {
 			ID   string `json:"id"`
@@ -273,36 +351,21 @@ func (a *ControlAPI) dispatch(ctx context.Context, req *rpcRequest) (any, *rpcEr
 			return nil, &rpcError{Code: -32000, Message: err.Error()}
 		}
 		return map[string]any{}, nil
-	case "shell.configs.update":
+	case "shell.configs.duplicateConnection":
 		if a.Configs == nil {
-			return nil, &rpcError{Code: -32000, Message: "配置服务未启用（缺少 --data-dir）"}
+			return nil, notEnabled()
 		}
 		var params struct {
-			ID     string               `json:"id"`
-			Config remote.ConnectConfig `json:"config"`
-			Group  string               `json:"group"`
+			ID string `json:"id"`
 		}
 		if err := json.Unmarshal(req.Params, &params); err != nil || params.ID == "" {
-			return nil, &rpcError{Code: -32602, Message: "参数错误: 需要 id 与 config"}
+			return nil, &rpcError{Code: -32602, Message: "参数错误: 需要 id"}
 		}
-		if err := a.Configs.Update(params.ID, params.Config, params.Group); err != nil {
+		id, err := a.Configs.Duplicate(params.ID)
+		if err != nil {
 			return nil, &rpcError{Code: -32000, Message: err.Error()}
 		}
-		return map[string]any{}, nil
-	case "shell.configs.createFolder":
-		if a.Configs == nil {
-			return nil, &rpcError{Code: -32000, Message: "配置服务未启用（缺少 --data-dir）"}
-		}
-		var params struct {
-			Name string `json:"name"`
-		}
-		if err := json.Unmarshal(req.Params, &params); err != nil || params.Name == "" {
-			return nil, &rpcError{Code: -32602, Message: "参数错误: 需要 name"}
-		}
-		if err := a.Configs.CreateFolder(params.Name); err != nil {
-			return nil, &rpcError{Code: -32000, Message: err.Error()}
-		}
-		return map[string]any{}, nil
+		return map[string]string{"id": id}, nil
 	case "shell.quickcmds.list":
 		if a.QuickCmds == nil {
 			return nil, notEnabled()

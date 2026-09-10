@@ -394,16 +394,16 @@ func TestConfigServicePersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id1, err := svc.Save(SaveInput{Name: "prod", Host: "10.0.0.1", Port: 22, User: "root", Password: "pw1"})
+	id1, err := svc.Save(ConnectionInput{Name: "prod", Host: "10.0.0.1", Port: 22, User: "root", Password: "pw1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	id2, err := svc.Save(SaveInput{Name: "staging", Host: "10.0.0.2", Port: 22, User: "root"})
+	id2, err := svc.Save(ConnectionInput{Name: "staging", Host: "10.0.0.2", Port: 22, User: "root"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	// 同 endpoint 再存：Upsert 更新而非新增
-	same, err := svc.Save(SaveInput{Name: "prod-renamed", Host: "10.0.0.1", Port: 22, User: "root"})
+	same, err := svc.Save(ConnectionInput{Name: "prod-renamed", Host: "10.0.0.1", Port: 22, User: "root"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -452,7 +452,7 @@ func TestConfigRPCMethods(t *testing.T) {
 	// 未启用 Configs：明确报错而不是 panic
 	send(1, "shell.configs.list", nil)
 	resp := waitResponse(t, outBuf, 1)
-	if resp.Error == nil || !strings.Contains(resp.Error.Message, "配置服务未启用") {
+	if resp.Error == nil || !strings.Contains(resp.Error.Message, "未启用") {
 		t.Fatalf("expected configs-not-enabled error, got %+v", resp)
 	}
 
@@ -469,7 +469,7 @@ func TestConfigRPCMethods(t *testing.T) {
 	}
 	send(3, "shell.configs.list", nil)
 	resp = waitResponse(t, outBuf, 3)
-	sessions := resp.Result.(map[string]any)["sessions"].([]any)
+	sessions := resp.Result.(map[string]any)["nodes"].([]any)
 	if len(sessions) != 1 {
 		t.Fatalf("expect 1 saved, got %d", len(sessions))
 	}

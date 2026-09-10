@@ -1,282 +1,834 @@
 package connectionstore
 
 import (
-	"opscopilot/pkg/sshclient"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"opscopilot/pkg/remote"
 )
 
-func TestNewStore(t *testing.T) {
-	m := NewStore()
-	if m.Nodes == nil {
-		t.Error("Nodes should be initialized")
+func TestNewStoreDefaults(t *testing.T) {
+	s := NewStore()
+	if s.nodes == nil {
+		t.Error("nodes 应被初始化")
 	}
-	if m.filePath != "sessions.json" {
-		t.Errorf("Expected default filePath 'sessions.json', got %s", m.filePath)
+	if s.filePath != "sessions.json" {
+		t.Errorf("默认 filePath 应为 sessions.json，实际 %s", s.filePath)
 	}
 }
 
-func TestUpsertSession(t *testing.T) {
-	// Setup temporary file
-	tmpFile := filepath.Join(os.TempDir(), "test_sessions.json")
-	defer os.Remove(tmpFile)
+// ── 基础增删改 ──────────────────────────────────────────────
 
-	m := NewStore()
-	m.filePath = tmpFile
+func TestUpsertByEndpoint_AddUpdateMove(t *testing.T) {
+	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
 
-	config := sshclient.ConnectConfig{
-		Host: "192.168.1.1",
-		User: "root",
-		Port: 22,
+	cfg := remote.ConnectConfig{Host: "192.168.1.1", User: "root", Port: 22}
+	if _, err := s.UpsertByEndpoint(cfg, ""); err != nil {
+		t.Fatalf("首次写入失败: %v", err)
+	}
+	if len(s.nodes) != 1 {
+		t.Fatalf("期望 1 个根节点，实际 %d", len(s.nodes))
+	}
+	if s.nodes[0].Name != "192.168.1.1" {
+		t.Errorf("显示名应回退为主机地址，实际 %q", s.nodes[0].Name)
+	}
+	if s.nodes[0].Type != KindConnection {
+		t.Errorf("类型应为连接，实际 %q", s.nodes[0].Type)
 	}
 
-	// Test 1: Add new session (Root)
-	err := m.Upsert(config, "")
+	// 同端点再次写入 = 更新，不新增节点。
+	cfg.User = "admin"
+	if _, err := s.UpsertByEndpoint(cfg, ""); err != nil {
+		t.Fatalf("更新失败: %v", err)
+	}
+	if len(s.nodes) != 1 {
+		t.Fatalf("更新后仍应只有 1 个节点，实际 %d", len(s.nodes))
+	}
+	if s.nodes[0].Config.User != "admin" {
+		t.Errorf("配置未更新，user=%q", s.nodes[0].Config.User)
+	}
+
+	// 指定分组写入 = 移动。
+	folderID, err := s.EnsureFolderByNamePath("Prod")
 	if err != nil {
-		t.Fatalf("Upsert failed: %v", err)
+		t.Fatalf("建分组失败: %v", err)
 	}
-
-	if len(m.Nodes) != 1 {
-		t.Fatalf("Expected 1 session, got %d", len(m.Nodes))
+	if _, err := s.UpsertByEndpoint(cfg, folderID); err != nil {
+		t.Fatalf("移入分组失败: %v", err)
 	}
-	if m.Nodes[0].Name != "192.168.1.1" {
-		t.Errorf("Expected name '192.168.1.1', got %s", m.Nodes[0].Name)
+	if len(s.nodes) != 1 {
+		t.Fatalf("根下应只剩分组节点，实际 %d", len(s.nodes))
 	}
-	if m.Nodes[0].Type != KindConnection {
-		t.Errorf("Expected type 'session', got %s", m.Nodes[0].Type)
-	}
-
-	// Test 2: Update existing session
-	config.User = "admin"
-	err = m.Upsert(config, "")
-	if err != nil {
-		t.Fatalf("Upsert update failed: %v", err)
-	}
-	if len(m.Nodes) != 1 {
-		t.Fatalf("Expected 1 session after update, got %d", len(m.Nodes))
-	}
-	if m.Nodes[0].Config.User != "admin" {
-		t.Errorf("Expected user 'admin', got %s", m.Nodes[0].Config.User)
-	}
-
-	// Test 3: Move to Group
-	err = m.Upsert(config, "Prod")
-	if err != nil {
-		t.Fatalf("Upsert move failed: %v", err)
-	}
-
-	// Should have 1 folder in root, and session inside it
-	if len(m.Nodes) != 1 {
-		t.Fatalf("Expected 1 node (folder) in root, got %d", len(m.Nodes))
-	}
-	folder := m.Nodes[0]
+	folder := s.nodes[0]
 	if folder.Type != KindFolder || folder.Name != "Prod" {
-		t.Errorf("Expected folder 'Prod', got %s (%s)", folder.Name, folder.Type)
+		t.Fatalf("期望分组 Prod，实际 %s(%s)", folder.Name, folder.Type)
 	}
-	if len(folder.Children) != 1 {
-		t.Fatalf("Expected 1 child in folder, got %d", len(folder.Children))
-	}
-	if folder.Children[0].Config.Host != "192.168.1.1" {
-		t.Errorf("Expected session in folder")
+	if len(folder.Children) != 1 || folder.Children[0].Config.Host != "192.168.1.1" {
+		t.Fatalf("连接未落入分组")
 	}
 }
 
-func TestDeleteSession(t *testing.T) {
-	tmpFile := filepath.Join(os.TempDir(), "test_sessions_delete.json")
-	defer os.Remove(tmpFile)
-
-	m := NewStore()
-	m.filePath = tmpFile
-
-	config := sshclient.ConnectConfig{Host: "1.1.1.1"}
-	m.Upsert(config, "")
-
-	id := m.Nodes[0].ID
-
-	err := m.DeleteSession(id)
+func TestDeleteNode(t *testing.T) {
+	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
+	node, err := s.UpsertByEndpoint(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, "")
 	if err != nil {
-		t.Fatalf("Delete failed: %v", err)
+		t.Fatalf("写入失败: %v", err)
 	}
 
-	if len(m.Nodes) != 0 {
-		t.Errorf("Expected 0 sessions, got %d", len(m.Nodes))
+	if err := s.DeleteNode(node.ID); err != nil {
+		t.Fatalf("删除失败: %v", err)
+	}
+	if len(s.nodes) != 0 {
+		t.Errorf("删除后根应为空，实际 %d", len(s.nodes))
+	}
+
+	if err := s.DeleteNode("no-such-id"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("删除不存在的节点应返回 ErrNotFound，实际 %v", err)
 	}
 }
 
-func TestRenameSession(t *testing.T) {
-	tmpFile := filepath.Join(os.TempDir(), "test_sessions_rename.json")
-	defer os.Remove(tmpFile)
+func TestRenameNode_SyncsConnectionConfigName(t *testing.T) {
+	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
+	node, _ := s.UpsertByEndpoint(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, "")
 
-	m := NewStore()
-	m.filePath = tmpFile
-
-	config := sshclient.ConnectConfig{Host: "1.1.1.1"}
-	m.Upsert(config, "")
-
-	id := m.Nodes[0].ID
-
-	err := m.RenameSession(id, "NewName")
-	if err != nil {
-		t.Fatalf("Rename failed: %v", err)
+	if err := s.RenameNode(node.ID, "NewName"); err != nil {
+		t.Fatalf("重命名失败: %v", err)
+	}
+	if s.nodes[0].Name != "NewName" {
+		t.Errorf("显示名未更新: %q", s.nodes[0].Name)
+	}
+	if s.nodes[0].Config.Name != "NewName" {
+		t.Errorf("连接配置名未同步: %q", s.nodes[0].Config.Name)
 	}
 
-	if m.Nodes[0].Name != "NewName" {
-		t.Errorf("Expected name 'NewName', got %s", m.Nodes[0].Name)
-	}
-	if m.Nodes[0].Config.Name != "NewName" {
-		t.Errorf("Expected config name 'NewName', got %s", m.Nodes[0].Config.Name)
+	if err := s.RenameNode(node.ID, "   "); !errors.Is(err, ErrEmptyName) {
+		t.Errorf("空名应被拒绝，实际 %v", err)
 	}
 }
 
 func TestUpsertPreservesRenamedSessionName(t *testing.T) {
-	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
-	m := NewStoreWithPath(tmpFile)
+	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
 
-	config := sshclient.ConnectConfig{
-		Host: "10.0.0.1",
-		Port: 22,
-		User: "root",
+	cfg := remote.ConnectConfig{Host: "10.0.0.1", Port: 22, User: "root"}
+	if _, err := s.UpsertByEndpoint(cfg, ""); err != nil {
+		t.Fatalf("首次写入失败: %v", err)
 	}
-	if err := m.Upsert(config, ""); err != nil {
-		t.Fatalf("initial Upsert failed: %v", err)
-	}
+	id := s.nodes[0].ID
 
-	id := m.Nodes[0].ID
-	if err := m.RenameSession(id, "web-primary"); err != nil {
-		t.Fatalf("Rename failed: %v", err)
+	if err := s.RenameNode(id, "web-primary"); err != nil {
+		t.Fatalf("重命名失败: %v", err)
 	}
 
-	// Simulate reconnecting with an older saved config whose Name was empty.
-	if err := m.Upsert(config, ""); err != nil {
-		t.Fatalf("reconnect Upsert failed: %v", err)
+	// 模拟用"名字仍为空"的旧配置重新连接。
+	if _, err := s.UpsertByEndpoint(cfg, ""); err != nil {
+		t.Fatalf("重连写入失败: %v", err)
 	}
 
-	if len(m.Nodes) != 1 {
-		t.Fatalf("Expected one session, got %d", len(m.Nodes))
+	if len(s.nodes) != 1 {
+		t.Fatalf("期望 1 个节点，实际 %d", len(s.nodes))
 	}
-	if m.Nodes[0].ID != id {
-		t.Errorf("Expected session ID %q to be reused, got %q", id, m.Nodes[0].ID)
+	if s.nodes[0].ID != id {
+		t.Errorf("应复用原 ID %q，实际 %q", id, s.nodes[0].ID)
 	}
-	if m.Nodes[0].Name != "web-primary" {
-		t.Errorf("Expected renamed display name to be preserved, got %q", m.Nodes[0].Name)
+	if s.nodes[0].Name != "web-primary" {
+		t.Errorf("改过的显示名被覆盖: %q", s.nodes[0].Name)
 	}
-	if m.Nodes[0].Config.Name != "web-primary" {
-		t.Errorf("Expected config name to stay in sync, got %q", m.Nodes[0].Config.Name)
+	if s.nodes[0].Config.Name != "web-primary" {
+		t.Errorf("连接配置名未保持一致: %q", s.nodes[0].Config.Name)
 	}
 }
 
 func TestUpsertUsesConfiguredDisplayName(t *testing.T) {
-	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
-	m := NewStoreWithPath(tmpFile)
+	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
 
-	config := sshclient.ConnectConfig{
-		Name: "database-primary",
-		Host: "10.0.0.2",
-		Port: 22,
-		User: "root",
+	cfg := remote.ConnectConfig{Name: "database-primary", Host: "10.0.0.2", Port: 22, User: "root"}
+	if _, err := s.UpsertByEndpoint(cfg, ""); err != nil {
+		t.Fatalf("写入失败: %v", err)
 	}
-	if err := m.Upsert(config, ""); err != nil {
-		t.Fatalf("Upsert failed: %v", err)
-	}
-
-	if m.Nodes[0].Name != "database-primary" {
-		t.Errorf("Expected configured display name, got %q", m.Nodes[0].Name)
-	}
-	if m.Nodes[0].Config.Name != "database-primary" {
-		t.Errorf("Expected config name to be persisted, got %q", m.Nodes[0].Config.Name)
+	if s.nodes[0].Name != "database-primary" || s.nodes[0].Config.Name != "database-primary" {
+		t.Errorf("应使用配置里的显示名，实际 node=%q config=%q",
+			s.nodes[0].Name, s.nodes[0].Config.Name)
 	}
 }
 
-func TestPersistence(t *testing.T) {
-	tmpFile := filepath.Join(os.TempDir(), "test_sessions_persist.json")
-	defer os.Remove(tmpFile)
+func TestPersistenceRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
 
-	m1 := NewStore()
-	m1.filePath = tmpFile
-	m1.Upsert(sshclient.ConnectConfig{Host: "1.1.1.1"}, "GroupA")
-
-	// Load with new manager
-	m2 := NewStore()
-	m2.filePath = tmpFile
-	err := m2.Load()
+	s1 := NewStoreWithPath(path)
+	folderID, err := s1.EnsureFolderByNamePath("GroupA")
 	if err != nil {
-		t.Fatalf("Load failed: %v", err)
+		t.Fatalf("建分组失败: %v", err)
+	}
+	if _, err := s1.UpsertByEndpoint(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, folderID); err != nil {
+		t.Fatalf("写入失败: %v", err)
 	}
 
-	if len(m2.Nodes) != 1 {
-		t.Fatalf("Expected 1 folder loaded, got %d", len(m2.Nodes))
+	s2 := NewStoreWithPath(path)
+	if err := s2.Load(); err != nil {
+		t.Fatalf("加载失败: %v", err)
 	}
-	if m2.Nodes[0].Name != "GroupA" {
-		t.Errorf("Expected group 'GroupA', got %s", m2.Nodes[0].Name)
+	if len(s2.nodes) != 1 || s2.nodes[0].Name != "GroupA" {
+		t.Fatalf("分组未持久化: %+v", s2.nodes)
 	}
-	if len(m2.Nodes[0].Children) != 1 {
-		t.Errorf("Expected 1 child in group")
+	if len(s2.nodes[0].Children) != 1 {
+		t.Fatalf("分组内的连接未持久化")
 	}
 }
 
-func TestRecursiveDelete(t *testing.T) {
-	tmpFile := filepath.Join(os.TempDir(), "test_sessions_recursive_delete.json")
-	defer os.Remove(tmpFile)
+func TestDeleteFolderRemovesWholeSubtree(t *testing.T) {
+	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
 
-	m := NewStore()
-	m.filePath = tmpFile
+	outerID, _ := s.EnsureFolderByNamePath("生产")
+	innerID, _ := s.EnsureFolderByNamePath("生产/华东")
+	if _, err := s.UpsertByEndpoint(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, innerID); err != nil {
+		t.Fatalf("写入失败: %v", err)
+	}
 
-	// Create Group -> Node
-	m.Upsert(sshclient.ConnectConfig{Host: "1.1.1.1"}, "GroupA")
+	if err := s.DeleteNode(outerID); err != nil {
+		t.Fatalf("删除失败: %v", err)
+	}
+	if len(s.nodes) != 0 {
+		t.Errorf("删除外层文件夹后根应为空，实际 %d", len(s.nodes))
+	}
+}
 
-	// Find Group ID
-	groupID := m.Nodes[0].ID
+// ── 多层嵌套文件夹 ──────────────────────────────────────────
 
-	// Delete Group
-	err := m.DeleteSession(groupID)
+func TestCreateFolder_NestedAndSiblingDuplicateRejected(t *testing.T) {
+	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
+
+	a, err := s.CreateFolder("A", "")
 	if err != nil {
-		t.Fatalf("Delete group failed: %v", err)
+		t.Fatalf("建 A 失败: %v", err)
+	}
+	b, err := s.CreateFolder("B", a.ID)
+	if err != nil {
+		t.Fatalf("在 A 下建 B 失败: %v", err)
+	}
+	c, err := s.CreateFolder("C", b.ID)
+	if err != nil {
+		t.Fatalf("在 B 下建 C 失败: %v", err)
 	}
 
-	if len(m.Nodes) != 0 {
-		t.Errorf("Expected root empty after group delete, got %d", len(m.Nodes))
+	// 三层结构：A > B > C，且 Group 镜像按直接父名派生。
+	root := s.nodes[0]
+	if root.ID != a.ID || len(root.Children) != 1 || root.Children[0].ID != b.ID {
+		t.Fatalf("两层嵌套结构不正确")
+	}
+	if len(root.Children[0].Children) != 1 || root.Children[0].Children[0].ID != c.ID {
+		t.Fatalf("三层嵌套结构不正确")
+	}
+
+	// 同层同名文件夹应被拒绝；不同层同名允许。
+	if _, err := s.CreateFolder("B", a.ID); !errors.Is(err, ErrDuplicateFolder) {
+		t.Errorf("同层重名应被拒绝，实际 %v", err)
+	}
+	if _, err := s.CreateFolder("B", c.ID); err != nil {
+		t.Errorf("不同层同名应被允许，实际 %v", err)
 	}
 }
 
-// --- 会话移动/编辑业务流程防护用例 ---
-// 覆盖用户操作流：拖拽移动会话、编辑保存失败不留脏状态。
-// 背景（Issue #70/#71）：UpdateSession 曾"先摘节点后校验"，失败时内存树被污染，
-// 前端 5 秒轮询把坏树当最新数据渲染，用户看到"会话消失"。
+func TestCreateFolder_RejectsMissingOrNonFolderParent(t *testing.T) {
+	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
+	node, _ := s.UpsertByEndpoint(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, "")
 
-// seedMoveTestTree 构造标准测试树并落盘：
+	if _, err := s.CreateFolder("X", "no-such-id"); !errors.Is(err, ErrParentNotFound) {
+		t.Errorf("父不存在应返回 ErrParentNotFound，实际 %v", err)
+	}
+	if _, err := s.CreateFolder("X", node.ID); !errors.Is(err, ErrNotFolder) {
+		t.Errorf("父不是文件夹应返回 ErrNotFolder，实际 %v", err)
+	}
+}
+
+func TestEnsureFolderByNamePath_IdempotentAndNested(t *testing.T) {
+	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
+
+	id1, err := s.EnsureFolderByNamePath("生产/华东/杭州")
+	if err != nil {
+		t.Fatalf("建路径失败: %v", err)
+	}
+	id2, err := s.EnsureFolderByNamePath("生产/华东/杭州")
+	if err != nil {
+		t.Fatalf("重复建路径失败: %v", err)
+	}
+	if id1 != id2 {
+		t.Errorf("同名路径应幂等，实际 %s vs %s", id1, id2)
+	}
+
+	empty, err := s.EnsureFolderByNamePath("   ")
+	if err != nil || empty != "" {
+		t.Errorf("空路径应返回根（空 ID），实际 %q, %v", empty, err)
+	}
+
+	// 只应有一棵 生产 树。
+	if len(s.nodes) != 1 || s.nodes[0].Name != "生产" {
+		t.Fatalf("根下应只有 生产，实际 %+v", s.nodes)
+	}
+}
+
+func TestRenameFolder_KeepsChildrenAndRejectsSiblingDuplicate(t *testing.T) {
+	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
+
+	prodID, _ := s.EnsureFolderByNamePath("生产")
+	if _, err := s.EnsureFolderByNamePath("测试"); err != nil {
+		t.Fatalf("建测试分组失败: %v", err)
+	}
+	node, _ := s.UpsertByEndpoint(remote.ConnectConfig{Host: "10.0.0.1", Port: 22}, prodID)
+
+	if err := s.RenameNode(prodID, "生产环境"); err != nil {
+		t.Fatalf("重命名失败: %v", err)
+	}
+	// 子节点归属由结构决定，重命名后依然在同一个文件夹里（这是 ID 寻址的关键收益）。
+	if loc := findNodeByID(s.nodes, node.ID); loc == nil {
+		t.Fatalf("重命名后子节点丢失")
+	}
+	if s.nodes[0].Name != "生产环境" || len(s.nodes[0].Children) != 1 {
+		t.Fatalf("重命名后结构与子节点应保持，实际 %+v", s.nodes[0])
+	}
+	// Group 镜像随父名更新。
+	if got := s.nodes[0].Children[0].Config.Group; got != "生产环境" {
+		t.Errorf("重命名文件夹后 Group 镜像未跟随，实际 %q", got)
+	}
+
+	if err := s.RenameNode(prodID, "测试"); !errors.Is(err, ErrDuplicateFolder) {
+		t.Errorf("与兄弟重名应被拒绝，实际 %v", err)
+	}
+}
+
+// ── 移动与排序 ──────────────────────────────────────────────
+
+func TestMoveNode_BetweenFoldersAndRoot(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	s := seedTestTree(t, path)
+
+	if err := s.MoveNode("s-web1", "f-test", 0); err != nil {
+		t.Fatalf("移动到测试分组失败: %v", err)
+	}
+	if loc := nodeLocation(t, s, "s-web1"); loc != "测试" {
+		t.Errorf("应位于 测试，实际 %q", loc)
+	}
+	if findNodeByID(s.nodes, "s-web1").Config.Host != "10.0.0.1" {
+		t.Errorf("移动过程中配置丢失")
+	}
+
+	// 落盘一致：重载后位置不变。
+	s2 := NewStoreWithPath(path)
+	if err := s2.Load(); err != nil {
+		t.Fatalf("重载失败: %v", err)
+	}
+	if loc := nodeLocation(t, s2, "s-web1"); loc != "测试" {
+		t.Errorf("重载后应位于 测试，实际 %q", loc)
+	}
+
+	if err := s2.MoveNode("s-web1", "", 0); err != nil {
+		t.Fatalf("移出到根失败: %v", err)
+	}
+	if loc := nodeLocation(t, s2, "s-web1"); loc != "<root>" {
+		t.Errorf("应位于根，实际 %q", loc)
+	}
+}
+
+func TestMoveNode_SameFolderStaysPutAndKeepsSingleCopy(t *testing.T) {
+	s := seedTestTree(t, filepath.Join(t.TempDir(), "sessions.json"))
+
+	if err := s.MoveNode("s-web1", "f-prod", 0); err != nil {
+		t.Fatalf("原地移动失败: %v", err)
+	}
+	if loc := nodeLocation(t, s, "s-web1"); loc != "生产" {
+		t.Errorf("应留在 生产，实际 %q", loc)
+	}
+	if n := countByID(s.nodes, "s-web1"); n != 1 {
+		t.Errorf("原地移动不应产生副本，实际 %d 个", n)
+	}
+}
+
+func TestMoveNode_RejectsCycle(t *testing.T) {
+	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
+
+	outer, _ := s.CreateFolder("outer", "")
+	middle, _ := s.CreateFolder("middle", outer.ID)
+	inner, _ := s.CreateFolder("inner", middle.ID)
+
+	cases := []struct {
+		name        string
+		id          string
+		newParentID string
+	}{
+		{"移到自身", outer.ID, outer.ID},
+		{"移到直接子级", outer.ID, middle.ID},
+		{"移到孙级", outer.ID, inner.ID},
+		{"中间层移到孙级", middle.ID, inner.ID},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := s.MoveNode(tc.id, tc.newParentID, 0); !errors.Is(err, ErrCycle) {
+				t.Errorf("应返回 ErrCycle，实际 %v", err)
+			}
+		})
+	}
+
+	// 反向（子级移到祖先）是合法的。
+	if err := s.MoveNode(inner.ID, "", 0); err != nil {
+		t.Errorf("子级移到根应允许，实际 %v", err)
+	}
+}
+
+func TestMoveNode_IndexClampedAndOrderPersisted(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	s := NewStoreWithPath(path)
+
+	for _, name := range []string{"c1", "c2", "c3"} {
+		if _, err := s.CreateConnection(remote.ConnectConfig{Host: name, Port: 22}, ""); err != nil {
+			t.Fatalf("建连接 %s 失败: %v", name, err)
+		}
+	}
+	// 把最后一个挪到最前。
+	if err := s.MoveNode(s.nodes[2].ID, "", 0); err != nil {
+		t.Fatalf("排序移动失败: %v", err)
+	}
+	got := []string{s.nodes[0].Name, s.nodes[1].Name, s.nodes[2].Name}
+	want := []string{"c3", "c1", "c2"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("顺序应为 %v，实际 %v", want, got)
+		}
+	}
+
+	// 越界索引按追加处理。
+	if err := s.MoveNode(s.nodes[0].ID, "", 999); err != nil {
+		t.Fatalf("越界索引应被钳制，实际 %v", err)
+	}
+	if s.nodes[2].Name != "c3" {
+		t.Errorf("越界索引应追加到末尾，实际 %v", []string{s.nodes[0].Name, s.nodes[1].Name, s.nodes[2].Name})
+	}
+
+	// 顺序必须持久化：重载后保持，不得被任何字母序重排覆盖。
+	s2 := NewStoreWithPath(path)
+	if err := s2.Load(); err != nil {
+		t.Fatalf("重载失败: %v", err)
+	}
+	if s2.nodes[2].Name != "c3" {
+		t.Errorf("重载后顺序丢失: %v", []string{s2.nodes[0].Name, s2.nodes[1].Name, s2.nodes[2].Name})
+	}
+}
+
+func TestReorderNodes_ValidatesPermutation(t *testing.T) {
+	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
+	a, _ := s.CreateConnection(remote.ConnectConfig{Host: "a", Port: 22}, "")
+	b, _ := s.CreateConnection(remote.ConnectConfig{Host: "b", Port: 22}, "")
+
+	if err := s.ReorderNodes("", []string{b.ID, a.ID}); err != nil {
+		t.Fatalf("合法排序失败: %v", err)
+	}
+	if s.nodes[0].ID != b.ID {
+		t.Errorf("排序未生效")
+	}
+
+	if err := s.ReorderNodes("", []string{a.ID}); err == nil {
+		t.Errorf("数量不匹配应被拒绝")
+	}
+	if err := s.ReorderNodes("", []string{a.ID, a.ID}); err == nil {
+		t.Errorf("重复 ID 应被拒绝")
+	}
+	if err := s.ReorderNodes("", []string{a.ID, "ghost"}); err == nil {
+		t.Errorf("未知 ID 应被拒绝")
+	}
+}
+
+// ── 连接去重与复制 ──────────────────────────────────────────
+
+func TestCreateConnection_RejectsDuplicateEndpoint(t *testing.T) {
+	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
+	if _, err := s.CreateConnection(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, ""); err != nil {
+		t.Fatalf("首次创建失败: %v", err)
+	}
+	if _, err := s.CreateConnection(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, ""); !errors.Is(err, ErrDuplicateEndpoint) {
+		t.Errorf("同端点应被拒绝，实际 %v", err)
+	}
+	// 同主机不同协议/端口可共存。
+	if _, err := s.CreateConnection(remote.ConnectConfig{Host: "1.1.1.1", Port: 23, Protocol: remote.ProtocolTelnet}, ""); err != nil {
+		t.Errorf("同主机不同协议应允许，实际 %v", err)
+	}
+	if _, err := s.CreateConnection(remote.ConnectConfig{Host: "1.1.1.1", Port: 2222}, ""); err != nil {
+		t.Errorf("同主机不同端口应允许，实际 %v", err)
+	}
+}
+
+func TestUpdateConnection_DuplicateErrorLeavesStateIntact(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	s := seedTestTree(t, path)
+
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("读取失败: %v", err)
+	}
+
+	web1 := findNodeByID(s.nodes, "s-web1")
+	conflict := *web1.Config
+	conflict.Host = "10.0.0.2" // 与 db-1 撞端点
+
+	if err := s.UpdateConnection("s-web1", conflict); !errors.Is(err, ErrDuplicateEndpoint) {
+		t.Fatalf("期望端点冲突错误，实际 %v", err)
+	}
+
+	if loc := nodeLocation(t, s, "s-web1"); loc != "生产" {
+		t.Errorf("失败更新后节点位置被改动: %q", loc)
+	}
+	if got := findNodeByID(s.nodes, "s-web1").Config.Host; got != "10.0.0.1" {
+		t.Errorf("失败更新改动了内存配置: host=%q", got)
+	}
+	after, _ := os.ReadFile(path)
+	if string(after) != string(before) {
+		t.Errorf("失败更新改动了磁盘文件")
+	}
+}
+
+func TestUpdateConnection_NotFoundLeavesStateIntact(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	s := seedTestTree(t, path)
+	before, _ := os.ReadFile(path)
+
+	if err := s.UpdateConnection("no-such-id", remote.ConnectConfig{Host: "9.9.9.9", Port: 22}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("期望 ErrNotFound，实际 %v", err)
+	}
+	after, _ := os.ReadFile(path)
+	if string(after) != string(before) {
+		t.Errorf("失败更新改动了磁盘文件")
+	}
+	if len(s.nodes) != 3 {
+		t.Errorf("失败更新改动了内存树: %d 个根节点", len(s.nodes))
+	}
+}
+
+func TestDuplicateConnection_CreatesIndependentCopyInSameFolder(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	s := seedTestTree(t, path)
+
+	web1 := findNodeByID(s.nodes, "s-web1")
+	web1.Config.Bastion = &remote.ConnectConfig{Host: "10.0.0.254", Port: 22, User: "jump", Password: "jp"}
+	if err := s.Save(); err != nil {
+		t.Fatalf("seed 失败: %v", err)
+	}
+
+	dup, err := s.DuplicateConnection("s-web1")
+	if err != nil {
+		t.Fatalf("复制失败: %v", err)
+	}
+
+	folder := findNodeByID(s.nodes, "f-prod")
+	idxSrc, idxCopy := -1, -1
+	for i, n := range folder.Children {
+		if n.ID == "s-web1" {
+			idxSrc = i
+		}
+		if n.ID == dup.ID {
+			idxCopy = i
+		}
+	}
+	if idxSrc < 0 || idxCopy != idxSrc+1 {
+		t.Fatalf("副本应紧跟源节点之后，src=%d copy=%d", idxSrc, idxCopy)
+	}
+	if dup.Name != "web-1-副本" {
+		t.Errorf("副本名应为 web-1-副本，实际 %q", dup.Name)
+	}
+	cfg := findNodeByID(s.nodes, dup.ID).Config
+	if cfg.Host != "10.0.0.1" || cfg.User != "root" || cfg.Password != "p1" || cfg.RootPassword != "rp1" {
+		t.Errorf("副本配置不完整: %+v", cfg)
+	}
+	if cfg.Bastion == nil || cfg.Bastion.Host != "10.0.0.254" {
+		t.Fatalf("副本丢失跳板机配置")
+	}
+
+	// 深拷贝：改副本跳板机不影响源节点。
+	cfg.Bastion.Host = "9.9.9.9"
+	if findNodeByID(s.nodes, "s-web1").Config.Bastion.Host != "10.0.0.254" {
+		t.Errorf("副本与源共享跳板机状态")
+	}
+
+	// 落盘可重载。
+	s2 := NewStoreWithPath(path)
+	if err := s2.Load(); err != nil {
+		t.Fatalf("重载失败: %v", err)
+	}
+	loaded := findNodeByID(s2.nodes, dup.ID)
+	if loaded == nil || loaded.Config == nil || loaded.Config.Bastion == nil {
+		t.Fatalf("副本未持久化")
+	}
+}
+
+func TestDuplicateConnection_AllowsSameEndpoint(t *testing.T) {
+	s := seedTestTree(t, filepath.Join(t.TempDir(), "sessions.json"))
+
+	if _, err := s.DuplicateConnection("s-web1"); err != nil {
+		t.Fatalf("同端点复制应放行，实际 %v", err)
+	}
+	if n := countByHost(s.nodes, "10.0.0.1"); n != 2 {
+		t.Errorf("期望 2 条同主机连接，实际 %d", n)
+	}
+}
+
+func TestDuplicateConnection_RootCopyStaysAtRoot(t *testing.T) {
+	s := seedTestTree(t, filepath.Join(t.TempDir(), "sessions.json"))
+
+	dup, err := s.DuplicateConnection("s-db1")
+	if err != nil {
+		t.Fatalf("复制失败: %v", err)
+	}
+	if loc := nodeLocation(t, s, dup.ID); loc != "<root>" {
+		t.Errorf("根节点副本应留在根，实际 %q", loc)
+	}
+}
+
+func TestDuplicateConnection_NotFoundLeavesStateIntact(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	s := seedTestTree(t, path)
+	before, _ := os.ReadFile(path)
+
+	if _, err := s.DuplicateConnection("no-such-id"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("期望 ErrNotFound，实际 %v", err)
+	}
+	after, _ := os.ReadFile(path)
+	if string(after) != string(before) {
+		t.Errorf("失败复制改动了磁盘文件")
+	}
+}
+
+// ── 快照隔离 ────────────────────────────────────────────────
+
+func TestSnapshotIsDeepCopy(t *testing.T) {
+	s := seedTestTree(t, filepath.Join(t.TempDir(), "sessions.json"))
+
+	snap := s.Snapshot()
+	web1 := findNodeByID(snap, "s-web1")
+	web1.Name = "tampered"
+	web1.Config.Host = "0.0.0.0"
+	web1.Config.Bastion = &remote.ConnectConfig{Host: "attacker"}
+
+	// 篡改快照不得影响内部状态。
+	if got := findNodeByID(s.nodes, "s-web1").Name; got != "web-1" {
+		t.Errorf("快照被篡改后影响了内部状态: name=%q", got)
+	}
+	if got := findNodeByID(s.nodes, "s-web1").Config.Host; got != "10.0.0.1" {
+		t.Errorf("快照被篡改后影响了内部配置: host=%q", got)
+	}
+}
+
+func TestFindByEndpoint_NormalizesProtocol(t *testing.T) {
+	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
+	if _, err := s.UpsertByEndpoint(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, ""); err != nil {
+		t.Fatalf("写入失败: %v", err)
+	}
+	// 存储里 Protocol 已被归一化为 ssh，用空协议查询也应命中。
+	if got := s.FindByEndpoint("", "1.1.1.1", 22); got == nil {
+		t.Errorf("空协议查询应按 SSH 命中")
+	}
+	if got := s.FindByEndpoint(remote.ProtocolTelnet, "1.1.1.1", 22); got != nil {
+		t.Errorf("不同协议不应命中")
+	}
+}
+
+// ── 持久化：对账、备份、无变更跳过 ──────────────────────────
+
+// legacySample 是真实 sessions.json 的形态：文件夹下的连接没有 group 字段、
+// 根连接的 config.name 缺失、config 里带下划线的 root_password。
+const legacySample = `[
+  {
+    "id": "f-demo",
+    "name": "测试设备(演示)",
+    "type": "folder",
+    "children": [
+      {
+        "id": "s-core",
+        "name": "core-sw-01",
+        "type": "session",
+        "config": {
+          "name": "core-sw-01",
+          "host": "10.0.0.11",
+          "port": 22,
+          "user": "admin",
+          "password": "pw",
+          "root_password": "",
+          "bastion": null
+        }
+      }
+    ]
+  },
+  {
+    "id": "s-root",
+    "name": "39.108.66.227",
+    "type": "session",
+    "config": {
+      "host": "39.108.66.227",
+      "port": 22,
+      "user": "root",
+      "password": "pw2",
+      "root_password": "",
+      "bastion": null
+    }
+  }
+]`
+
+func TestLoadRepairsLegacyFileAndBacksUp(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sessions.json")
+	if err := os.WriteFile(path, []byte(legacySample), 0o644); err != nil {
+		t.Fatalf("写入旧样本失败: %v", err)
+	}
+
+	s := NewStoreWithPath(path)
+	if err := s.Load(); err != nil {
+		t.Fatalf("加载旧文件失败: %v", err)
+	}
+
+	// 结构保持不变：文件夹与连接都还在，层级正确。
+	if len(s.nodes) != 2 {
+		t.Fatalf("期望 2 个根节点，实际 %d", len(s.nodes))
+	}
+	folder := findNodeByID(s.nodes, "f-demo")
+	if folder == nil || folder.Type != KindFolder || len(folder.Children) != 1 {
+		t.Fatalf("文件夹结构在迁移中损坏: %+v", folder)
+	}
+	// 用户可见的显示名与密码必须原样保留。
+	core := findNodeByID(s.nodes, "s-core")
+	if core.Config.Password != "pw" || core.Config.User != "admin" {
+		t.Errorf("迁移改动了连接凭据: %+v", core.Config)
+	}
+	// 空 Children 归一化为 nil（序列化稳定）。
+	if folder.Children == nil {
+		t.Errorf("文件夹不应丢失 children")
+	}
+
+	// Group 镜像按结构重建。
+	if got := core.Config.Group; got != "测试设备(演示)" {
+		t.Errorf("文件夹内连接的 group 镜像应为直接父名，实际 %q", got)
+	}
+	if got := findNodeByID(s.nodes, "s-root").Config.Group; got != "" {
+		t.Errorf("根连接的 group 镜像应为空，实际 %q", got)
+	}
+	// 缺失的 config.name 被补为显示名。
+	if got := findNodeByID(s.nodes, "s-root").Config.Name; got != "39.108.66.227" {
+		t.Errorf("config.name 应补为显示名，实际 %q", got)
+	}
+
+	// 修复前先备份，用户可回退。
+	entries, _ := os.ReadDir(dir)
+	backups := 0
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "sessions.json.bak-") {
+			backups++
+			raw, _ := os.ReadFile(filepath.Join(dir, e.Name()))
+			if string(raw) != legacySample {
+				t.Errorf("备份内容不是修复前的原始文件")
+			}
+		}
+	}
+	if backups != 1 {
+		t.Errorf("期望 1 个备份文件，实际 %d", backups)
+	}
+}
+
+func TestLoadReconcileIsIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sessions.json")
+	os.WriteFile(path, []byte(legacySample), 0o644)
+
+	first := NewStoreWithPath(path)
+	if err := first.Load(); err != nil {
+		t.Fatalf("首次加载失败: %v", err)
+	}
+	afterFirst, _ := os.ReadFile(path)
+
+	second := NewStoreWithPath(path)
+	if err := second.Load(); err != nil {
+		t.Fatalf("二次加载失败: %v", err)
+	}
+	afterSecond, _ := os.ReadFile(path)
+
+	if string(afterFirst) != string(afterSecond) {
+		t.Errorf("对账不幂等：第二次加载改动了文件")
+	}
+
+	entries, _ := os.ReadDir(dir)
+	backups := 0
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "sessions.json.bak-") {
+			backups++
+		}
+	}
+	if backups != 1 {
+		t.Errorf("已规范的文件不应再次触发备份，实际 %d 个备份", backups)
+	}
+}
+
+func TestSaveSkipsWriteWhenUnchanged(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	s := NewStoreWithPath(path)
+	if _, err := s.CreateConnection(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, ""); err != nil {
+		t.Fatalf("写入失败: %v", err)
+	}
+	before, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("Stat 失败: %v", err)
+	}
+
+	// 无变更的 Save 不应触碰文件（mtime 不变）。
+	if err := s.Save(); err != nil {
+		t.Fatalf("Save 失败: %v", err)
+	}
+	after, _ := os.Stat(path)
+	if !after.ModTime().Equal(before.ModTime()) {
+		t.Errorf("无变更时不应写盘，mtime 从 %v 变为 %v", before.ModTime(), after.ModTime())
+	}
+}
+
+func TestLoadCreatesFileWhenMissing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sessions.json")
+	s := NewStoreWithPath(path)
+	if err := s.Load(); err != nil {
+		t.Fatalf("加载失败: %v", err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("缺失的文件应被创建: %v", err)
+	}
+}
+
+// ── 测试辅助 ────────────────────────────────────────────────
+
+// seedTestTree 构造标准测试树并落盘：
 //
-//	生产(folder) ── web-1(session, 10.0.0.1)
+//	生产(folder) ── web-1(10.0.0.1)
 //	测试(folder) ── (空)
-//	db-1(session, 10.0.0.2, 根目录)
-func seedMoveTestTree(t *testing.T, filePath string) *Store {
+//	db-1(10.0.0.2，根)
+func seedTestTree(t *testing.T, path string) *Store {
 	t.Helper()
-	m := NewStoreWithPath(filePath)
-	m.Nodes = []*Node{
+	s := NewStoreWithPath(path)
+	s.nodes = []*Node{
 		{ID: "f-prod", Name: "生产", Type: KindFolder, Children: []*Node{
-			{ID: "s-web1", Name: "web-1", Type: KindConnection, Config: &sshclient.ConnectConfig{
-				Host: "10.0.0.1", Port: 22, User: "root", Password: "p1", RootPassword: "rp1",
+			{ID: "s-web1", Name: "web-1", Type: KindConnection, Config: &remote.ConnectConfig{
+				Name: "web-1", Host: "10.0.0.1", Port: 22, User: "root", Password: "p1", RootPassword: "rp1",
 			}},
 		}},
-		{ID: "f-test", Name: "测试", Type: KindFolder, Children: []*Node{}},
-		{ID: "s-db1", Name: "db-1", Type: KindConnection, Config: &sshclient.ConnectConfig{
-			Host: "10.0.0.2", Port: 22, User: "root",
+		{ID: "f-test", Name: "测试", Type: KindFolder},
+		{ID: "s-db1", Name: "db-1", Type: KindConnection, Config: &remote.ConnectConfig{
+			Name: "db-1", Host: "10.0.0.2", Port: 22, User: "root",
 		}},
 	}
-	if err := m.Save(); err != nil {
-		t.Fatalf("seed save: %v", err)
+	if err := s.Save(); err != nil {
+		t.Fatalf("seed 失败: %v", err)
 	}
-	return m
+	return s
 }
 
-// findNodeByID 在树中递归查找节点。
 func findNodeByID(nodes []*Node, id string) *Node {
-	for _, node := range nodes {
-		if node.ID == id {
-			return node
+	for _, n := range nodes {
+		if n.ID == id {
+			return n
 		}
-		if node.Type == KindFolder {
-			if found := findNodeByID(node.Children, id); found != nil {
+		if n.Type == KindFolder {
+			if found := findNodeByID(n.Children, id); found != nil {
 				return found
 			}
 		}
@@ -284,316 +836,43 @@ func findNodeByID(nodes []*Node, id string) *Node {
 	return nil
 }
 
-// sessionLocation 返回 session 所在位置的描述（根目录 / 文件夹名）。
-func sessionLocation(t *testing.T, m *Store, id string) string {
+func countByID(nodes []*Node, id string) int {
+	count := 0
+	for _, n := range nodes {
+		if n.ID == id {
+			count++
+		}
+		if n.Type == KindFolder {
+			count += countByID(n.Children, id)
+		}
+	}
+	return count
+}
+
+func countByHost(nodes []*Node, host string) int {
+	count := 0
+	for _, n := range nodes {
+		if n.Type == KindConnection && n.Config != nil && n.Config.Host == host {
+			count++
+		}
+		if n.Type == KindFolder {
+			count += countByHost(n.Children, host)
+		}
+	}
+	return count
+}
+
+// nodeLocation 返回节点所在位置的描述（根节点为 "<root>"，否则为所属文件夹名）。
+func nodeLocation(t *testing.T, s *Store, id string) string {
 	t.Helper()
-	for _, node := range m.Nodes {
-		if node.ID == id {
+	for _, n := range s.nodes {
+		if n.ID == id {
 			return "<root>"
 		}
-		if node.Type == KindFolder {
-			if findNodeByID(node.Children, id) != nil {
-				return node.Name
-			}
+		if n.Type == KindFolder && findNodeByID(n.Children, id) != nil {
+			return n.Name
 		}
 	}
-	t.Fatalf("session %s not found in tree", id)
+	t.Fatalf("节点 %s 不在树中", id)
 	return ""
-}
-
-// TestUpdateSession_MoveBetweenFolders 覆盖用户流程："把会话从文件夹 A 拖到文件夹 B"。
-// 移动后必须恰好存在一个副本，位于目标文件夹内；重载磁盘后结果一致。
-func TestUpdateSession_MoveBetweenFolders(t *testing.T) {
-	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
-	m := seedMoveTestTree(t, tmpFile)
-
-	web1 := findNodeByID(m.Nodes, "s-web1")
-	if web1 == nil || web1.Config == nil {
-		t.Fatalf("seed failed: s-web1 missing")
-	}
-	movedCfg := *web1.Config
-
-	if err := m.UpdateSession("s-web1", movedCfg, "测试"); err != nil {
-		t.Fatalf("move to 测试 failed: %v", err)
-	}
-
-	if loc := sessionLocation(t, m, "s-web1"); loc != "测试" {
-		t.Errorf("session should be in 测试, got %q", loc)
-	}
-	if findNodeByID(m.Nodes, "s-web1").Config.Host != "10.0.0.1" {
-		t.Errorf("config lost during move")
-	}
-
-	// 磁盘一致性：重新加载后位置不变。
-	m2 := NewStoreWithPath(tmpFile)
-	if err := m2.Load(); err != nil {
-		t.Fatalf("reload: %v", err)
-	}
-	if loc := sessionLocation(t, m2, "s-web1"); loc != "测试" {
-		t.Errorf("after reload session should be in 测试, got %q", loc)
-	}
-}
-
-// TestUpdateSession_SameFolderStaysPut 覆盖用户流程："把会话拖到它自己所在的文件夹"。
-// 结果必须是原地不动、单副本——绝不能被弹到根目录（Issue #70 的可见症状）。
-func TestUpdateSession_SameFolderStaysPut(t *testing.T) {
-	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
-	m := seedMoveTestTree(t, tmpFile)
-
-	web1 := findNodeByID(m.Nodes, "s-web1")
-	movedCfg := *web1.Config
-	movedCfg.Group = "生产"
-
-	if err := m.UpdateSession("s-web1", movedCfg, "生产"); err != nil {
-		t.Fatalf("same-folder update failed: %v", err)
-	}
-
-	if loc := sessionLocation(t, m, "s-web1"); loc != "生产" {
-		t.Errorf("session should stay in 生产, got %q", loc)
-	}
-	// 全树恰好一个 s-web1，不允许移动产生副本。
-	count := 0
-	var countNode func(nodes []*Node)
-	countNode = func(nodes []*Node) {
-		for _, n := range nodes {
-			if n.ID == "s-web1" {
-				count++
-			}
-			if n.Type == KindFolder {
-				countNode(n.Children)
-			}
-		}
-	}
-	countNode(m.Nodes)
-	if count != 1 {
-		t.Errorf("expected exactly 1 copy of s-web1, got %d", count)
-	}
-}
-
-// TestUpdateSession_MoveToRoot 覆盖用户流程："把会话拖到树空白处移出分组"。
-func TestUpdateSession_MoveToRoot(t *testing.T) {
-	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
-	m := seedMoveTestTree(t, tmpFile)
-
-	web1 := findNodeByID(m.Nodes, "s-web1")
-	movedCfg := *web1.Config
-	movedCfg.Group = ""
-
-	if err := m.UpdateSession("s-web1", movedCfg, ""); err != nil {
-		t.Fatalf("ungroup failed: %v", err)
-	}
-
-	if loc := sessionLocation(t, m, "s-web1"); loc != "<root>" {
-		t.Errorf("session should be at root after ungroup, got %q", loc)
-	}
-}
-
-// TestUpdateSession_DuplicateErrorLeavesStateIntact 防护编辑流程的数据一致性：
-// 改主机地址撞上已有会话时必须报错，且内存树与磁盘文件都不能有任何变化——
-// 前端轮询渲染的是内存树，脏状态会让会话从列表里"消失"。
-func TestUpdateSession_DuplicateErrorLeavesStateIntact(t *testing.T) {
-	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
-	m := seedMoveTestTree(t, tmpFile)
-
-	before, err := os.ReadFile(tmpFile)
-	if err != nil {
-		t.Fatalf("read before: %v", err)
-	}
-	beforeTree := string(before)
-
-	// 把 web-1 的主机改成与 db-1 相同 → 重名冲突。
-	web1 := findNodeByID(m.Nodes, "s-web1")
-	conflictCfg := *web1.Config
-	conflictCfg.Host = "10.0.0.2"
-
-	err = m.UpdateSession("s-web1", conflictCfg, "生产")
-	if err == nil {
-		t.Fatalf("expected duplicate-host error, got nil")
-	}
-
-	// 内存树必须完好：web-1 仍在生产文件夹、配置仍是原主机。
-	if loc := sessionLocation(t, m, "s-web1"); loc != "生产" {
-		t.Errorf("session vanished from 生产 after failed update, now at %q", loc)
-	}
-	if got := findNodeByID(m.Nodes, "s-web1").Config.Host; got != "10.0.0.1" {
-		t.Errorf("in-memory config mutated by failed update: host=%q", got)
-	}
-	// 磁盘文件必须逐字节不变。
-	after, err := os.ReadFile(tmpFile)
-	if err != nil {
-		t.Fatalf("read after: %v", err)
-	}
-	if string(after) != beforeTree {
-		t.Errorf("sessions.json changed despite failed update")
-	}
-}
-
-// TestUpdateSession_NotFoundLeavesStateIntact 防护异常路径：更新不存在的会话
-// 必须报错且不留任何状态变化。
-func TestUpdateSession_NotFoundLeavesStateIntact(t *testing.T) {
-	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
-	m := seedMoveTestTree(t, tmpFile)
-
-	before, err := os.ReadFile(tmpFile)
-	if err != nil {
-		t.Fatalf("read before: %v", err)
-	}
-
-	err = m.UpdateSession("no-such-id", sshclient.ConnectConfig{Host: "9.9.9.9", Port: 22}, "")
-	if err == nil {
-		t.Fatalf("expected session-not-found error, got nil")
-	}
-
-	after, err := os.ReadFile(tmpFile)
-	if err != nil {
-		t.Fatalf("read after: %v", err)
-	}
-	if string(after) != string(before) {
-		t.Errorf("sessions.json changed despite not-found error")
-	}
-	if len(m.Nodes) != 3 {
-		t.Errorf("in-memory tree mutated by not-found error: %d top-level nodes", len(m.Nodes))
-	}
-}
-
-// TestDuplicateSession_CreatesIndependentCopyInSameFolder 覆盖用户流程（Issue #68）：
-// "在会话管理里复制一条连接 → 得到完整配置的副本，落在同一文件夹，可直接编辑"。
-// 副本必须与源节点完全独立（新 ID、深拷贝配置），且落盘可重载。
-func TestDuplicateSession_CreatesIndependentCopyInSameFolder(t *testing.T) {
-	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
-	m := seedMoveTestTree(t, tmpFile)
-
-	// 给源会话补一个跳板机，验证深拷贝。
-	web1 := findNodeByID(m.Nodes, "s-web1")
-	web1.Config.Bastion = &sshclient.ConnectConfig{Host: "10.0.0.254", Port: 22, User: "jump", Password: "jp"}
-	if err := m.Save(); err != nil {
-		t.Fatalf("seed bastion save: %v", err)
-	}
-
-	if err := m.DuplicateSession("s-web1"); err != nil {
-		t.Fatalf("duplicate failed: %v", err)
-	}
-
-	// 副本在"生产"文件夹内、紧跟源节点之后。
-	folder := findNodeByID(m.Nodes, "f-prod")
-	if folder == nil {
-		t.Fatalf("folder missing")
-	}
-	var idxSrc, idxCopy = -1, -1
-	var copyNode *Node
-	for i, n := range folder.Children {
-		if n.ID == "s-web1" {
-			idxSrc = i
-		}
-		if n.Name == "web-1-副本" {
-			idxCopy = i
-			copyNode = n
-		}
-	}
-	if idxSrc < 0 || idxCopy < 0 {
-		t.Fatalf("copy not found inside 生产 folder (srcIdx=%d copyIdx=%d)", idxSrc, idxCopy)
-	}
-	if idxCopy != idxSrc+1 {
-		t.Errorf("copy should be right after source, src=%d copy=%d", idxSrc, idxCopy)
-	}
-	if copyNode.ID == "s-web1" {
-		t.Errorf("copy must have a new ID")
-	}
-	cfg := copyNode.Config
-	if cfg == nil {
-		t.Fatalf("copy has no config")
-	}
-	if cfg.Host != "10.0.0.1" || cfg.User != "root" || cfg.Password != "p1" || cfg.RootPassword != "rp1" {
-		t.Errorf("copy config not faithful: %+v", cfg)
-	}
-	if cfg.Bastion == nil || cfg.Bastion.Host != "10.0.0.254" {
-		t.Fatalf("copy lost bastion config")
-	}
-	// 深拷贝：改副本的跳板机不影响源节点。
-	cfg.Bastion.Host = "9.9.9.9"
-	if findNodeByID(m.Nodes, "s-web1").Config.Bastion.Host != "10.0.0.254" {
-		t.Errorf("copy shares bastion state with source")
-	}
-
-	// 落盘可重载。
-	m2 := NewStoreWithPath(tmpFile)
-	if err := m2.Load(); err != nil {
-		t.Fatalf("reload: %v", err)
-	}
-	dup := findNodeByID(m2.Nodes, copyNode.ID)
-	if dup == nil || dup.Config == nil || dup.Config.Bastion == nil {
-		t.Fatalf("duplicated session not persisted")
-	}
-}
-
-// TestDuplicateSession_AllowsSameEndpoint 覆盖复制的关键语义：
-// 副本与源同 (Host, Port, Protocol) 必须放行——用户复制后就是要改主机/端口，
-// Upsert/UpdateSession 的端点去重不适用于复制。
-func TestDuplicateSession_AllowsSameEndpoint(t *testing.T) {
-	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
-	m := seedMoveTestTree(t, tmpFile)
-
-	if err := m.DuplicateSession("s-web1"); err != nil {
-		t.Fatalf("duplicate with same endpoint should be allowed: %v", err)
-	}
-	count := 0
-	var countFn func(nodes []*Node)
-	countFn = func(nodes []*Node) {
-		for _, n := range nodes {
-			if n.Type == KindConnection && n.Config != nil && n.Config.Host == "10.0.0.1" {
-				count++
-			}
-			if n.Type == KindFolder {
-				countFn(n.Children)
-			}
-		}
-	}
-	countFn(m.Nodes)
-	if count != 2 {
-		t.Errorf("expected 2 sessions with same host after duplicate, got %d", count)
-	}
-}
-
-// TestDuplicateSession_RootSessionCopiedAtRoot 根会话的副本仍在根目录。
-func TestDuplicateSession_RootSessionCopiedAtRoot(t *testing.T) {
-	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
-	m := seedMoveTestTree(t, tmpFile)
-
-	if err := m.DuplicateSession("s-db1"); err != nil {
-		t.Fatalf("duplicate failed: %v", err)
-	}
-	// 找到副本节点（db-1-副本）。
-	var copyNode *Node
-	for _, n := range m.Nodes {
-		if n.Name == "db-1-副本" {
-			copyNode = n
-		}
-	}
-	if copyNode == nil {
-		t.Fatalf("root copy not found")
-	}
-	if loc := sessionLocation(t, m, copyNode.ID); loc != "<root>" {
-		t.Errorf("root session copy should be at root, got %q", loc)
-	}
-}
-
-// TestDuplicateSession_NotFoundLeavesStateIntact 复制不存在的会话必须报错且不留状态变化。
-func TestDuplicateSession_NotFoundLeavesStateIntact(t *testing.T) {
-	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
-	m := seedMoveTestTree(t, tmpFile)
-
-	before, err := os.ReadFile(tmpFile)
-	if err != nil {
-		t.Fatalf("read before: %v", err)
-	}
-	if err := m.DuplicateSession("no-such-id"); err == nil {
-		t.Fatalf("expected not-found error, got nil")
-	}
-	after, err := os.ReadFile(tmpFile)
-	if err != nil {
-		t.Fatalf("read after: %v", err)
-	}
-	if string(after) != string(before) {
-		t.Errorf("sessions.json changed despite not-found error")
-	}
 }

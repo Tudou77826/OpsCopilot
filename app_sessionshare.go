@@ -607,7 +607,7 @@ func (a *App) SaveSharedSessionToLocal(entryKey string) string {
 		}
 	}
 
-	if err := a.savedSessionMgr.Upsert(cfg, ""); err != nil {
+	if _, err := a.savedSessionMgr.UpsertByEndpoint(cfg, ""); err != nil {
 		return fmt.Sprintf("保存失败: %v", err)
 	}
 	return ""

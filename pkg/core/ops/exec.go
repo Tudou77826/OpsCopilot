@@ -50,7 +50,7 @@ func (m *Manager) Connect(serverName string) (*ConnectResult, error) {
 	}
 
 	// 从 sessions.json 查找服务器配置
-	serverConfig := findSessionConfig(m.sessionMgr.GetSessions(), serverName)
+	serverConfig := findSessionConfig(m.sessionMgr.Snapshot(), serverName)
 	if serverConfig == nil {
 		return nil, fmt.Errorf("服务器 '%s' 未找到", serverName)
 	}
@@ -212,7 +212,7 @@ func (m *Manager) Exec(ctx context.Context, serverName, command string, opts Exe
 	if exists {
 		host = conn.Host
 	} else {
-		cfg := findSessionConfig(m.sessionMgr.GetSessions(), serverName)
+		cfg := findSessionConfig(m.sessionMgr.Snapshot(), serverName)
 		if cfg == nil {
 			return nil, fmt.Errorf("服务器 '%s' 未找到", serverName)
 		}
