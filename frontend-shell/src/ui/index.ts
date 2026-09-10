@@ -19,7 +19,8 @@ export { default as logoUniversal } from './assets/logo-universal.png';
 // 阶段 3：会话树 / 连接表单 / 快捷命令（连接管理与快捷命令纵切）
 export { default as SessionManager } from './session/SessionManager';
 export type { SessionNode } from './ports';
-export { default as EditSavedSessionModal } from './session/EditSavedSessionModal';
+export { default as ConnectionPropertiesModal } from './session/ConnectionPropertiesModal';
+export { default as XshellImportDialog } from './session/XshellImportDialog';
 export { default as SharedSessionPanel } from './session/SharedSessionPanel';
 export { default as ConnectionConfigForm } from './connection/ConnectionConfigForm';
 export { default as SmartConnectModal } from './connection/SmartConnectModal';
@@ -32,6 +33,11 @@ export type {
   SharedSessionRuntime,
   SharedSessionEntry,
   SharedConnectResult,
+  XshellSessionDir,
+  XshellCredentialStatus,
+  XshellImportOptions,
+  XshellImportAnalysis,
+  XshellImportReport,
 } from './ports';
 // 阶段 4：文件传输纵切
 export { default as FilesPanel } from './filetransfer/FilesPanel';

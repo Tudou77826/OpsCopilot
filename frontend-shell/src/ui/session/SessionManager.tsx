@@ -1,10 +1,24 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { TbFolderOpen, TbFolder, TbTerminal2 } from 'react-icons/tb';
-import { ConnectionConfig, normalizeProtocol, PROTOCOL_LABEL } from '../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ConnectionConfig } from '../types';
 import { SessionManagerRuntime, SharedSessionRuntime, SessionNode } from '../ports';
-import EditSavedSessionModal from './EditSavedSessionModal';
-import SharedSessionPanel from './SharedSessionPanel';
 import { confirmDialog } from '../feedback/ConfirmDialog';
+import { useToast } from '../feedback/Toast';
+import NameDialog from '../filetransfer/NameDialog';
+import SessionTreeView from './SessionTreeView';
+import SessionContextMenu, { ContextMenuAction } from './SessionContextMenu';
+import ConnectionPropertiesModal from './ConnectionPropertiesModal';
+import XshellImportDialog from './XshellImportDialog';
+import SharedSessionPanel from './SharedSessionPanel';
+import { useSessionTree } from './useSessionTree';
+import {
+    breadcrumb,
+    childrenOf,
+    collectConnections,
+    countConnections,
+    filterTree,
+    findNode,
+    sortedChildIds,
+} from './treeModel';
 
 interface SessionManagerProps {
     onConnect: (config: ConnectionConfig) => void;
@@ -13,690 +27,340 @@ interface SessionManagerProps {
     sharedRuntime?: SharedSessionRuntime | null;
 }
 
+/** 同一文件夹"全部连接"的并发上限，避免一次开出过多终端。 */
+const CONNECT_ALL_LIMIT = 5;
+
+interface NameDialogState {
+    mode: 'folder' | 'rename';
+    parentId?: string;
+    node?: SessionNode;
+}
+
+interface PropertiesState {
+    mode: 'create' | 'edit';
+    parentId?: string;
+    node?: SessionNode;
+}
+
+const emptyConnectionConfig = (): ConnectionConfig => ({
+    name: '',
+    protocol: 'ssh',
+    host: '',
+    port: 22,
+    user: '',
+});
+
+/**
+ * 会话管理面板容器。
+ *
+ * 只做编排：数据与展开态在 useSessionTree，树渲染与拖拽在 SessionTreeView，
+ * 菜单项生成在 SessionContextMenu，纯逻辑在 treeModel。这里负责把用户动作翻译成
+ * runtime 调用，并在每次变更后刷新。
+ */
 const SessionManager: React.FC<SessionManagerProps> = ({ onConnect, runtime, sharedRuntime }) => {
-    const [sessions, setSessions] = useState<SessionNode[]>([]);
+    const { nodes, expanded, toggle, expand, expandMany, refresh, loadError } = useSessionTree(runtime);
     const [searchTerm, setSearchTerm] = useState('');
-    const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: SessionNode | null } | null>(null);
-    const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
-    const [editName, setEditName] = useState('');
-    const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
-    const [hoveredMenuItem, setHoveredMenuItem] = useState<string | null>(null);
-    const [editingSession, setEditingSession] = useState<{ id: string; config: ConnectionConfig } | null>(null);
-    const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
-    const dragNodeIdRef = useRef<string | null>(null);
-    const autoExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    // 拖拽边缘自动滚动：rAF 循环滚动会话树，dragEnd/drop 时停止。
-    const autoScrollRafRef = useRef<number | null>(null);
-    const treeContainerRef = useRef<HTMLElement | null>(null);
-    const lastDragPointRef = useRef({ x: 0, y: 0 });
+    const [nameDialog, setNameDialog] = useState<NameDialogState | null>(null);
+    const [properties, setProperties] = useState<PropertiesState | null>(null);
+    const [importOpen, setImportOpen] = useState(false);
+    const toast = useToast();
 
-    const stopTreeAutoScroll = () => {
-        if (autoScrollRafRef.current !== null) {
-            cancelAnimationFrame(autoScrollRafRef.current);
-            autoScrollRafRef.current = null;
-        }
-        treeContainerRef.current = null;
-    };
+    const canImport = typeof runtime.applyXshellImport === 'function';
+    const canDuplicate = typeof runtime.duplicateConnection === 'function';
 
-    const startTreeAutoScroll = () => {
-        if (autoScrollRafRef.current !== null) return;
-        const step = () => {
-            const container = treeContainerRef.current;
-            if (!container) return;
-            const rect = container.getBoundingClientRect();
-            const { y } = lastDragPointRef.current;
-            // 光标进入容器上下 40px 边缘带时滚动，越靠近边界越快。
-            const edge = 40;
-            if (y >= rect.top && y <= rect.top + edge) {
-                container.scrollTop -= Math.ceil((1 - (y - rect.top) / edge) * 14) + 2;
-            } else if (y <= rect.bottom && y > rect.bottom - edge) {
-                container.scrollTop += Math.ceil((1 - (rect.bottom - y) / edge) * 14) + 2;
-            }
-            autoScrollRafRef.current = requestAnimationFrame(step);
-        };
-        autoScrollRafRef.current = requestAnimationFrame(step);
-    };
+    const displayed = useMemo(() => filterTree(nodes, searchTerm), [nodes, searchTerm]);
 
+    // 搜索时展开命中项的祖先链。刻意只依赖 searchTerm：把 nodes 放进依赖会让每次
+    // 刷新都重新展开，把用户刚手动折叠的文件夹又撑开。
     useEffect(() => {
-        loadSessions();
-        const interval = setInterval(loadSessions, 5000);
-        return () => clearInterval(interval);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [runtime]);
-
-    // Close context menu on any outside pointer event (including xterm.js terminals)
-    useEffect(() => {
-        if (!contextMenu) return;
-        const handler = (e: PointerEvent) => {
-            const menuEl = document.querySelector('[data-session-context-menu]');
-            if (menuEl && menuEl.contains(e.target as Node)) return;
-            setContextMenu(null);
-        };
-        document.addEventListener('pointerdown', handler);
-        return () => document.removeEventListener('pointerdown', handler);
-    }, [contextMenu]);
-
-    // Cleanup drag timer on unmount
-    useEffect(() => {
-        return () => {
-            if (autoExpandTimerRef.current) clearTimeout(autoExpandTimerRef.current);
-            stopTreeAutoScroll();
-        };
-    }, []);
-
-    // Find a session by ID anywhere in the tree
-    const findSessionById = (nodes: SessionNode[], id: string): SessionNode | undefined => {
-        for (const n of nodes) {
-            if (n.id === id) return n;
-            if (n.children) { const f = findSessionById(n.children, id); if (f) return f; }
-        }
-        return undefined;
-    };
-
-    // Drag a session into a folder
-    const handleDragStart = (e: React.DragEvent, node: SessionNode) => {
-        if (node.type !== 'session') return;
-        e.dataTransfer.setData('text/plain', node.id);
-        e.dataTransfer.effectAllowed = 'move';
-        dragNodeIdRef.current = node.id;
-    };
-
-    const handleDragOver = (e: React.DragEvent, node: SessionNode) => {
-        if (node.type !== 'folder') return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        setDragOverFolderId(node.id);
-
-        // Auto-expand after hovering 600ms
-        if (autoExpandTimerRef.current) clearTimeout(autoExpandTimerRef.current);
-        if (!expandedFolders.has(node.id)) {
-            autoExpandTimerRef.current = setTimeout(() => {
-                setExpandedFolders(prev => new Set(prev).add(node.id));
-            }, 600);
-        }
-    };
-
-    const handleDragLeave = (e: React.DragEvent) => {
-        const related = e.relatedTarget as HTMLElement | null;
-        if (related && e.currentTarget.contains(related)) return;
-        if (autoExpandTimerRef.current) {
-            clearTimeout(autoExpandTimerRef.current);
-            autoExpandTimerRef.current = null;
-        }
-        setDragOverFolderId(null);
-    };
-
-    const handleDrop = async (e: React.DragEvent, folder: SessionNode) => {
-        e.preventDefault();
-        // 文件夹行已消化本次 drop,必须阻断冒泡:树容器兜底的 handleTreeDrop 语义是
-        // "移出分组",若放行会在本处理器之后再次提交 updateSession(group=''),
-        // 把刚移入文件夹的会话又弹回根目录(见 Issue #70)。
-        e.stopPropagation();
-        if (autoExpandTimerRef.current) {
-            clearTimeout(autoExpandTimerRef.current);
-            autoExpandTimerRef.current = null;
-        }
-        setDragOverFolderId(null);
-
-        const sessionId = e.dataTransfer.getData('text/plain');
-        if (!sessionId) return;
-
-        stopTreeAutoScroll();
-
-        const session = findSessionById(sessions, sessionId);
-        if (!session?.config) return;
-        if (session.config.group === folder.name) return;
-
-        const updatedConfig = { ...session.config, group: folder.name };
-        try {
-            await runtime.updateSession(session.id, updatedConfig, folder.name);
-        } catch (err) {
-            console.error("Failed to move session:", err);
-        }
-        loadSessions();
-    };
-
-    const handleDragEnd = () => {
-        dragNodeIdRef.current = null;
-        setDragOverFolderId(null);
-        stopTreeAutoScroll();
-        if (autoExpandTimerRef.current) {
-            clearTimeout(autoExpandTimerRef.current);
-            autoExpandTimerRef.current = null;
-        }
-    };
-
-    // Drop on tree container blank area = remove group (move to root)
-    const handleTreeDrop = async (e: React.DragEvent) => {
-        e.preventDefault();
-        stopTreeAutoScroll();
-        // 只响应真正落在容器空白处的 drop(按下目标即容器本身);
-        // 落在会话行等其他子元素上的冒泡 drop 不做任何事,避免误触发"移出分组"。
-        if (e.target !== e.currentTarget) return;
-        const sessionId = e.dataTransfer.getData('text/plain');
-        if (!sessionId) return;
-        const session = findSessionById(sessions, sessionId);
-        if (!session?.config || !session.config.group) return;
-        const updatedConfig = { ...session.config };
-        delete (updatedConfig as any).group;
-        try {
-            await runtime.updateSession(session.id, updatedConfig, '');
-        } catch (err) {
-            console.error("Failed to move session:", err);
-        }
-        loadSessions();
-    };
-
-    const loadSessions = async () => {
-        try {
-            const data = await runtime.listSessions();
-
-            // Helper to normalize config keys (snake_case to camelCase)
-            const normalizeConfig = (cfg: any): ConnectionConfig => {
-                if (!cfg) return cfg;
-                return {
-                    ...cfg,
-                    rootPassword: cfg.rootPassword || cfg.root_password, // Map root_password to rootPassword
-                    bastion: cfg.bastion ? normalizeConfig(cfg.bastion) : undefined
-                };
-            };
-
-            // Recursive helper to process nodes
-            const processNode = (node: any): SessionNode => {
-                return {
-                    ...node,
-                    config: node.config ? normalizeConfig(node.config) : undefined,
-                    children: node.children ? node.children.map(processNode) : undefined
-                };
-            };
-
-            // Helper to sort sessions (folders first, then sessions, both alphabetically)
-            const sortSessions = (nodes: SessionNode[]): SessionNode[] => {
-                // Separate folders and sessions
-                const folders = nodes.filter(node => node.type === 'folder');
-                const sessions = nodes.filter(node => node.type === 'session');
-
-                // Sort folders alphabetically
-                folders.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN', { sensitivity: 'base' }));
-
-                // Sort sessions alphabetically
-                sessions.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN', { sensitivity: 'base' }));
-
-                // Recursively sort children in folders
-                const sortedFolders = folders.map(folder => ({
-                    ...folder,
-                    children: folder.children ? sortSessions(folder.children) : undefined
-                }));
-
-                // Return folders first, then sessions
-                return [...sortedFolders, ...sessions];
-            };
-
-            const processedData = data ? data.map(processNode) : [];
-            const sortedData = sortSessions(processedData);
-            setSessions(sortedData);
-        } catch (e) {
-            console.error("Failed to load sessions:", e);
-        }
-    };
-
-    const handleToggleFolder = (id: string) => {
-        const newSet = new Set(expandedFolders);
-        if (newSet.has(id)) {
-            newSet.delete(id);
-        } else {
-            newSet.add(id);
-        }
-        setExpandedFolders(newSet);
-    };
-
-    const handleContextMenu = (e: React.MouseEvent, node?: SessionNode | null) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setContextMenu({ x: e.clientX, y: e.clientY, node: node ?? null });
-    };
-
-    const handleRename = async (id: string, newName: string) => {
-        if (!newName.trim()) return;
-        await runtime.renameSession(id, newName);
-        loadSessions();
-        setEditingNodeId(null);
-    };
-
-    const handleDelete = async (id: string) => {
-        const ok = await confirmDialog.show({ message: '确定要删除吗？', danger: true });
-        if (ok) {
-            await runtime.deleteSession(id);
-            loadSessions();
-        }
-    };
-
-    const handleUnGroup = async (node: SessionNode) => {
-        if (!node.config) return;
-        const next: ConnectionConfig = { ...node.config };
-        delete (next as any).group;
-        await runtime.updateSession(node.id, next, '');
-        loadSessions();
-    };
-
-    const collectSessions = (node: SessionNode): SessionNode[] => {
-        if (node.type === 'session' && node.config) return [node];
-        if (node.type === 'folder' && node.children) {
-            return node.children.flatMap(collectSessions);
-        }
-        return [];
-    };
-
-    const handleConnectAll = async (folder: SessionNode) => {
-        const all = collectSessions(folder);
-        const max = 5;
-        if (all.length === 0) return;
-        const toConnect = all.slice(0, max);
-        if (all.length > max) {
-            const ok = await confirmDialog.show({ message: `该文件夹共有 ${all.length} 个会话，最多同时连接 ${max} 个，是否继续？` });
-            if (!ok) return;
-        }
-        toConnect.forEach(s => { if (s.config) onConnect(s.config); });
-    };
-
-    // Recursive render
-    const renderTree = (nodes: SessionNode[], level: number = 0) => {
-        if (!nodes) return null;
-
-        return nodes.map(node => {
-            const isFolder = node.type === 'folder';
-            const isExpanded = expandedFolders.has(node.id);
-            const isEditing = editingNodeId === node.id;
-            const isHovered = hoveredNodeId === node.id;
-
-            const paddingLeft = `${level * 20 + 10}px`;
-
-            const isDragOver = isFolder && dragOverFolderId === node.id;
-
-            return (
-                <div key={node.id}>
-                    <div
-                        style={{
-                            ...styles.nodeRow,
-                            paddingLeft,
-                            backgroundColor: isDragOver ? 'var(--bg-active)' : (isHovered ? 'var(--bg-elevated)' : 'transparent'),
-                            outline: isDragOver ? '1px dashed var(--accent)' : 'none',
-                            outlineOffset: '-1px',
-                        }}
-                        draggable={!isFolder}
-                        onDragStart={(e) => handleDragStart(e, node)}
-                        onDragOver={(e) => handleDragOver(e, node)}
-                        onDragLeave={isFolder ? handleDragLeave : undefined}
-                        onDrop={(e) => isFolder ? handleDrop(e, node) : undefined}
-                        onDragEnd={handleDragEnd}
-                        onMouseEnter={() => setHoveredNodeId(node.id)}
-                        onMouseLeave={() => setHoveredNodeId(null)}
-                        onContextMenu={(e) => handleContextMenu(e, node)}
-                        onClick={() => isFolder ? handleToggleFolder(node.id) : null}
-                        onDoubleClick={() => !isFolder && node.config && onConnect(node.config)}
-                    >
-                        <span style={{marginRight: '8px', userSelect: 'none', display: 'inline-flex', alignItems: 'center', color: isFolder ? 'var(--icon-folder-fg)' : 'var(--text-muted)'}}>{isFolder ? (isExpanded ? TbFolderOpen({size: 16}) : TbFolder({size: 16})) : TbTerminal2({size: 16})}</span>
-
-                        {isEditing ? (
-                            <input
-                                autoFocus
-                                value={editName}
-                                onChange={e => setEditName(e.target.value)}
-                                onBlur={() => handleRename(node.id, editName)}
-                                onKeyDown={e => {
-                                    if (e.key === 'Enter') handleRename(node.id, editName);
-                                    if (e.key === 'Escape') setEditingNodeId(null);
-                                }}
-                                onClick={e => e.stopPropagation()}
-                                style={styles.renameInput}
-                            />
-                        ) : (
-                            <>
-                                <span style={{
-                                    ...styles.nodeName,
-                                    fontWeight: isFolder ? 600 : 400,
-                                    color: isFolder ? 'var(--text-primary)' : 'var(--text-secondary)',
-                                }}>{node.name}</span>
-                                {/* 协议 chip:仅非默认协议(telnet)显示,避免全 SSH 环境噪声 */}
-                                {!isFolder && normalizeProtocol(node.config?.protocol) === 'telnet' && (
-                                    <span style={protocolChipStyle}>{PROTOCOL_LABEL.telnet}</span>
-                                )}
-                            </>
-                        )}
-                    </div>
-                    {isFolder && isExpanded && node.children && (
-                        <div>{renderTree(node.children, level + 1)}</div>
-                    )}
-                </div>
-            );
-        });
-    };
-
-    // Filter Logic
-    // 文件夹名命中搜索词时,展示该文件夹下全部子节点;
-    // 文件夹名未命中但子节点命中时,仅保留命中的子节点。
-    const filterNodes = (nodes: SessionNode[], term: string): SessionNode[] => {
-        if (!term) return nodes;
-        const lowerTerm = term.toLowerCase();
-
-        return nodes.reduce<SessionNode[]>((acc, node) => {
-            const matches = node.name.toLowerCase().includes(lowerTerm) ||
-                           (node.config && node.config.host.includes(lowerTerm));
-
-            if (node.type === 'folder') {
-                if (matches) {
-                    acc.push({ ...node });
-                } else {
-                    const filteredChildren = filterNodes(node.children || [], term);
-                    if (filteredChildren.length > 0) {
-                        acc.push({ ...node, children: filteredChildren });
-                    }
+        if (!searchTerm.trim()) return;
+        const ids: string[] = [];
+        const walk = (list: SessionNode[]) => {
+            for (const node of list) {
+                if (node.type === 'folder') {
+                    ids.push(node.id);
+                    walk(node.children ?? []);
                 }
-            } else {
-                if (matches) acc.push(node);
             }
-            return acc;
-        }, []);
-    };
-
-    // Auto-expand effect when searching
-    // 仅依赖 searchTerm:只在用户改动搜索词时展开一次匹配的文件夹。
-    // 不依赖 sessions——loadSessions 每 5 秒轮询会替换 sessions,若把它放进依赖,
-    // 会在每次定时刷新时重新展开所有匹配项,把用户刚刚手动折叠的文件夹再次撑开。
-    useEffect(() => {
-        if (searchTerm) {
-            const expandRecursive = (nodes: SessionNode[]) => {
-                nodes.forEach(node => {
-                    if (node.type === 'folder') {
-                        setExpandedFolders(prev => new Set(prev).add(node.id));
-                        if (node.children) expandRecursive(node.children);
-                    }
-                });
-            };
-            expandRecursive(filterNodes(sessions, searchTerm));
-        }
+        };
+        walk(filterTree(nodes, searchTerm));
+        expandMany(ids);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchTerm]);
 
-    const displayedSessions = filterNodes(sessions, searchTerm);
+    const handleMove = async (id: string, newParentId: string, index: number) => {
+        try {
+            await runtime.moveNode(id, newParentId, index);
+            if (newParentId) expand(newParentId);
+        } catch (e: any) {
+            toast.error(e?.toString?.() ?? '移动失败');
+        }
+        await refresh();
+    };
+
+    const handleRename = async (id: string, newName: string) => {
+        try {
+            await runtime.renameNode(id, newName);
+        } catch (e: any) {
+            toast.error(e?.toString?.() ?? '重命名失败');
+        }
+        await refresh();
+    };
+
+    const handleDelete = async (node: SessionNode) => {
+        const count = countConnections(node);
+        const message =
+            node.type === 'folder'
+                ? count > 0
+                    ? `删除文件夹「${node.name}」会一并删除其中的 ${count} 个连接，且无法恢复。确定继续吗？`
+                    : `确定删除文件夹「${node.name}」吗？`
+                : `确定删除连接「${node.name}」吗？`;
+        const ok = await confirmDialog.show({ message, danger: true });
+        if (!ok) return;
+
+        try {
+            await runtime.deleteNode(node.id);
+        } catch (e: any) {
+            toast.error(e?.toString?.() ?? '删除失败');
+        }
+        await refresh();
+    };
+
+    const handleConnectAll = async (folder: SessionNode) => {
+        const all = collectConnections(folder);
+        if (all.length === 0) return;
+        const targets = all.slice(0, CONNECT_ALL_LIMIT);
+        if (all.length > CONNECT_ALL_LIMIT) {
+            const ok = await confirmDialog.show({
+                message: `该文件夹共有 ${all.length} 个会话，最多同时连接 ${CONNECT_ALL_LIMIT} 个，是否继续？`,
+            });
+            if (!ok) return;
+        }
+        targets.forEach((session) => {
+            if (session.config) onConnect(session.config);
+        });
+    };
+
+    const handleSortByName = async (parentId: string) => {
+        const target = sortedChildIds(nodes, parentId);
+        const current = childrenOf(nodes, parentId).map((node) => node.id);
+        // 已经有序就不写盘，避免无意义的重排与磁盘写入。
+        if (target.length === current.length && target.every((id, i) => id === current[i])) {
+            toast.info('该层已经按名称排好序');
+            return;
+        }
+        try {
+            await runtime.reorderNodes(parentId, target);
+        } catch (e: any) {
+            toast.error(e?.toString?.() ?? '排序失败');
+        }
+        await refresh();
+    };
+
+    const handleDuplicate = async (node: SessionNode) => {
+        try {
+            await runtime.duplicateConnection?.(node.id);
+        } catch (e: any) {
+            toast.error(e?.toString?.() ?? '复制失败');
+        }
+        await refresh();
+    };
+
+    const handleAction = (action: ContextMenuAction) => {
+        setContextMenu(null);
+        switch (action.kind) {
+            case 'newFolder':
+                setNameDialog({ mode: 'folder', parentId: action.parentId });
+                break;
+            case 'newConnection':
+                setProperties({ mode: 'create', parentId: action.parentId });
+                break;
+            case 'connect':
+                if (action.node.config) onConnect(action.node.config);
+                break;
+            case 'connectAll':
+                void handleConnectAll(action.node);
+                break;
+            case 'properties':
+                setProperties({ mode: 'edit', node: action.node });
+                break;
+            case 'duplicate':
+                void handleDuplicate(action.node);
+                break;
+            case 'sortByName':
+                void handleSortByName(action.parentId);
+                break;
+            case 'moveToRoot':
+                void handleMove(action.node.id, '', Number.MAX_SAFE_INTEGER);
+                break;
+            case 'rename':
+                setNameDialog({ mode: 'rename', node: action.node });
+                break;
+            case 'delete':
+                void handleDelete(action.node);
+                break;
+            case 'import':
+                setImportOpen(true);
+                break;
+        }
+    };
+
+    const handleNameDialogConfirm = async (name: string) => {
+        const dialog = nameDialog;
+        setNameDialog(null);
+        if (!dialog) return;
+
+        try {
+            if (dialog.mode === 'folder') {
+                const parentId = dialog.parentId ?? '';
+                const siblings = childrenOf(nodes, parentId);
+                await runtime.createFolder(name, parentId);
+                if (parentId) expand(parentId);
+                void siblings;
+            } else if (dialog.node) {
+                await runtime.renameNode(dialog.node.id, name);
+            }
+        } catch (e: any) {
+            toast.error(e?.toString?.() ?? '操作失败');
+        }
+        await refresh();
+    };
+
+    const propertiesParentId = properties?.parentId ?? '';
+    const propertiesParentLabel = propertiesParentId
+        ? breadcrumb(nodes, propertiesParentId)
+        : undefined;
+    const propertiesInitialConfig = properties?.node?.config ?? emptyConnectionConfig();
 
     return (
-        <div style={styles.container} onClick={() => setContextMenu(null)}>
+        <div style={styles.container}>
             <div style={styles.searchBar}>
                 <input
                     style={styles.searchInput}
-                    placeholder="搜索会话 (IP/名称)..."
+                    placeholder="搜索会话（IP / 名称）..."
                     value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
+                    onChange={(e) => setSearchTerm(e.target.value)}
                 />
-            </div>
-
-            <div
-                style={styles.treeContainer}
-                ref={(el) => { treeContainerRef.current = el; }}
-                onContextMenu={(e) => handleContextMenu(e)}
-                onDragOver={(e) => {
-                    if (!dragNodeIdRef.current) return;
-                    e.preventDefault();
-                    // 记录拖拽光标位置并启动边缘自动滚动循环（Issue #69：
-                    // 列表超出一屏时，底部的会话无法拖到顶部的文件夹）。
-                    lastDragPointRef.current = { x: e.clientX, y: e.clientY };
-                    startTreeAutoScroll();
-                }}
-                onDrop={handleTreeDrop}
-            >
-                {renderTree(displayedSessions)}
-                {displayedSessions.length === 0 && (
-                    <div style={styles.empty}>无会话</div>
+                {canImport && (
+                    <button
+                        style={styles.importButton}
+                        onClick={() => setImportOpen(true)}
+                        title="从本机 Xshell 或导出文件导入会话"
+                    >
+                        导入
+                    </button>
                 )}
             </div>
 
-            {/* 团队共享会话（下半 1/4 区域；功能未启用时组件自身返回 null，不占空间）。
-                与上方会话树共用搜索词和统一连接流程 */}
+            {loadError && <div style={styles.loadError}>{loadError}</div>}
+
+            <SessionTreeView
+                nodes={displayed}
+                expanded={expanded}
+                onToggle={toggle}
+                onExpand={expand}
+                onConnect={(node) => node.config && onConnect(node.config)}
+                onContextMenu={(event, node) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setContextMenu({ x: event.clientX, y: event.clientY, node });
+                }}
+                onRename={handleRename}
+                onMove={handleMove}
+            />
+
+            {/* 团队共享会话（下半区；功能未启用时组件自身返回 null，不占空间）。
+                与上方会话树共用搜索词和统一连接流程。 */}
             <SharedSessionPanel onConnect={onConnect} searchTerm={searchTerm} runtime={sharedRuntime} />
 
-            {/* Context Menu */}
             {contextMenu && (
-                <div style={{...styles.contextMenu, top: contextMenu.y, left: contextMenu.x}} data-session-context-menu>
-                    <div
-                        style={{
-                            ...styles.menuItem,
-                            backgroundColor: hoveredMenuItem === 'newfolder' ? 'var(--bg-active)' : 'transparent',
-                            color: hoveredMenuItem === 'newfolder' ? 'var(--text-on-accent)' : 'var(--text-secondary)'
-                        }}
-                        onMouseEnter={() => setHoveredMenuItem('newfolder')}
-                        onMouseLeave={() => setHoveredMenuItem(null)}
-                        onClick={() => {
-                            const name = prompt('文件夹名称:');
-                            if (name?.trim()) {
-                                runtime.createFolder(name.trim())
-                                    .then(() => loadSessions())
-                                    .catch((err) => {
-                                        alert(err?.message || String(err));
-                                        loadSessions();
-                                    });
-                            }
-                            setContextMenu(null);
-                        }}
-                    >新建文件夹</div>
-                    {contextMenu.node && contextMenu.node.type === 'session' && (
-                        <div
-                            style={{
-                                ...styles.menuItem,
-                                backgroundColor: hoveredMenuItem === 'connect' ? 'var(--bg-active)' : 'transparent',
-                                color: hoveredMenuItem === 'connect' ? 'var(--text-on-accent)' : 'var(--text-secondary)'
-                            }}
-                            onMouseEnter={() => setHoveredMenuItem('connect')}
-                            onMouseLeave={() => setHoveredMenuItem(null)}
-                            onClick={() => {
-                                if (contextMenu.node!.config) onConnect(contextMenu.node!.config);
-                                setContextMenu(null);
-                            }}
-                        >打开连接</div>
-                    )}
-                    {contextMenu.node && contextMenu.node.type === 'session' && (
-                        <div
-                            style={{
-                                ...styles.menuItem,
-                                backgroundColor: hoveredMenuItem === 'edit' ? 'var(--bg-active)' : 'transparent',
-                                color: hoveredMenuItem === 'edit' ? 'var(--text-on-accent)' : 'var(--text-secondary)'
-                            }}
-                            onMouseEnter={() => setHoveredMenuItem('edit')}
-                            onMouseLeave={() => setHoveredMenuItem(null)}
-                            onClick={() => {
-                                if (contextMenu.node!.config) {
-                                    setEditingSession({ id: contextMenu.node!.id, config: contextMenu.node!.config });
-                                }
-                                setContextMenu(null);
-                            }}
-                        >编辑连接</div>
-                    )}
-                    {contextMenu.node && contextMenu.node.type === 'session' && runtime.duplicateSession && (
-                        <div
-                            style={{
-                                ...styles.menuItem,
-                                backgroundColor: hoveredMenuItem === 'duplicate' ? 'var(--bg-active)' : 'transparent',
-                                color: hoveredMenuItem === 'duplicate' ? 'var(--text-on-accent)' : 'var(--text-secondary)'
-                            }}
-                            onMouseEnter={() => setHoveredMenuItem('duplicate')}
-                            onMouseLeave={() => setHoveredMenuItem(null)}
-                            onClick={() => {
-                                // 完整复制为新的连接条目（同配置副本，落同一文件夹），
-                                // 用户随后编辑副本的主机/端口等信息。
-                                runtime.duplicateSession!(contextMenu.node!.id)
-                                    .then(() => loadSessions())
-                                    .catch((err) => {
-                                        alert(err?.message || String(err));
-                                        loadSessions();
-                                    });
-                                setContextMenu(null);
-                            }}
-                        >复制连接信息</div>
-                    )}
-                    {contextMenu.node && contextMenu.node.type === 'session' && !!contextMenu.node.config?.group && (
-                        <div
-                            style={{
-                                ...styles.menuItem,
-                                backgroundColor: hoveredMenuItem === 'ungroup' ? 'var(--bg-active)' : 'transparent',
-                                color: hoveredMenuItem === 'ungroup' ? 'var(--text-on-accent)' : 'var(--text-secondary)'
-                            }}
-                            onMouseEnter={() => setHoveredMenuItem('ungroup')}
-                            onMouseLeave={() => setHoveredMenuItem(null)}
-                            onClick={() => {
-                                handleUnGroup(contextMenu.node!);
-                                setContextMenu(null);
-                            }}
-                        >移出分组</div>
-                    )}
-                    {contextMenu.node && contextMenu.node.type === 'folder' && contextMenu.node.children && contextMenu.node.children.length > 0 && (
-                        <div
-                            style={{
-                                ...styles.menuItem,
-                                backgroundColor: hoveredMenuItem === 'connectall' ? 'var(--bg-active)' : 'transparent',
-                                color: hoveredMenuItem === 'connectall' ? 'var(--text-on-accent)' : 'var(--text-secondary)'
-                            }}
-                            onMouseEnter={() => setHoveredMenuItem('connectall')}
-                            onMouseLeave={() => setHoveredMenuItem(null)}
-                            onClick={() => {
-                                handleConnectAll(contextMenu.node!);
-                                setContextMenu(null);
-                            }}
-                        >全部连接</div>
-                    )}
-                    {contextMenu.node && (
-                    <div
-                        style={{
-                            ...styles.menuItem,
-                            backgroundColor: hoveredMenuItem === 'rename' ? 'var(--bg-active)' : 'transparent',
-                            color: hoveredMenuItem === 'rename' ? 'var(--text-on-accent)' : 'var(--text-secondary)'
-                        }}
-                        onMouseEnter={() => setHoveredMenuItem('rename')}
-                        onMouseLeave={() => setHoveredMenuItem(null)}
-                        onClick={() => {
-                            setEditingNodeId(contextMenu.node!.id);
-                            setEditName(contextMenu.node!.name);
-                            setContextMenu(null);
-                        }}
-                    >重命名</div>
-                    )}
-                    {contextMenu.node && (
-                    <div
-                        style={{
-                            ...styles.menuItem,
-                            backgroundColor: hoveredMenuItem === 'delete' ? 'var(--bg-active)' : 'transparent',
-                            color: hoveredMenuItem === 'delete' ? 'var(--text-on-accent)' : 'var(--text-secondary)'
-                        }}
-                        onMouseEnter={() => setHoveredMenuItem('delete')}
-                        onMouseLeave={() => setHoveredMenuItem(null)}
-                        onClick={() => {
-                            handleDelete(contextMenu.node!.id);
-                            setContextMenu(null);
-                        }}
-                    >删除</div>
-                    )}
-                </div>
+                <SessionContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    node={contextMenu.node}
+                    nodes={nodes}
+                    canDuplicate={canDuplicate}
+                    canImport={canImport}
+                    onAction={handleAction}
+                    onClose={() => setContextMenu(null)}
+                />
             )}
 
-            {editingSession && (
-                <EditSavedSessionModal
+            {nameDialog && (
+                <NameDialog
+                    title={nameDialog.mode === 'folder' ? '新建文件夹' : '重命名'}
+                    defaultValue={nameDialog.node?.name ?? ''}
+                    placeholder="名称"
+                    onConfirm={(name) => void handleNameDialogConfirm(name)}
+                    onCancel={() => setNameDialog(null)}
+                />
+            )}
+
+            {properties && (
+                <ConnectionPropertiesModal
                     isOpen={true}
-                    sessionId={editingSession.id}
-                    initialConfig={editingSession.config}
-                    onClose={() => setEditingSession(null)}
-                    onSaved={loadSessions}
+                    mode={properties.mode}
+                    sessionId={properties.node?.id}
+                    initialConfig={propertiesInitialConfig}
+                    parentId={propertiesParentId}
+                    parentLabel={propertiesParentLabel}
+                    onClose={() => setProperties(null)}
+                    onSaved={refresh}
                     runtime={runtime}
                 />
             )}
+
+            <XshellImportDialog
+                isOpen={importOpen}
+                runtime={runtime}
+                onClose={() => setImportOpen(false)}
+                onImported={refresh}
+            />
         </div>
     );
 };
 
-// protocolChipStyle:telnet 协议标识 chip。
-// 风格对齐 FilesPanel 的 infoChip(胶囊形 999px + 冷调深底),仅文字色
-// 用低饱和橙(var(--stage-orange))区分协议,避免强对比暖色块在侧栏里突兀。
-const protocolChipStyle: React.CSSProperties = {
-    display: 'inline-block',
-    marginLeft: '6px',
-    padding: '1px 7px',
-    fontSize: '10px',
-    lineHeight: '1.5',
-    color: 'var(--stage-orange)',
-    backgroundColor: 'var(--bg-primary)',
-    border: '1px solid var(--border)',
-    borderRadius: '999px',
-    userSelect: 'none',
-    verticalAlign: 'middle',
-};
-
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
     container: {
         display: 'flex',
-        flexDirection: 'column' as const,
+        flexDirection: 'column',
         height: '100%',
         color: 'var(--text-secondary)',
         backgroundColor: 'var(--bg-secondary)',
     },
     searchBar: {
+        display: 'flex',
+        gap: 8,
         padding: '10px',
         borderBottom: '1px solid var(--border)',
     },
     searchInput: {
-        width: '100%',
-        padding: '6px',
-        borderRadius: '4px',
-        border: '1px solid var(--border)',
-        backgroundColor: 'var(--bg-input)',
-        color: 'var(--text-primary)',
-        outline: 'none',
-        boxSizing: 'border-box' as const,
-    },
-    treeContainer: {
         flex: 1,
-        overflowY: 'auto' as const,
-        padding: '10px 0',
-        minHeight: 0, // Critical for nested flex scrolling
-    },
-    nodeRow: {
-        display: 'flex',
-        alignItems: 'center',
-        padding: '4px 8px',
-        cursor: 'pointer',
-    },
-    nodeName: {
-        fontSize: '14px',
-        userSelect: 'none' as const,
-    },
-    renameInput: {
+        padding: '6px',
+        borderRadius: 4,
+        border: '1px solid var(--border)',
         backgroundColor: 'var(--bg-input)',
         color: 'var(--text-primary)',
-        border: '1px solid var(--accent)',
         outline: 'none',
-        padding: '2px 4px',
-        fontSize: '14px',
-        width: '150px',
+        boxSizing: 'border-box',
+        minWidth: 0,
     },
-    empty: {
-        textAlign: 'center' as const,
-        color: 'var(--text-disabled)',
-        marginTop: '20px',
-    },
-    contextMenu: {
-        position: 'fixed' as const,
-        backgroundColor: 'var(--bg-secondary)',
-        border: '1px solid var(--border)',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-        borderRadius: '4px',
-        zIndex: 1000,
-        minWidth: '120px',
-        padding: '4px 0',
-    },
-    menuItem: {
+    importButton: {
         padding: '6px 12px',
+        borderRadius: 4,
+        border: '1px solid var(--border-strong)',
+        backgroundColor: 'var(--bg-elevated)',
+        color: 'var(--text-primary)',
+        fontSize: 12,
         cursor: 'pointer',
-        fontSize: '13px',
-        transition: 'background-color 0.1s',
-    }
+        whiteSpace: 'nowrap',
+    },
+    loadError: {
+        padding: '6px 10px',
+        fontSize: 12,
+        color: 'var(--danger)',
+    },
 };
 
 export default SessionManager;

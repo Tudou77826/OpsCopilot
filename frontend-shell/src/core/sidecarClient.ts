@@ -25,11 +25,12 @@ export interface OpenTerminalResult {
   terminalId: string;
 }
 
-export interface SavedSession {
+/** Sidecar 保存的连接树节点（文件夹或连接），与桌面端 connectionstore.Node 形态一致。 */
+export interface SavedNode {
   id: string;
   name: string;
   type: string;
-  children?: SavedSession[];
+  children?: SavedNode[];
   config?: {
     name?: string;
     protocol?: string;
@@ -47,6 +48,20 @@ export interface SavedSession {
     };
     group?: string;
   };
+}
+
+/** 写入 sidecar 的连接入参（驼峰 tag，与后端 ConnectionInput 对齐）。 */
+export interface SavedConnectionInput {
+  name?: string;
+  protocol?: string;
+  host: string;
+  port?: number;
+  user: string;
+  password?: string;
+  rootPassword?: string;
+  bastion?: Record<string, unknown>;
+  /** 仅 saveConfig 使用：便于输入的"保存到分组"路径，支持 "A/B" 多层。 */
+  group?: string;
 }
 
 /** 快捷命令/脚本（与终端应用 quick_commands.json 同格式）。 */
@@ -170,29 +185,51 @@ export class SidecarClient {
     return this.call('shell.closeTerminal', { terminalId });
   }
 
-  listConfigs(): Promise<{ sessions: SavedSession[] }> {
+  listConfigs(): Promise<{ nodes: SavedNode[] }> {
     return this.call('shell.configs.list', {});
   }
 
-  saveConfig(input: { name: string; host: string; port?: number; user: string; password: string; group?: string }): Promise<{ id: string }> {
-    return this.call('shell.configs.save', input);
+  /** 连接时按端点 upsert 落库；group 支持 "A/B" 形式的多层分组路径。 */
+  saveConfig(input: SavedConnectionInput): Promise<{ id: string }> {
+    return this.call('shell.configs.save', input as unknown as Record<string, unknown>);
   }
 
-  deleteConfig(id: string): Promise<void> {
-    return this.call('shell.configs.delete', { id });
+  /** 新建一条连接（不建立会话）。 */
+  createConnection(config: Record<string, unknown>, parentId: string): Promise<{ id: string }> {
+    return this.call('shell.configs.createConnection', { config, parentId });
   }
 
-  renameConfig(id: string, name: string): Promise<void> {
-    return this.call('shell.configs.rename', { id, name });
+  /** 更新连接配置，位置不变。 */
+  updateConnection(id: string, config: Record<string, unknown>): Promise<void> {
+    return this.call('shell.configs.updateConnection', { id, config });
   }
 
-  /** 更新已保存的连接配置（含 group 移动）。config 为完整连接配置。 */
-  updateConfig(id: string, config: Record<string, unknown>, group: string): Promise<void> {
-    return this.call('shell.configs.update', { id, config, group });
+  deleteNode(id: string): Promise<void> {
+    return this.call('shell.configs.deleteNode', { id });
   }
 
-  createFolder(name: string): Promise<void> {
-    return this.call('shell.configs.createFolder', { name });
+  renameNode(id: string, name: string): Promise<void> {
+    return this.call('shell.configs.renameNode', { id, name });
+  }
+
+  /** 在 parentId 下新建文件夹，返回新文件夹 ID。 */
+  createFolder(name: string, parentId: string): Promise<{ id: string }> {
+    return this.call('shell.configs.createFolder', { name, parentId });
+  }
+
+  /** 移动节点到 newParentId 下的第 index 位。 */
+  moveNode(id: string, newParentId: string, index: number): Promise<void> {
+    return this.call('shell.configs.moveNode', { id, newParentId, index });
+  }
+
+  /** 按 orderedIds 重排某一层子节点。 */
+  reorderNodes(parentId: string, orderedIds: string[]): Promise<void> {
+    return this.call('shell.configs.reorderNodes', { parentId, orderedIds });
+  }
+
+  /** 复制一条连接，返回副本 ID。 */
+  duplicateConnection(id: string): Promise<{ id: string }> {
+    return this.call('shell.configs.duplicateConnection', { id });
   }
 
   quickcmdsList(): Promise<{ commands: QuickCommand[] }> {

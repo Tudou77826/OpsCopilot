@@ -611,12 +611,15 @@ export const App: React.FC<SidecarShellAppProps> = ({ endpoint, autoConnect = fa
             if (config.name || config.host) {
               void client?.saveConfig({
                 name: config.name || `${config.user}@${config.host}`,
+                protocol: config.protocol,
                 host: config.host,
                 port: config.port,
                 user: config.user,
                 password: config.password ?? '',
+                rootPassword: config.rootPassword,
+                bastion: config.bastion as unknown as Record<string, unknown> | undefined,
                 group: config.group,
-              } as any);
+              });
             }
             void openSession(config as any);
           }

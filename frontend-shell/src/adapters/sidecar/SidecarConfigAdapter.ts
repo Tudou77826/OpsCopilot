@@ -6,16 +6,16 @@ import type {
   SessionNode,
   ConnectionConfig,
 } from '../../ui';
-import { SidecarClient, SavedSession } from '../../core/sidecarClient';
+import { SidecarClient, SavedNode } from '../../core/sidecarClient';
 
-// Sidecar 的 SavedSession 与共享 SessionNode 形态一致（id/name/type/children/config）。
-function toSessionNode(s: SavedSession): SessionNode {
+// Sidecar 的 SavedNode 与共享 SessionNode 形态一致（id/name/type/children/config）。
+function toSessionNode(node: SavedNode): SessionNode {
   return {
-    id: s.id,
-    name: s.name,
-    type: (s.type === 'folder' ? 'folder' : 'session') as SessionNode['type'],
-    children: s.children ? s.children.map(toSessionNode) : undefined,
-    config: s.config as ConnectionConfig | undefined,
+    id: node.id,
+    name: node.name,
+    type: (node.type === 'folder' ? 'folder' : 'session') as SessionNode['type'],
+    children: node.children ? node.children.map(toSessionNode) : undefined,
+    config: node.config as ConnectionConfig | undefined,
   };
 }
 
@@ -46,22 +46,37 @@ export interface SidecarConfigRuntime {
 
 /** 构造 sidecar 会话树 + 快捷命令宿主适配器。 */
 export function makeSidecarConfigRuntime(client: SidecarClient): SidecarConfigRuntime {
+  // 实现全部会话树方法（含 duplicateConnection），两端能力保持一致。
+  // 不实现 Xshell 导入：那是桌面端专有能力，缺少这些可选方法时共享 UI 会自动
+  // 隐藏导入入口——这正是 ports 里把它们声明为可选的目的。
   const sessionRuntime: SessionManagerRuntime = {
-    async listSessions() {
-      const { sessions } = await client.listConfigs();
-      return (sessions ?? []).map(toSessionNode);
+    async listTree() {
+      const { nodes } = await client.listConfigs();
+      return (nodes ?? []).map(toSessionNode);
     },
-    async deleteSession(id) {
-      await client.deleteConfig(id);
+    async createFolder(name, parentId) {
+      await client.createFolder(name, parentId);
     },
-    async renameSession(id, newName) {
-      await client.renameConfig(id, newName);
+    async createConnection(config, parentId) {
+      await client.createConnection(config as unknown as Record<string, unknown>, parentId);
     },
-    async updateSession(id, config, group) {
-      await client.updateConfig(id, config as unknown as Record<string, unknown>, group);
+    async renameNode(id, newName) {
+      await client.renameNode(id, newName);
     },
-    async createFolder(name) {
-      await client.createFolder(name);
+    async updateConnection(id, config) {
+      await client.updateConnection(id, config as unknown as Record<string, unknown>);
+    },
+    async moveNode(id, newParentId, index) {
+      await client.moveNode(id, newParentId, index);
+    },
+    async deleteNode(id) {
+      await client.deleteNode(id);
+    },
+    async reorderNodes(parentId, orderedIds) {
+      await client.reorderNodes(parentId, orderedIds);
+    },
+    async duplicateConnection(id) {
+      await client.duplicateConnection(id);
     },
   };
 
