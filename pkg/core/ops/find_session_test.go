@@ -3,17 +3,17 @@ package ops
 import (
 	"testing"
 
-	"opscopilot/pkg/sessionmanager"
+	"opscopilot/pkg/connectionstore"
 	"opscopilot/pkg/sshclient"
 )
 
 // makeSession 构造一个 type=session 的节点，Host=ip，Name=name。
 // Name 故意与 IP 不同，用于验证匹配只看 Host 不看 Name。
-func makeSession(name, ip string) *sessionmanager.Session {
-	return &sessionmanager.Session{
+func makeSession(name, ip string) *connectionstore.Node {
+	return &connectionstore.Node{
 		ID:   "id-" + ip,
 		Name: name,
-		Type: sessionmanager.TypeSession,
+		Type: connectionstore.KindConnection,
 		Config: &sshclient.ConnectConfig{
 			Name: name,
 			Host: ip,
@@ -25,7 +25,7 @@ func makeSession(name, ip string) *sessionmanager.Session {
 
 // TestFindSessionConfig_MatchByIP 按 IP 匹配应命中
 func TestFindSessionConfig_MatchByIP(t *testing.T) {
-	nodes := []*sessionmanager.Session{
+	nodes := []*connectionstore.Node{
 		makeSession("web-01", "10.1.1.1"),
 		makeSession("db-01", "10.1.1.2"),
 	}
@@ -41,7 +41,7 @@ func TestFindSessionConfig_MatchByIP(t *testing.T) {
 // TestFindSessionConfig_NameNotMatched 按 Name 不应命中（验证废弃了 Name 匹配）。
 // 回归保护：若有人把匹配逻辑改回 node.Name == name，此测试会失败。
 func TestFindSessionConfig_NameNotMatched(t *testing.T) {
-	nodes := []*sessionmanager.Session{
+	nodes := []*connectionstore.Node{
 		makeSession("web-01", "10.1.1.1"),
 	}
 	// 传 Name（别名）应找不到，因为只按 Host(IP) 匹配
@@ -53,18 +53,18 @@ func TestFindSessionConfig_NameNotMatched(t *testing.T) {
 
 // TestFindSessionConfig_NestedFolder 嵌套在文件夹下的服务器也应能按 IP 找到
 func TestFindSessionConfig_NestedFolder(t *testing.T) {
-	nodes := []*sessionmanager.Session{
+	nodes := []*connectionstore.Node{
 		{
 			ID:   "folder-1",
 			Name: "生产环境",
-			Type: sessionmanager.TypeFolder,
-			Children: []*sessionmanager.Session{
+			Type: connectionstore.KindFolder,
+			Children: []*connectionstore.Node{
 				makeSession("web-01", "10.1.1.1"),
 				{
 					ID:   "folder-2",
 					Name: "数据库",
-					Type: sessionmanager.TypeFolder,
-					Children: []*sessionmanager.Session{
+					Type: connectionstore.KindFolder,
+					Children: []*connectionstore.Node{
 						makeSession("db-master", "10.2.2.2"),
 					},
 				},
@@ -82,7 +82,7 @@ func TestFindSessionConfig_NestedFolder(t *testing.T) {
 
 // TestFindSessionConfig_NotFound 未登记的 IP 应返回 nil
 func TestFindSessionConfig_NotFound(t *testing.T) {
-	nodes := []*sessionmanager.Session{
+	nodes := []*connectionstore.Node{
 		makeSession("web-01", "10.1.1.1"),
 	}
 	cfg := findSessionConfig(nodes, "10.9.9.9")
@@ -93,7 +93,7 @@ func TestFindSessionConfig_NotFound(t *testing.T) {
 
 // TestFindSessionConfig_EmptyNodes 空列表返回 nil
 func TestFindSessionConfig_EmptyNodes(t *testing.T) {
-	cfg := findSessionConfig([]*sessionmanager.Session{}, "10.1.1.1")
+	cfg := findSessionConfig([]*connectionstore.Node{}, "10.1.1.1")
 	if cfg != nil {
 		t.Error("空列表应返回 nil")
 	}

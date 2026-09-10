@@ -1,4 +1,4 @@
-package sessionmanager
+package connectionstore
 
 import (
 	"opscopilot/pkg/sshclient"
@@ -7,10 +7,10 @@ import (
 	"testing"
 )
 
-func TestNewManager(t *testing.T) {
-	m := NewManager()
-	if m.Sessions == nil {
-		t.Error("Sessions should be initialized")
+func TestNewStore(t *testing.T) {
+	m := NewStore()
+	if m.Nodes == nil {
+		t.Error("Nodes should be initialized")
 	}
 	if m.filePath != "sessions.json" {
 		t.Errorf("Expected default filePath 'sessions.json', got %s", m.filePath)
@@ -22,7 +22,7 @@ func TestUpsertSession(t *testing.T) {
 	tmpFile := filepath.Join(os.TempDir(), "test_sessions.json")
 	defer os.Remove(tmpFile)
 
-	m := NewManager()
+	m := NewStore()
 	m.filePath = tmpFile
 
 	config := sshclient.ConnectConfig{
@@ -37,14 +37,14 @@ func TestUpsertSession(t *testing.T) {
 		t.Fatalf("Upsert failed: %v", err)
 	}
 
-	if len(m.Sessions) != 1 {
-		t.Fatalf("Expected 1 session, got %d", len(m.Sessions))
+	if len(m.Nodes) != 1 {
+		t.Fatalf("Expected 1 session, got %d", len(m.Nodes))
 	}
-	if m.Sessions[0].Name != "192.168.1.1" {
-		t.Errorf("Expected name '192.168.1.1', got %s", m.Sessions[0].Name)
+	if m.Nodes[0].Name != "192.168.1.1" {
+		t.Errorf("Expected name '192.168.1.1', got %s", m.Nodes[0].Name)
 	}
-	if m.Sessions[0].Type != TypeSession {
-		t.Errorf("Expected type 'session', got %s", m.Sessions[0].Type)
+	if m.Nodes[0].Type != KindConnection {
+		t.Errorf("Expected type 'session', got %s", m.Nodes[0].Type)
 	}
 
 	// Test 2: Update existing session
@@ -53,11 +53,11 @@ func TestUpsertSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Upsert update failed: %v", err)
 	}
-	if len(m.Sessions) != 1 {
-		t.Fatalf("Expected 1 session after update, got %d", len(m.Sessions))
+	if len(m.Nodes) != 1 {
+		t.Fatalf("Expected 1 session after update, got %d", len(m.Nodes))
 	}
-	if m.Sessions[0].Config.User != "admin" {
-		t.Errorf("Expected user 'admin', got %s", m.Sessions[0].Config.User)
+	if m.Nodes[0].Config.User != "admin" {
+		t.Errorf("Expected user 'admin', got %s", m.Nodes[0].Config.User)
 	}
 
 	// Test 3: Move to Group
@@ -67,11 +67,11 @@ func TestUpsertSession(t *testing.T) {
 	}
 
 	// Should have 1 folder in root, and session inside it
-	if len(m.Sessions) != 1 {
-		t.Fatalf("Expected 1 node (folder) in root, got %d", len(m.Sessions))
+	if len(m.Nodes) != 1 {
+		t.Fatalf("Expected 1 node (folder) in root, got %d", len(m.Nodes))
 	}
-	folder := m.Sessions[0]
-	if folder.Type != TypeFolder || folder.Name != "Prod" {
+	folder := m.Nodes[0]
+	if folder.Type != KindFolder || folder.Name != "Prod" {
 		t.Errorf("Expected folder 'Prod', got %s (%s)", folder.Name, folder.Type)
 	}
 	if len(folder.Children) != 1 {
@@ -86,21 +86,21 @@ func TestDeleteSession(t *testing.T) {
 	tmpFile := filepath.Join(os.TempDir(), "test_sessions_delete.json")
 	defer os.Remove(tmpFile)
 
-	m := NewManager()
+	m := NewStore()
 	m.filePath = tmpFile
 
 	config := sshclient.ConnectConfig{Host: "1.1.1.1"}
 	m.Upsert(config, "")
 
-	id := m.Sessions[0].ID
+	id := m.Nodes[0].ID
 
 	err := m.DeleteSession(id)
 	if err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
-	if len(m.Sessions) != 0 {
-		t.Errorf("Expected 0 sessions, got %d", len(m.Sessions))
+	if len(m.Nodes) != 0 {
+		t.Errorf("Expected 0 sessions, got %d", len(m.Nodes))
 	}
 }
 
@@ -108,30 +108,30 @@ func TestRenameSession(t *testing.T) {
 	tmpFile := filepath.Join(os.TempDir(), "test_sessions_rename.json")
 	defer os.Remove(tmpFile)
 
-	m := NewManager()
+	m := NewStore()
 	m.filePath = tmpFile
 
 	config := sshclient.ConnectConfig{Host: "1.1.1.1"}
 	m.Upsert(config, "")
 
-	id := m.Sessions[0].ID
+	id := m.Nodes[0].ID
 
 	err := m.RenameSession(id, "NewName")
 	if err != nil {
 		t.Fatalf("Rename failed: %v", err)
 	}
 
-	if m.Sessions[0].Name != "NewName" {
-		t.Errorf("Expected name 'NewName', got %s", m.Sessions[0].Name)
+	if m.Nodes[0].Name != "NewName" {
+		t.Errorf("Expected name 'NewName', got %s", m.Nodes[0].Name)
 	}
-	if m.Sessions[0].Config.Name != "NewName" {
-		t.Errorf("Expected config name 'NewName', got %s", m.Sessions[0].Config.Name)
+	if m.Nodes[0].Config.Name != "NewName" {
+		t.Errorf("Expected config name 'NewName', got %s", m.Nodes[0].Config.Name)
 	}
 }
 
 func TestUpsertPreservesRenamedSessionName(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
-	m := NewManagerWithPath(tmpFile)
+	m := NewStoreWithPath(tmpFile)
 
 	config := sshclient.ConnectConfig{
 		Host: "10.0.0.1",
@@ -142,7 +142,7 @@ func TestUpsertPreservesRenamedSessionName(t *testing.T) {
 		t.Fatalf("initial Upsert failed: %v", err)
 	}
 
-	id := m.Sessions[0].ID
+	id := m.Nodes[0].ID
 	if err := m.RenameSession(id, "web-primary"); err != nil {
 		t.Fatalf("Rename failed: %v", err)
 	}
@@ -152,23 +152,23 @@ func TestUpsertPreservesRenamedSessionName(t *testing.T) {
 		t.Fatalf("reconnect Upsert failed: %v", err)
 	}
 
-	if len(m.Sessions) != 1 {
-		t.Fatalf("Expected one session, got %d", len(m.Sessions))
+	if len(m.Nodes) != 1 {
+		t.Fatalf("Expected one session, got %d", len(m.Nodes))
 	}
-	if m.Sessions[0].ID != id {
-		t.Errorf("Expected session ID %q to be reused, got %q", id, m.Sessions[0].ID)
+	if m.Nodes[0].ID != id {
+		t.Errorf("Expected session ID %q to be reused, got %q", id, m.Nodes[0].ID)
 	}
-	if m.Sessions[0].Name != "web-primary" {
-		t.Errorf("Expected renamed display name to be preserved, got %q", m.Sessions[0].Name)
+	if m.Nodes[0].Name != "web-primary" {
+		t.Errorf("Expected renamed display name to be preserved, got %q", m.Nodes[0].Name)
 	}
-	if m.Sessions[0].Config.Name != "web-primary" {
-		t.Errorf("Expected config name to stay in sync, got %q", m.Sessions[0].Config.Name)
+	if m.Nodes[0].Config.Name != "web-primary" {
+		t.Errorf("Expected config name to stay in sync, got %q", m.Nodes[0].Config.Name)
 	}
 }
 
 func TestUpsertUsesConfiguredDisplayName(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
-	m := NewManagerWithPath(tmpFile)
+	m := NewStoreWithPath(tmpFile)
 
 	config := sshclient.ConnectConfig{
 		Name: "database-primary",
@@ -180,11 +180,11 @@ func TestUpsertUsesConfiguredDisplayName(t *testing.T) {
 		t.Fatalf("Upsert failed: %v", err)
 	}
 
-	if m.Sessions[0].Name != "database-primary" {
-		t.Errorf("Expected configured display name, got %q", m.Sessions[0].Name)
+	if m.Nodes[0].Name != "database-primary" {
+		t.Errorf("Expected configured display name, got %q", m.Nodes[0].Name)
 	}
-	if m.Sessions[0].Config.Name != "database-primary" {
-		t.Errorf("Expected config name to be persisted, got %q", m.Sessions[0].Config.Name)
+	if m.Nodes[0].Config.Name != "database-primary" {
+		t.Errorf("Expected config name to be persisted, got %q", m.Nodes[0].Config.Name)
 	}
 }
 
@@ -192,25 +192,25 @@ func TestPersistence(t *testing.T) {
 	tmpFile := filepath.Join(os.TempDir(), "test_sessions_persist.json")
 	defer os.Remove(tmpFile)
 
-	m1 := NewManager()
+	m1 := NewStore()
 	m1.filePath = tmpFile
 	m1.Upsert(sshclient.ConnectConfig{Host: "1.1.1.1"}, "GroupA")
 
 	// Load with new manager
-	m2 := NewManager()
+	m2 := NewStore()
 	m2.filePath = tmpFile
 	err := m2.Load()
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
 
-	if len(m2.Sessions) != 1 {
-		t.Fatalf("Expected 1 folder loaded, got %d", len(m2.Sessions))
+	if len(m2.Nodes) != 1 {
+		t.Fatalf("Expected 1 folder loaded, got %d", len(m2.Nodes))
 	}
-	if m2.Sessions[0].Name != "GroupA" {
-		t.Errorf("Expected group 'GroupA', got %s", m2.Sessions[0].Name)
+	if m2.Nodes[0].Name != "GroupA" {
+		t.Errorf("Expected group 'GroupA', got %s", m2.Nodes[0].Name)
 	}
-	if len(m2.Sessions[0].Children) != 1 {
+	if len(m2.Nodes[0].Children) != 1 {
 		t.Errorf("Expected 1 child in group")
 	}
 }
@@ -219,14 +219,14 @@ func TestRecursiveDelete(t *testing.T) {
 	tmpFile := filepath.Join(os.TempDir(), "test_sessions_recursive_delete.json")
 	defer os.Remove(tmpFile)
 
-	m := NewManager()
+	m := NewStore()
 	m.filePath = tmpFile
 
-	// Create Group -> Session
+	// Create Group -> Node
 	m.Upsert(sshclient.ConnectConfig{Host: "1.1.1.1"}, "GroupA")
 
 	// Find Group ID
-	groupID := m.Sessions[0].ID
+	groupID := m.Nodes[0].ID
 
 	// Delete Group
 	err := m.DeleteSession(groupID)
@@ -234,8 +234,8 @@ func TestRecursiveDelete(t *testing.T) {
 		t.Fatalf("Delete group failed: %v", err)
 	}
 
-	if len(m.Sessions) != 0 {
-		t.Errorf("Expected root empty after group delete, got %d", len(m.Sessions))
+	if len(m.Nodes) != 0 {
+		t.Errorf("Expected root empty after group delete, got %d", len(m.Nodes))
 	}
 }
 
@@ -245,20 +245,21 @@ func TestRecursiveDelete(t *testing.T) {
 // 前端 5 秒轮询把坏树当最新数据渲染，用户看到"会话消失"。
 
 // seedMoveTestTree 构造标准测试树并落盘：
-//   生产(folder) ── web-1(session, 10.0.0.1)
-//   测试(folder) ── (空)
-//   db-1(session, 10.0.0.2, 根目录)
-func seedMoveTestTree(t *testing.T, filePath string) *Manager {
+//
+//	生产(folder) ── web-1(session, 10.0.0.1)
+//	测试(folder) ── (空)
+//	db-1(session, 10.0.0.2, 根目录)
+func seedMoveTestTree(t *testing.T, filePath string) *Store {
 	t.Helper()
-	m := NewManagerWithPath(filePath)
-	m.Sessions = []*Session{
-		{ID: "f-prod", Name: "生产", Type: TypeFolder, Children: []*Session{
-			{ID: "s-web1", Name: "web-1", Type: TypeSession, Config: &sshclient.ConnectConfig{
+	m := NewStoreWithPath(filePath)
+	m.Nodes = []*Node{
+		{ID: "f-prod", Name: "生产", Type: KindFolder, Children: []*Node{
+			{ID: "s-web1", Name: "web-1", Type: KindConnection, Config: &sshclient.ConnectConfig{
 				Host: "10.0.0.1", Port: 22, User: "root", Password: "p1", RootPassword: "rp1",
 			}},
 		}},
-		{ID: "f-test", Name: "测试", Type: TypeFolder, Children: []*Session{}},
-		{ID: "s-db1", Name: "db-1", Type: TypeSession, Config: &sshclient.ConnectConfig{
+		{ID: "f-test", Name: "测试", Type: KindFolder, Children: []*Node{}},
+		{ID: "s-db1", Name: "db-1", Type: KindConnection, Config: &sshclient.ConnectConfig{
 			Host: "10.0.0.2", Port: 22, User: "root",
 		}},
 	}
@@ -269,12 +270,12 @@ func seedMoveTestTree(t *testing.T, filePath string) *Manager {
 }
 
 // findNodeByID 在树中递归查找节点。
-func findNodeByID(nodes []*Session, id string) *Session {
+func findNodeByID(nodes []*Node, id string) *Node {
 	for _, node := range nodes {
 		if node.ID == id {
 			return node
 		}
-		if node.Type == TypeFolder {
+		if node.Type == KindFolder {
 			if found := findNodeByID(node.Children, id); found != nil {
 				return found
 			}
@@ -284,13 +285,13 @@ func findNodeByID(nodes []*Session, id string) *Session {
 }
 
 // sessionLocation 返回 session 所在位置的描述（根目录 / 文件夹名）。
-func sessionLocation(t *testing.T, m *Manager, id string) string {
+func sessionLocation(t *testing.T, m *Store, id string) string {
 	t.Helper()
-	for _, node := range m.Sessions {
+	for _, node := range m.Nodes {
 		if node.ID == id {
 			return "<root>"
 		}
-		if node.Type == TypeFolder {
+		if node.Type == KindFolder {
 			if findNodeByID(node.Children, id) != nil {
 				return node.Name
 			}
@@ -306,7 +307,7 @@ func TestUpdateSession_MoveBetweenFolders(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
 	m := seedMoveTestTree(t, tmpFile)
 
-	web1 := findNodeByID(m.Sessions, "s-web1")
+	web1 := findNodeByID(m.Nodes, "s-web1")
 	if web1 == nil || web1.Config == nil {
 		t.Fatalf("seed failed: s-web1 missing")
 	}
@@ -319,12 +320,12 @@ func TestUpdateSession_MoveBetweenFolders(t *testing.T) {
 	if loc := sessionLocation(t, m, "s-web1"); loc != "测试" {
 		t.Errorf("session should be in 测试, got %q", loc)
 	}
-	if findNodeByID(m.Sessions, "s-web1").Config.Host != "10.0.0.1" {
+	if findNodeByID(m.Nodes, "s-web1").Config.Host != "10.0.0.1" {
 		t.Errorf("config lost during move")
 	}
 
 	// 磁盘一致性：重新加载后位置不变。
-	m2 := NewManagerWithPath(tmpFile)
+	m2 := NewStoreWithPath(tmpFile)
 	if err := m2.Load(); err != nil {
 		t.Fatalf("reload: %v", err)
 	}
@@ -339,7 +340,7 @@ func TestUpdateSession_SameFolderStaysPut(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
 	m := seedMoveTestTree(t, tmpFile)
 
-	web1 := findNodeByID(m.Sessions, "s-web1")
+	web1 := findNodeByID(m.Nodes, "s-web1")
 	movedCfg := *web1.Config
 	movedCfg.Group = "生产"
 
@@ -352,18 +353,18 @@ func TestUpdateSession_SameFolderStaysPut(t *testing.T) {
 	}
 	// 全树恰好一个 s-web1，不允许移动产生副本。
 	count := 0
-	var countNode func(nodes []*Session)
-	countNode = func(nodes []*Session) {
+	var countNode func(nodes []*Node)
+	countNode = func(nodes []*Node) {
 		for _, n := range nodes {
 			if n.ID == "s-web1" {
 				count++
 			}
-			if n.Type == TypeFolder {
+			if n.Type == KindFolder {
 				countNode(n.Children)
 			}
 		}
 	}
-	countNode(m.Sessions)
+	countNode(m.Nodes)
 	if count != 1 {
 		t.Errorf("expected exactly 1 copy of s-web1, got %d", count)
 	}
@@ -374,7 +375,7 @@ func TestUpdateSession_MoveToRoot(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "sessions.json")
 	m := seedMoveTestTree(t, tmpFile)
 
-	web1 := findNodeByID(m.Sessions, "s-web1")
+	web1 := findNodeByID(m.Nodes, "s-web1")
 	movedCfg := *web1.Config
 	movedCfg.Group = ""
 
@@ -401,7 +402,7 @@ func TestUpdateSession_DuplicateErrorLeavesStateIntact(t *testing.T) {
 	beforeTree := string(before)
 
 	// 把 web-1 的主机改成与 db-1 相同 → 重名冲突。
-	web1 := findNodeByID(m.Sessions, "s-web1")
+	web1 := findNodeByID(m.Nodes, "s-web1")
 	conflictCfg := *web1.Config
 	conflictCfg.Host = "10.0.0.2"
 
@@ -414,7 +415,7 @@ func TestUpdateSession_DuplicateErrorLeavesStateIntact(t *testing.T) {
 	if loc := sessionLocation(t, m, "s-web1"); loc != "生产" {
 		t.Errorf("session vanished from 生产 after failed update, now at %q", loc)
 	}
-	if got := findNodeByID(m.Sessions, "s-web1").Config.Host; got != "10.0.0.1" {
+	if got := findNodeByID(m.Nodes, "s-web1").Config.Host; got != "10.0.0.1" {
 		t.Errorf("in-memory config mutated by failed update: host=%q", got)
 	}
 	// 磁盘文件必须逐字节不变。
@@ -450,8 +451,8 @@ func TestUpdateSession_NotFoundLeavesStateIntact(t *testing.T) {
 	if string(after) != string(before) {
 		t.Errorf("sessions.json changed despite not-found error")
 	}
-	if len(m.Sessions) != 3 {
-		t.Errorf("in-memory tree mutated by not-found error: %d top-level nodes", len(m.Sessions))
+	if len(m.Nodes) != 3 {
+		t.Errorf("in-memory tree mutated by not-found error: %d top-level nodes", len(m.Nodes))
 	}
 }
 
@@ -463,7 +464,7 @@ func TestDuplicateSession_CreatesIndependentCopyInSameFolder(t *testing.T) {
 	m := seedMoveTestTree(t, tmpFile)
 
 	// 给源会话补一个跳板机，验证深拷贝。
-	web1 := findNodeByID(m.Sessions, "s-web1")
+	web1 := findNodeByID(m.Nodes, "s-web1")
 	web1.Config.Bastion = &sshclient.ConnectConfig{Host: "10.0.0.254", Port: 22, User: "jump", Password: "jp"}
 	if err := m.Save(); err != nil {
 		t.Fatalf("seed bastion save: %v", err)
@@ -474,12 +475,12 @@ func TestDuplicateSession_CreatesIndependentCopyInSameFolder(t *testing.T) {
 	}
 
 	// 副本在"生产"文件夹内、紧跟源节点之后。
-	folder := findNodeByID(m.Sessions, "f-prod")
+	folder := findNodeByID(m.Nodes, "f-prod")
 	if folder == nil {
 		t.Fatalf("folder missing")
 	}
 	var idxSrc, idxCopy = -1, -1
-	var copyNode *Session
+	var copyNode *Node
 	for i, n := range folder.Children {
 		if n.ID == "s-web1" {
 			idxSrc = i
@@ -510,16 +511,16 @@ func TestDuplicateSession_CreatesIndependentCopyInSameFolder(t *testing.T) {
 	}
 	// 深拷贝：改副本的跳板机不影响源节点。
 	cfg.Bastion.Host = "9.9.9.9"
-	if findNodeByID(m.Sessions, "s-web1").Config.Bastion.Host != "10.0.0.254" {
+	if findNodeByID(m.Nodes, "s-web1").Config.Bastion.Host != "10.0.0.254" {
 		t.Errorf("copy shares bastion state with source")
 	}
 
 	// 落盘可重载。
-	m2 := NewManagerWithPath(tmpFile)
+	m2 := NewStoreWithPath(tmpFile)
 	if err := m2.Load(); err != nil {
 		t.Fatalf("reload: %v", err)
 	}
-	dup := findNodeByID(m2.Sessions, copyNode.ID)
+	dup := findNodeByID(m2.Nodes, copyNode.ID)
 	if dup == nil || dup.Config == nil || dup.Config.Bastion == nil {
 		t.Fatalf("duplicated session not persisted")
 	}
@@ -536,18 +537,18 @@ func TestDuplicateSession_AllowsSameEndpoint(t *testing.T) {
 		t.Fatalf("duplicate with same endpoint should be allowed: %v", err)
 	}
 	count := 0
-	var countFn func(nodes []*Session)
-	countFn = func(nodes []*Session) {
+	var countFn func(nodes []*Node)
+	countFn = func(nodes []*Node) {
 		for _, n := range nodes {
-			if n.Type == TypeSession && n.Config != nil && n.Config.Host == "10.0.0.1" {
+			if n.Type == KindConnection && n.Config != nil && n.Config.Host == "10.0.0.1" {
 				count++
 			}
-			if n.Type == TypeFolder {
+			if n.Type == KindFolder {
 				countFn(n.Children)
 			}
 		}
 	}
-	countFn(m.Sessions)
+	countFn(m.Nodes)
 	if count != 2 {
 		t.Errorf("expected 2 sessions with same host after duplicate, got %d", count)
 	}
@@ -562,8 +563,8 @@ func TestDuplicateSession_RootSessionCopiedAtRoot(t *testing.T) {
 		t.Fatalf("duplicate failed: %v", err)
 	}
 	// 找到副本节点（db-1-副本）。
-	var copyNode *Session
-	for _, n := range m.Sessions {
+	var copyNode *Node
+	for _, n := range m.Nodes {
 		if n.Name == "db-1-副本" {
 			copyNode = n
 		}

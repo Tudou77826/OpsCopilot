@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"opscopilot/pkg/config"
-	"opscopilot/pkg/sessionmanager"
+	"opscopilot/pkg/connectionstore"
 )
 
 // initBareRepoForShare 创建带 main 分支的裸仓库（共享仓库模拟）。
@@ -65,7 +65,7 @@ func newShareTestApp(t *testing.T, bareRepo, workDir, secretKey string) *App {
 		SecretKey: secretKey,
 	}
 
-	savedMgr := sessionmanager.NewManagerWithPath(filepath.Join(workDir, "sessions.json"))
+	savedMgr := connectionstore.NewStoreWithPath(filepath.Join(workDir, "sessions.json"))
 	if err := savedMgr.Load(); err != nil {
 		t.Fatalf("saved sessions load: %v", err)
 	}

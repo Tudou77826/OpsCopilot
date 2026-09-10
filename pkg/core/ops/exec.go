@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"opscopilot/pkg/connectionstore"
 	"opscopilot/pkg/remote"
-	"opscopilot/pkg/sessionmanager"
 )
 
 // buildSudoCommand 构造以 root 身份执行命令的 shell 语句
@@ -325,12 +325,12 @@ func (m *Manager) Exec(ctx context.Context, serverName, command string, opts Exe
 // 以 IP 为唯一主键：用户在 OpsCopilot 中登记服务器时 Host 字段即 IP，
 // 且 UpdateSession 保证同 Host 唯一，因此 IP → session 是 1:1 映射，
 // 避免了 Name 可被改成别名导致 CLI 无法定位的问题。
-func findSessionConfig(nodes []*sessionmanager.Session, host string) *remote.ConnectConfig {
+func findSessionConfig(nodes []*connectionstore.Node, host string) *remote.ConnectConfig {
 	for _, node := range nodes {
-		if node.Type == sessionmanager.TypeSession && node.Config != nil && node.Config.Host == host {
+		if node.Type == connectionstore.KindConnection && node.Config != nil && node.Config.Host == host {
 			return node.Config
 		}
-		if node.Type == sessionmanager.TypeFolder {
+		if node.Type == connectionstore.KindFolder {
 			if found := findSessionConfig(node.Children, host); found != nil {
 				return found
 			}

@@ -6,16 +6,16 @@ import (
 	"strings"
 	"testing"
 
+	"opscopilot/pkg/connectionstore"
 	"opscopilot/pkg/remote"
-	"opscopilot/pkg/sessionmanager"
 	"opscopilot/pkg/sshclient"
 )
 
 // newSavedSessionTestApp 构造仅填充已保存会话所需字段的 App（不经过 NewApp 重初始化），
 // 用于覆盖"前端编辑连接 → Wails → Go 持久化"这条用户流程。
-func newSavedSessionTestApp(t *testing.T, workDir string) (*App, *sessionmanager.Manager) {
+func newSavedSessionTestApp(t *testing.T, workDir string) (*App, *connectionstore.Store) {
 	t.Helper()
-	savedMgr := sessionmanager.NewManagerWithPath(filepath.Join(workDir, "sessions.json"))
+	savedMgr := connectionstore.NewStoreWithPath(filepath.Join(workDir, "sessions.json"))
 	if err := savedMgr.Load(); err != nil {
 		t.Fatalf("saved sessions load: %v", err)
 	}
@@ -24,12 +24,12 @@ func newSavedSessionTestApp(t *testing.T, workDir string) (*App, *sessionmanager
 }
 
 // findSavedNode 在会话树中按 ID 递归查找节点。
-func findSavedNode(nodes []*sessionmanager.Session, id string) *sessionmanager.Session {
+func findSavedNode(nodes []*connectionstore.Node, id string) *connectionstore.Node {
 	for _, node := range nodes {
 		if node.ID == id {
 			return node
 		}
-		if node.Type == sessionmanager.TypeFolder {
+		if node.Type == connectionstore.KindFolder {
 			if found := findSavedNode(node.Children, id); found != nil {
 				return found
 			}
@@ -78,7 +78,7 @@ func TestUpdateSavedSession_PreservesRootPassword(t *testing.T) {
 	}
 
 	// 从磁盘重新加载验证（等价于应用重启后用户再次打开编辑弹窗看到的值）。
-	reloaded := sessionmanager.NewManagerWithPath(filepath.Join(workDir, "sessions.json"))
+	reloaded := connectionstore.NewStoreWithPath(filepath.Join(workDir, "sessions.json"))
 	if err := reloaded.Load(); err != nil {
 		t.Fatalf("reload: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestUpdateSavedSession_BastionRoundTrip(t *testing.T) {
 		t.Fatalf("UpdateSavedSession returned error: %s", errStr)
 	}
 
-	reloaded := sessionmanager.NewManagerWithPath(filepath.Join(workDir, "sessions.json"))
+	reloaded := connectionstore.NewStoreWithPath(filepath.Join(workDir, "sessions.json"))
 	if err := reloaded.Load(); err != nil {
 		t.Fatalf("reload: %v", err)
 	}

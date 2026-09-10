@@ -25,6 +25,7 @@ import (
 	"opscopilot/pkg/ai"
 	"opscopilot/pkg/completion"
 	"opscopilot/pkg/config"
+	"opscopilot/pkg/connectionstore"
 	"opscopilot/pkg/core/security"
 	"opscopilot/pkg/filetransfer"
 	"opscopilot/pkg/knowledge"
@@ -36,7 +37,6 @@ import (
 	"opscopilot/pkg/script"
 	"opscopilot/pkg/secretstore"
 	"opscopilot/pkg/session"
-	"opscopilot/pkg/sessionmanager"
 	"opscopilot/pkg/sshclient"
 	// blank import 触发 telnetclient 的 init(),向 remote 注册 telnet dialer。
 	// remote 包用注册表避免循环依赖,故需在入口处显式引入协议实现包。
@@ -53,7 +53,7 @@ var Version = "dev"
 type App struct {
 	ctx               context.Context
 	sessionMgr        *session.Manager
-	savedSessionMgr   *sessionmanager.Manager
+	savedSessionMgr   *connectionstore.Store
 	secretStore       secretstore.SecretStore
 	aiService         *ai.AIService
 	configMgr         *config.Manager
@@ -137,7 +137,7 @@ func NewApp() *App {
 	cleanupRedundantRecordingFiles(scriptsDir)
 
 	// Initialize Saved Session Manager
-	savedMgr := sessionmanager.NewManager()
+	savedMgr := connectionstore.NewStore()
 	if err := savedMgr.Load(); err != nil {
 		fmt.Fprintf(os.Stderr, "[WARN] Failed to load saved sessions: %v\n", err)
 	}
@@ -2768,7 +2768,7 @@ func (a *App) SummarizeUpdateNotes(notes string) string {
 
 // --- Saved Session Management ---
 
-func (a *App) GetSavedSessions() []*sessionmanager.Session {
+func (a *App) GetSavedSessions() []*connectionstore.Node {
 	return a.savedSessionMgr.GetSessions()
 }
 
@@ -3105,10 +3105,10 @@ func readTerminalChunk(r io.Reader, buf []byte, n int) string {
 // 安全阀：暂存超过 terminalOutputGateMax 后不再累积、直接透传（防止前端迟迟不就绪
 // 时无限积压或永久卡住首段输出）；TerminalOutputReady 幂等。
 type terminalOutputGate struct {
-	mu      sync.Mutex
-	ready   bool
-	buf     []string
-	bufLen  int
+	mu     sync.Mutex
+	ready  bool
+	buf    []string
+	bufLen int
 }
 
 const terminalOutputGateMax = 512 << 10 // 512KB

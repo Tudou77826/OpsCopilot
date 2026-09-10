@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/pkg/sftp"
+	"opscopilot/pkg/connectionstore"
 	"opscopilot/pkg/core/security"
 	"opscopilot/pkg/remote"
 	"opscopilot/pkg/secretstore"
-	"opscopilot/pkg/sessionmanager"
 )
 
 // Config 运维内核配置
@@ -30,7 +30,7 @@ type Config struct {
 // 它内置 security 闸门（命令白名单 + 文件访问控制），调用方无法绕过。
 type Manager struct {
 	config           *Config
-	sessionMgr       *sessionmanager.Manager
+	sessionMgr       *connectionstore.Store
 	secretStore      secretstore.SecretStore
 	connections      map[string]*Connection
 	whitelistManager *security.WhitelistManager
@@ -83,12 +83,12 @@ func NewManager(config *Config) (*Manager, error) {
 	// 启动连接空闲超时清理 goroutine
 	go m.startIdleConnectionCleaner()
 
-	// 使用现有的 sessionmanager 加载 sessions.json
+	// 使用现有的 connectionstore 加载 sessions.json
 	sessionsPath := config.SessionsFile
 	if sessionsPath == "" {
 		sessionsPath = "sessions.json"
 	}
-	m.sessionMgr = sessionmanager.NewManagerWithPath(sessionsPath)
+	m.sessionMgr = connectionstore.NewStoreWithPath(sessionsPath)
 	if err := m.sessionMgr.Load(); err != nil {
 		fmt.Fprintf(os.Stderr, "[ops] Warning: Failed to load sessions: %v\n", err)
 	}
@@ -124,7 +124,7 @@ func NewManager(config *Config) (*Manager, error) {
 }
 
 // GetAvailableServers 获取所有可用的服务器配置
-func (m *Manager) GetAvailableServers() []*sessionmanager.Session {
+func (m *Manager) GetAvailableServers() []*connectionstore.Node {
 	return m.sessionMgr.GetSessions()
 }
 

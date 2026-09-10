@@ -1,4 +1,4 @@
-package sessionmanager
+package connectionstore
 
 import (
 	"encoding/json"
@@ -11,86 +11,86 @@ import (
 	"github.com/google/uuid"
 )
 
-type SessionType string
+type Kind string
 
 const (
-	TypeFolder  SessionType = "folder"
-	TypeSession SessionType = "session"
+	KindFolder     Kind = "folder"
+	KindConnection Kind = "session"
 )
 
-type Session struct {
+type Node struct {
 	ID       string                `json:"id"`
 	Name     string                `json:"name"` // Display name; defaults to Host
-	Type     SessionType           `json:"type"`
-	Children []*Session            `json:"children,omitempty"` // For folders
+	Type     Kind                  `json:"type"`
+	Children []*Node               `json:"children,omitempty"` // For folders
 	Config   *remote.ConnectConfig `json:"config,omitempty"`   // For sessions
 }
 
-type Manager struct {
+type Store struct {
 	filePath string
-	Sessions []*Session
+	Nodes    []*Node
 	mu       sync.RWMutex
 }
 
-func NewManager() *Manager {
-	return &Manager{
+func NewStore() *Store {
+	return &Store{
 		filePath: "sessions.json",
-		Sessions: []*Session{},
+		Nodes:    []*Node{},
 	}
 }
 
-// NewManagerWithPath 创建指定文件路径的 session 管理器
-func NewManagerWithPath(filePath string) *Manager {
-	return &Manager{
+// NewStoreWithPath 创建指定文件路径的 session 管理器
+func NewStoreWithPath(filePath string) *Store {
+	return &Store{
 		filePath: filePath,
-		Sessions: []*Session{},
+		Nodes:    []*Node{},
 	}
 }
 
-func (m *Manager) Load() error {
+func (m *Store) Load() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	data, err := os.ReadFile(m.filePath)
 	if os.IsNotExist(err) {
-		m.Sessions = []*Session{}
+		m.Nodes = []*Node{}
 		return m.Save()
 	}
 	if err != nil {
 		return err
 	}
 
-	return json.Unmarshal(data, &m.Sessions)
+	return json.Unmarshal(data, &m.Nodes)
 }
 
-func (m *Manager) Save() error {
+func (m *Store) Save() error {
 	// Assumes lock is held by caller or public method
-	data, err := json.MarshalIndent(m.Sessions, "", "  ")
+	data, err := json.MarshalIndent(m.Nodes, "", "  ")
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(m.filePath, data, 0644)
 }
 
-func (m *Manager) GetSessions() []*Session {
+func (m *Store) GetSessions() []*Node {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.Sessions
+	return m.Nodes
 }
 
-func (m *Manager) DeleteSession(id string) error {
+func (m *Store) DeleteSession(id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	// Recursive deletion helper
-	var deleteNode func(nodes []*Session) []*Session
-	deleteNode = func(nodes []*Session) []*Session {
-		var result []*Session
+	var deleteNode func(nodes []*Node) []*Node
+	deleteNode = func(nodes []*Node) []*Node {
+		var result []*Node
 		for _, node := range nodes {
 			if node.ID == id {
 				continue // Skip (delete)
 			}
-			if node.Type == TypeFolder {
+			if node.Type == KindFolder {
 				node.Children = deleteNode(node.Children)
 			}
 			result = append(result, node)
@@ -98,16 +98,16 @@ func (m *Manager) DeleteSession(id string) error {
 		return result
 	}
 
-	m.Sessions = deleteNode(m.Sessions)
+	m.Nodes = deleteNode(m.Nodes)
 	return m.Save()
 }
 
-func (m *Manager) RenameSession(id, newName string) error {
+func (m *Store) RenameSession(id, newName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	var renameNode func(nodes []*Session) bool
-	renameNode = func(nodes []*Session) bool {
+	var renameNode func(nodes []*Node) bool
+	renameNode = func(nodes []*Node) bool {
 		for _, node := range nodes {
 			if node.ID == id {
 				node.Name = newName
@@ -116,7 +116,7 @@ func (m *Manager) RenameSession(id, newName string) error {
 				}
 				return true
 			}
-			if node.Type == TypeFolder {
+			if node.Type == KindFolder {
 				if renameNode(node.Children) {
 					return true
 				}
@@ -125,7 +125,7 @@ func (m *Manager) RenameSession(id, newName string) error {
 		return false
 	}
 
-	if renameNode(m.Sessions) {
+	if renameNode(m.Nodes) {
 		return m.Save()
 	}
 	return fmt.Errorf("session not found")
@@ -160,7 +160,7 @@ func sameEndpoint(a, b *remote.ConnectConfig) bool {
 // 去重 key 为 (Host, Port, Protocol) 三元组:同一 host 不同协议/端口可共存,
 // 例如 192.168.1.1:22(SSH) 与 192.168.1.1:23(Telnet) 不冲突。
 // Protocol 空值在比较前归一化为 SSH,保证一致。
-func (m *Manager) Upsert(config remote.ConnectConfig, groupName string) error {
+func (m *Store) Upsert(config remote.ConnectConfig, groupName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -171,23 +171,23 @@ func (m *Manager) Upsert(config remote.ConnectConfig, groupName string) error {
 
 	// Step 1: Remove existing session with same (Host, Port, Protocol) from anywhere in the tree.
 	// This handles "Update" (by removing old and adding new) and "Move" (if group changed).
-	var removed *Session
-	var removeByHost func(nodes []*Session) []*Session
-	removeByHost = func(nodes []*Session) []*Session {
-		var result []*Session
+	var removed *Node
+	var removeByHost func(nodes []*Node) []*Node
+	removeByHost = func(nodes []*Node) []*Node {
+		var result []*Node
 		for _, node := range nodes {
-			if node.Type == TypeSession && node.Config != nil && sameEndpoint(node.Config, &config) {
+			if node.Type == KindConnection && node.Config != nil && sameEndpoint(node.Config, &config) {
 				removed = node
 				continue // Remove
 			}
-			if node.Type == TypeFolder {
+			if node.Type == KindFolder {
 				node.Children = removeByHost(node.Children)
 			}
 			result = append(result, node)
 		}
 		return result
 	}
-	m.Sessions = removeByHost(m.Sessions)
+	m.Nodes = removeByHost(m.Nodes)
 
 	// Connections opened from the saved-session tree carry the stored config.
 	// Preserve the node's display name when that config still has the old/empty name.
@@ -207,10 +207,10 @@ func (m *Manager) Upsert(config remote.ConnectConfig, groupName string) error {
 	config.Name = targetName
 
 	// Step 2: Create new node
-	newNode := &Session{
+	newNode := &Node{
 		ID:     "",
 		Name:   targetName,
-		Type:   TypeSession,
+		Type:   KindConnection,
 		Config: &config,
 	}
 	if removed != nil {
@@ -224,8 +224,8 @@ func (m *Manager) Upsert(config remote.ConnectConfig, groupName string) error {
 	if groupName != "" {
 		// Find folder
 		found := false
-		for _, node := range m.Sessions {
-			if node.Type == TypeFolder && node.Name == groupName {
+		for _, node := range m.Nodes {
+			if node.Type == KindFolder && node.Name == groupName {
 				node.Children = append(node.Children, newNode)
 				found = true
 				break
@@ -233,23 +233,23 @@ func (m *Manager) Upsert(config remote.ConnectConfig, groupName string) error {
 		}
 		if !found {
 			// Create new folder
-			newFolder := &Session{
+			newFolder := &Node{
 				ID:       uuid.New().String(),
 				Name:     groupName,
-				Type:     TypeFolder,
-				Children: []*Session{newNode},
+				Type:     KindFolder,
+				Children: []*Node{newNode},
 			}
-			m.Sessions = append(m.Sessions, newFolder)
+			m.Nodes = append(m.Nodes, newFolder)
 		}
 	} else {
 		// Add to root
-		m.Sessions = append(m.Sessions, newNode)
+		m.Nodes = append(m.Nodes, newNode)
 	}
 
 	return m.Save()
 }
 
-func (m *Manager) UpdateSession(id string, config remote.ConnectConfig, groupName string) error {
+func (m *Store) UpdateSession(id string, config remote.ConnectConfig, groupName string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -260,16 +260,16 @@ func (m *Manager) UpdateSession(id string, config remote.ConnectConfig, groupNam
 	config.Group = groupName
 
 	// Step 1: 定位目标节点(只读,不改动树)。定位/校验全部通过后才允许变更内存树,
-	// 保证任何错误返回时 m.Sessions 与磁盘文件保持一致——否则前端 5 秒轮询会把
+	// 保证任何错误返回时 m.Nodes 与磁盘文件保持一致——否则前端 5 秒轮询会把
 	// 被污染的内存树当最新数据渲染,用户会看到"保存失败且会话消失"。
-	var existing *Session
-	var findById func(nodes []*Session) *Session
-	findById = func(nodes []*Session) *Session {
+	var existing *Node
+	var findById func(nodes []*Node) *Node
+	findById = func(nodes []*Node) *Node {
 		for _, node := range nodes {
 			if node.ID == id {
 				return node
 			}
-			if node.Type == TypeFolder {
+			if node.Type == KindFolder {
 				if found := findById(node.Children); found != nil {
 					return found
 				}
@@ -277,25 +277,25 @@ func (m *Manager) UpdateSession(id string, config remote.ConnectConfig, groupNam
 		}
 		return nil
 	}
-	existing = findById(m.Sessions)
+	existing = findById(m.Nodes)
 	if existing == nil {
 		return fmt.Errorf("session not found")
 	}
 
 	// Step 2: 重复检测:key 为 (Host, Port, Protocol) 三元组,允许同 host 不同协议共存。
-	var hasDuplicateHost func(nodes []*Session) bool
-	hasDuplicateHost = func(nodes []*Session) bool {
+	var hasDuplicateHost func(nodes []*Node) bool
+	hasDuplicateHost = func(nodes []*Node) bool {
 		for _, node := range nodes {
-			if node.Type == TypeSession && node.Config != nil && sameEndpoint(node.Config, &config) && node.ID != id {
+			if node.Type == KindConnection && node.Config != nil && sameEndpoint(node.Config, &config) && node.ID != id {
 				return true
 			}
-			if node.Type == TypeFolder && hasDuplicateHost(node.Children) {
+			if node.Type == KindFolder && hasDuplicateHost(node.Children) {
 				return true
 			}
 		}
 		return false
 	}
-	if hasDuplicateHost(m.Sessions) {
+	if hasDuplicateHost(m.Nodes) {
 		return fmt.Errorf("a session with the same host already exists")
 	}
 
@@ -317,29 +317,29 @@ func (m *Manager) UpdateSession(id string, config remote.ConnectConfig, groupNam
 	config.Name = displayName
 
 	// Step 3: 校验通过,开始变更:先摘除旧位置,再插入目标位置。
-	newNode := &Session{
+	newNode := &Node{
 		ID:     id,
 		Name:   displayName,
-		Type:   TypeSession,
+		Type:   KindConnection,
 		Config: &config,
 	}
-	var removed *Session
-	var removeByID func(nodes []*Session) []*Session
-	removeByID = func(nodes []*Session) []*Session {
-		var result []*Session
+	var removed *Node
+	var removeByID func(nodes []*Node) []*Node
+	removeByID = func(nodes []*Node) []*Node {
+		var result []*Node
 		for _, node := range nodes {
 			if node.ID == id {
 				removed = node
 				continue
 			}
-			if node.Type == TypeFolder {
+			if node.Type == KindFolder {
 				node.Children = removeByID(node.Children)
 			}
 			result = append(result, node)
 		}
 		return result
 	}
-	m.Sessions = removeByID(m.Sessions)
+	m.Nodes = removeByID(m.Nodes)
 	if removed == nil {
 		// 理论不可达(Step 1 已定位);防御:未摘到节点时不落盘,避免状态不一致。
 		return fmt.Errorf("session not found")
@@ -347,24 +347,24 @@ func (m *Manager) UpdateSession(id string, config remote.ConnectConfig, groupNam
 
 	if groupName != "" {
 		found := false
-		for _, node := range m.Sessions {
-			if node.Type == TypeFolder && node.Name == groupName {
+		for _, node := range m.Nodes {
+			if node.Type == KindFolder && node.Name == groupName {
 				node.Children = append(node.Children, newNode)
 				found = true
 				break
 			}
 		}
 		if !found {
-			newFolder := &Session{
+			newFolder := &Node{
 				ID:       uuid.New().String(),
 				Name:     groupName,
-				Type:     TypeFolder,
-				Children: []*Session{newNode},
+				Type:     KindFolder,
+				Children: []*Node{newNode},
 			}
-			m.Sessions = append(m.Sessions, newFolder)
+			m.Nodes = append(m.Nodes, newFolder)
 		}
 	} else {
-		m.Sessions = append(m.Sessions, newNode)
+		m.Nodes = append(m.Nodes, newNode)
 	}
 
 	return m.Save()
@@ -374,22 +374,22 @@ func (m *Manager) UpdateSession(id string, config remote.ConnectConfig, groupNam
 // 深拷贝（含跳板机），副本落在源节点同一文件夹（根会话副本仍在根）。
 // 与 Upsert/UpdateSession 不同，复制允许与源节点同 endpoint——用户复制后通常
 // 会立刻修改副本的主机/端口，端点去重在这里是错误语义。
-func (m *Manager) DuplicateSession(id string) error {
+func (m *Store) DuplicateSession(id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	// 查找源节点及其所在兄弟列表（副本要插到源节点之后，保持相邻）。
-	var src *Session
-	var siblings *[]*Session
-	var findById func(nodes *[]*Session) bool
-	findById = func(nodes *[]*Session) bool {
+	var src *Node
+	var siblings *[]*Node
+	var findById func(nodes *[]*Node) bool
+	findById = func(nodes *[]*Node) bool {
 		for _, node := range *nodes {
 			if node.ID == id {
 				src = node
 				siblings = nodes
 				return true
 			}
-			if node.Type == TypeFolder {
+			if node.Type == KindFolder {
 				if findById(&node.Children) {
 					return true
 				}
@@ -397,10 +397,10 @@ func (m *Manager) DuplicateSession(id string) error {
 		}
 		return false
 	}
-	if !findById(&m.Sessions) || src == nil {
+	if !findById(&m.Nodes) || src == nil {
 		return fmt.Errorf("session not found")
 	}
-	if src.Type != TypeSession || src.Config == nil {
+	if src.Type != KindConnection || src.Config == nil {
 		return fmt.Errorf("only sessions can be duplicated")
 	}
 
@@ -409,10 +409,10 @@ func (m *Manager) DuplicateSession(id string) error {
 		bastion := *src.Config.Bastion
 		cfg.Bastion = &bastion
 	}
-	copyNode := &Session{
+	copyNode := &Node{
 		ID:     uuid.New().String(),
 		Name:   src.Name + "-副本",
-		Type:   TypeSession,
+		Type:   KindConnection,
 		Config: &cfg,
 	}
 
@@ -431,7 +431,7 @@ func (m *Manager) DuplicateSession(id string) error {
 }
 
 // CreateFolder creates an empty folder at root level.
-func (m *Manager) CreateFolder(name string) error {
+func (m *Store) CreateFolder(name string) error {
 	if strings.TrimSpace(name) == "" {
 		return fmt.Errorf("folder name cannot be empty")
 	}
@@ -439,18 +439,18 @@ func (m *Manager) CreateFolder(name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for _, s := range m.Sessions {
-		if s.Type == TypeFolder && s.Name == name {
+	for _, s := range m.Nodes {
+		if s.Type == KindFolder && s.Name == name {
 			return fmt.Errorf("folder '%s' already exists", name)
 		}
 	}
 
-	folder := &Session{
+	folder := &Node{
 		ID:       uuid.New().String(),
 		Name:     name,
-		Type:     TypeFolder,
-		Children: []*Session{},
+		Type:     KindFolder,
+		Children: []*Node{},
 	}
-	m.Sessions = append(m.Sessions, folder)
+	m.Nodes = append(m.Nodes, folder)
 	return m.Save()
 }

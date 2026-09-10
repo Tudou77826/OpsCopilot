@@ -6,16 +6,16 @@ import (
 	"path/filepath"
 	"sync"
 
+	"opscopilot/pkg/connectionstore"
 	"opscopilot/pkg/remote"
-	"opscopilot/pkg/sessionmanager"
 )
 
 // ConfigService 管理已保存的连接配置：sidecar 自有数据（JSON 文件），
 // 与宿主/平台无耦合；凭据落盘沿用既有决策（允许凭据落文件系统）。
-// 复用 pkg/sessionmanager（与终端应用同一套树形结构与 Upsert 语义）。
+// 复用 pkg/connectionstore（与终端应用同一套树形结构与 Upsert 语义）。
 type ConfigService struct {
 	mu   sync.Mutex
-	mgr  *sessionmanager.Manager
+	mgr  *connectionstore.Store
 	path string
 }
 
@@ -24,7 +24,7 @@ func NewConfigService(dataDir string) (*ConfigService, error) {
 		return nil, fmt.Errorf("创建数据目录失败: %w", err)
 	}
 	path := filepath.Join(dataDir, "saved-connections.json")
-	mgr := sessionmanager.NewManagerWithPath(path)
+	mgr := connectionstore.NewStoreWithPath(path)
 	if err := mgr.Load(); err != nil {
 		return nil, fmt.Errorf("读取连接配置失败: %w", err)
 	}
@@ -40,7 +40,7 @@ type SavedSession struct {
 	Config   *remote.ConnectConfig `json:"config,omitempty"`
 }
 
-func convertTree(sessions []*sessionmanager.Session) []SavedSession {
+func convertTree(sessions []*connectionstore.Node) []SavedSession {
 	out := make([]SavedSession, 0, len(sessions))
 	for _, s := range sessions {
 		node := SavedSession{ID: s.ID, Name: s.Name, Type: string(s.Type)}
@@ -87,7 +87,7 @@ func (s *ConfigService) Save(in SaveInput) (string, error) {
 	cfg := remote.ConnectConfig{
 		Name: in.Name, Host: in.Host, Port: in.Port, User: in.User,
 		Password: in.Password, RootPassword: in.RootPassword,
-		Bastion: in.Bastion,
+		Bastion:  in.Bastion,
 		Protocol: in.Protocol,
 	}
 	if cfg.Protocol == "" {
@@ -146,8 +146,8 @@ func (s *ConfigService) Rename(id, name string) error {
 
 func (s *ConfigService) findID(host string, port int, user string) (string, error) {
 	var id string
-	var walk func([]*sessionmanager.Session)
-	walk = func(sessions []*sessionmanager.Session) {
+	var walk func([]*connectionstore.Node)
+	walk = func(sessions []*connectionstore.Node) {
 		for _, s := range sessions {
 			if c := s.Config; c != nil && c.Host == host && c.Port == port && c.User == user {
 				id = s.ID
