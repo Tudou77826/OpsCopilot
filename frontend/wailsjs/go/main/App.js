@@ -6,6 +6,14 @@ export function AddQuickCommand(arg1) {
   return window['go']['main']['App']['AddQuickCommand'](arg1);
 }
 
+export function AnalyzeXshellImport(arg1, arg2) {
+  return window['go']['main']['App']['AnalyzeXshellImport'](arg1, arg2);
+}
+
+export function ApplyXshellImport(arg1, arg2) {
+  return window['go']['main']['App']['ApplyXshellImport'](arg1, arg2);
+}
+
 export function ArchiveSession(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['ArchiveSession'](arg1, arg2, arg3, arg4, arg5);
 }
@@ -50,8 +58,12 @@ export function ConnectWithID(arg1, arg2) {
   return window['go']['main']['App']['ConnectWithID'](arg1, arg2);
 }
 
-export function CreateSavedFolder(arg1) {
-  return window['go']['main']['App']['CreateSavedFolder'](arg1);
+export function CreateSavedConnection(arg1, arg2) {
+  return window['go']['main']['App']['CreateSavedConnection'](arg1, arg2);
+}
+
+export function CreateSavedFolder(arg1, arg2) {
+  return window['go']['main']['App']['CreateSavedFolder'](arg1, arg2);
 }
 
 export function CreateScript(arg1, arg2) {
@@ -62,20 +74,28 @@ export function DeleteQuickCommand(arg1) {
   return window['go']['main']['App']['DeleteQuickCommand'](arg1);
 }
 
-export function DeleteSavedSession(arg1) {
-  return window['go']['main']['App']['DeleteSavedSession'](arg1);
-}
-
 export function DeleteScript(arg1) {
   return window['go']['main']['App']['DeleteScript'](arg1);
+}
+
+export function DeleteTreeNode(arg1) {
+  return window['go']['main']['App']['DeleteTreeNode'](arg1);
+}
+
+export function DetectXshellSessionDirs() {
+  return window['go']['main']['App']['DetectXshellSessionDirs']();
 }
 
 export function DoUpdate(arg1) {
   return window['go']['main']['App']['DoUpdate'](arg1);
 }
 
-export function DuplicateSession(arg1) {
-  return window['go']['main']['App']['DuplicateSession'](arg1);
+export function DuplicateSavedConnection(arg1) {
+  return window['go']['main']['App']['DuplicateSavedConnection'](arg1);
+}
+
+export function DuplicateTerminalSession(arg1) {
+  return window['go']['main']['App']['DuplicateTerminalSession'](arg1);
 }
 
 export function ExportScript(arg1) {
@@ -150,6 +170,10 @@ export function GetCompletions(arg1, arg2) {
   return window['go']['main']['App']['GetCompletions'](arg1, arg2);
 }
 
+export function GetConnectionTree() {
+  return window['go']['main']['App']['GetConnectionTree']();
+}
+
 export function GetFileAccessConfig() {
   return window['go']['main']['App']['GetFileAccessConfig']();
 }
@@ -190,10 +214,6 @@ export function GetReleaseHistory() {
   return window['go']['main']['App']['GetReleaseHistory']();
 }
 
-export function GetSavedSessions() {
-  return window['go']['main']['App']['GetSavedSessions']();
-}
-
 export function GetScriptList() {
   return window['go']['main']['App']['GetScriptList']();
 }
@@ -220,6 +240,10 @@ export function GetSharedSessions() {
 
 export function GetVersion() {
   return window['go']['main']['App']['GetVersion']();
+}
+
+export function GetXshellImportStatus() {
+  return window['go']['main']['App']['GetXshellImportStatus']();
 }
 
 export function HasActiveWork() {
@@ -266,6 +290,10 @@ export function LocalStat(arg1) {
   return window['go']['main']['App']['LocalStat'](arg1);
 }
 
+export function MoveTreeNode(arg1, arg2, arg3) {
+  return window['go']['main']['App']['MoveTreeNode'](arg1, arg2, arg3);
+}
+
 export function ParseIntent(arg1) {
   return window['go']['main']['App']['ParseIntent'](arg1);
 }
@@ -286,12 +314,16 @@ export function RemoveSharedSession(arg1) {
   return window['go']['main']['App']['RemoveSharedSession'](arg1);
 }
 
-export function RenameSavedSession(arg1, arg2) {
-  return window['go']['main']['App']['RenameSavedSession'](arg1, arg2);
+export function RenameTreeNode(arg1, arg2) {
+  return window['go']['main']['App']['RenameTreeNode'](arg1, arg2);
 }
 
 export function ReorderQuickCommands(arg1) {
   return window['go']['main']['App']['ReorderQuickCommands'](arg1);
+}
+
+export function ReorderTreeChildren(arg1, arg2) {
+  return window['go']['main']['App']['ReorderTreeChildren'](arg1, arg2);
 }
 
 export function ReplayScript(arg1, arg2) {
@@ -346,6 +378,14 @@ export function SelectSavePath(arg1) {
   return window['go']['main']['App']['SelectSavePath'](arg1);
 }
 
+export function SelectSessionImportDirectory() {
+  return window['go']['main']['App']['SelectSessionImportDirectory']();
+}
+
+export function SelectSessionImportFile() {
+  return window['go']['main']['App']['SelectSessionImportFile']();
+}
+
 export function SendCommand(arg1, arg2) {
   return window['go']['main']['App']['SendCommand'](arg1, arg2);
 }
@@ -374,6 +414,10 @@ export function SummarizeUpdateNotes(arg1) {
   return window['go']['main']['App']['SummarizeUpdateNotes'](arg1);
 }
 
+export function TerminalOutputReady(arg1) {
+  return window['go']['main']['App']['TerminalOutputReady'](arg1);
+}
+
 export function UpdatePatchIssueStatus(arg1, arg2, arg3) {
   return window['go']['main']['App']['UpdatePatchIssueStatus'](arg1, arg2, arg3);
 }
@@ -382,8 +426,8 @@ export function UpdateQuickCommand(arg1, arg2) {
   return window['go']['main']['App']['UpdateQuickCommand'](arg1, arg2);
 }
 
-export function UpdateSavedSession(arg1, arg2) {
-  return window['go']['main']['App']['UpdateSavedSession'](arg1, arg2);
+export function UpdateSavedConnection(arg1, arg2) {
+  return window['go']['main']['App']['UpdateSavedConnection'](arg1, arg2);
 }
 
 export function UpdateScript(arg1) {

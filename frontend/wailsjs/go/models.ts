@@ -299,6 +299,49 @@ export namespace config {
 
 }
 
+export namespace connectionstore {
+	
+	export class Node {
+	    id: string;
+	    name: string;
+	    type: string;
+	    children?: Node[];
+	    config?: remote.ConnectConfig;
+	
+	    static createFrom(source: any = {}) {
+	        return new Node(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.type = source["type"];
+	        this.children = this.convertValues(source["children"], Node);
+	        this.config = this.convertValues(source["config"], remote.ConnectConfig);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace main {
 	
 	export class ConnectConfig {
@@ -361,6 +404,74 @@ export namespace main {
 	        this.success = source["success"];
 	        this.sessionId = source["sessionId"];
 	        this.message = source["message"];
+	    }
+	}
+	export class ImportAnalysis {
+	    total: number;
+	    supported: number;
+	    unsupported: number;
+	    existing: number;
+	    withPassword: number;
+	    passwordDecrypted: number;
+	    passwordFailed: number;
+	    groups: number;
+	    protocols: Record<string, number>;
+	    warnings: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportAnalysis(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total = source["total"];
+	        this.supported = source["supported"];
+	        this.unsupported = source["unsupported"];
+	        this.existing = source["existing"];
+	        this.withPassword = source["withPassword"];
+	        this.passwordDecrypted = source["passwordDecrypted"];
+	        this.passwordFailed = source["passwordFailed"];
+	        this.groups = source["groups"];
+	        this.protocols = source["protocols"];
+	        this.warnings = source["warnings"];
+	    }
+	}
+	export class ImportOptions {
+	    decryptPassword: boolean;
+	    sourceSid?: string;
+	    masterPassword?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportOptions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.decryptPassword = source["decryptPassword"];
+	        this.sourceSid = source["sourceSid"];
+	        this.masterPassword = source["masterPassword"];
+	    }
+	}
+	export class ImportReport {
+	    imported: number;
+	    skippedExisting: number;
+	    skippedUnsupported: number;
+	    passwordDecrypted: number;
+	    passwordFailed: number;
+	    warnings: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportReport(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.imported = source["imported"];
+	        this.skippedExisting = source["skippedExisting"];
+	        this.skippedUnsupported = source["skippedUnsupported"];
+	        this.passwordDecrypted = source["passwordDecrypted"];
+	        this.passwordFailed = source["passwordFailed"];
+	        this.warnings = source["warnings"];
 	    }
 	}
 	export class ModuleInfo {
@@ -442,6 +553,40 @@ export namespace main {
 		    }
 		    return a;
 		}
+	}
+	export class XshellCredentialStatus {
+	    available: boolean;
+	    maskedSid?: string;
+	    windowsUser?: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new XshellCredentialStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.available = source["available"];
+	        this.maskedSid = source["maskedSid"];
+	        this.windowsUser = source["windowsUser"];
+	        this.message = source["message"];
+	    }
+	}
+	export class XshellSessionDir {
+	    path: string;
+	    version: number;
+	    sessions: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new XshellSessionDir(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.version = source["version"];
+	        this.sessions = source["sessions"];
+	    }
 	}
 
 }
@@ -893,49 +1038,6 @@ export namespace security {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.version = source["version"];
 	        this.policies = this.convertValues(source["policies"], Policy);
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-
-}
-
-export namespace sessionmanager {
-	
-	export class Session {
-	    id: string;
-	    name: string;
-	    type: string;
-	    children?: Session[];
-	    config?: remote.ConnectConfig;
-	
-	    static createFrom(source: any = {}) {
-	        return new Session(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.name = source["name"];
-	        this.type = source["type"];
-	        this.children = this.convertValues(source["children"], Session);
-	        this.config = this.convertValues(source["config"], remote.ConnectConfig);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
