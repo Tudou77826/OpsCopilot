@@ -236,7 +236,6 @@ const QuickCommandPanel: React.FC<QuickCommandPanelProps> = ({ isOpen, onExecute
                 <QuickCommandImportDialog
                     isOpen={importOpen}
                     host={host}
-                    existingGroups={availableGroups}
                     onClose={() => setImportOpen(false)}
                 />
             </ErrorBoundary>

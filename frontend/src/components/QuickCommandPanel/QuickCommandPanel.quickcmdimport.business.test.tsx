@@ -21,6 +21,9 @@ const COMMANDS_QBL = QBL_DIR + '\\commands.qbl';
 
 const LoadQuickCommands = vi.fn(async () => [
     { id: 'g1-1', name: '重启服务', content: 'systemctl restart app', group: '默认' },
+    // 面板的分组下拉与"现状"都来自这份列表；内容刻意不与被导入的命令重合，
+    // 否则默认落点会被"同内容已在哪儿"接管
+    { id: 'g1-2', name: '看旧日志', content: 'tail -f /var/log/old.log', group: '日志排查' },
 ]);
 
 const DetectXshellQuickButtonDirs = vi.fn(async () => [
@@ -113,7 +116,7 @@ function renderPanel() {
 /** 打开面板并进入导入对话框。 */
 async function openImportDialog() {
     renderPanel();
-    await screen.findByText('重启服务');
+    await screen.findByTestId('command-import-btn');
     fireEvent.click(screen.getByTestId('command-import-btn'));
     await screen.findByText('导入 Xshell 快捷命令');
 }
@@ -126,10 +129,21 @@ async function openImportReview() {
     await screen.findByText('导入预览');
 }
 
+/**
+ * 把某个分组选择器设成一个新分组名。
+ *
+ * 分组现在是选择器（现有分组 / 跟随集合 / ＋新建分组…），新名字要走「＋ 新建分组…」
+ * 再输入——这样用户一眼能看见 OpsCopilot 里已有哪些分组，不必盲打。
+ */
+function pickNewGroup(testId: string, name: string) {
+    fireEvent.change(screen.getByTestId(testId), { target: { value: '__new__' } });
+    fireEvent.change(screen.getByTestId(testId), { target: { value: name } });
+}
+
 describe('导入入口（B0）', () => {
     it('宿主提供导入能力时，卡片流里出现「导入」入口', async () => {
         renderPanel();
-        await screen.findByText('重启服务');
+        await screen.findByTestId('command-import-btn');
         expect(screen.getByTestId('command-import-btn')).toBeInTheDocument();
     });
 });
@@ -156,8 +170,8 @@ describe('命令级取舍与编辑（B2）', () => {
         fireEvent.click(screen.getByTestId('import-item-0-1')); // 不要 df
         fireEvent.change(screen.getByTestId('import-item-name-0-0'), { target: { value: '跟踪应用日志' } });
         fireEvent.change(screen.getByTestId('import-item-content-0-0'), { target: { value: 'tail -F /var/log/app.log' } });
-        fireEvent.change(screen.getByTestId('import-item-group-0-0'), { target: { value: '日志排查' } });
-        fireEvent.change(screen.getByTestId('import-group-0'), { target: { value: '运维命令' } });
+        fireEvent.change(screen.getByTestId('import-item-group-0-0'), { target: { value: '日志排查' } }); // 选现有分组
+        pickNewGroup('import-group-0', '运维命令');
 
         fireEvent.click(screen.getByRole('button', { name: /确认导入 1 条/ }));
 
@@ -188,7 +202,7 @@ describe('命令级取舍与编辑（B2）', () => {
 describe('落盘与刷新（B3）', () => {
     it('导入后在报告里给出写入的分组，面板随事件刷新出新分组', async () => {
         await openImportReview();
-        fireEvent.change(screen.getByTestId('import-group-0'), { target: { value: '运维命令' } });
+        pickNewGroup('import-group-0', '运维命令');
         fireEvent.click(screen.getByRole('button', { name: /确认导入/ }));
 
         await screen.findByText('导入结果');

@@ -13,14 +13,13 @@ import type {
     QuickCommandImportAnalysis,
     QuickCommandImportReport,
     QuickCommandImportSelection,
+    QuickCommandSetItem,
     XshellQuickButtonDir,
 } from '../ports';
 
 type Props = {
     isOpen: boolean;
     host: QuickCommandHost;
-    /** 面板里已有的分组名，用于提示"将追加到已有分组"。 */
-    existingGroups: string[];
     onClose: () => void;
 };
 
@@ -46,14 +45,28 @@ type SetPlan = {
     items: ItemPlan[];
 };
 
+/** 现有命令库的快照，用于"落点参考现状"。 */
+type Library = {
+    total: number;
+    /** 按条数从多到少。 */
+    groups: { name: string; count: number }[];
+    /** 全键（分组 + 名称 + 内容）命中 → 导入时会跳过。 */
+    keys: Set<string>;
+    /** 按命令内容索引，用于识别"同一条运维命令已经在哪儿"。 */
+    byContent: Map<string, { name: string; group: string }[]>;
+};
+
 /**
  * 集合的默认分组名。
  *
  * Xshell 的 .qbl 里没有集合的显示名（[Info] 只有 Version/Count/Expanded），文件名又
- * 常常是 commands 这种无意义的名字，所以分组名不能由后端猜。默认值取 Xshell 而不是
- * 文件名，是为了让最常见的单集合场景一按就得到一个像样的分组名。
+ * 常常是 commands 这种无意义的名字，所以分组名不能由后端猜。没有任何可参考的现有分组
+ * 时用它，是为了让最常见的单集合场景一按就得到一个像样的分组名。
  */
 const DEFAULT_GROUP = 'Xshell';
+
+/** 分组选择器里"新建分组"选项的哨兵值（`<select>` 的 value 只能是字符串）。 */
+const NEW_GROUP = '__new__';
 
 /**
  * 判重键：分组 + 名称 + 内容，三者全同才算同一条命令。
@@ -66,9 +79,67 @@ function commandKey(group: string, name: string, content: string): string {
     return `${group}\u0000${name}\u0000${content}`;
 }
 
+function emptyLibrary(): Library {
+    return { total: 0, groups: [], keys: new Set(), byContent: new Map() };
+}
+
+function buildLibrary(commands: { name: string; content: string; group?: string }[]): Library {
+    const counts = new Map<string, number>();
+    const keys = new Set<string>();
+    const byContent = new Map<string, { name: string; group: string }[]>();
+
+    for (const cmd of commands) {
+        const group = cmd.group || 'default';
+        counts.set(group, (counts.get(group) ?? 0) + 1);
+        keys.add(commandKey(group, cmd.name, cmd.content));
+        const list = byContent.get(cmd.content) ?? [];
+        list.push({ name: cmd.name, group });
+        byContent.set(cmd.content, list);
+    }
+
+    const groups = [...counts.entries()]
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
+    return { total: commands.length, groups, keys, byContent };
+}
+
+/**
+ * 按现有命令的内容给出建议落点。
+ *
+ * 这是"落点参考现状"的核心：导入的这批里如果有同内容的命令已经存在于某个分组，默认就
+ * 落到那个分组。否则本该进「普通运维」的命令会被放进一个凭空新建的分组，同一件事散成两处。
+ */
+function suggestGroup(items: QuickCommandSetItem[], library: Library, fallback: string): string {
+    const tally = new Map<string, number>();
+    for (const item of items) {
+        if (!item.supported) continue;
+        const hit = library.byContent.get(item.content.trim())?.[0];
+        if (!hit) continue;
+        tally.set(hit.group, (tally.get(hit.group) ?? 0) + 1);
+    }
+    let best = '';
+    let bestCount = 0;
+    for (const [group, count] of tally) {
+        if (count > bestCount) {
+            best = group;
+            bestCount = count;
+        }
+    }
+    return best || fallback;
+}
+
 type Evaluated = {
-    /** 每个集合里逐条命令的"是否已被占位"标记（与 items 同序）。 */
-    bySource: Record<string, { existing: boolean[]; includeCount: number }>;
+    bySource: Record<
+        string,
+        {
+            /** 与 items 同序：该条是否已被同分组同名的命令占位（导入会跳过）。 */
+            existing: boolean[];
+            /** 与 items 同序：同内容的命令已经存在的分组（用于提示"这条其实在哪儿"）。 */
+            contentHit: (string | null)[];
+            includeCount: number;
+        }
+    >;
     willImport: number;
     existing: number;
     unsupported: number;
@@ -84,9 +155,9 @@ type Evaluated = {
 function evaluatePlan(
     rows: QuickCommandImportAnalysis['rows'],
     plan: Record<string, SetPlan>,
-    existingKeys: Set<string>,
+    library: Library,
 ): Evaluated {
-    const seen = new Set(existingKeys);
+    const seen = new Set(library.keys);
     const bySource: Evaluated['bySource'] = {};
     let willImport = 0;
     let existing = 0;
@@ -97,18 +168,24 @@ function evaluatePlan(
         if (!set) continue;
         const setGroup = set.group.trim() || DEFAULT_GROUP;
         const flags: boolean[] = [];
+        const hits: (string | null)[] = [];
         let includeCount = 0;
 
         set.items.forEach((item) => {
             if (!item.supported) {
                 unsupported++;
                 flags.push(false);
+                hits.push(null);
                 return;
             }
             const active = set.included && item.included;
             const key = commandKey(item.group.trim() || setGroup, item.name.trim(), item.content.trim());
             const duplicate = active && seen.has(key);
             flags.push(duplicate);
+
+            const sibling = library.byContent.get(item.content.trim())?.[0];
+            hits.push(!duplicate && active && sibling ? sibling.group : null);
+
             if (!active) return;
             if (duplicate) {
                 existing++;
@@ -119,10 +196,98 @@ function evaluatePlan(
             includeCount++;
         });
 
-        bySource[row.source] = { existing: flags, includeCount };
+        bySource[row.source] = { existing: flags, contentHit: hits, includeCount };
     }
     return { bySource, willImport, existing, unsupported };
 }
+
+type GroupPickerProps = {
+    value: string;
+    /** 现有分组（按条数从多到少）。 */
+    groups: string[];
+    /** 提供「跟随集合」选项——逐条分组用。 */
+    allowFollow?: boolean;
+    onChange: (next: string) => void;
+    testId: string;
+    ariaLabel: string;
+    newPlaceholder: string;
+};
+
+/**
+ * 分组选择器：从现有分组里选、跟随集合、或新建。
+ *
+ * 之所以不是纯粹的文本框：用户看不到 OpsCopilot 里已有哪些分组，只能盲打，于是同一件事
+ * 容易散成「K8S 运维」和「K8s 操作」两个分组。把现有分组列出来，选择本身就是看一眼现状。
+ * 当前值不在现有分组里时，它作为「新建：xxx」选项出现，因此下拉始终可达。
+ */
+const GroupPicker: React.FC<GroupPickerProps> = ({
+    value,
+    groups,
+    allowFollow,
+    onChange,
+    testId,
+    ariaLabel,
+    newPlaceholder,
+}) => {
+    // 只有显式点了「＋ 新建分组…」才进入输入态；否则始终给下拉，保证现有分组可达。
+    const [newMode, setNewMode] = useState(false);
+    const isCustom = value !== '' && !groups.includes(value);
+
+    if (newMode) {
+        return (
+            <span style={styles.pickerRow}>
+                <input
+                    style={styles.pickerInput}
+                    value={value}
+                    placeholder={newPlaceholder}
+                    onChange={(e) => onChange(e.target.value)}
+                    aria-label={ariaLabel}
+                    data-testid={testId}
+                />
+                {groups.length > 0 && (
+                    <button
+                        style={styles.backLink}
+                        title="从现有分组中选择"
+                        onClick={() => {
+                            setNewMode(false);
+                            onChange(groups[0]);
+                        }}
+                        data-testid={`${testId}-back`}
+                    >
+                        ↩
+                    </button>
+                )}
+            </span>
+        );
+    }
+
+    return (
+        <select
+            style={styles.pickerSelect}
+            value={value}
+            onChange={(e) => {
+                const next = e.target.value;
+                if (next === NEW_GROUP) {
+                    setNewMode(true);
+                    if (!isCustom) onChange('');
+                    return;
+                }
+                onChange(next);
+            }}
+            aria-label={ariaLabel}
+            data-testid={testId}
+        >
+            {allowFollow && <option value="">跟随集合</option>}
+            {groups.map((g) => (
+                <option key={g} value={g}>
+                    {g}
+                </option>
+            ))}
+            {isCustom && <option value={value}>新建：{value}</option>}
+            <option value={NEW_GROUP}>＋ 新建分组…</option>
+        </select>
+    );
+};
 
 /**
  * Xshell 快捷命令导入对话框。
@@ -132,13 +297,13 @@ function evaluatePlan(
  *  2. 命令级——逐条勾选，取消掉不想要的那几条；
  *  3. 字段级——逐条改名称与命令内容，逐条覆盖目标分组（空 = 跟随集合）。
  *
- * 之所以要这么细：Xshell 里按钮的名字常常很潦草、一套按钮里往往混着不同类别的命令，
- * 而导入后逐条改要重复打开编辑弹窗。放在写入之前一次做完，用户只需要在一个地方对齐。
+ * 落点不只看导入的东西，也看 OpsCopilot 现状：现有分组列在来源页与选择器里，"同一内容的
+ * 命令已经存在于某个分组"会作为默认落点并标出来，避免同一件事散成多个分组。
  *
  * 不支持导入的类型（脚本、菜单等）仍然列出来但置灰并写明原因——比只在提示里给一个
  * 跳过总数清楚。
  */
-const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroups, onClose }) => {
+const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, onClose }) => {
     const toast = useToast();
 
     const [step, setStep] = useState<Step>('source');
@@ -146,8 +311,7 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
     const [selectedPath, setSelectedPath] = useState('');
     const [analysis, setAnalysis] = useState<QuickCommandImportAnalysis | null>(null);
     const [plan, setPlan] = useState<Record<string, SetPlan>>({});
-    /** 现有命令的判重键，用于实时判断"已存在"。 */
-    const [existingKeys, setExistingKeys] = useState<Set<string>>(() => new Set());
+    const [library, setLibrary] = useState<Library>(emptyLibrary);
     const [report, setReport] = useState<QuickCommandImportReport | null>(null);
     const [busy, setBusy] = useState('');
     const [error, setError] = useState('');
@@ -174,13 +338,11 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
 
         void (async () => {
             try {
-                // 读一次现有命令：预览里的"已存在"要随分组/名称/内容的改动实时重算
+                // 读一次现有命令：落点建议与"已存在"判断都基于它
                 const commands = (await hostRef.current.storage.load()) ?? [];
-                setExistingKeys(
-                    new Set(commands.map((c) => commandKey(c.group || 'default', c.name, c.content))),
-                );
+                setLibrary(buildLibrary(commands));
             } catch {
-                setExistingKeys(new Set());
+                setLibrary(emptyLibrary());
             }
             try {
                 const detect = hostRef.current.detectQuickButtonDirs;
@@ -201,7 +363,8 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
     }
 
     const rows = analysis?.rows ?? [];
-    const evaluated = evaluatePlan(rows, plan, existingKeys);
+    const evaluated = evaluatePlan(rows, plan, library);
+    const groupNames = library.groups.map((g) => g.name);
 
     const updateSet = (source: string, patch: Partial<SetPlan>) => {
         setPlan((prev) => (prev[source] ? { ...prev, [source]: { ...prev[source], ...patch } } : prev));
@@ -222,10 +385,9 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
         if (!name) return '集合分组不能为空';
         const sameBatch = rows.some((other, i) => i !== index && (plan[other.source]?.group ?? '').trim() === name);
         if (sameBatch) return '将与本批其它集合合并到同一分组';
-        if (existingGroups.includes(name)) return '将追加到已有分组';
+        if (groupNames.includes(name)) return '将追加到已有分组';
         return '将新建分组';
     };
-
     const runAnalyze = async () => {
         if (!selectedPath) {
             setError('请先选择要导入的 Xshell 快捷按钮文件或目录');
@@ -237,13 +399,13 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
             const result = await host.analyzeQuickCommandImport!(selectedPath, DEFAULT_GROUP);
             setAnalysis(result);
 
-            // 逐条以"可导入且默认勾选"为初值；分组留空表示跟随集合。
+            // 每套按钮的默认分组参考现状：同内容的命令已经在哪个分组，就默认落到那里。
             const initial: Record<string, SetPlan> = {};
             for (const row of result.rows ?? []) {
                 initial[row.source] = {
                     included: true,
                     expanded: true,
-                    group: row.group || DEFAULT_GROUP,
+                    group: suggestGroup(row.items ?? [], library, row.group || DEFAULT_GROUP),
                     items: (row.items ?? []).map((item) => ({
                         name: item.name,
                         content: item.content,
@@ -319,6 +481,10 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
 
     const pickedSets = Object.values(plan).filter((s) => s.included).length;
 
+    // 现状一览：分组太多时只列前几个，完整列表放 title（开头的总数已经说明有多少个）
+    const shownGroups = library.groups.slice(0, 12);
+    const groupListText = library.groups.map((g) => `${g.name} ${g.count}`).join(' · ');
+
     return (
         <ImportDialogShell
             title="导入 Xshell 快捷命令"
@@ -355,60 +521,77 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
             }
         >
             {step === 'source' && (
-                <ImportSection title="导入来源">
-                    {dirs.length > 0 && (
-                        <>
-                            <div style={importStyles.subTitle}>本机检测到的 Xshell 快捷按钮目录</div>
-                            <div style={importStyles.sectionHint}>
-                                直接选它即可，无需在 Xshell 里做任何导出操作。
-                            </div>
-                            {dirs.map((dir) => (
-                                <label key={dir.path} style={importStyles.radioRow}>
-                                    <input
-                                        type="radio"
-                                        name="qbl-dir"
-                                        checked={selectedPath === dir.path}
-                                        onChange={() => setSelectedPath(dir.path)}
-                                    />
-                                    <span style={importStyles.radioLabel}>
-                                        Xshell {dir.version || '未知版本'}
-                                        <span style={importStyles.muted}>
-                                            {' '}· {dir.sets} 套按钮 / {dir.buttons} 条
-                                        </span>
-                                    </span>
-                                    <span style={importStyles.pathText} title={dir.path}>{dir.path}</span>
-                                </label>
-                            ))}
-                            <div style={importStyles.divider} />
-                        </>
-                    )}
-
-                    <div style={importStyles.subTitle}>或从文件 / 目录导入</div>
-                    <div style={importStyles.sectionHint}>
-                        支持单个 .qbl 文件，或包含 .qbl 的目录（子目录也会一并扫描）。
-                    </div>
-                    <div style={importStyles.buttonRow}>
-                        <button style={importStyles.secondaryButton} onClick={pickFile} disabled={!!busy}>
-                            选择文件（.qbl）
-                        </button>
-                        <button style={importStyles.secondaryButton} onClick={pickDirectory} disabled={!!busy}>
-                            选择目录
-                        </button>
-                    </div>
-
-                    <div style={selectedPath ? importStyles.selectionLine : importStyles.selectionLineEmpty}>
-                        {selectedPath ? (
+                <>
+                    <ImportSection title="导入来源">
+                        {dirs.length > 0 && (
                             <>
-                                将从此处导入：
-                                <span style={importStyles.selectionPath} title={selectedPath}>
-                                    {selectedPath}
-                                </span>
+                                <div style={importStyles.subTitle}>本机检测到的 Xshell 快捷按钮目录</div>
+                                <div style={importStyles.sectionHint}>
+                                    直接选它即可，无需在 Xshell 里做任何导出操作。
+                                </div>
+                                {dirs.map((dir) => (
+                                    <label key={dir.path} style={importStyles.radioRow}>
+                                        <input
+                                            type="radio"
+                                            name="qbl-dir"
+                                            checked={selectedPath === dir.path}
+                                            onChange={() => setSelectedPath(dir.path)}
+                                        />
+                                        <span style={importStyles.radioLabel}>
+                                            Xshell {dir.version || '未知版本'}
+                                            <span style={importStyles.muted}>
+                                                {' '}· {dir.sets} 套按钮 / {dir.buttons} 条
+                                            </span>
+                                        </span>
+                                        <span style={importStyles.pathText} title={dir.path}>{dir.path}</span>
+                                    </label>
+                                ))}
+                                <div style={importStyles.divider} />
                             </>
-                        ) : (
-                            '尚未选择导入来源'
                         )}
-                    </div>
-                </ImportSection>
+
+                        <div style={importStyles.subTitle}>或从文件 / 目录导入</div>
+                        <div style={importStyles.sectionHint}>
+                            支持单个 .qbl 文件，或包含 .qbl 的目录（子目录也会一并扫描）。
+                        </div>
+                        <div style={importStyles.buttonRow}>
+                            <button style={importStyles.secondaryButton} onClick={pickFile} disabled={!!busy}>
+                                选择文件（.qbl）
+                            </button>
+                            <button style={importStyles.secondaryButton} onClick={pickDirectory} disabled={!!busy}>
+                                选择目录
+                            </button>
+                        </div>
+
+                        <div style={selectedPath ? importStyles.selectionLine : importStyles.selectionLineEmpty}>
+                            {selectedPath ? (
+                                <>
+                                    将从此处导入：
+                                    <span style={importStyles.selectionPath} title={selectedPath}>
+                                        {selectedPath}
+                                    </span>
+                                </>
+                            ) : (
+                                '尚未选择导入来源'
+                            )}
+                        </div>
+                    </ImportSection>
+
+                    {/* 现状一览：导入谁、往哪儿放，都取决于 OpsCopilot 里已经有什么 */}
+                    <ImportSection title="OpsCopilot 现有命令">
+                        {library.total === 0 ? (
+                            <div style={importStyles.sectionHint} data-testid="import-library-empty">
+                                目前还没有快捷命令，导入时会新建分组。
+                            </div>
+                        ) : (
+                            <div style={styles.libraryLine} data-testid="import-library-summary" title={groupListText}>
+                                共 {library.total} 条，{library.groups.length} 个分组：
+                                {shownGroups.map((g) => ` ${g.name} ${g.count}`).join(' ·')}
+                                {library.groups.length > shownGroups.length ? ' …' : ''}
+                            </div>
+                        )}
+                    </ImportSection>
+                </>
             )}
 
             {step === 'review' && analysis && (
@@ -477,12 +660,13 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
                                     <div style={styles.setMeta}>
                                         <label style={styles.setGroupField}>
                                             <span style={styles.fieldLabel}>集合分组</span>
-                                            <input
-                                                style={styles.input}
+                                            <GroupPicker
                                                 value={set.group}
-                                                onChange={(e) => updateSet(row.source, { group: e.target.value })}
-                                                aria-label={`${row.name} 的集合分组`}
-                                                data-testid={`import-group-${setIndex}`}
+                                                groups={groupNames}
+                                                onChange={(next) => updateSet(row.source, { group: next })}
+                                                testId={`import-group-${setIndex}`}
+                                                ariaLabel={`${row.name} 的集合分组`}
+                                                newPlaceholder="新分组名"
                                             />
                                         </label>
                                         <span style={styles.setHint} data-testid={`import-group-hint-${setIndex}`}>
@@ -520,10 +704,19 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
                                                             {setEval?.existing[itemIndex] && (
                                                                 <span
                                                                     style={styles.tag}
-                                                                    title="目标分组里已有同名同内容的命令，导入时会跳过"
+                                                                    title="该分组里已有同名同内容的命令，导入时会跳过"
                                                                     data-testid={`import-item-existing-${setIndex}-${itemIndex}`}
                                                                 >
                                                                     已存在
+                                                                </span>
+                                                            )}
+                                                            {!setEval?.existing[itemIndex] && setEval?.contentHit[itemIndex] && (
+                                                                <span
+                                                                    style={styles.tagInfo}
+                                                                    title={`OpsCopilot 的该分组里已有同内容的命令（名称可能不同），可取消勾选或改名称`}
+                                                                    data-testid={`import-item-content-hit-${setIndex}-${itemIndex}`}
+                                                                >
+                                                                    已在{setEval.contentHit[itemIndex]}
                                                                 </span>
                                                             )}
                                                         </span>
@@ -534,13 +727,14 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
                                                             aria-label={`${item.name} 的命令内容`}
                                                             data-testid={`import-item-content-${setIndex}-${itemIndex}`}
                                                         />
-                                                        <input
-                                                            style={styles.itemGroup}
+                                                        <GroupPicker
                                                             value={item.group}
-                                                            placeholder="跟随集合"
-                                                            onChange={(e) => updateItem(row.source, itemIndex, { group: e.target.value })}
-                                                            aria-label={`${item.name} 的命令分组`}
-                                                            data-testid={`import-item-group-${setIndex}-${itemIndex}`}
+                                                            groups={groupNames}
+                                                            allowFollow
+                                                            onChange={(next) => updateItem(row.source, itemIndex, { group: next })}
+                                                            testId={`import-item-group-${setIndex}-${itemIndex}`}
+                                                            ariaLabel={`${item.name} 的命令分组`}
+                                                            newPlaceholder="新分组名"
                                                         />
                                                     </div>
                                                 ) : (
@@ -628,8 +822,8 @@ const styles: Record<string, React.CSSProperties> = {
         padding: 0,
     },
     fieldLabel: { fontSize: 11, color: 'var(--text-secondary)', flexShrink: 0 },
-    input: {
-        padding: '5px 8px',
+    pickerSelect: {
+        padding: '5px 6px',
         borderRadius: 4,
         border: '1px solid var(--border)',
         backgroundColor: 'var(--bg-input)',
@@ -638,11 +832,33 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: 12,
         width: 150,
     },
+    pickerRow: { display: 'flex', alignItems: 'center', gap: 4 },
+    pickerInput: {
+        padding: '4px 6px',
+        borderRadius: 4,
+        border: '1px solid var(--border)',
+        backgroundColor: 'var(--bg-input)',
+        color: 'var(--text-primary)',
+        outline: 'none',
+        fontSize: 12,
+        width: 118,
+        minWidth: 0,
+    },
+    backLink: {
+        background: 'transparent',
+        border: 'none',
+        color: 'var(--accent)',
+        fontSize: 12,
+        cursor: 'pointer',
+        padding: 0,
+        flexShrink: 0,
+    },
+    libraryLine: { fontSize: 12, lineHeight: 1.7, color: 'var(--text-secondary)' },
     itemList: { marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 },
-    // 列宽：勾选框 / 名称（含"已存在"标记）/ 命令内容 / 分组
+    // 列宽：勾选框 / 名称（含标记）/ 命令内容 / 分组
     itemHead: {
         display: 'grid',
-        gridTemplateColumns: '22px 190px 1fr 140px',
+        gridTemplateColumns: '22px 210px 1fr 150px',
         gap: 6,
         alignItems: 'center',
         fontSize: 10,
@@ -651,13 +867,13 @@ const styles: Record<string, React.CSSProperties> = {
     },
     itemRow: {
         display: 'grid',
-        gridTemplateColumns: '22px 190px 1fr 140px',
+        gridTemplateColumns: '22px 210px 1fr 150px',
         gap: 6,
         alignItems: 'center',
     },
     itemRowOff: {
         display: 'grid',
-        gridTemplateColumns: '22px 190px 1fr 140px',
+        gridTemplateColumns: '22px 210px 1fr 150px',
         gap: 6,
         alignItems: 'center',
         fontSize: 12,
@@ -687,17 +903,6 @@ const styles: Record<string, React.CSSProperties> = {
         width: '100%',
         minWidth: 0,
     },
-    itemGroup: {
-        padding: '4px 6px',
-        borderRadius: 4,
-        border: '1px solid var(--border)',
-        backgroundColor: 'var(--bg-input)',
-        color: 'var(--text-primary)',
-        outline: 'none',
-        fontSize: 12,
-        width: '100%',
-        minWidth: 0,
-    },
     itemNameOff: { textDecoration: 'line-through' },
     itemSkipReason: { gridColumn: '3 / 5', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
     tag: {
@@ -708,6 +913,18 @@ const styles: Record<string, React.CSSProperties> = {
         border: '1px solid var(--warning)',
         color: 'var(--warning)',
         whiteSpace: 'nowrap',
+    },
+    tagInfo: {
+        flexShrink: 0,
+        fontSize: 10,
+        padding: '1px 4px',
+        borderRadius: 3,
+        border: '1px solid var(--border-strong)',
+        color: 'var(--text-muted)',
+        whiteSpace: 'nowrap',
+        maxWidth: 96,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
     },
     noteBox: {
         marginTop: 10,

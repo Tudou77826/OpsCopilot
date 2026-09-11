@@ -18,6 +18,9 @@ const COMMANDS_QBL = QBL_DIR + '\\commands.qbl';
 const OPS_QBL = QBL_DIR + '\\ops.qbl';
 
 const UNSUPPORTED_REASON = '按钮 脚本按钮 的类型为 2，OpsCopilot 暂只支持「发送字符串」类型，已跳过';
+const NEW_GROUP_OPTION = '__new__';
+
+type ExistingCommand = { name: string; content: string; group: string };
 
 function item(overrides: Partial<QuickCommandSetItem> = {}): QuickCommandSetItem {
     return {
@@ -63,12 +66,16 @@ function makeAnalysis(overrides: Partial<QuickCommandImportAnalysis> = {}): Quic
     };
 }
 
-function makeHost(overrides: Partial<QuickCommandHost> = {}, existingCommands: { name: string; content: string; group?: string }[] = []) {
+function makeHost(
+    overrides: Partial<QuickCommandHost> = {},
+    /** OpsCopilot 里现有的命令，面板的"现状"来自它。 */
+    existing: ExistingCommand[] = [],
+) {
     const dirs: XshellQuickButtonDir[] = [{ path: QBL_DIR, version: 8, sets: 1, buttons: 3 }];
     const detectQuickButtonDirs = vi.fn(async () => dirs);
     const selectImportFile = vi.fn(async () => '');
     const selectImportDirectory = vi.fn(async () => '');
-    const load = vi.fn(async () => existingCommands.map((c, i) => ({ id: String(i), group: c.group ?? 'Xshell', ...c })));
+    const load = vi.fn(async () => existing.map((c, i) => ({ id: String(i), ...c })));
     const analyzeQuickCommandImport = vi.fn(
         async (_path: string, _defaultGroup: string): Promise<QuickCommandImportAnalysis> => makeAnalysis(),
     );
@@ -88,13 +95,7 @@ function makeHost(overrides: Partial<QuickCommandHost> = {}, existingCommands: {
 
     const host: QuickCommandHost = {
         execute: () => {},
-        storage: {
-            load,
-            add: () => {},
-            update: () => {},
-            remove: () => {},
-            reorder: () => {},
-        },
+        storage: { load, add: () => {}, update: () => {}, remove: () => {}, reorder: () => {} },
         detectQuickButtonDirs,
         selectImportFile,
         selectImportDirectory,
@@ -102,44 +103,69 @@ function makeHost(overrides: Partial<QuickCommandHost> = {}, existingCommands: {
         applyQuickCommandImport,
         ...overrides,
     };
-    return { host, load, detectQuickButtonDirs, selectImportFile, selectImportDirectory, analyzeQuickCommandImport, applyQuickCommandImport };
+    return { host, load, detectQuickButtonDirs, analyzeQuickCommandImport, applyQuickCommandImport };
 }
 
-function renderDialog(host: QuickCommandHost, existingGroups: string[] = []) {
+function renderDialog(host: QuickCommandHost) {
     return render(
         <ToastProvider>
-            <QuickCommandImportDialog isOpen host={host} existingGroups={existingGroups} onClose={() => {}} />
+            <QuickCommandImportDialog isOpen host={host} onClose={() => {}} />
         </ToastProvider>,
     );
 }
 
-/** 渲染并等自动探测落地（默认选中第一个目录）——分析按钮在此之前是禁用的。 */
-async function renderReady(host: QuickCommandHost, existingGroups: string[] = []) {
-    const utils = renderDialog(host, existingGroups);
+/** 渲染并等自动探测落地（分析按钮在此之前是禁用的）。 */
+async function renderReady(host: QuickCommandHost) {
+    const utils = renderDialog(host);
     await waitFor(() => expect(screen.getByText(/将从此处导入/)).toBeInTheDocument());
     return utils;
 }
 
-/** 进到预览步（等待探测完成后分析）。 */
-async function openReview(host: QuickCommandHost, existingGroups: string[] = []) {
-    await renderReady(host, existingGroups);
+/** 进到预览步。 */
+async function openReview(host: QuickCommandHost) {
+    await renderReady(host);
     fireEvent.click(screen.getByRole('button', { name: '分析并预览' }));
     await screen.findByText('导入预览');
 }
+
+const readValue = (testId: string) => (screen.getByTestId(testId) as HTMLInputElement | HTMLSelectElement).value;
+const optionsOf = (testId: string) =>
+    Array.from((screen.getByTestId(testId) as HTMLSelectElement).options).map((o) => o.value);
 
 beforeEach(() => {
     vi.clearAllMocks();
 });
 
-describe('来源', () => {
-    it('打开时自动探测本机目录并默认选中第一个，无需用户做任何导出操作', async () => {
+describe('来源与现状', () => {
+    it('自动探测本机目录并默认选中，无需用户做任何导出操作', async () => {
         const { host, detectQuickButtonDirs } = makeHost();
         renderDialog(host);
 
         await waitFor(() => expect(detectQuickButtonDirs).toHaveBeenCalledTimes(1));
         expect(await screen.findByText(/Xshell 8/)).toBeInTheDocument();
         expect(screen.getByText(/1 套按钮 \/ 3 条/)).toBeInTheDocument();
-        expect(screen.getByText(/将从此处导入/)).toBeInTheDocument();
+    });
+
+    it('列出 OpsCopilot 现有的分组与条数——落点参考现状的前提', async () => {
+        const { host } = makeHost({}, [
+            { name: '查磁盘', content: 'df -h', group: '普通运维' },
+            { name: '看日志', content: 'tail -f app.log', group: '普通运维' },
+            { name: '看 Pod', content: 'kubectl get pods', group: 'K8S运维' },
+        ]);
+        renderDialog(host);
+
+        const summary = await screen.findByTestId('import-library-summary');
+        expect(summary).toHaveTextContent('共 3 条，2 个分组');
+        expect(summary).toHaveTextContent('普通运维 2');
+        expect(summary).toHaveTextContent('K8S运维 1');
+    });
+
+    it('OpsCopilot 还没有命令时明确说明会新建分组', async () => {
+        const { host } = makeHost();
+        renderDialog(host);
+
+        expect(await screen.findByTestId('import-library-empty')).toHaveTextContent('目前还没有快捷命令');
+        expect(screen.getByText(/导入时会新建分组/)).toBeInTheDocument();
     });
 
     it('宿主未提供导入能力时整个面板不渲染（sidecar 外壳）', async () => {
@@ -150,75 +176,144 @@ describe('来源', () => {
         await waitFor(() => expect(container).toBeEmptyDOMElement());
     });
 
-    it('没探测到本机目录且未手选来源时，分析按钮禁用，不发起后端调用', async () => {
-        const { host, analyzeQuickCommandImport } = makeHost({
-            detectQuickButtonDirs: vi.fn(async () => []),
-        });
+    it('没探测到本机目录且未手选来源时，分析按钮禁用', async () => {
+        const { host, analyzeQuickCommandImport } = makeHost({ detectQuickButtonDirs: vi.fn(async () => []) });
         renderDialog(host);
 
         expect(await screen.findByText('尚未选择导入来源')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: '分析并预览' })).toBeDisabled();
-
-        fireEvent.click(screen.getByRole('button', { name: '分析并预览' }));
         expect(analyzeQuickCommandImport).not.toHaveBeenCalled();
     });
 });
 
-describe('命令级明细（本次粒度下钻的核心）', () => {
+describe('落点参考现状', () => {
+    const opsLibrary: ExistingCommand[] = [
+        { name: '看磁盘', content: 'df -h', group: '普通运维' },
+        { name: '看日志', content: 'tail -f /var/log/app.log', group: '普通运维' },
+        { name: '看 Pod', content: 'kubectl get pods', group: 'K8S运维' },
+    ];
+
+    it('同内容的命令已在某个分组时，默认就落到那个分组', async () => {
+        const { host } = makeHost({}, opsLibrary);
+        await openReview(host);
+
+        // 两条可导入命令同内容都命中「普通运维」，集合默认分组因此是它，而不是凭空新建
+        expect(readValue('import-group-0')).toBe('普通运维');
+        expect(screen.getByTestId('import-group-hint-0')).toHaveTextContent('将追加到已有分组');
+    });
+
+    it('没有同内容命令时保持默认的新分组名', async () => {
+        const { host } = makeHost({}, [{ name: '别的', content: 'echo other', group: '普通运维' }]);
+        await openReview(host);
+
+        expect(readValue('import-group-0')).toBe('Xshell');
+        expect(screen.getByTestId('import-group-hint-0')).toHaveTextContent('将新建分组');
+    });
+
+    it('标出"已在某分组"，因为同内容命令已经存在于那里', async () => {
+        const { host } = makeHost({}, opsLibrary);
+        await openReview(host);
+
+        // tail 与「看日志」内容相同但名字不同：不算已存在，但要点明它在哪儿
+        expect(screen.getByTestId('import-item-content-hit-0-0')).toHaveTextContent('已在普通运维');
+        expect(screen.queryByTestId('import-item-existing-0-0')).not.toBeInTheDocument();
+    });
+
+    it('名称与内容都相同时标为"已存在"，不计入将导入', async () => {
+        const { host } = makeHost({}, [{ name: 'tail', content: 'tail -f /var/log/app.log', group: '普通运维' }]);
+        await openReview(host);
+
+        expect(screen.getByTestId('import-item-existing-0-0')).toHaveTextContent('已存在');
+        expect(screen.queryByTestId('import-item-content-hit-0-0')).not.toBeInTheDocument();
+        expect(screen.getByText(/共 3 条，将导入 1 条/)).toBeInTheDocument();
+    });
+
+    it('分组下拉列出现有分组，可直接选中', async () => {
+        const { host } = makeHost({}, opsLibrary);
+        await openReview(host);
+
+        const options = optionsOf('import-group-0');
+        expect(options).toContain('普通运维');
+        expect(options).toContain('K8S运维');
+        expect(options).toContain(NEW_GROUP_OPTION);
+
+        fireEvent.change(screen.getByTestId('import-group-0'), { target: { value: 'K8S运维' } });
+        expect(readValue('import-group-0')).toBe('K8S运维');
+    });
+
+    it('选「＋ 新建分组…」切到输入框，↩ 能回到下拉', async () => {
+        const { host } = makeHost({}, opsLibrary);
+        await openReview(host);
+
+        fireEvent.change(screen.getByTestId('import-group-0'), { target: { value: NEW_GROUP_OPTION } });
+        expect(screen.getByTestId('import-group-0').tagName).toBe('INPUT');
+        fireEvent.change(screen.getByTestId('import-group-0'), { target: { value: '我的新分组' } });
+        expect(screen.getByTestId('import-group-hint-0')).toHaveTextContent('将新建分组');
+
+        fireEvent.click(screen.getByTestId('import-group-0-back'));
+        expect(screen.getByTestId('import-group-0').tagName).toBe('SELECT');
+        expect(readValue('import-group-0')).toBe('普通运维');
+    });
+
+    it('逐条分组默认跟随集合，也可选现有分组', async () => {
+        const { host } = makeHost({}, opsLibrary);
+        await openReview(host);
+
+        expect(readValue('import-item-group-0-0')).toBe('');
+        const options = optionsOf('import-item-group-0-0');
+        expect(options[0]).toBe(''); // 跟随集合
+        expect(options).toContain('普通运维');
+
+        fireEvent.change(screen.getByTestId('import-item-group-0-0'), { target: { value: 'K8S运维' } });
+        expect(readValue('import-item-group-0-0')).toBe('K8S运维');
+    });
+});
+
+describe('命令级明细', () => {
     it('预览逐条列出命令，含不可导入的条目及其原因', async () => {
         const { host } = makeHost();
         await openReview(host);
 
-        expect(screen.getByTestId('import-item-name-0-0')).toHaveValue('tail');
-        expect(screen.getByTestId('import-item-content-0-0')).toHaveValue('tail -f /var/log/app.log');
-        expect(screen.getByTestId('import-item-name-0-1')).toHaveValue('df');
+        expect(readValue('import-item-name-0-0')).toBe('tail');
+        expect(readValue('import-item-content-0-0')).toBe('tail -f /var/log/app.log');
+        expect(readValue('import-item-name-0-1')).toBe('df');
 
-        // 不可导入的条目仍然列出来，但置灰且写明原因（不是只给一个跳过总数）
         const off = screen.getByTestId('import-item-unsupported-0-2');
         expect(off).toHaveTextContent('脚本按钮');
         expect(off).toHaveTextContent('类型为 2');
-        // 可勾选的条目只有 2 条
-        expect(screen.getByTestId('import-item-0-0')).toBeInTheDocument();
-        expect(screen.getByTestId('import-item-0-1')).toBeInTheDocument();
         expect(screen.queryByTestId('import-item-0-2')).not.toBeInTheDocument();
     });
 
-    it('默认全部勾选，汇总与逐条勾选状态一致', async () => {
+    it('默认全部勾选，段头给出本套条数', async () => {
         const { host } = makeHost();
         await openReview(host);
 
         expect(screen.getByTestId('import-item-0-0')).toBeChecked();
         expect(screen.getByTestId('import-item-0-1')).toBeChecked();
-        expect(screen.getByTestId('import-group-hint-0')).toHaveTextContent('将新建分组');
-        // 段头给出本套的条数，汇总卡片不再重复"按钮总数"
         expect(screen.getByText(/共 3 条，将导入 2 条/)).toBeInTheDocument();
     });
 
-    it('逐条取消勾选后，汇总与"确认导入"上的条数随之减少', async () => {
+    it('逐条取消、全选、全不选都会同步汇总与按钮文案', async () => {
         const { host } = makeHost();
         await openReview(host);
 
         fireEvent.click(screen.getByTestId('import-item-0-1'));
-        expect(screen.getByTestId('import-item-0-1')).not.toBeChecked();
         expect(screen.getByRole('button', { name: /确认导入 1 条/ })).toBeInTheDocument();
 
-        // 全不选 → 没有可导入项
         fireEvent.click(screen.getByTestId('import-select-none-0'));
-        expect(screen.getByTestId('import-item-0-0')).not.toBeChecked();
         expect(screen.getByRole('button', { name: '确认导入' })).toBeInTheDocument();
 
-        // 全选 → 又把两条都选回来
         fireEvent.click(screen.getByTestId('import-select-all-0'));
-        expect(screen.getByTestId('import-item-0-0')).toBeChecked();
         expect(screen.getByTestId('import-item-0-1')).toBeChecked();
+        expect(screen.getByRole('button', { name: /确认导入 2 条/ })).toBeInTheDocument();
     });
 
     it('改名、改内容、逐条指定分组都会随请求回传', async () => {
-        const { host, applyQuickCommandImport } = makeHost();
+        const { host, applyQuickCommandImport } = makeHost({}, [{ name: 'x', content: 'x', group: '日志排查' }]);
         await openReview(host);
 
         fireEvent.change(screen.getByTestId('import-item-name-0-0'), { target: { value: '跟踪应用日志' } });
-        fireEvent.change(screen.getByTestId('import-item-content-0-0'), { target: { value: 'tail -f /var/log/new.log' } });
+        fireEvent.change(screen.getByTestId('import-item-content-0-0'), { target: { value: 'tail -F /var/log/new.log' } });
         fireEvent.change(screen.getByTestId('import-item-group-0-0'), { target: { value: '日志排查' } });
         fireEvent.click(screen.getByTestId('import-item-0-1')); // 取消 df
 
@@ -231,7 +326,7 @@ describe('命令级明细（本次粒度下钻的核心）', () => {
                 {
                     source: COMMANDS_QBL,
                     group: 'Xshell',
-                    items: [{ name: '跟踪应用日志', content: 'tail -f /var/log/new.log', group: '日志排查' }],
+                    items: [{ name: '跟踪应用日志', content: 'tail -F /var/log/new.log', group: '日志排查' }],
                 },
             ],
             'Xshell',
@@ -239,7 +334,7 @@ describe('命令级明细（本次粒度下钻的核心）', () => {
         expect(await screen.findByText('导入结果')).toBeInTheDocument();
     });
 
-    it('收起/展开命令列表不影响已做的选择', async () => {
+    it('收起/展开不影响已做的选择', async () => {
         const { host } = makeHost();
         await openReview(host);
 
@@ -251,7 +346,16 @@ describe('命令级明细（本次粒度下钻的核心）', () => {
 });
 
 describe('集合级', () => {
-    it('取消整个集合后它不参与导入，也不出现在请求里', async () => {
+    it('取消整个集合后它不参与导入，且禁止在一条都不选时确认', async () => {
+        const { host, applyQuickCommandImport } = makeHost();
+        await openReview(host);
+
+        fireEvent.click(screen.getByTestId('import-set-0'));
+        expect(screen.getByRole('button', { name: '确认导入' })).toBeDisabled();
+        expect(applyQuickCommandImport).not.toHaveBeenCalled();
+    });
+
+    it('取消某套按钮时该套不出现在请求的条目里', async () => {
         const { host, applyQuickCommandImport } = makeHost({
             analyzeQuickCommandImport: vi.fn(async () =>
                 makeAnalysis({
@@ -265,62 +369,47 @@ describe('集合级', () => {
         await openReview(host);
 
         fireEvent.click(screen.getByTestId('import-set-1'));
-        expect(screen.getByRole('button', { name: /确认导入 2 条/ })).toBeInTheDocument();
-
         fireEvent.click(screen.getByRole('button', { name: /确认导入/ }));
         await waitFor(() => expect(applyQuickCommandImport).toHaveBeenCalledTimes(1));
 
-        const selections = applyQuickCommandImport.mock.calls[0][1] as any[];
+        const selections = applyQuickCommandImport.mock.calls[0][1];
         expect(selections).toHaveLength(2);
         expect(selections[1]).toMatchObject({ source: OPS_QBL, items: [] });
     });
 
-    it('全部集合都不选时禁止确认', async () => {
-        const { host } = makeHost();
+    it('集合分组的三种提示：合并同批、追加已有、为空', async () => {
+        const { host } = makeHost(
+            {
+                analyzeQuickCommandImport: vi.fn(async () =>
+                    makeAnalysis({
+                        rows: [
+                            row(),
+                            row({ source: OPS_QBL, name: 'ops', buttons: 1, importable: 1, unsupported: 0, items: [item({ name: 'free', content: 'free -h' })] }),
+                        ],
+                    }),
+                ),
+            },
+            // 现有分组里有「容器命令」，下拉才选得到它；内容刻意不与被导入的命令重合，
+            // 否则默认落点会被"同内容已在哪儿"接管
+            [{ name: '别的', content: 'echo other', group: '容器命令' }],
+        );
         await openReview(host);
 
-        fireEvent.click(screen.getByTestId('import-set-0'));
-        expect(screen.getByRole('button', { name: '确认导入' })).toBeDisabled();
-    });
-
-    it('集合分组重名时提示合并或追加，空名给出提示', async () => {
-        const { host } = makeHost({
-            analyzeQuickCommandImport: vi.fn(async () =>
-                makeAnalysis({
-                    rows: [
-                        row(),
-                        row({ source: OPS_QBL, name: 'ops', buttons: 1, importable: 1, unsupported: 0, items: [item({ name: 'free', content: 'free -h' })] }),
-                    ],
-                }),
-            ),
-        });
-        await openReview(host, ['容器命令']);
-
-        // 两段默认同名 → 合并提示
+        // 两套默认同名 → 合并提示
         expect(screen.getByTestId('import-group-hint-0')).toHaveTextContent('将与本批其它集合合并到同一分组');
-        // 改成已有分组 → 追加提示
+
         fireEvent.change(screen.getByTestId('import-group-1'), { target: { value: '容器命令' } });
         expect(screen.getByTestId('import-group-hint-1')).toHaveTextContent('将追加到已有分组');
         expect(screen.getByTestId('import-group-hint-0')).toHaveTextContent('将新建分组');
-        // 清空 → 提示不能为空
-        fireEvent.change(screen.getByTestId('import-group-1'), { target: { value: '' } });
+
+        // 切到新建但还没输入名字 → 提示不能为空
+        fireEvent.change(screen.getByTestId('import-group-1'), { target: { value: NEW_GROUP_OPTION } });
+        expect(screen.getByTestId('import-group-1').tagName).toBe('INPUT');
         expect(screen.getByTestId('import-group-hint-1')).toHaveTextContent('集合分组不能为空');
     });
 });
 
 describe('数字必须与实际写入一致', () => {
-    it('已存在的条目不计入"将导入"，也不让按钮谎报条数', async () => {
-        // tail 已经在 Xshell 分组里了
-        const { host } = makeHost({}, [{ name: 'tail', content: 'tail -f /var/log/app.log', group: 'Xshell' }]);
-        await openReview(host);
-
-        // 3 条里：tail 已存在、df 可导入、脚本按钮不可导入
-        expect(screen.getByTestId('import-item-existing-0-0')).toHaveTextContent('已存在');
-        expect(screen.queryByTestId('import-item-existing-0-1')).not.toBeInTheDocument();
-        expect(screen.getByText(/共 3 条，将导入 1 条/)).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: '确认导入 1 条' })).toBeInTheDocument();
-    });
-
     it('改集合分组后"已存在"实时重算——换了分组就不再是重复', async () => {
         const { host } = makeHost({}, [{ name: 'tail', content: 'tail -f /var/log/app.log', group: 'Xshell' }]);
         await openReview(host);
@@ -329,10 +418,10 @@ describe('数字必须与实际写入一致', () => {
         expect(screen.getByRole('button', { name: '确认导入 1 条' })).toBeInTheDocument();
 
         // 落到一个新分组：tail 不再与已有命令重复，两条都可导入
+        fireEvent.change(screen.getByTestId('import-group-0'), { target: { value: NEW_GROUP_OPTION } });
         fireEvent.change(screen.getByTestId('import-group-0'), { target: { value: '全新分组' } });
         expect(screen.queryByTestId('import-item-existing-0-0')).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: '确认导入 2 条' })).toBeInTheDocument();
-        expect(screen.getByText(/共 3 条，将导入 2 条/)).toBeInTheDocument();
     });
 
     it('逐条改名后"已存在"标记随之消失', async () => {
@@ -346,17 +435,23 @@ describe('数字必须与实际写入一致', () => {
     });
 
     it('逐条指定分组时按该条自己的分组判断重复', async () => {
-        // 已有命令在"日志排查"分组里
-        const { host } = makeHost({}, [{ name: 'tail', content: 'tail -f /var/log/app.log', group: '日志排查' }]);
+        // 两条命令分别已经住在不同分组：tail 在「日志排查」、df 在「普通运维」
+        const { host } = makeHost({}, [
+            { name: 'tail', content: 'tail -f /var/log/app.log', group: '日志排查' },
+            { name: 'df', content: 'df -h', group: '普通运维' },
+        ]);
         await openReview(host);
 
-        // 集合默认分组是 Xshell，此时不重复
-        expect(screen.queryByTestId('import-item-existing-0-0')).not.toBeInTheDocument();
-
-        // 把这条指到"日志排查"就重复了
-        fireEvent.change(screen.getByTestId('import-item-group-0-0'), { target: { value: '日志排查' } });
+        // tail 与已有命令同名同内容、且默认落点已被引到「日志排查」→ 直接标为已存在
         expect(screen.getByTestId('import-item-existing-0-0')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: '确认导入 1 条' })).toBeInTheDocument();
+
+        // df 的默认落点是集合分组「日志排查」，那里没有它；把它指回它真正所在的分组才成重复
+        expect(screen.queryByTestId('import-item-existing-0-1')).not.toBeInTheDocument();
+        expect(screen.getByTestId('import-item-content-hit-0-1')).toHaveTextContent('已在普通运维');
+
+        fireEvent.change(screen.getByTestId('import-item-group-0-1'), { target: { value: '普通运维' } });
+        expect(screen.getByTestId('import-item-existing-0-1')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '确认导入' })).toBeInTheDocument();
     });
 
     it('同一批内重复只算一条（与后端同规则）', async () => {
@@ -420,6 +515,23 @@ describe('容错与结果', () => {
         expect(screen.getByRole('button', { name: '确认导入' })).toBeInTheDocument();
     });
 
+    it('命令库读取失败时不崩，只是没有现状可参考', async () => {
+        const { host } = makeHost({
+            storage: {
+                load: vi.fn(async () => {
+                    throw new Error('读库失败');
+                }),
+                add: () => {},
+                update: () => {},
+                remove: () => {},
+                reorder: () => {},
+            },
+        });
+        renderDialog(host);
+
+        expect(await screen.findByTestId('import-library-empty')).toBeInTheDocument();
+    });
+
     it('展示导入结果与写入的分组', async () => {
         const { host } = makeHost({
             applyQuickCommandImport: vi.fn(async () => ({
@@ -478,7 +590,7 @@ describe('容错与结果', () => {
         // 若重置逻辑跟着 host 走，导入一完成就跳回来源步，报告一闪而过。
         rerender(
             <ToastProvider>
-                <QuickCommandImportDialog isOpen host={{ ...host }} existingGroups={[]} onClose={() => {}} />
+                <QuickCommandImportDialog isOpen host={{ ...host }} onClose={() => {}} />
             </ToastProvider>,
         );
 
