@@ -36,7 +36,12 @@ const GetXshellImportStatus = vi.fn(async (): Promise<ImportStatus> => ({
     windowsUser: '15802',
     message: '已检测到本机 Xshell 凭据，导入的密码将自动解密',
 }));
-const AnalyzeXshellImport = vi.fn(async (_path: string, _opts: unknown) => ({
+type AnalysisShape = {
+    total: number; supported: number; unsupported: number; existing: number;
+    withPassword: number; passwordDecrypted: number; passwordFailed: number; groups: number;
+    protocols: Record<string, number> | null; warnings: string[] | null;
+};
+const AnalyzeXshellImport = vi.fn(async (_path: string, _opts: unknown): Promise<AnalysisShape> => ({
     total: 3,
     supported: 2,
     unsupported: 1,
@@ -48,7 +53,11 @@ const AnalyzeXshellImport = vi.fn(async (_path: string, _opts: unknown) => ({
     protocols: { ssh: 3 },
     warnings: [],
 }));
-const ApplyXshellImport = vi.fn(async (_path: string, _opts: unknown) => ({
+type ReportShape = {
+    imported: number; skippedExisting: number; skippedUnsupported: number;
+    passwordDecrypted: number; passwordFailed: number; warnings: string[] | null;
+};
+const ApplyXshellImport = vi.fn(async (_path: string, _opts: unknown): Promise<ReportShape> => ({
     imported: 2,
     skippedExisting: 1,
     skippedUnsupported: 0,
@@ -100,7 +109,7 @@ beforeEach(() => {
         passwordFailed: 0,
         groups: 2,
         protocols: { ssh: 3 },
-        warnings: [],
+        warnings: null,
     }));
     ApplyXshellImport.mockImplementation(async () => ({
         imported: 2,
@@ -108,7 +117,7 @@ beforeEach(() => {
         skippedUnsupported: 0,
         passwordDecrypted: 2,
         passwordFailed: 0,
-        warnings: [],
+        warnings: null,
     }));
 });
 
@@ -180,8 +189,8 @@ describe('密码解密失败不静默（B5）', () => {
             passwordDecrypted: 0,
             passwordFailed: 2,
             groups: 2,
-            protocols: { ssh: 3 },
-            warnings: [],
+            protocols: null,
+            warnings: null,
         }));
         await openImportDialog();
         fireEvent.click(screen.getByRole('button', { name: '分析并预览' }));
@@ -218,7 +227,7 @@ describe('执行导入（B2）', () => {
                 skippedUnsupported: 0,
                 passwordDecrypted: 2,
                 passwordFailed: 0,
-                warnings: [],
+                warnings: null,
             };
         });
         fireEvent.click(screen.getByRole('button', { name: '确认导入' }));

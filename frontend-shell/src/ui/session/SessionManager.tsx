@@ -3,6 +3,7 @@ import { ConnectionConfig } from '../types';
 import { SessionManagerRuntime, SharedSessionRuntime, SessionNode } from '../ports';
 import { confirmDialog } from '../feedback/ConfirmDialog';
 import { useToast } from '../feedback/Toast';
+import ErrorBoundary from '../feedback/ErrorBoundary';
 import NameDialog from '../filetransfer/NameDialog';
 import SessionTreeView from './SessionTreeView';
 import SessionContextMenu, { ContextMenuAction } from './SessionContextMenu';
@@ -234,6 +235,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect, runtime, sha
     const propertiesInitialConfig = properties?.node?.config ?? emptyConnectionConfig();
 
     return (
+        <ErrorBoundary label="会话管理">
         <div style={styles.container}>
             <div style={styles.searchBar}>
                 <input
@@ -318,6 +320,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ onConnect, runtime, sha
                 onImported={refresh}
             />
         </div>
+        </ErrorBoundary>
     );
 };
 

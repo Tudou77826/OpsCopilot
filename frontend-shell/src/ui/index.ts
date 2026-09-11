@@ -15,6 +15,7 @@ export { ToastProvider, useToast } from './feedback/Toast';
 export type { ToastContextValue, ToastType } from './feedback/Toast';
 export { default as ConfirmDialogInternal, confirmDialog } from './feedback/ConfirmDialog';
 export type { ConfirmChoice, ConfirmOptions } from './feedback/ConfirmDialog';
+export { default as ErrorBoundary } from './feedback/ErrorBoundary';
 export { default as logoUniversal } from './assets/logo-universal.png';
 // 阶段 3：会话树 / 连接表单 / 快捷命令（连接管理与快捷命令纵切）
 export { default as SessionManager } from './session/SessionManager';

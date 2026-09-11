@@ -259,37 +259,43 @@ const XshellImportDialog: React.FC<Props> = ({ isOpen, runtime, onClose, onImpor
     );
 };
 
-const AnalysisTable: React.FC<{ analysis: XshellImportAnalysis }> = ({ analysis }) => (
-    <>
-        <div style={styles.statGrid}>
-            <Stat label="解析到会话" value={analysis.total} />
-            <Stat label="将导入" value={analysis.supported} tone="ok" />
-            <Stat label="已存在（跳过）" value={analysis.existing} />
-            <Stat label="协议不支持（跳过）" value={analysis.unsupported} />
-            <Stat label="分组层级" value={analysis.groups} />
-            <Stat label="含密码" value={analysis.withPassword} />
-            <Stat label="密码已解密" value={analysis.passwordDecrypted} tone="ok" />
-            <Stat
-                label="密码未解密"
-                value={analysis.passwordFailed}
-                tone={analysis.passwordFailed > 0 ? 'warn' : undefined}
-            />
-        </div>
-        {analysis.passwordFailed > 0 && (
-            <div style={styles.hintBox}>
-                有 {analysis.passwordFailed} 个会话的密码无法解密。Xshell 的密码密钥依赖导出时那台机器的
-                Windows 账户标识；若这批会话来自其他电脑，请在下方填写源机器的 SID 或 Xshell 主密码后重新分析。
-                这些会话仍会被导入，只是密码需要手工补充。
+const AnalysisTable: React.FC<{ analysis: XshellImportAnalysis }> = ({ analysis }) => {
+    // 集合字段做容错：后端契约是空数组/空对象，但一旦传来 null，Object.keys 与
+    // .length 会抛异常，而渲染异常会让 React 卸载整棵树（表现为整个应用黑屏）。
+    // 这里的代价只是两个空值兜底，收益是任何一边出错都不会让应用不可用。
+    const protocolEntries = Object.entries(analysis.protocols ?? {});
+    return (
+        <>
+            <div style={styles.statGrid}>
+                <Stat label="解析到会话" value={analysis.total} />
+                <Stat label="将导入" value={analysis.supported} tone="ok" />
+                <Stat label="已存在（跳过）" value={analysis.existing} />
+                <Stat label="协议不支持（跳过）" value={analysis.unsupported} />
+                <Stat label="分组层级" value={analysis.groups} />
+                <Stat label="含密码" value={analysis.withPassword} />
+                <Stat label="密码已解密" value={analysis.passwordDecrypted} tone="ok" />
+                <Stat
+                    label="密码未解密"
+                    value={analysis.passwordFailed}
+                    tone={analysis.passwordFailed > 0 ? 'warn' : undefined}
+                />
             </div>
-        )}
-        {Object.keys(analysis.protocols).length > 0 && (
-            <div style={styles.protocolLine}>
-                协议分布：{Object.entries(analysis.protocols).map(([p, n]) => `${p} ${n}`).join('，')}
-            </div>
-        )}
-        <WarningList warnings={analysis.warnings} />
-    </>
-);
+            {analysis.passwordFailed > 0 && (
+                <div style={styles.hintBox}>
+                    有 {analysis.passwordFailed} 个会话的密码无法解密。Xshell 的密码密钥依赖导出时那台机器的
+                    Windows 账户标识；若这批会话来自其他电脑，请在下方填写源机器的 SID 或 Xshell 主密码后重新分析。
+                    这些会话仍会被导入，只是密码需要手工补充。
+                </div>
+            )}
+            {protocolEntries.length > 0 && (
+                <div style={styles.protocolLine}>
+                    协议分布：{protocolEntries.map(([p, n]) => `${p} ${n}`).join('，')}
+                </div>
+            )}
+            <WarningList warnings={analysis.warnings} />
+        </>
+    );
+};
 
 const ReportTable: React.FC<{ report: XshellImportReport }> = ({ report }) => (
     <>
@@ -308,13 +314,15 @@ const ReportTable: React.FC<{ report: XshellImportReport }> = ({ report }) => (
     </>
 );
 
-const WarningList: React.FC<{ warnings: string[] }> = ({ warnings }) => {
-    if (warnings.length === 0) return null;
+/** warnings 允许为 null：后端契约应为空数组，但边界异常不应升级为整页白屏。 */
+const WarningList: React.FC<{ warnings: string[] | null | undefined }> = ({ warnings }) => {
+    const list = Array.isArray(warnings) ? warnings : [];
+    if (list.length === 0) return null;
     return (
         <details style={styles.warningBox}>
-            <summary style={styles.warningSummary}>{warnings.length} 条提示</summary>
+            <summary style={styles.warningSummary}>{list.length} 条提示</summary>
             <ul style={styles.warningList}>
-                {warnings.map((w, i) => (
+                {list.map((w, i) => (
                     <li key={i}>{w}</li>
                 ))}
             </ul>

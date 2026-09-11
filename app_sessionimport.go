@@ -180,7 +180,14 @@ func (a *App) AnalyzeXshellImport(path string, opts ImportOptions) (*ImportAnaly
 	}
 
 	analysis := sessionimport.Analyze(records, importTreeWriter{a.savedSessionMgr})
-	warnings := mergeWarnings(analysis.Warnings, parseWarnings)
+
+	// 契约：集合字段一律给空集合而不是 nil。Go 的 nil slice/map 会序列化成 null，
+	// 前端按数组/对象处理就会抛异常，而 React 的渲染异常会把整棵组件树卸载成黑屏。
+	// 前端另有容错，但边界本身不该产出这种形状。
+	protocols := analysis.Protocols
+	if protocols == nil {
+		protocols = map[string]int{}
+	}
 
 	return &ImportAnalysis{
 		Total:             analysis.Total,
@@ -191,8 +198,8 @@ func (a *App) AnalyzeXshellImport(path string, opts ImportOptions) (*ImportAnaly
 		PasswordDecrypted: analysis.PasswordDecrypted,
 		PasswordFailed:    analysis.PasswordFailed,
 		Groups:            analysis.Groups,
-		Protocols:         analysis.Protocols,
-		Warnings:          warnings,
+		Protocols:         protocols,
+		Warnings:          mergeWarnings(analysis.Warnings, parseWarnings),
 	}, nil
 }
 
@@ -262,9 +269,10 @@ func describeImportError(err error) error {
 	return err
 }
 
+// mergeWarnings 合并去重并排序。始终返回非 nil 切片——见 AnalyzeXshellImport 里的契约说明。
 func mergeWarnings(groups ...[]string) []string {
 	seen := make(map[string]bool)
-	var out []string
+	out := []string{}
 	for _, group := range groups {
 		for _, w := range group {
 			w = strings.TrimSpace(w)
