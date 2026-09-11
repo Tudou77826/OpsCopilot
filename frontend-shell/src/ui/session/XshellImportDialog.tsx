@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useToast } from '../feedback/Toast';
+import {
+    ImportDialogShell,
+    ImportSection,
+    ImportStat,
+    ImportStatGrid,
+    ImportWarningList,
+    importStyles,
+} from '../common/ImportParts';
 import type {
     SessionManagerRuntime,
     XshellCredentialStatus,
@@ -138,128 +146,117 @@ const XshellImportDialog: React.FC<Props> = ({ isOpen, runtime, onClose, onImpor
     };
 
     return (
-        <div style={styles.overlay} onClick={(e) => e.target === e.currentTarget && !busy && onClose()}>
-            <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-                <div style={styles.header}>
-                    <h2 style={styles.title}>导入 Xshell 会话</h2>
-                    <button style={styles.closeButton} onClick={onClose} disabled={!!busy}>✕</button>
+        <ImportDialogShell
+            title="导入 Xshell 会话"
+            busy={busy}
+            onClose={onClose}
+            footer={
+                step === 'report' ? (
+                    <button style={importStyles.primaryButton} onClick={onClose}>完成</button>
+                ) : (
+                    <>
+                        <button style={importStyles.cancelButton} onClick={onClose} disabled={!!busy}>取消</button>
+                        {step === 'review' ? (
+                            <>
+                                <button style={importStyles.secondaryButton} onClick={() => setStep('source')} disabled={!!busy}>
+                                    返回
+                                </button>
+                                <button style={importStyles.secondaryButton} onClick={runAnalyze} disabled={!!busy}>
+                                    重新分析
+                                </button>
+                                <button style={importStyles.primaryButton} onClick={runImport} disabled={!!busy || !canApply}>
+                                    {busy || '确认导入'}
+                                </button>
+                            </>
+                        ) : (
+                            <button style={importStyles.primaryButton} onClick={runAnalyze} disabled={!!busy || !selectedPath}>
+                                {busy || '分析并预览'}
+                            </button>
+                        )}
+                    </>
+                )
+            }
+        >
+            {status && (
+                <div style={{ ...styles.statusBanner, ...(status.available ? styles.statusOk : styles.statusWarn) }}>
+                    {status.message}
+                    {status.available && status.maskedSid && (
+                        <span style={styles.statusDetail}>（{status.windowsUser} / {status.maskedSid}）</span>
+                    )}
                 </div>
+            )}
 
-                <div style={styles.body}>
-                    {status && (
-                        <div style={{ ...styles.statusBanner, ...(status.available ? styles.statusOk : styles.statusWarn) }}>
-                            {status.message}
-                            {status.available && status.maskedSid && (
-                                <span style={styles.statusDetail}>（{status.windowsUser} / {status.maskedSid}）</span>
-                            )}
+            {step === 'source' && (
+                <>
+                    {/* 两种来源放在同一块里，底部只给一行"将从此处导入"作为唯一的选择结论。
+                        此前"已选择"挂在"或手动选择"下面，自动探测到的路径显示在那里会读成
+                        "用户手动选的"，同一个路径也因此出现两次。 */}
+                    <ImportSection title="导入来源">
+                        {dirs.length > 0 && (
+                            <>
+                                <div style={importStyles.subTitle}>本机检测到的 Xshell 会话目录</div>
+                                <div style={importStyles.sectionHint}>
+                                    直接选它即可，无需先去 Xshell 做任何导出操作。
+                                </div>
+                                {dirs.map((dir) => (
+                                    <label key={dir.path} style={importStyles.radioRow}>
+                                        <input
+                                            type="radio"
+                                            name="xsh-dir"
+                                            checked={selectedPath === dir.path}
+                                            onChange={() => setSelectedPath(dir.path)}
+                                        />
+                                        <span style={importStyles.radioLabel}>
+                                            Xshell {dir.version || '未知版本'}
+                                            <span style={importStyles.muted}> · {dir.sessions} 个会话</span>
+                                        </span>
+                                        <span style={importStyles.pathText} title={dir.path}>{dir.path}</span>
+                                    </label>
+                                ))}
+                                <div style={importStyles.divider} />
+                            </>
+                        )}
+
+                        <div style={importStyles.subTitle}>或从文件 / 目录导入</div>
+                        <div style={importStyles.sectionHint}>
+                            支持 Xshell 导出的 .xts 备份包、单个 .xsh 文件，或包含 .xsh 的目录。
                         </div>
-                    )}
+                        <div style={importStyles.buttonRow}>
+                            <button style={importStyles.secondaryButton} onClick={pickFile} disabled={!!busy}>
+                                选择文件（.xts / .xsh）
+                            </button>
+                            <button style={importStyles.secondaryButton} onClick={pickDirectory} disabled={!!busy}>
+                                选择目录
+                            </button>
+                        </div>
 
-                    {step === 'source' && (
-                        <>
-                            {/* 两种来源放在同一块里，底部只给一行"将从此处导入"作为唯一的选择结论。
-                                此前"已选择"挂在"或手动选择"下面，自动探测到的路径显示在那里会读成
-                                "用户手动选的"，同一个路径也因此出现两次。 */}
-                            <section style={styles.section}>
-                                <div style={styles.sectionTitle}>导入来源</div>
-
-                                {dirs.length > 0 && (
-                                    <>
-                                        <div style={styles.subTitle}>本机检测到的 Xshell 会话目录</div>
-                                        <div style={styles.sectionHint}>
-                                            直接选它即可，无需先去 Xshell 做任何导出操作。
-                                        </div>
-                                        {dirs.map((dir) => (
-                                            <label key={dir.path} style={styles.radioRow}>
-                                                <input
-                                                    type="radio"
-                                                    name="xsh-dir"
-                                                    checked={selectedPath === dir.path}
-                                                    onChange={() => setSelectedPath(dir.path)}
-                                                />
-                                                <span style={styles.radioLabel}>
-                                                    Xshell {dir.version || '未知版本'}
-                                                    <span style={styles.muted}> · {dir.sessions} 个会话</span>
-                                                </span>
-                                                <span style={styles.pathText} title={dir.path}>{dir.path}</span>
-                                            </label>
-                                        ))}
-                                        <div style={styles.divider} />
-                                    </>
-                                )}
-
-                                <div style={styles.subTitle}>或从文件 / 目录导入</div>
-                                <div style={styles.sectionHint}>
-                                    支持 Xshell 导出的 .xts 备份包、单个 .xsh 文件，或包含 .xsh 的目录。
-                                </div>
-                                <div style={styles.buttonRow}>
-                                    <button style={styles.secondaryButton} onClick={pickFile} disabled={!!busy}>
-                                        选择文件（.xts / .xsh）
-                                    </button>
-                                    <button style={styles.secondaryButton} onClick={pickDirectory} disabled={!!busy}>
-                                        选择目录
-                                    </button>
-                                </div>
-
-                                <div style={selectedPath ? styles.selectionLine : styles.selectionLineEmpty}>
-                                    {selectedPath ? (
-                                        <>
-                                            将从此处导入：
-                                            <span style={styles.selectionPath} title={selectedPath}>
-                                                {selectedPath}
-                                            </span>
-                                        </>
-                                    ) : (
-                                        '尚未选择导入来源'
-                                    )}
-                                </div>
-                            </section>
-
-                            <GuidePanel open={guideOpen} onToggle={() => setGuideOpen((v) => !v)} />
-                        </>
-                    )}
-
-                    {(step === 'review' || step === 'report') && (
-                        <section style={styles.section}>
-                            <div style={styles.sectionTitle}>
-                                {step === 'review' ? '导入预览' : '导入结果'}
-                            </div>
-                            {step === 'review' && analysis && <AnalysisTable analysis={analysis} />}
-                            {step === 'report' && report && <ReportTable report={report} />}
-                        </section>
-                    )}
-
-                    {error && <div style={styles.error}>{error}</div>}
-                </div>
-
-                <div style={styles.footer}>
-                    {step === 'report' ? (
-                        <button style={styles.primaryButton} onClick={onClose}>完成</button>
-                    ) : (
-                        <>
-                            <button style={styles.cancelButton} onClick={onClose} disabled={!!busy}>取消</button>
-                            {step === 'review' ? (
+                        <div style={selectedPath ? importStyles.selectionLine : importStyles.selectionLineEmpty}>
+                            {selectedPath ? (
                                 <>
-                                    <button style={styles.secondaryButton} onClick={() => setStep('source')} disabled={!!busy}>
-                                        返回
-                                    </button>
-                                    <button style={styles.secondaryButton} onClick={runAnalyze} disabled={!!busy}>
-                                        重新分析
-                                    </button>
-                                    <button style={styles.primaryButton} onClick={runImport} disabled={!!busy || !canApply}>
-                                        {busy || '确认导入'}
-                                    </button>
+                                    将从此处导入：
+                                    <span style={importStyles.selectionPath} title={selectedPath}>
+                                        {selectedPath}
+                                    </span>
                                 </>
                             ) : (
-                                <button style={styles.primaryButton} onClick={runAnalyze} disabled={!!busy || !selectedPath}>
-                                    {busy || '分析并预览'}
-                                </button>
+                                '尚未选择导入来源'
                             )}
-                        </>
-                    )}
-                </div>
-            </div>
-        </div>
+                        </div>
+                    </ImportSection>
+
+                    <GuidePanel open={guideOpen} onToggle={() => setGuideOpen((v) => !v)} />
+                </>
+            )}
+
+            {(step === 'review' || step === 'report') && (
+                <ImportSection title={step === 'review' ? '导入预览' : '导入结果'}>
+                    {step === 'review' && analysis && <AnalysisTable analysis={analysis} />}
+                    {step === 'report' && report && <ReportTable report={report} />}
+                </ImportSection>
+            )}
+
+            {error && <div style={importStyles.error}>{error}</div>}
+        </ImportDialogShell>
     );
 };
 
@@ -270,20 +267,20 @@ const AnalysisTable: React.FC<{ analysis: XshellImportAnalysis }> = ({ analysis 
     const protocolEntries = Object.entries(analysis.protocols ?? {});
     return (
         <>
-            <div style={styles.statGrid}>
-                <Stat label="解析到会话" value={analysis.total} />
-                <Stat label="将导入" value={analysis.supported} tone="ok" />
-                <Stat label="已存在（跳过）" value={analysis.existing} />
-                <Stat label="协议不支持（跳过）" value={analysis.unsupported} />
-                <Stat label="分组层级" value={analysis.groups} />
-                <Stat label="含密码" value={analysis.withPassword} />
-                <Stat label="密码已解密" value={analysis.passwordDecrypted} tone="ok" />
-                <Stat
+            <ImportStatGrid>
+                <ImportStat label="解析到会话" value={analysis.total} />
+                <ImportStat label="将导入" value={analysis.supported} tone="ok" />
+                <ImportStat label="已存在（跳过）" value={analysis.existing} />
+                <ImportStat label="协议不支持（跳过）" value={analysis.unsupported} />
+                <ImportStat label="分组层级" value={analysis.groups} />
+                <ImportStat label="含密码" value={analysis.withPassword} />
+                <ImportStat label="密码已解密" value={analysis.passwordDecrypted} tone="ok" />
+                <ImportStat
                     label="密码未解密"
                     value={analysis.passwordFailed}
                     tone={analysis.passwordFailed > 0 ? 'warn' : undefined}
                 />
-            </div>
+            </ImportStatGrid>
             {analysis.passwordFailed > 0 && (
                 <div style={styles.hintBox}>
                     有 {analysis.passwordFailed} 个会话的密码无法解密。Xshell 的密码密钥依赖导出那台电脑的
@@ -295,55 +292,30 @@ const AnalysisTable: React.FC<{ analysis: XshellImportAnalysis }> = ({ analysis 
                     协议分布：{protocolEntries.map(([p, n]) => `${p} ${n}`).join('，')}
                 </div>
             )}
-            <WarningList warnings={analysis.warnings} />
+            <ImportWarningList warnings={analysis.warnings} />
         </>
     );
 };
 
 const ReportTable: React.FC<{ report: XshellImportReport }> = ({ report }) => (
     <>
-        <div style={styles.statGrid}>
-            <Stat label="已导入" value={report.imported} tone="ok" />
-            <Stat label="已存在（跳过）" value={report.skippedExisting} />
-            <Stat label="不支持（跳过）" value={report.skippedUnsupported} />
-            <Stat label="密码已解密" value={report.passwordDecrypted} tone="ok" />
-            <Stat
+        <ImportStatGrid>
+            <ImportStat label="已导入" value={report.imported} tone="ok" />
+            <ImportStat label="已存在（跳过）" value={report.skippedExisting} />
+            <ImportStat label="不支持（跳过）" value={report.skippedUnsupported} />
+            <ImportStat label="密码已解密" value={report.passwordDecrypted} tone="ok" />
+            <ImportStat
                 label="密码未解密"
                 value={report.passwordFailed}
                 tone={report.passwordFailed > 0 ? 'warn' : undefined}
             />
-        </div>
-        <WarningList warnings={report.warnings} />
+        </ImportStatGrid>
+        <ImportWarningList warnings={report.warnings} />
     </>
 );
 
-/** warnings 允许为 null：后端契约应为空数组，但边界异常不应升级为整页白屏。 */
-const WarningList: React.FC<{ warnings: string[] | null | undefined }> = ({ warnings }) => {
-    const list = Array.isArray(warnings) ? warnings : [];
-    if (list.length === 0) return null;
-    return (
-        <details style={styles.warningBox}>
-            <summary style={styles.warningSummary}>{list.length} 条提示</summary>
-            <ul style={styles.warningList}>
-                {list.map((w, i) => (
-                    <li key={i}>{w}</li>
-                ))}
-            </ul>
-        </details>
-    );
-};
-
-const Stat: React.FC<{ label: string; value: number; tone?: 'ok' | 'warn' }> = ({ label, value, tone }) => (
-    <div style={styles.statCard}>
-        <div style={{ ...styles.statValue, color: tone === 'ok' ? 'var(--success)' : tone === 'warn' ? 'var(--warning)' : 'var(--text-primary)' }}>
-            {value}
-        </div>
-        <div style={styles.statLabel}>{label}</div>
-    </div>
-);
-
 const GuidePanel: React.FC<{ open: boolean; onToggle: () => void }> = ({ open, onToggle }) => (
-    <section style={styles.section}>
+    <section style={importStyles.section}>
         <button style={styles.collapseHeader} onClick={onToggle}>
             {open ? '▾' : '▸'} 如何在 Xshell 里导出？（点这里看步骤）
         </button>
@@ -372,98 +344,12 @@ const GuidePanel: React.FC<{ open: boolean; onToggle: () => void }> = ({ open, o
     </section>
 );
 
+// 会话导入特有的样式；公共部分（外壳、分区、数字网格、提示列表）在 ui/common/ImportParts。
 const styles: Record<string, React.CSSProperties> = {
-    overlay: {
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1100,
-    },
-    modal: {
-        backgroundColor: 'var(--bg-tertiary)',
-        borderRadius: 8,
-        width: 720,
-        maxWidth: '92vw',
-        maxHeight: '88vh',
-        display: 'flex',
-        flexDirection: 'column',
-        color: 'var(--text-primary)',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-    },
-    header: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '16px 20px 8px',
-    },
-    title: { margin: 0, fontSize: '1.15rem' },
-    closeButton: {
-        background: 'transparent',
-        border: 'none',
-        color: 'var(--text-muted)',
-        fontSize: 16,
-        cursor: 'pointer',
-    },
-    body: { overflowY: 'auto', padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 14 },
     statusBanner: { padding: '10px 12px', borderRadius: 6, fontSize: 13 },
     statusOk: { backgroundColor: 'rgba(64, 160, 96, 0.12)', color: 'var(--text-primary)', border: '1px solid var(--success)' },
     statusWarn: { backgroundColor: 'rgba(200, 150, 60, 0.12)', color: 'var(--text-primary)', border: '1px solid var(--warning)' },
     statusDetail: { color: 'var(--text-muted)', marginLeft: 6 },
-    section: {
-        border: '1px solid var(--border)',
-        borderRadius: 6,
-        padding: '12px 14px',
-        backgroundColor: 'var(--bg-secondary)',
-    },
-    sectionTitle: { fontSize: 13, fontWeight: 600, marginBottom: 6 },
-    subTitle: { fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' },
-    divider: { height: 1, backgroundColor: 'var(--border)', margin: '10px 0' },
-    sectionHint: { fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 },
-    radioRow: { display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 13, cursor: 'pointer' },
-    radioLabel: { flexShrink: 0 },
-    pathText: {
-        color: 'var(--text-muted)',
-        fontSize: 11,
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
-        direction: 'rtl',
-    },
-    muted: { color: 'var(--text-muted)' },
-    buttonRow: { display: 'flex', gap: 8, flexWrap: 'wrap' },
-    // 全块唯一的"选择结论"：把两种来源收敛成一行，避免同一个路径在多处出现、
-    // 让人误以为手动选择区也参与了选择。
-    selectionLine: {
-        marginTop: 10,
-        paddingTop: 10,
-        borderTop: '1px solid var(--border)',
-        fontSize: 12,
-        color: 'var(--text-secondary)',
-    },
-    selectionLineEmpty: {
-        marginTop: 10,
-        paddingTop: 10,
-        borderTop: '1px solid var(--border)',
-        fontSize: 12,
-        color: 'var(--text-muted)',
-    },
-    selectionPath: {
-        marginLeft: 6,
-        color: 'var(--text-primary)',
-        wordBreak: 'break-all',
-    },
-    statGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 },
-    statCard: {
-        backgroundColor: 'var(--bg-primary)',
-        border: '1px solid var(--border)',
-        borderRadius: 6,
-        padding: '8px 10px',
-    },
-    statValue: { fontSize: 18, fontWeight: 600 },
-    statLabel: { fontSize: 11, color: 'var(--text-muted)', marginTop: 2 },
     hintBox: {
         marginTop: 10,
         fontSize: 12,
@@ -475,9 +361,6 @@ const styles: Record<string, React.CSSProperties> = {
         padding: '8px 10px',
     },
     protocolLine: { marginTop: 8, fontSize: 12, color: 'var(--text-muted)' },
-    warningBox: { marginTop: 8, fontSize: 12 },
-    warningSummary: { cursor: 'pointer', color: 'var(--text-muted)' },
-    warningList: { margin: '6px 0 0', paddingLeft: 18, color: 'var(--text-secondary)', lineHeight: 1.7 },
     collapseHeader: {
         background: 'transparent',
         border: 'none',
@@ -491,38 +374,6 @@ const styles: Record<string, React.CSSProperties> = {
     guideList: { margin: 0, paddingLeft: 20 },
     guideFallback: { marginTop: 8, padding: '8px 10px', backgroundColor: 'var(--bg-primary)', borderRadius: 6 },
     guideWarning: { marginTop: 8, color: 'var(--warning)' },
-    error: { color: 'var(--danger)', fontSize: 12 },
-    footer: {
-        display: 'flex',
-        justifyContent: 'flex-end',
-        gap: 10,
-        padding: '12px 20px 16px',
-    },
-    cancelButton: {
-        padding: '8px 16px',
-        borderRadius: 6,
-        border: '1px solid var(--border-strong)',
-        backgroundColor: 'transparent',
-        color: 'var(--text-primary)',
-        cursor: 'pointer',
-    },
-    secondaryButton: {
-        padding: '8px 16px',
-        borderRadius: 6,
-        border: '1px solid var(--border-strong)',
-        backgroundColor: 'var(--bg-elevated)',
-        color: 'var(--text-primary)',
-        cursor: 'pointer',
-    },
-    primaryButton: {
-        padding: '8px 18px',
-        borderRadius: 6,
-        border: 'none',
-        backgroundColor: 'var(--accent)',
-        color: 'var(--text-on-accent)',
-        cursor: 'pointer',
-        fontWeight: 600,
-    },
 };
 
 export default XshellImportDialog;
