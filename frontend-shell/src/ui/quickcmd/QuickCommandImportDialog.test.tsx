@@ -483,6 +483,31 @@ describe('数字必须与实际写入一致', () => {
     });
 });
 
+describe('布局', () => {
+    // jsdom 没有布局引擎，量不出"两个控件重叠"；这里钉住导致重叠的那个属性本身：
+    // 本仓库没有全局 border-box，输入框声明 width:100% 时若用 content-box，实际宽度会
+    // 再加上 padding 与边框，溢出所在栅格列并与右侧的分组选择器叠在一起（实机上发生过）。
+    it('逐条命令的输入框声明 border-box，避免溢出所在列', async () => {
+        const { host } = makeHost();
+        await openReview(host);
+
+        for (const testId of ['import-item-name-0-0', 'import-item-content-0-0']) {
+            expect((screen.getByTestId(testId) as HTMLElement).style.boxSizing).toBe('border-box');
+        }
+
+        // 库里没有任何分组时集合分组直接是输入态
+        expect((screen.getByTestId('import-group-0') as HTMLElement).style.boxSizing).toBe('border-box');
+    });
+
+    it('从菜单新建分组时，新分组输入框同样声明 border-box', async () => {
+        const { host } = makeHost({}, [{ name: '看磁盘', content: 'df -h', group: '普通运维' }]);
+        await openReview(host);
+
+        pickNewGroup('import-group-0', '新名字');
+        expect((screen.getByTestId('import-group-0') as HTMLElement).style.boxSizing).toBe('border-box');
+    });
+});
+
 describe('容错与结果', () => {
     it('后端返回 null 的集合字段不会让面板崩掉', async () => {
         const { host } = makeHost({

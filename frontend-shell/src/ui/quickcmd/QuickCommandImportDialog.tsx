@@ -861,6 +861,9 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: 12,
         width: '100%',
         minWidth: 0,
+        // 本仓库没有全局 border-box，输入框必须自己声明：否则 width:100% 会
+        // 再加上 padding 与边框的宽度，溢出所在栅格列并与右侧控件重叠。
+        boxSizing: 'border-box',
     },
     backLink: {
         background: 'transparent',
@@ -905,6 +908,7 @@ const styles: Record<string, React.CSSProperties> = {
         backgroundColor: 'var(--bg-input)',
         color: 'var(--text-primary)',
         outline: 'none',
+        boxSizing: 'border-box',
         fontSize: 12,
         width: '100%',
         minWidth: 0,
@@ -916,6 +920,7 @@ const styles: Record<string, React.CSSProperties> = {
         backgroundColor: 'var(--bg-input)',
         color: 'var(--text-primary)',
         outline: 'none',
+        boxSizing: 'border-box',
         fontSize: 12,
         fontFamily: 'monospace',
         width: '100%',
