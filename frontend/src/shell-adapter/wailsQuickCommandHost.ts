@@ -2,9 +2,9 @@ import type {
     QuickCommandHost,
     QuickCommandStorageAdapter,
     QuickCommand,
-    QuickCommandGroupAssignment,
     QuickCommandImportAnalysis,
     QuickCommandImportReport,
+    QuickCommandImportSelection,
     XshellQuickButtonDir,
 } from '@opscopilot/shell-terminal/ui';
 
@@ -24,7 +24,7 @@ type WailsWindow = Window & {
         ) => Promise<QuickCommandImportAnalysis>;
         ApplyQuickCommandImport?: (
             path: string,
-            assignments: QuickCommandGroupAssignment[],
+            selections: QuickCommandImportSelection[],
             options: { defaultGroup?: string },
         ) => Promise<QuickCommandImportReport>;
     } } };
@@ -101,8 +101,8 @@ export function makeWailsQuickCommandHost(execute: (content: string) => void): Q
         analyzeQuickCommandImport(path, defaultGroup) {
             return call<QuickCommandImportAnalysis>('AnalyzeQuickCommandImport', path, { defaultGroup });
         },
-        applyQuickCommandImport(path, assignments, defaultGroup) {
-            return call<QuickCommandImportReport>('ApplyQuickCommandImport', path, assignments, { defaultGroup });
+        applyQuickCommandImport(path, selections, defaultGroup) {
+            return call<QuickCommandImportReport>('ApplyQuickCommandImport', path, selections, { defaultGroup });
         },
     };
 }

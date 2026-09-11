@@ -182,17 +182,32 @@ export interface XshellQuickButtonDir {
   buttons: number;
 }
 
-/** 预览里"每个 .qbl 集合一行"的数据。 */
+/** 预览里的一条命令明细。 */
+export interface QuickCommandSetItem {
+  name: string;
+  content: string;
+  /** 原始的 Button_<i>_Type，便于用户判断"为什么不支持"。 */
+  type: string;
+  /** false 时界面置灰且不可勾选，skipReason 说明原因。 */
+  supported: boolean;
+  skipReason?: string;
+  /** 按集合默认分组判断的"已存在"；改了分组名后以最终报告为准。 */
+  existing: boolean;
+}
+
+/** 预览里"每个 .qbl 集合一段"的数据。 */
 export interface QuickCommandSetRow {
-  /** .qbl 文件路径，执行导入时用它回指该集合的目标分组。 */
+  /** .qbl 文件路径，执行导入时用它回指该集合。 */
   source: string;
   name: string;
   buttons: number;
   importable: number;
   unsupported: number;
   existing: number;
-  /** 建议的目标分组名，界面上可改。 */
+  /** 建议的集合默认分组名，界面上可改。 */
   group: string;
+  /** 逐条命令明细（含不可导入的条目）。 */
+  items: QuickCommandSetItem[];
 }
 
 /** 快捷命令导入前的影响分析。 */
@@ -209,10 +224,19 @@ export interface QuickCommandImportAnalysis {
   warnings: string[];
 }
 
-/** 把一个 .qbl 集合指派到目标分组。 */
-export interface QuickCommandGroupAssignment {
+/** 回传的一条命令：名称、内容、分组都可能是界面上改过的。 */
+export interface QuickCommandImportItem {
+  name: string;
+  content: string;
+  /** 为空表示跟随所属集合的默认分组。 */
+  group?: string;
+}
+
+/** 回传的一个集合的最终决定。items 为空表示这个集合不导入。 */
+export interface QuickCommandImportSelection {
   source: string;
   group: string;
+  items: QuickCommandImportItem[];
 }
 
 /** 快捷命令导入结果。 */
@@ -238,7 +262,7 @@ export interface QuickCommandHost {
   analyzeQuickCommandImport?(path: string, defaultGroup: string): Promise<QuickCommandImportAnalysis>;
   applyQuickCommandImport?(
     path: string,
-    assignments: QuickCommandGroupAssignment[],
+    selections: QuickCommandImportSelection[],
     defaultGroup: string,
   ): Promise<QuickCommandImportReport>;
 }

@@ -2,11 +2,12 @@
  * Xshell 快捷命令导入业务流程用例。
  *
  * 走真实链路：QuickCommandPanel → CommandGrid → QuickCommandImportDialog →
- * wailsQuickCommandHost → window.go（mock）。重点验证四件事：
+ * wailsQuickCommandHost → window.go（mock）。重点验证五件事：
  *   1. 入口只在宿主提供能力时出现；
- *   2. 导入前能看到每套按钮有多少条能搬、多少条会被跳过；
- *   3. 分组名在面板里可改，改后的名字真的传到后端；
- *   4. 导入完成后面板随之刷新（后端推送的事件被接住）。
+ *   2. 预览逐条列出命令，不可导入的置灰并说明原因；
+ *   3. 勾选、改名、改内容、逐条指定分组都真的传到后端；
+ *   4. 导入完成后面板随之刷新（后端推送的事件被接住）；
+ *   5. 取消不写入任何数据。
  */
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -23,13 +24,13 @@ const LoadQuickCommands = vi.fn(async () => [
 ]);
 
 const DetectXshellQuickButtonDirs = vi.fn(async () => [
-    { path: QBL_DIR, version: 8, sets: 1, buttons: 2 },
+    { path: QBL_DIR, version: 8, sets: 1, buttons: 3 },
 ]);
 
 const AnalyzeQuickCommandImport = vi.fn(async () => ({
     sets: 1,
-    buttons: 2,
-    importable: 1,
+    buttons: 3,
+    importable: 2,
     unsupported: 1,
     existing: 0,
     groups: ['Xshell'],
@@ -37,20 +38,32 @@ const AnalyzeQuickCommandImport = vi.fn(async () => ({
         {
             source: COMMANDS_QBL,
             name: 'commands',
-            buttons: 2,
-            importable: 1,
+            buttons: 3,
+            importable: 2,
             unsupported: 1,
             existing: 0,
             group: 'Xshell',
+            items: [
+                { name: 'tail', content: 'tail -f /var/log/app.log', type: '1', supported: true, existing: false },
+                { name: 'df', content: 'df -h', type: '1', supported: true, existing: false },
+                {
+                    name: '脚本按钮',
+                    content: 'echo script',
+                    type: '2',
+                    supported: false,
+                    skipReason: '按钮 脚本按钮 的类型为 2，OpsCopilot 暂只支持「发送字符串」类型，已跳过',
+                    existing: false,
+                },
+            ],
         },
     ],
     warnings: ['commands: 按钮 脚本按钮 的类型为 2，OpsCopilot 暂只支持「发送字符串」类型，已跳过'],
 }));
 
 const ApplyQuickCommandImport = vi.fn(async () => ({
-    imported: 1,
+    imported: 2,
     skippedExisting: 0,
-    skippedUnsupported: 1,
+    skippedUnsupported: 0,
     groups: ['运维命令'],
     warnings: null as unknown as string[],
 }));
@@ -64,7 +77,7 @@ beforeAll(() => {
             App: {
                 LoadQuickCommands,
                 DetectXshellQuickButtonDirs,
-                SelectQuickCommandImportFile: vi.fn(async () => ''), 
+                SelectQuickCommandImportFile: vi.fn(async () => ''),
                 SelectQuickCommandImportDirectory: vi.fn(async () => ''),
                 AnalyzeQuickCommandImport,
                 ApplyQuickCommandImport,
@@ -105,6 +118,14 @@ async function openImportDialog() {
     await screen.findByText('导入 Xshell 快捷命令');
 }
 
+/** 再进到预览步。 */
+async function openImportReview() {
+    await openImportDialog();
+    await waitFor(() => expect(DetectXshellQuickButtonDirs).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: '分析并预览' }));
+    await screen.findByText('导入预览');
+}
+
 describe('导入入口（B0）', () => {
     it('宿主提供导入能力时，卡片流里出现「导入」入口', async () => {
         renderPanel();
@@ -113,57 +134,71 @@ describe('导入入口（B0）', () => {
     });
 });
 
-describe('分析与预览（B1）', () => {
-    it('自动探测本机快捷按钮目录并默认选中，分析后逐集合展示可导入与跳过条数', async () => {
-        await openImportDialog();
+describe('分析与逐条预览（B1）', () => {
+    it('自动探测本机目录并默认选中，预览逐条列出命令且不可导入项置灰', async () => {
+        await openImportReview();
 
-        // 无需用户做任何 Xshell 导出操作，路径已默认选中
-        await waitFor(() => expect(DetectXshellQuickButtonDirs).toHaveBeenCalledTimes(1));
-        expect(screen.getByText(/Xshell 8/)).toBeInTheDocument();
-        expect(screen.getByText(/1 套按钮 \/ 2 条/)).toBeInTheDocument();
-
-        fireEvent.click(screen.getByRole('button', { name: '分析并预览' }));
-
-        await screen.findByText('导入预览');
-        // 绑定层给的是驼峰 options 对象（Go 侧 DTO 的 json tag 就是 defaultGroup）
         expect(AnalyzeQuickCommandImport).toHaveBeenCalledWith(QBL_DIR, { defaultGroup: 'Xshell' });
-        // 有损映射在写入前就讲清楚：1 条能搬、1 条类型不支持
-        expect(screen.getByText(/可导入 1 \/ 共 2 条/)).toBeInTheDocument();
-        expect(screen.getByText('类型不支持（跳过）')).toBeInTheDocument();
-        expect(screen.getByText(/1 条提示/)).toBeInTheDocument();
+
+        // 逐条可见、可编辑
+        expect(screen.getByTestId('import-item-name-0-0')).toHaveValue('tail');
+        expect(screen.getByTestId('import-item-content-0-0')).toHaveValue('tail -f /var/log/app.log');
+        // 不可导入的类型置灰并写明原因，且没有勾选框
+        expect(screen.getByTestId('import-item-unsupported-0-2')).toHaveTextContent('类型为 2');
+        expect(screen.queryByTestId('import-item-0-2')).not.toBeInTheDocument();
     });
 });
 
-describe('分组落点（B2）', () => {
-    it('在面板里改分组名后导入，改后的名字与写入分组都体现在报告里，且面板随之刷新', async () => {
-        await openImportDialog();
-        fireEvent.click(screen.getByRole('button', { name: '分析并预览' }));
-        await screen.findByText('导入预览');
+describe('命令级取舍与编辑（B2）', () => {
+    it('取消一条、改名、改内容、逐条指定分组，全部随请求到后端', async () => {
+        await openImportReview();
 
-        // 默认建议值是 Xshell；用户改成自己的分组名
-        const groupInput = screen.getByTestId('import-group-0');
-        expect(groupInput).toHaveValue('Xshell');
-        expect(screen.getByTestId('import-group-hint-0')).toHaveTextContent('将新建分组');
-        fireEvent.change(groupInput, { target: { value: '运维命令' } });
+        fireEvent.click(screen.getByTestId('import-item-0-1')); // 不要 df
+        fireEvent.change(screen.getByTestId('import-item-name-0-0'), { target: { value: '跟踪应用日志' } });
+        fireEvent.change(screen.getByTestId('import-item-content-0-0'), { target: { value: 'tail -F /var/log/app.log' } });
+        fireEvent.change(screen.getByTestId('import-item-group-0-0'), { target: { value: '日志排查' } });
+        fireEvent.change(screen.getByTestId('import-group-0'), { target: { value: '运维命令' } });
 
-        fireEvent.click(screen.getByRole('button', { name: '确认导入' }));
+        fireEvent.click(screen.getByRole('button', { name: /确认导入 1 条/ }));
 
         await waitFor(() => expect(ApplyQuickCommandImport).toHaveBeenCalledTimes(1));
         expect(ApplyQuickCommandImport).toHaveBeenCalledWith(
             QBL_DIR,
-            [{ source: COMMANDS_QBL, group: '运维命令' }],
+            [
+                {
+                    source: COMMANDS_QBL,
+                    group: '运维命令',
+                    items: [{ name: '跟踪应用日志', content: 'tail -F /var/log/app.log', group: '日志排查' }],
+                },
+            ],
             { defaultGroup: 'Xshell' },
         );
-
         expect(await screen.findByText('导入结果')).toBeInTheDocument();
+    });
+
+    it('取消整套按钮后它不参与导入，且禁止在一条都不选时确认', async () => {
+        await openImportReview();
+
+        fireEvent.click(screen.getByTestId('import-set-0'));
+        expect(screen.getByRole('button', { name: '确认导入' })).toBeDisabled();
+        expect(ApplyQuickCommandImport).not.toHaveBeenCalled();
+    });
+});
+
+describe('落盘与刷新（B3）', () => {
+    it('导入后在报告里给出写入的分组，面板随事件刷新出新分组', async () => {
+        await openImportReview();
+        fireEvent.change(screen.getByTestId('import-group-0'), { target: { value: '运维命令' } });
+        fireEvent.click(screen.getByRole('button', { name: /确认导入/ }));
+
+        await screen.findByText('导入结果');
         expect(screen.getByText(/已写入分组：运维命令/)).toBeInTheDocument();
-        expect(screen.getByText('类型不支持（跳过）')).toBeInTheDocument();
 
         // 后端写完会 emit 最新列表，面板接住后新分组出现在分组条里
         expect(externalEmit).toBeTypeOf('function');
         externalEmit!([
             { id: 'g1-1', name: '重启服务', content: 'systemctl restart app', group: '默认' },
-            { id: 'qc-1-0', name: 'tail', content: 'tail -f /var/log/app.log', group: '运维命令' },
+            { id: 'qc-1-0', name: '跟踪应用日志', content: 'tail -F /var/log/app.log', group: '运维命令' },
         ]);
         expect(await screen.findByTestId('group-item-运维命令')).toBeInTheDocument();
     });
@@ -177,8 +212,8 @@ describe('分组落点（B2）', () => {
     });
 });
 
-describe('重复导入（B3）', () => {
-    it('全部重复时报告为无新增，不产生新命令', async () => {
+describe('重复导入（B4）', () => {
+    it('全部重复时报告为无新增，不显示写入的分组', async () => {
         ApplyQuickCommandImport.mockImplementationOnce(async () => ({
             imported: 0,
             skippedExisting: 2,
@@ -187,14 +222,11 @@ describe('重复导入（B3）', () => {
             warnings: [],
         }));
 
-        await openImportDialog();
-        fireEvent.click(screen.getByRole('button', { name: '分析并预览' }));
-        await screen.findByText('导入预览');
-        fireEvent.click(screen.getByRole('button', { name: '确认导入' }));
+        await openImportReview();
+        fireEvent.click(screen.getByRole('button', { name: /确认导入/ }));
 
         await screen.findByText('导入结果');
         expect(screen.getByText('已存在或重复（跳过）')).toBeInTheDocument();
-        // 没有新增时不必显示"已写入分组"
         expect(screen.queryByText(/已写入分组/)).not.toBeInTheDocument();
     });
 });

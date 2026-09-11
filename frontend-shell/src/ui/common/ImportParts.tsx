@@ -15,11 +15,13 @@ type ShellProps = {
     onClose: () => void;
     footer: React.ReactNode;
     children: React.ReactNode;
+    /** 弹窗宽度。逐条列出命令的导入面板需要更宽，默认 720。 */
+    width?: number;
 };
 
-export const ImportDialogShell: React.FC<ShellProps> = ({ title, busy, onClose, footer, children }) => (
+export const ImportDialogShell: React.FC<ShellProps> = ({ title, busy, onClose, footer, children, width }) => (
     <div style={importStyles.overlay} onClick={(e) => e.target === e.currentTarget && !busy && onClose()}>
-        <div style={importStyles.modal} onClick={(e) => e.stopPropagation()}>
+        <div style={{ ...importStyles.modal, ...(width ? { width, maxWidth: '96vw' } : null) }} onClick={(e) => e.stopPropagation()}>
             <div style={importStyles.header}>
                 <h2 style={importStyles.title}>{title}</h2>
                 <button style={importStyles.closeButton} onClick={onClose} disabled={!!busy} title="关闭">

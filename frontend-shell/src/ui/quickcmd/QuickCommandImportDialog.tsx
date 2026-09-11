@@ -12,6 +12,7 @@ import type {
     QuickCommandHost,
     QuickCommandImportAnalysis,
     QuickCommandImportReport,
+    QuickCommandImportSelection,
     QuickCommandSetRow,
     XshellQuickButtonDir,
 } from '../ports';
@@ -26,25 +27,49 @@ type Props = {
 
 type Step = 'source' | 'review' | 'report';
 
+/** 一条命令的编辑状态。名称、内容、分组都可以在预览里改。 */
+type ItemPlan = {
+    name: string;
+    content: string;
+    /** 空表示跟随所属集合的分组。 */
+    group: string;
+    included: boolean;
+    supported: boolean;
+    skipReason: string;
+    existing: boolean;
+    type: string;
+};
+
+/** 一个 .qbl 集合的编辑状态。 */
+type SetPlan = {
+    included: boolean;
+    expanded: boolean;
+    group: string;
+    items: ItemPlan[];
+};
+
 /**
- * 导入的落点：一个分组名。
+ * 集合的默认分组名。
  *
- * Xshell 的 .qbl 里没有集合的显示名（[Info] 只有 Version/Count/Expanded），文件名
- * 又常常是 commands 这种无意义的名字，所以分组名不能由后端猜——放在界面上让用户确认。
- * 默认值取 Xshell 而不是文件名，是为了让最常见的单集合场景一按就得到一个像样的分组名。
+ * Xshell 的 .qbl 里没有集合的显示名（[Info] 只有 Version/Count/Expanded），文件名又
+ * 常常是 commands 这种无意义的名字，所以分组名不能由后端猜。默认值取 Xshell 而不是
+ * 文件名，是为了让最常见的单集合场景一按就得到一个像样的分组名。
  */
 const DEFAULT_GROUP = 'Xshell';
 
 /**
  * Xshell 快捷命令导入对话框。
  *
- * 设计要点：
- *  1. 同机场景下"自动检测本机 QuickButton Files 目录"是首选入口，用户不需要在
- *     Xshell 里做任何导出操作（.qbl 也没有导出向导，它就是个文件）。
- *  2. 先分析后导入：导入前就能看到每套按钮里有多少条能搬、多少条因类型不支持被跳过。
- *  3. 分组名逐个集合可改：填成同一个名字即合并，填不同即分开——一个机制同时表达
- *     "合并"和"分开"，只选一个集合时就只有一行。
- *  4. 有损映射要讲清楚：只搬名称与命令文本，Type≠1 的按钮（脚本/菜单等）会跳过。
+ * 粒度分三层，且每一层都能改：
+ *  1. 集合级——勾选要导哪几套按钮、每套的默认分组；
+ *  2. 命令级——逐条勾选，取消掉不想要的那几条；
+ *  3. 字段级——逐条改名称与命令内容，逐条覆盖目标分组（留空跟随集合）。
+ *
+ * 之所以要这么细：Xshell 里按钮的名字常常很潦草、一套按钮里往往混着不同类别的命令，
+ * 而导入后逐条改要重复打开编辑弹窗。放在写入之前一次做完，用户只需要在一个地方对齐。
+ *
+ * 不支持导入的类型（脚本、菜单等）仍然列出来但置灰并写明原因——比只在提示里给一个
+ * 跳过总数清楚。
  */
 const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroups, onClose }) => {
     const toast = useToast();
@@ -53,7 +78,7 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
     const [dirs, setDirs] = useState<XshellQuickButtonDir[]>([]);
     const [selectedPath, setSelectedPath] = useState('');
     const [analysis, setAnalysis] = useState<QuickCommandImportAnalysis | null>(null);
-    const [groups, setGroups] = useState<Record<string, string>>({});
+    const [plan, setPlan] = useState<Record<string, SetPlan>>({});
     const [report, setReport] = useState<QuickCommandImportReport | null>(null);
     const [busy, setBusy] = useState('');
     const [error, setError] = useState('');
@@ -75,7 +100,7 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
         setSelectedPath('');
         setAnalysis(null);
         setReport(null);
-        setGroups({});
+        setPlan({});
         setError('');
 
         void (async () => {
@@ -97,13 +122,29 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
         return null; // 宿主未提供导入能力（如 sidecar），入口本就不该出现
     }
 
+    // —— 计划的读与写 ——
+    const rows = analysis?.rows ?? [];
+
+    const updateSet = (source: string, patch: Partial<SetPlan>) => {
+        setPlan((prev) => (prev[source] ? { ...prev, [source]: { ...prev[source], ...patch } } : prev));
+    };
+
+    const updateItem = (source: string, index: number, patch: Partial<ItemPlan>) => {
+        setPlan((prev) => {
+            const set = prev[source];
+            if (!set) return prev;
+            const items = set.items.map((item, i) => (i === index ? { ...item, ...patch } : item));
+            return { ...prev, [source]: { ...set, items } };
+        });
+    };
+
+    const selectedCount = (set: SetPlan) => (set.included ? set.items.filter((i) => i.included && i.supported).length : 0);
+
     /** 分组输入框的实时提示：与已有分组合并，还是与本批其它集合合并。 */
-    const groupHint = (row: QuickCommandSetRow, index: number): string => {
-        const name = (groups[row.source] ?? row.group).trim();
-        if (!name) return '分组名不能为空';
-        const sameBatch = (analysis?.rows ?? []).some(
-            (other, i) => i !== index && (groups[other.source] ?? other.group).trim() === name,
-        );
+    const groupHint = (set: SetPlan, index: number): string => {
+        const name = set.group.trim();
+        if (!name) return '集合分组不能为空';
+        const sameBatch = rows.some((other, i) => i !== index && (plan[other.source]?.group ?? '').trim() === name);
         if (sameBatch) return '将与本批其它集合合并到同一分组';
         if (existingGroups.includes(name)) return '将追加到已有分组';
         return '将新建分组';
@@ -119,13 +160,27 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
         try {
             const result = await host.analyzeQuickCommandImport!(selectedPath, DEFAULT_GROUP);
             setAnalysis(result);
-            // 每行的分组输入框以建议值为初值；用户改过的值在重新分析后重置，
-            // 因为集合本身可能已经变了（换了来源）。
-            const initial: Record<string, string> = {};
+
+            // 逐条以"可导入且默认勾选"为初值；分组留空表示跟随集合。
+            const initial: Record<string, SetPlan> = {};
             for (const row of result.rows ?? []) {
-                initial[row.source] = row.group || DEFAULT_GROUP;
+                initial[row.source] = {
+                    included: true,
+                    expanded: true,
+                    group: row.group || DEFAULT_GROUP,
+                    items: (row.items ?? []).map((item) => ({
+                        name: item.name,
+                        content: item.content,
+                        group: '',
+                        included: item.supported,
+                        supported: item.supported,
+                        skipReason: item.skipReason ?? '',
+                        existing: item.existing,
+                        type: item.type,
+                    })),
+                };
             }
-            setGroups(initial);
+            setPlan(initial);
             setStep('review');
         } catch (e: any) {
             setError(e?.toString?.() || '分析失败');
@@ -138,8 +193,23 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
         setBusy('导入中...');
         setError('');
         try {
-            const assignments = Object.entries(groups).map(([source, group]) => ({ source, group: group.trim() }));
-            const result = await host.applyQuickCommandImport!(selectedPath, assignments, DEFAULT_GROUP);
+            // 回传的条目就是用户最终的决定：取消的集合不带条目，取消的条目不出现在列表里，
+            // 名称/内容/分组用的是界面上改过的值。
+            const selections: QuickCommandImportSelection[] = rows.map((row) => {
+                const set = plan[row.source];
+                if (!set || !set.included) {
+                    return { source: row.source, group: set?.group ?? row.group, items: [] };
+                }
+                return {
+                    source: row.source,
+                    group: set.group.trim() || DEFAULT_GROUP,
+                    items: set.items
+                        .filter((item) => item.included && item.supported)
+                        .map((item) => ({ name: item.name, content: item.content, group: item.group.trim() })),
+                };
+            });
+
+            const result = await host.applyQuickCommandImport!(selectedPath, selections, DEFAULT_GROUP);
             setReport(result);
             setStep('report');
             if (result.imported > 0) {
@@ -172,12 +242,22 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
         }
     };
 
-    const assignableRows = (analysis?.rows ?? []).length > 0;
+    // —— 汇总数字由当前计划算出，用户取消勾选后立刻跟着变 ——
+    const setPlans = Object.values(plan);
+    const pickedSets = setPlans.filter((s) => s.included).length;
+    const totalButtons = setPlans.reduce((n, s) => n + s.items.length, 0);
+    const willImport = setPlans.reduce((n, s) => n + selectedCount(s), 0);
+    const unsupportedTotal = setPlans.reduce((n, s) => n + s.items.filter((i) => !i.supported).length, 0);
+    const existingTotal = setPlans.reduce(
+        (n, s) => n + (s.included ? s.items.filter((i) => i.supported && i.included && i.existing).length : 0),
+        0,
+    );
 
     return (
         <ImportDialogShell
             title="导入 Xshell 快捷命令"
             busy={busy}
+            width={920}
             onClose={onClose}
             footer={
                 step === 'report' ? (
@@ -190,8 +270,13 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
                                 <button style={importStyles.secondaryButton} onClick={() => setStep('source')} disabled={!!busy}>
                                     返回
                                 </button>
-                                <button style={importStyles.primaryButton} onClick={runImport} disabled={!!busy || !canApply}>
-                                    {busy || '确认导入'}
+                                <button
+                                    style={importStyles.primaryButton}
+                                    onClick={runImport}
+                                    disabled={!!busy || !canApply || pickedSets === 0}
+                                    title={pickedSets === 0 ? '至少要勾选一套按钮' : undefined}
+                                >
+                                    {busy || `确认导入${willImport > 0 ? ` ${willImport} 条` : ''}`}
                                 </button>
                             </>
                         ) : (
@@ -263,45 +348,149 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
             {step === 'review' && analysis && (
                 <ImportSection title="导入预览">
                     <ImportStatGrid>
-                        <ImportStat label="按钮集" value={analysis.sets} />
-                        <ImportStat label="按钮总数" value={analysis.buttons} />
-                        <ImportStat label="将导入" value={analysis.importable} tone="ok" />
-                        <ImportStat label="类型不支持（跳过）" value={analysis.unsupported} />
-                        <ImportStat label="已存在或重复（跳过）" value={analysis.existing} />
+                        <ImportStat label="已选按钮集" value={pickedSets} tone="ok" />
+                        <ImportStat label="按钮总数" value={totalButtons} />
+                        <ImportStat label="将导入" value={willImport} tone="ok" />
+                        <ImportStat label="类型不支持（跳过）" value={unsupportedTotal} />
+                        <ImportStat label="已存在或重复（跳过）" value={existingTotal} />
                     </ImportStatGrid>
 
-                    {assignableRows && (
-                        <div style={styles.assignList}>
-                            {(analysis.rows ?? []).map((row, index) => (
-                                <div key={row.source} style={styles.assignRow}>
-                                    <div style={styles.assignMeta}>
-                                        <span style={styles.assignName}>{row.name}</span>
-                                        <span style={importStyles.muted}>
-                                            {' '}· 可导入 {row.importable} / 共 {row.buttons} 条
-                                        </span>
-                                        <div style={styles.assignPath} title={row.source}>{row.source}</div>
+                    <div style={styles.setList}>
+                        {rows.map((row, setIndex) => {
+                            const set = plan[row.source];
+                            if (!set) return null;
+                            return (
+                                <div
+                                    key={row.source}
+                                    style={set.included ? styles.setBlock : styles.setBlockOff}
+                                    data-testid={`import-set-block-${setIndex}`}
+                                >
+                                    <div style={styles.setHead}>
+                                        <label style={styles.setCheck}>
+                                            <input
+                                                type="checkbox"
+                                                checked={set.included}
+                                                onChange={(e) => updateSet(row.source, { included: e.target.checked })}
+                                                aria-label={`导入 ${row.name} 这套按钮`}
+                                                data-testid={`import-set-${setIndex}`}
+                                            />
+                                            <span style={styles.setName}>{row.name}</span>
+                                            <span style={importStyles.muted}>
+                                                {' '}· 将导入 {selectedCount(set)} / 共 {row.buttons} 条
+                                            </span>
+                                        </label>
+
+                                        <label style={styles.setGroupField}>
+                                            <span style={styles.fieldLabel}>集合分组</span>
+                                            <input
+                                                style={styles.input}
+                                                value={set.group}
+                                                onChange={(e) => updateSet(row.source, { group: e.target.value })}
+                                                aria-label={`${row.name} 的集合分组`}
+                                                data-testid={`import-group-${setIndex}`}
+                                            />
+                                        </label>
                                     </div>
-                                    <label style={styles.assignField}>
-                                        <span style={styles.assignLabel}>导入到分组</span>
-                                        <input
-                                            style={styles.input}
-                                            value={groups[row.source] ?? row.group}
-                                            onChange={(e) => setGroups((prev) => ({ ...prev, [row.source]: e.target.value }))}
-                                            aria-label={`${row.name} 的目标分组`}
-                                            data-testid={`import-group-${index}`}
-                                        />
-                                        <span style={styles.assignHint} data-testid={`import-group-hint-${index}`}>
-                                            {groupHint(row, index)}
+
+                                    <div style={styles.setMeta}>
+                                        <span style={styles.setHint} data-testid={`import-group-hint-${setIndex}`}>
+                                            {groupHint(set, setIndex)}
                                         </span>
-                                    </label>
+                                        <span style={styles.setActions}>
+                                            <button
+                                                style={styles.linkButton}
+                                                onClick={() => updateSet(row.source, { items: set.items.map((i) => ({ ...i, included: i.supported })) })}
+                                                data-testid={`import-select-all-${setIndex}`}
+                                            >
+                                                全选
+                                            </button>
+                                            <button
+                                                style={styles.linkButton}
+                                                onClick={() => updateSet(row.source, { items: set.items.map((i) => ({ ...i, included: false })) })}
+                                                data-testid={`import-select-none-${setIndex}`}
+                                            >
+                                                全不选
+                                            </button>
+                                            <button
+                                                style={styles.linkButton}
+                                                onClick={() => updateSet(row.source, { expanded: !set.expanded })}
+                                                data-testid={`import-set-toggle-${setIndex}`}
+                                            >
+                                                {set.expanded ? '收起命令' : `展开命令（${set.items.length}）`}
+                                            </button>
+                                        </span>
+                                    </div>
+
+                                    {set.expanded && (
+                                        <div style={styles.itemList}>
+                                            <div style={styles.itemHead}>
+                                                <span />
+                                                <span>名称</span>
+                                                <span>命令内容</span>
+                                                <span>分组（留空跟随集合）</span>
+                                                <span />
+                                            </div>
+                                            {set.items.map((item, itemIndex) =>
+                                                item.supported ? (
+                                                    <div key={`${item.name}-${itemIndex}`} style={styles.itemRow}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={set.included && item.included}
+                                                            disabled={!set.included}
+                                                            onChange={(e) => updateItem(row.source, itemIndex, { included: e.target.checked })}
+                                                            aria-label={`导入 ${item.name}`}
+                                                            data-testid={`import-item-${setIndex}-${itemIndex}`}
+                                                        />
+                                                        <input
+                                                            style={styles.itemName}
+                                                            value={item.name}
+                                                            onChange={(e) => updateItem(row.source, itemIndex, { name: e.target.value })}
+                                                            aria-label={`${item.name} 的名称`}
+                                                            data-testid={`import-item-name-${setIndex}-${itemIndex}`}
+                                                        />
+                                                        <input
+                                                            style={styles.itemContent}
+                                                            value={item.content}
+                                                            onChange={(e) => updateItem(row.source, itemIndex, { content: e.target.value })}
+                                                            aria-label={`${item.name} 的命令内容`}
+                                                            data-testid={`import-item-content-${setIndex}-${itemIndex}`}
+                                                        />
+                                                        <input
+                                                            style={styles.itemGroup}
+                                                            value={item.group}
+                                                            placeholder="跟随集合"
+                                                            onChange={(e) => updateItem(row.source, itemIndex, { group: e.target.value })}
+                                                            aria-label={`${item.name} 的命令分组`}
+                                                            data-testid={`import-item-group-${setIndex}-${itemIndex}`}
+                                                        />
+                                                        <span style={styles.tagCell}>
+                                                            {item.existing && <span style={styles.tag}>已存在</span>}
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <div
+                                                        key={`${item.name}-${itemIndex}`}
+                                                        style={styles.itemRowOff}
+                                                        data-testid={`import-item-unsupported-${setIndex}-${itemIndex}`}
+                                                    >
+                                                        <input type="checkbox" checked={false} disabled readOnly aria-hidden />
+                                                        <span style={styles.itemNameOff}>{item.name || '（无名称）'}</span>
+                                                        <span style={styles.itemSkipReason} title={item.skipReason}>
+                                                            {item.skipReason}
+                                                        </span>
+                                                    </div>
+                                                ),
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
-                            ))}
-                        </div>
-                    )}
+                            );
+                        })}
+                    </div>
 
                     <div style={styles.noteBox}>
-                        .qbl 里只有按钮名称与命令文本，因此只搬这两样。类型不是「发送字符串」的按钮
-                        （脚本、菜单等）会被跳过并在下方列出原因。
+                        .qbl 里只有按钮名称与命令文本，因此只搬这两样。名称、命令内容与分组都可以在这里直接改；
+                        类型不是「发送字符串」的按钮（脚本、菜单等）不可勾选，原因见上方置灰行。
                     </div>
 
                     <ImportWarningList warnings={analysis.warnings} />
@@ -313,7 +502,7 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
                     <ImportStatGrid>
                         <ImportStat label="已导入" value={report.imported} tone="ok" />
                         <ImportStat label="已存在或重复（跳过）" value={report.skippedExisting} />
-                        <ImportStat label="类型不支持（跳过）" value={report.skippedUnsupported} />
+                        <ImportStat label="不可导入（跳过）" value={report.skippedUnsupported} />
                     </ImportStatGrid>
                     <WrittenGroups groups={report.groups} />
                     <ImportWarningList warnings={report.warnings} />
@@ -334,39 +523,114 @@ const WrittenGroups: React.FC<{ groups: string[] | null | undefined }> = ({ grou
 
 // 本对话框特有的样式；公共部分（外壳、分区、数字网格、提示列表）在 ui/common/ImportParts。
 const styles: Record<string, React.CSSProperties> = {
-    assignList: { marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 },
-    assignRow: {
-        display: 'flex',
-        alignItems: 'flex-start',
-        justifyContent: 'space-between',
-        gap: 12,
-        padding: '8px 10px',
-        backgroundColor: 'var(--bg-primary)',
+    setList: { marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 },
+    setBlock: {
         border: '1px solid var(--border)',
         borderRadius: 6,
+        padding: '8px 10px',
+        backgroundColor: 'var(--bg-primary)',
     },
-    assignMeta: { minWidth: 0, flex: '1 1 auto' },
-    assignName: { fontSize: 13, fontWeight: 600 },
-    assignPath: {
-        marginTop: 2,
+    setBlockOff: {
+        border: '1px dashed var(--border)',
+        borderRadius: 6,
+        padding: '8px 10px',
+        backgroundColor: 'transparent',
+        opacity: 0.7,
+    },
+    setHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' },
+    setCheck: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', minWidth: 0 },
+    setName: { fontWeight: 600 },
+    setGroupField: { display: 'flex', alignItems: 'center', gap: 6, flex: '0 0 auto' },
+    setMeta: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 4 },
+    setHint: { fontSize: 11, color: 'var(--text-muted)' },
+    setActions: { display: 'flex', gap: 10, flexShrink: 0 },
+    linkButton: {
+        background: 'transparent',
+        border: 'none',
+        color: 'var(--accent)',
         fontSize: 11,
-        color: 'var(--text-muted)',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
-        direction: 'rtl',
+        cursor: 'pointer',
+        padding: 0,
     },
-    assignField: { display: 'flex', flexDirection: 'column', gap: 2, flex: '0 0 220px' },
-    assignLabel: { fontSize: 11, color: 'var(--text-secondary)' },
-    assignHint: { fontSize: 11, color: 'var(--text-muted)' },
+    fieldLabel: { fontSize: 11, color: 'var(--text-secondary)', flexShrink: 0 },
     input: {
-        padding: '6px 8px',
+        padding: '5px 8px',
         borderRadius: 4,
         border: '1px solid var(--border)',
         backgroundColor: 'var(--bg-input)',
         color: 'var(--text-primary)',
         outline: 'none',
         fontSize: 12,
+        width: 160,
+    },
+    itemList: { marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 },
+    itemHead: {
+        display: 'grid',
+        gridTemplateColumns: '22px 150px 1fr 150px 54px',
+        gap: 6,
+        alignItems: 'center',
+        fontSize: 10,
+        color: 'var(--text-muted)',
+        paddingBottom: 2,
+    },
+    itemRow: {
+        display: 'grid',
+        gridTemplateColumns: '22px 150px 1fr 150px 54px',
+        gap: 6,
+        alignItems: 'center',
+    },
+    itemRowOff: {
+        display: 'grid',
+        gridTemplateColumns: '22px 150px 1fr 150px 54px',
+        gap: 6,
+        alignItems: 'center',
+        fontSize: 12,
+        color: 'var(--text-disabled)',
+    },
+    itemName: {
+        padding: '4px 6px',
+        borderRadius: 4,
+        border: '1px solid var(--border)',
+        backgroundColor: 'var(--bg-input)',
+        color: 'var(--text-primary)',
+        outline: 'none',
+        fontSize: 12,
+        width: '100%',
+        minWidth: 0,
+    },
+    itemContent: {
+        padding: '4px 6px',
+        borderRadius: 4,
+        border: '1px solid var(--border)',
+        backgroundColor: 'var(--bg-input)',
+        color: 'var(--text-primary)',
+        outline: 'none',
+        fontSize: 12,
+        fontFamily: 'monospace',
+        width: '100%',
+        minWidth: 0,
+    },
+    itemGroup: {
+        padding: '4px 6px',
+        borderRadius: 4,
+        border: '1px solid var(--border)',
+        backgroundColor: 'var(--bg-input)',
+        color: 'var(--text-primary)',
+        outline: 'none',
+        fontSize: 12,
+        width: '100%',
+        minWidth: 0,
+    },
+    itemNameOff: { textDecoration: 'line-through' },
+    itemSkipReason: { gridColumn: '3 / 6', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+    tagCell: { display: 'flex', justifyContent: 'flex-start' },
+    tag: {
+        fontSize: 10,
+        padding: '1px 5px',
+        borderRadius: 3,
+        border: '1px solid var(--border)',
+        color: 'var(--text-muted)',
+        whiteSpace: 'nowrap',
     },
     noteBox: {
         marginTop: 10,
