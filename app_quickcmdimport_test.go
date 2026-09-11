@@ -97,6 +97,13 @@ func TestQuickCommandImportAnalysis_MatchesFrontendExpectations(t *testing.T) {
 	if row["source"] == "" || row["source"] == nil {
 		t.Fatalf("行内缺少 source（执行导入时要用它回指分组）: %#v", row)
 	}
+	// 行内的按钮数是该集合自己的条数：实机上这一项漏填过，界面显示成"共 0 条"。
+	if row["buttons"] != float64(2) {
+		t.Fatalf("行内按钮数应为本集合条数 2，实际 %#v", row["buttons"])
+	}
+	if row["importable"] != float64(2) {
+		t.Fatalf("行内可导入数错误: %#v", row["importable"])
+	}
 }
 
 // 端到端：分析与执行走同一份输入，结果必须一致；执行后命令真的落盘。

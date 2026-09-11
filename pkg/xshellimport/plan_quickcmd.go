@@ -83,7 +83,12 @@ func AnalyzeQuickCommands(sets []*QuickButtonSet, writer CommandWriter, defaultG
 		plan.Sets++
 		plan.Warnings = append(plan.Warnings, set.Warnings...)
 
-		row := QuickCommandSetRow{Source: set.Path, Name: set.Name, Group: defaultGroup}
+		row := QuickCommandSetRow{
+			Source:  set.Path,
+			Name:    set.Name,
+			Buttons: len(set.Buttons),
+			Group:   defaultGroup,
+		}
 		for _, button := range set.Buttons {
 			plan.Buttons++
 			if ok, reason := ButtonSupported(button); !ok {

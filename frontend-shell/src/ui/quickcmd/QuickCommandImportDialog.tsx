@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useToast } from '../feedback/Toast';
 import {
     ImportDialogShell,
@@ -61,6 +61,14 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
     const canAnalyze = typeof host.analyzeQuickCommandImport === 'function';
     const canApply = typeof host.applyQuickCommandImport === 'function';
 
+    // host 的对象身份可能在流程中途变化（Wails 适配器由外层 useMemo 按 onExecute
+    // 重建，而 onExecute 未必是稳定引用）。流程重置只应由 isOpen 触发：否则导入一完成
+    // 就跳回来源步，用户永远看不到结果报告——实机上就是这样。
+    const hostRef = useRef(host);
+    useEffect(() => {
+        hostRef.current = host;
+    }, [host]);
+
     useEffect(() => {
         if (!isOpen) return;
         setStep('source');
@@ -72,17 +80,17 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
 
         void (async () => {
             try {
-                if (host.detectQuickButtonDirs) {
-                    const found = await host.detectQuickButtonDirs();
-                    setDirs(Array.isArray(found) ? found : []);
-                    // 默认选中最新版本的目录，用户点一下就能分析。
-                    if (found.length > 0) setSelectedPath(found[0].path);
-                }
+                const detect = hostRef.current.detectQuickButtonDirs;
+                if (!detect) return;
+                const found = await detect();
+                setDirs(Array.isArray(found) ? found : []);
+                // 默认选中最新版本的目录，用户点一下就能分析。
+                if (found.length > 0) setSelectedPath(found[0].path);
             } catch (e: any) {
                 setError(e?.toString?.() || '检测本机 Xshell 快捷按钮目录失败');
             }
         })();
-    }, [isOpen, host]);
+    }, [isOpen]);
 
     if (!isOpen) return null;
     if (!canAnalyze) {

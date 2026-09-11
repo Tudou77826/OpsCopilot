@@ -268,6 +268,29 @@ describe('结果与取消', () => {
         expect(await screen.findByText('导入结果')).toBeInTheDocument();
     });
 
+    it('宿主对象在流程中途被重建时，不会把界面重置回来源步', async () => {
+        const { host, applyQuickCommandImport } = makeHost();
+        const { rerender } = renderDialog(host);
+        await waitFor(() => expect(screen.getByText(/将从此处导入/)).toBeInTheDocument());
+
+        fireEvent.click(screen.getByRole('button', { name: '分析并预览' }));
+        await screen.findByText('导入预览');
+        fireEvent.click(screen.getByRole('button', { name: '确认导入' }));
+        await waitFor(() => expect(applyQuickCommandImport).toHaveBeenCalledTimes(1));
+        expect(await screen.findByText('导入结果')).toBeInTheDocument();
+
+        // 实机上外层每次渲染都会重建 host（useMemo 依赖 onExecute，而它不是稳定引用），
+        // 若重置逻辑跟着 host 走，导入一完成就跳回来源步，报告一闪而过。
+        rerender(
+            <ToastProvider>
+                <QuickCommandImportDialog isOpen host={{ ...host }} existingGroups={[]} onClose={() => {}} />
+            </ToastProvider>,
+        );
+
+        expect(screen.getByText('导入结果')).toBeInTheDocument();
+        expect(screen.queryByText('导入来源')).not.toBeInTheDocument();
+    });
+
     it('未执行导入就取消时，不发起任何写入', async () => {
         const { host, applyQuickCommandImport, analyzeQuickCommandImport } = makeHost();
         await renderReady(host);

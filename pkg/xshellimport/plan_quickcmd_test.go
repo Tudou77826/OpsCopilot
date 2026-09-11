@@ -79,6 +79,17 @@ func TestAnalyzeQuickCommands_Counts(t *testing.T) {
 	if len(plan.Rows) != 2 {
 		t.Fatalf("应有两行集合明细，实际 %d", len(plan.Rows))
 	}
+	// 每行的按钮数必须是该集合自己的条数，不是总数——实机上这一项漏填过，
+	// 界面因此显示成"可导入 1 / 共 0 条"。
+	if plan.Rows[0].Buttons != 4 || plan.Rows[1].Buttons != 2 {
+		t.Fatalf("行内按钮数错误: %+v", plan.Rows)
+	}
+	// 行内三个桶相加也必须等于该行按钮数
+	for i, row := range plan.Rows {
+		if row.Importable+row.Unsupported+row.Existing != row.Buttons {
+			t.Fatalf("第 %d 行数字不自洽: %+v", i+1, row)
+		}
+	}
 	if plan.Rows[0].Importable != 2 || plan.Rows[0].Unsupported != 2 {
 		t.Fatalf("第一行统计错误: %+v", plan.Rows[0])
 	}
