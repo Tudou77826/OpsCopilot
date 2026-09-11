@@ -10,6 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"opscopilot/internal/atomicfile"
 )
 
 type AppConfig struct {
@@ -665,7 +667,10 @@ func backupFileIfExists(srcPath, dstPath string) error {
 	return os.WriteFile(dstPath, data, 0644)
 }
 
-// saveQuickCommands 保存快捷命令配置到独立文件（调用方须持有 quickCmdMu）
+// saveQuickCommands 保存快捷命令配置到独立文件（调用方须持有 quickCmdMu）。
+//
+// 用原子写而非 os.WriteFile：这里是全量覆写，导入会一次性写整个命令库，
+// 直接截断再写一旦中途失败，用户的全部快捷命令就没了。
 func (m *Manager) saveQuickCommands() error {
 	data, err := json.MarshalIndent(m.Config.QuickCommands, "", "  ")
 	if err != nil {
@@ -675,7 +680,7 @@ func (m *Manager) saveQuickCommands() error {
 	if old, rerr := os.ReadFile(m.quickCommandsPath); rerr == nil && bytes.Equal(old, data) {
 		return nil
 	}
-	if err := os.WriteFile(m.quickCommandsPath, data, 0644); err != nil {
+	if err := atomicfile.Write(m.quickCommandsPath, data, 0644); err != nil {
 		return err
 	}
 	m.recordQuickCmdStat()
@@ -773,8 +778,67 @@ func (m *Manager) ReorderQuickCommands(ids []string) bool {
 	return true
 }
 
+// ImportQuickCommands 批量追加导入的快捷命令，整批只写盘一次，返回实际写入条数。
+//
+// 与 AddQuickCommand 的差异都是导入场景必需的两条：
+//   - 目标分组内已存在同名同内容的命令时跳过，同一批内的重复也只保留一条。
+//     这样重复导入同一个 .qbl 是幂等的，不会把命令库堆成一片重复项。
+//   - 导入的条目不带 ID，由本方法生成（单条新增通路仍由前端给 ID，行为不变）。
+//
+// 写盘失败时回滚内存改动，避免调用方拿到 error 而内存已悄悄变化。
+func (m *Manager) ImportQuickCommands(items []QuickCommand) (int, error) {
+	m.quickCmdMu.Lock()
+	defer m.quickCmdMu.Unlock()
+
+	seen := make(map[string]bool, len(m.Config.QuickCommands)+len(items))
+	ids := make(map[string]bool, len(m.Config.QuickCommands)+len(items))
+	for _, c := range m.Config.QuickCommands {
+		seen[quickCommandKey(c.Group, c.Name, c.Content)] = true
+		ids[c.ID] = true
+	}
+
+	base := len(m.Config.QuickCommands)
+	now := time.Now().UnixMilli()
+	for i, item := range items {
+		if item.Group == "" {
+			item.Group = "default"
+		}
+		key := quickCommandKey(item.Group, item.Name, item.Content)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		if item.ID == "" {
+			id := fmt.Sprintf("qc-%d-%d", now, i)
+			// 同一毫秒内导入多条时靠序号区分，再撞则继续加后缀。
+			for n := 1; ids[id]; n++ {
+				id = fmt.Sprintf("qc-%d-%d-%d", now, i, n)
+			}
+			item.ID = id
+		}
+		ids[item.ID] = true
+		m.Config.QuickCommands = append(m.Config.QuickCommands, item)
+	}
+
+	added := len(m.Config.QuickCommands) - base
+	if added == 0 {
+		return 0, nil
+	}
+	if err := m.saveQuickCommands(); err != nil {
+		m.Config.QuickCommands = m.Config.QuickCommands[:base]
+		return 0, err
+	}
+	return added, nil
+}
+
+// quickCommandKey 是判重键：分组 + 名称 + 内容。
+// 名称与内容都一致才算重复——同一条命令挂两个名字可能是刻意的。
+func quickCommandKey(group, name, content string) string {
+	return group + "\x00" + name + "\x00" + content
+}
+
 // CheckQuickCommandsChanged 检测 quick_commands.json 是否被外部修改
-//（多窗口场景下其他进程写入）。变化时重载进内存并返回最新列表。
+// （多窗口场景下其他进程写入）。变化时重载进内存并返回最新列表。
 func (m *Manager) CheckQuickCommandsChanged() (bool, []QuickCommand) {
 	st, err := os.Stat(m.quickCommandsPath)
 	if err != nil {
