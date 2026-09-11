@@ -8,6 +8,8 @@ interface CommandGridProps {
     onEdit: (command: QuickCommand) => void;
     onDelete: (id: string) => void;
     onAdd: () => void;
+    /** 传入时在「+ 添加」后多出一个「导入」块。宿主未提供导入能力时不传（入口自动消失）。 */
+    onImport?: () => void;
     /** 当前搜索关键字（在当前分组内进一步过滤） */
     searchQuery: string;
     onSearchChange: (query: string) => void;
@@ -16,7 +18,7 @@ interface CommandGridProps {
 }
 
 const CommandGrid: React.FC<CommandGridProps> = ({
-    commands, onExecute, onEdit, onDelete, onAdd, searchQuery, onSearchChange, onReorder,
+    commands, onExecute, onEdit, onDelete, onAdd, onImport, searchQuery, onSearchChange, onReorder,
 }) => {
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; cmdId: string } | null>(null);
     const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -141,6 +143,16 @@ const CommandGrid: React.FC<CommandGridProps> = ({
                 >
                     + 添加
                 </div>
+                {onImport && (
+                    <div
+                        style={styles.addCard}
+                        onClick={onImport}
+                        title="从本机 Xshell 导入快捷命令"
+                        data-testid="command-import-btn"
+                    >
+                        导入
+                    </div>
+                )}
             </div>
 
             {contextMenu && (

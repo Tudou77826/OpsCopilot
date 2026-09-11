@@ -1,9 +1,11 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { QuickCommand, QuickCommandHost } from '../ports';
+import ErrorBoundary from '../feedback/ErrorBoundary';
 import { useQuickCommands } from './useQuickCommands';
 import GroupStrip from './GroupStrip';
 import CommandGrid from './CommandGrid';
 import CommandEditModal from './CommandEditModal';
+import QuickCommandImportDialog from './QuickCommandImportDialog';
 
 interface QuickCommandPanelProps {
     host: QuickCommandHost;
@@ -43,6 +45,7 @@ const QuickCommandPanel: React.FC<QuickCommandPanelProps> = ({ isOpen, onExecute
 
     const [editingCmd, setEditingCmd] = useState<QuickCommand | null>(null);
     const [isNewCommand, setIsNewCommand] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
     // 搜索关键字：在当前分组内进一步过滤（按 name/content 匹配，大小写不敏感）（issue #56）
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -163,6 +166,9 @@ const QuickCommandPanel: React.FC<QuickCommandPanelProps> = ({ isOpen, onExecute
             ? { height: `${panelHeight}px` }
             : { maxHeight: '200px' };
 
+    // 导入能力由宿主决定（sidecar 不提供），未提供时「导入」入口不出现。
+    const canImport = typeof host.applyQuickCommandImport === 'function';
+
     return (
         <div
             ref={panelRef}
@@ -190,6 +196,7 @@ const QuickCommandPanel: React.FC<QuickCommandPanelProps> = ({ isOpen, onExecute
                         onEdit={handleEdit}
                         onDelete={deleteCommand}
                         onAdd={handleAdd}
+                        onImport={canImport ? () => setImportOpen(true) : undefined}
                         searchQuery={searchQuery}
                         onSearchChange={setSearchQuery}
                         onReorder={(ordered) => reorderCommands(ordered.map(c => c.id))}
@@ -222,6 +229,17 @@ const QuickCommandPanel: React.FC<QuickCommandPanelProps> = ({ isOpen, onExecute
                 onCancel={handleCancel}
                 defaultGroup={selectedGroup}
             />
+
+            {/* 导入面板独立包一层 ErrorBoundary：导入涉及文件解析与落盘，
+                一旦渲染期抛异常，不该把整个终端界面带走。 */}
+            <ErrorBoundary label="快捷命令导入">
+                <QuickCommandImportDialog
+                    isOpen={importOpen}
+                    host={host}
+                    existingGroups={availableGroups}
+                    onClose={() => setImportOpen(false)}
+                />
+            </ErrorBoundary>
         </div>
     );
 };

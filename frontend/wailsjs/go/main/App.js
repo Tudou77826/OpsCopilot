@@ -6,8 +6,16 @@ export function AddQuickCommand(arg1) {
   return window['go']['main']['App']['AddQuickCommand'](arg1);
 }
 
+export function AnalyzeQuickCommandImport(arg1, arg2) {
+  return window['go']['main']['App']['AnalyzeQuickCommandImport'](arg1, arg2);
+}
+
 export function AnalyzeXshellImport(arg1, arg2) {
   return window['go']['main']['App']['AnalyzeXshellImport'](arg1, arg2);
+}
+
+export function ApplyQuickCommandImport(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ApplyQuickCommandImport'](arg1, arg2, arg3);
 }
 
 export function ApplyXshellImport(arg1, arg2) {
@@ -80,6 +88,10 @@ export function DeleteScript(arg1) {
 
 export function DeleteTreeNode(arg1) {
   return window['go']['main']['App']['DeleteTreeNode'](arg1);
+}
+
+export function DetectXshellQuickButtonDirs() {
+  return window['go']['main']['App']['DetectXshellQuickButtonDirs']();
 }
 
 export function DetectXshellSessionDirs() {
@@ -372,6 +384,14 @@ export function SaveSharedSessionToLocal(arg1) {
 
 export function SaveTerminalConfig(arg1) {
   return window['go']['main']['App']['SaveTerminalConfig'](arg1);
+}
+
+export function SelectQuickCommandImportDirectory() {
+  return window['go']['main']['App']['SelectQuickCommandImportDirectory']();
+}
+
+export function SelectQuickCommandImportFile() {
+  return window['go']['main']['App']['SelectQuickCommandImportFile']();
 }
 
 export function SelectSavePath(arg1) {

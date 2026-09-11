@@ -1,4 +1,12 @@
-import type { QuickCommandHost, QuickCommandStorageAdapter, QuickCommand } from '@opscopilot/shell-terminal/ui';
+import type {
+    QuickCommandHost,
+    QuickCommandStorageAdapter,
+    QuickCommand,
+    QuickCommandGroupAssignment,
+    QuickCommandImportAnalysis,
+    QuickCommandImportReport,
+    XshellQuickButtonDir,
+} from '@opscopilot/shell-terminal/ui';
 
 type WailsWindow = Window & {
     go?: { main?: { App?: {
@@ -7,9 +15,43 @@ type WailsWindow = Window & {
         UpdateQuickCommand?: (id: string, updates: Partial<QuickCommand> & { id: string }) => void;
         DeleteQuickCommand?: (id: string) => void;
         ReorderQuickCommands?: (ids: string[]) => void;
+        DetectXshellQuickButtonDirs?: () => Promise<XshellQuickButtonDir[]>;
+        SelectQuickCommandImportFile?: () => Promise<string>;
+        SelectQuickCommandImportDirectory?: () => Promise<string>;
+        AnalyzeQuickCommandImport?: (
+            path: string,
+            options: { defaultGroup?: string },
+        ) => Promise<QuickCommandImportAnalysis>;
+        ApplyQuickCommandImport?: (
+            path: string,
+            assignments: QuickCommandGroupAssignment[],
+            options: { defaultGroup?: string },
+        ) => Promise<QuickCommandImportReport>;
     } } };
     runtime?: { EventsOn?: (name: string, handler: (cmds: QuickCommand[]) => void) => () => void };
 };
+
+type WailsApp = NonNullable<NonNullable<NonNullable<WailsWindow['go']>['main']>['App']>;
+
+function app(): WailsApp | undefined {
+    return (window as WailsWindow).go?.main?.App;
+}
+
+/**
+ * 调用生成的 Wails 绑定。
+ *
+ * 与存储适配器的可选链不同，导入相关的调用在方法缺失时要显式报错：静默返回
+ * undefined 会让对话框显示成"分析成功但没有数据"，比直接报错更难排查。
+ */
+async function call<T>(name: keyof WailsApp, ...args: unknown[]): Promise<T> {
+    const target = app();
+    const fn = target?.[name] as ((...a: unknown[]) => Promise<T>) | undefined;
+    if (typeof fn !== 'function') {
+        throw new Error(`当前宿主未提供 ${String(name)}`);
+    }
+    // 用 apply 保留 this：Wails 生成的绑定依赖调用对象。
+    return fn.apply(target, args) as Promise<T>;
+}
 
 // 存储适配器：单条意图化操作，配合后端文件变化热加载保持多窗口一致。
 class WailsQuickCommandStorage implements QuickCommandStorageAdapter {
@@ -46,6 +88,21 @@ export function makeWailsQuickCommandHost(execute: (content: string) => void): Q
             return () => {
                 if (typeof off === 'function') off();
             };
+        },
+        detectQuickButtonDirs() {
+            return call<XshellQuickButtonDir[]>('DetectXshellQuickButtonDirs');
+        },
+        selectImportFile() {
+            return call<string>('SelectQuickCommandImportFile');
+        },
+        selectImportDirectory() {
+            return call<string>('SelectQuickCommandImportDirectory');
+        },
+        analyzeQuickCommandImport(path, defaultGroup) {
+            return call<QuickCommandImportAnalysis>('AnalyzeQuickCommandImport', path, { defaultGroup });
+        },
+        applyQuickCommandImport(path, assignments, defaultGroup) {
+            return call<QuickCommandImportReport>('ApplyQuickCommandImport', path, assignments, { defaultGroup });
         },
     };
 }

@@ -172,12 +172,75 @@ export interface QuickCommandStorageAdapter {
   reorder(ids: string[]): void;
 }
 
+/** 探测到的一个本机 Xshell 快捷按钮目录（QuickButton Files）。 */
+export interface XshellQuickButtonDir {
+  path: string;
+  version: number;
+  /** 目录内 .qbl 文件数（每个 .qbl 是一套按钮）。 */
+  sets: number;
+  /** 按钮总数，帮助用户判断值不值得导。 */
+  buttons: number;
+}
+
+/** 预览里"每个 .qbl 集合一行"的数据。 */
+export interface QuickCommandSetRow {
+  /** .qbl 文件路径，执行导入时用它回指该集合的目标分组。 */
+  source: string;
+  name: string;
+  buttons: number;
+  importable: number;
+  unsupported: number;
+  existing: number;
+  /** 建议的目标分组名，界面上可改。 */
+  group: string;
+}
+
+/** 快捷命令导入前的影响分析。 */
+export interface QuickCommandImportAnalysis {
+  sets: number;
+  buttons: number;
+  importable: number;
+  unsupported: number;
+  /** 本地已有或本批重复，都会被跳过。 */
+  existing: number;
+  /** 本次将涉及的目标分组（去重）。 */
+  groups: string[];
+  rows: QuickCommandSetRow[];
+  warnings: string[];
+}
+
+/** 把一个 .qbl 集合指派到目标分组。 */
+export interface QuickCommandGroupAssignment {
+  source: string;
+  group: string;
+}
+
+/** 快捷命令导入结果。 */
+export interface QuickCommandImportReport {
+  imported: number;
+  skippedExisting: number;
+  skippedUnsupported: number;
+  groups: string[];
+  warnings: string[];
+}
+
 /** 快捷命令 UI 所需宿主能力。execute → 发送到激活终端。 */
 export interface QuickCommandHost {
   execute(content: string): void;
   storage: QuickCommandStorageAdapter;
   /** 多窗口变更通知订阅。Wails 走 window.runtime.EventsOn；Sidecar 走配置轮询。 */
   onExternalChange?: (handler: (cmds: QuickCommand[]) => void) => () => void;
+
+  // —— Xshell 快捷命令导入：可选能力，未提供时导入入口不出现（能力边界纪律）。
+  detectQuickButtonDirs?(): Promise<XshellQuickButtonDir[]>;
+  selectImportFile?(): Promise<string>;
+  selectImportDirectory?(): Promise<string>;
+  analyzeQuickCommandImport?(path: string, defaultGroup: string): Promise<QuickCommandImportAnalysis>;
+  applyQuickCommandImport?(
+    path: string,
+    assignments: QuickCommandGroupAssignment[],
+    defaultGroup: string,
+  ): Promise<QuickCommandImportReport>;
 }
 
 // QuickCommand 类型由 core 层定义（平台无关 RPC 模型），此处供端口与组件复用。

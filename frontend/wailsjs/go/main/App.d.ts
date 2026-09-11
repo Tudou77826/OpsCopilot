@@ -9,7 +9,11 @@ import {recorder} from '../models';
 
 export function AddQuickCommand(arg1:config.QuickCommand):Promise<string>;
 
+export function AnalyzeQuickCommandImport(arg1:string,arg2:main.QuickCommandImportOptions):Promise<main.QuickCommandImportAnalysis>;
+
 export function AnalyzeXshellImport(arg1:string,arg2:main.ImportOptions):Promise<main.ImportAnalysis>;
+
+export function ApplyQuickCommandImport(arg1:string,arg2:Array<main.QuickCommandGroupAssignment>,arg3:main.QuickCommandImportOptions):Promise<main.QuickCommandImportReport>;
 
 export function ApplyXshellImport(arg1:string,arg2:main.ImportOptions):Promise<main.ImportReport>;
 
@@ -46,6 +50,8 @@ export function DeleteQuickCommand(arg1:string):Promise<string>;
 export function DeleteScript(arg1:string):Promise<void>;
 
 export function DeleteTreeNode(arg1:string):Promise<void>;
+
+export function DetectXshellQuickButtonDirs():Promise<Array<main.XshellQuickButtonDir>>;
 
 export function DetectXshellSessionDirs():Promise<Array<main.XshellSessionDir>>;
 
@@ -192,6 +198,10 @@ export function SaveSettings(arg1:config.AppConfig):Promise<string>;
 export function SaveSharedSessionToLocal(arg1:string):Promise<string>;
 
 export function SaveTerminalConfig(arg1:config.TerminalConfig):Promise<string>;
+
+export function SelectQuickCommandImportDirectory():Promise<string>;
+
+export function SelectQuickCommandImportFile():Promise<string>;
 
 export function SelectSavePath(arg1:string):Promise<string>;
 
