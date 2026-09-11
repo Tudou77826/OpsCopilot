@@ -30,17 +30,32 @@ type XshellQuickButtonDir struct {
 	Buttons int    `json:"buttons"`
 }
 
-// QuickCommandSetRow 是预览界面上"每集合一行"的数据。
+// QuickCommandSetItem 是预览里的一条命令明细。
+//
+// 不可导入的条目同样出现在列表里（supported=false 且带 skipReason），界面据此置灰
+// 并说明原因，而不是只给一个跳过的总数。
+type QuickCommandSetItem struct {
+	Name       string `json:"name"`
+	Content    string `json:"content"`
+	Type       string `json:"type"`
+	Supported  bool   `json:"supported"`
+	SkipReason string `json:"skipReason,omitempty"`
+	Existing   bool   `json:"existing"`
+}
+
+// QuickCommandSetRow 是预览界面上"每集合一段"的数据。
 type QuickCommandSetRow struct {
-	// Source 是 .qbl 文件路径，执行导入时用它回指该集合的目标分组。
+	// Source 是 .qbl 文件路径，执行导入时用它回指该集合。
 	Source      string `json:"source"`
 	Name        string `json:"name"`
 	Buttons     int    `json:"buttons"`
 	Importable  int    `json:"importable"`
 	Unsupported int    `json:"unsupported"`
 	Existing    int    `json:"existing"`
-	// Group 是建议的目标分组名，界面上可改，改动通过 assignments 传回。
+	// Group 是建议的目标分组名，界面上可改。
 	Group string `json:"group"`
+	// Items 是该集合逐条命令的明细，供界面列出并逐条勾选、改名、改分组。
+	Items []QuickCommandSetItem `json:"items"`
 }
 
 // QuickCommandImportAnalysis 是写入前的影响分析。
@@ -55,10 +70,23 @@ type QuickCommandImportAnalysis struct {
 	Warnings    []string             `json:"warnings"`
 }
 
-// QuickCommandGroupAssignment 把一个 .qbl 集合指派到目标分组。
-type QuickCommandGroupAssignment struct {
-	Source string `json:"source"`
-	Group  string `json:"group"`
+// QuickCommandImportItem 是回传的一条命令：名称、内容、目标分组都可能是用户在界面上
+// 改过的，因此以它为准写入，不回到 .qbl 重新推导。
+type QuickCommandImportItem struct {
+	Name    string `json:"name"`
+	Content string `json:"content"`
+	// Group 为空表示跟随所属集合的默认分组。
+	Group string `json:"group,omitempty"`
+}
+
+// QuickCommandImportSelection 是回传的一个集合的最终决定。
+//
+// Items 为空表示这个集合不导入任何命令；整个集合没有出现在请求里同样不导入。
+// 集合的默认分组是 Group，条目可用自己的 Group 覆盖。
+type QuickCommandImportSelection struct {
+	Source string                   `json:"source"`
+	Group  string                   `json:"group"`
+	Items  []QuickCommandImportItem `json:"items"`
 }
 
 // QuickCommandImportReport 是导入结果。
@@ -167,6 +195,17 @@ func (a *App) AnalyzeQuickCommandImport(path string, opts QuickCommandImportOpti
 
 	rows := make([]QuickCommandSetRow, 0, len(plan.Rows))
 	for _, row := range plan.Rows {
+		items := make([]QuickCommandSetItem, 0, len(row.Items))
+		for _, item := range row.Items {
+			items = append(items, QuickCommandSetItem{
+				Name:       item.Name,
+				Content:    item.Content,
+				Type:       item.Type,
+				Supported:  item.Supported,
+				SkipReason: item.SkipReason,
+				Existing:   item.Existing,
+			})
+		}
 		rows = append(rows, QuickCommandSetRow{
 			Source:      row.Source,
 			Name:        row.Name,
@@ -175,6 +214,7 @@ func (a *App) AnalyzeQuickCommandImport(path string, opts QuickCommandImportOpti
 			Unsupported: row.Unsupported,
 			Existing:    row.Existing,
 			Group:       row.Group,
+			Items:       items,
 		})
 	}
 
@@ -197,23 +237,34 @@ func (a *App) AnalyzeQuickCommandImport(path string, opts QuickCommandImportOpti
 	}, nil
 }
 
-// ApplyQuickCommandImport 解析并按分组指派批量写入快捷命令。
+// ApplyQuickCommandImport 解析并按用户在预览里的决定批量写入快捷命令。
 //
-// 冲突策略固定为"跳过同分组内同名同内容"：导入是补齐而不是覆盖，重复导入同一个
-// .qbl 是幂等的。整批只写盘一次。
-func (a *App) ApplyQuickCommandImport(path string, assignments []QuickCommandGroupAssignment, opts QuickCommandImportOptions) (*QuickCommandImportReport, error) {
+// 每个集合一段决定：默认分组 + 勾选后的条目。名称、内容、分组都可以在界面上改过，
+// 因此以回传的条目为准（解析只用于兜底校验与集合级告警）。整批只写盘一次。
+//
+// 冲突策略固定为"跳过同分组内同名同内容"：导入是补齐而不是覆盖，重复导入同一份
+// .qbl 是幂等的。
+func (a *App) ApplyQuickCommandImport(path string, selections []QuickCommandImportSelection, opts QuickCommandImportOptions) (*QuickCommandImportReport, error) {
 	sets, parseWarnings, err := parseQuickCommandImport(path)
 	if err != nil {
 		return nil, err
 	}
 
-	byPath := make(map[string]string, len(assignments))
-	for _, item := range assignments {
-		source := strings.TrimSpace(item.Source)
+	byPath := make(map[string]xshellimport.SetSelection, len(selections))
+	for _, selection := range selections {
+		source := strings.TrimSpace(selection.Source)
 		if source == "" {
 			continue
 		}
-		byPath[source] = item.Group
+		items := make([]xshellimport.SelectedCommand, 0, len(selection.Items))
+		for _, item := range selection.Items {
+			items = append(items, xshellimport.SelectedCommand{
+				Name:    item.Name,
+				Content: item.Content,
+				Group:   item.Group,
+			})
+		}
+		byPath[source] = xshellimport.SetSelection{Group: selection.Group, Items: items}
 	}
 
 	report, err := xshellimport.ApplyQuickCommands(sets, byPath, quickCommandWriter{a.configMgr}, opts.DefaultGroup)

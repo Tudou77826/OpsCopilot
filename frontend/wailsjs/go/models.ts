@@ -488,18 +488,26 @@ export namespace main {
 	        this.fileName = source["fileName"];
 	    }
 	}
-	export class QuickCommandGroupAssignment {
-	    source: string;
-	    group: string;
+	export class QuickCommandSetItem {
+	    name: string;
+	    content: string;
+	    type: string;
+	    supported: boolean;
+	    skipReason?: string;
+	    existing: boolean;
 	
 	    static createFrom(source: any = {}) {
-	        return new QuickCommandGroupAssignment(source);
+	        return new QuickCommandSetItem(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.source = source["source"];
-	        this.group = source["group"];
+	        this.name = source["name"];
+	        this.content = source["content"];
+	        this.type = source["type"];
+	        this.supported = source["supported"];
+	        this.skipReason = source["skipReason"];
+	        this.existing = source["existing"];
 	    }
 	}
 	export class QuickCommandSetRow {
@@ -510,6 +518,7 @@ export namespace main {
 	    unsupported: number;
 	    existing: number;
 	    group: string;
+	    items: QuickCommandSetItem[];
 	
 	    static createFrom(source: any = {}) {
 	        return new QuickCommandSetRow(source);
@@ -524,7 +533,26 @@ export namespace main {
 	        this.unsupported = source["unsupported"];
 	        this.existing = source["existing"];
 	        this.group = source["group"];
+	        this.items = this.convertValues(source["items"], QuickCommandSetItem);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class QuickCommandImportAnalysis {
 	    sets: number;
@@ -570,6 +598,22 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class QuickCommandImportItem {
+	    name: string;
+	    content: string;
+	    group?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new QuickCommandImportItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.content = source["content"];
+	        this.group = source["group"];
+	    }
+	}
 	export class QuickCommandImportOptions {
 	    defaultGroup?: string;
 	
@@ -602,6 +646,41 @@ export namespace main {
 	        this.warnings = source["warnings"];
 	    }
 	}
+	export class QuickCommandImportSelection {
+	    source: string;
+	    group: string;
+	    items: QuickCommandImportItem[];
+	
+	    static createFrom(source: any = {}) {
+	        return new QuickCommandImportSelection(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.source = source["source"];
+	        this.group = source["group"];
+	        this.items = this.convertValues(source["items"], QuickCommandImportItem);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	
 	export class ServiceInfo {
 	    name: string;

@@ -106,6 +106,26 @@ func TestQuickCommandImportAnalysis_MatchesFrontendExpectations(t *testing.T) {
 	}
 }
 
+// selectionsFromPlan 按分析结果构造"全选可导入项"的请求，模拟用户在预览里全选后确认。
+// groups 可按 source 覆盖集合的默认分组；未指定时用界面上给出的建议分组。
+func selectionsFromPlan(analysis *QuickCommandImportAnalysis, groups map[string]string) []QuickCommandImportSelection {
+	selections := make([]QuickCommandImportSelection, 0, len(analysis.Rows))
+	for _, row := range analysis.Rows {
+		group := groups[row.Source]
+		if group == "" {
+			group = row.Group
+		}
+		items := []QuickCommandImportItem{}
+		for _, item := range row.Items {
+			if item.Supported {
+				items = append(items, QuickCommandImportItem{Name: item.Name, Content: item.Content})
+			}
+		}
+		selections = append(selections, QuickCommandImportSelection{Source: row.Source, Group: group, Items: items})
+	}
+	return selections
+}
+
 // 端到端：分析与执行走同一份输入，结果必须一致；执行后命令真的落盘。
 func TestQuickCommandImport_AppliesAndPersists(t *testing.T) {
 	workDir := t.TempDir()
@@ -121,9 +141,7 @@ func TestQuickCommandImport_AppliesAndPersists(t *testing.T) {
 		t.Fatalf("分析失败: %v", err)
 	}
 
-	report, err := app.ApplyQuickCommandImport(qblDir, []QuickCommandGroupAssignment{
-		{Source: source, Group: "运维"},
-	}, QuickCommandImportOptions{DefaultGroup: "Xshell"})
+	report, err := app.ApplyQuickCommandImport(qblDir, selectionsFromPlan(analysis, map[string]string{source: "运维"}), QuickCommandImportOptions{DefaultGroup: "Xshell"})
 	if err != nil {
 		t.Fatalf("导入失败: %v", err)
 	}
@@ -150,6 +168,123 @@ func TestQuickCommandImport_AppliesAndPersists(t *testing.T) {
 	}
 }
 
+// 逐条粒度：取消勾选、改名、改内容、逐条指定分组都要真的落到盘上。
+func TestQuickCommandImport_PerItemEdits(t *testing.T) {
+	workDir := t.TempDir()
+	app := newQuickCommandImportTestApp(t, workDir)
+	qblDir := filepath.Join(workDir, "qbl")
+	if err := os.MkdirAll(qblDir, 0o755); err != nil {
+		t.Fatalf("建目录失败: %v", err)
+	}
+	source := writeQBL(t, filepath.Join(qblDir, "commands.qbl"), cleanQBL)
+
+	analysis, err := app.AnalyzeQuickCommandImport(qblDir, QuickCommandImportOptions{DefaultGroup: "Xshell"})
+	if err != nil {
+		t.Fatalf("分析失败: %v", err)
+	}
+	if len(analysis.Rows) != 1 || len(analysis.Rows[0].Items) != 2 {
+		t.Fatalf("预览应给出 2 条明细，实际 %+v", analysis.Rows)
+	}
+
+	// tail 留在集合分组并改名；df 只留部分内容并改到另一个分组
+	report, err := app.ApplyQuickCommandImport(qblDir, []QuickCommandImportSelection{{
+		Source: source,
+		Group:  "Xshell",
+		Items: []QuickCommandImportItem{
+			{Name: "跟踪应用日志", Content: "tail -f /var/log/app.log"},
+			{Name: "磁盘", Content: "df -h", Group: "磁盘巡检"},
+		},
+	}}, QuickCommandImportOptions{DefaultGroup: "Xshell"})
+	if err != nil {
+		t.Fatalf("导入失败: %v", err)
+	}
+	if report.Imported != 2 {
+		t.Fatalf("应导入 2 条，实际 %d", report.Imported)
+	}
+	if len(report.Groups) != 2 {
+		t.Fatalf("应涉及两个分组，实际 %v", report.Groups)
+	}
+
+	persisted := loadPersistedQuickCommands(t, workDir)
+	byName := map[string]config.QuickCommand{}
+	for _, cmd := range persisted {
+		byName[cmd.Name] = cmd
+	}
+	if got, ok := byName["跟踪应用日志"]; !ok || got.Group != "Xshell" {
+		t.Fatalf("改名或集合分组未生效: %+v", persisted)
+	}
+	if got, ok := byName["磁盘"]; !ok || got.Group != "磁盘巡检" {
+		t.Fatalf("逐条分组覆盖未生效: %+v", persisted)
+	}
+	if _, ok := byName["df"]; ok {
+		t.Fatalf("原名不应再出现（条目是按回传的编辑结果写入的）: %+v", persisted)
+	}
+}
+
+// 集合的条目列表为空（用户取消了该集合）：不写入任何东西。
+func TestQuickCommandImport_ExcludedSetWritesNothing(t *testing.T) {
+	workDir := t.TempDir()
+	app := newQuickCommandImportTestApp(t, workDir)
+	qblDir := filepath.Join(workDir, "qbl")
+	if err := os.MkdirAll(qblDir, 0o755); err != nil {
+		t.Fatalf("建目录失败: %v", err)
+	}
+	source := writeQBL(t, filepath.Join(qblDir, "commands.qbl"), cleanQBL)
+
+	report, err := app.ApplyQuickCommandImport(qblDir, []QuickCommandImportSelection{
+		{Source: source, Group: "Xshell", Items: []QuickCommandImportItem{}},
+	}, QuickCommandImportOptions{DefaultGroup: "Xshell"})
+	if err != nil {
+		t.Fatalf("导入失败: %v", err)
+	}
+	if report.Imported != 0 {
+		t.Fatalf("取消的集合不应导入，实际 %d", report.Imported)
+	}
+	if len(report.Groups) != 0 {
+		t.Fatalf("没有写入时分组应为空，实际 %v", report.Groups)
+	}
+	if got := len(loadPersistedQuickCommandsOrEmpty(t, workDir)); got != 0 {
+		t.Fatalf("命令库不该有内容，实际 %d 条", got)
+	}
+}
+
+// 预览必须带上逐条明细，含不可导入的条目（界面据此置灰并说明原因）。
+func TestQuickCommandImportAnalysis_RowItemsIncludeUnsupported(t *testing.T) {
+	workDir := t.TempDir()
+	app := newQuickCommandImportTestApp(t, workDir)
+	qblDir := filepath.Join(workDir, "qbl")
+	if err := os.MkdirAll(qblDir, 0o755); err != nil {
+		t.Fatalf("建目录失败: %v", err)
+	}
+	writeQBL(t, filepath.Join(qblDir, "mixed.qbl"), mixedQBL)
+
+	analysis, err := app.AnalyzeQuickCommandImport(qblDir, QuickCommandImportOptions{DefaultGroup: "Xshell"})
+	if err != nil {
+		t.Fatalf("分析失败: %v", err)
+	}
+	row := analysis.Rows[0]
+	if len(row.Items) != 2 {
+		t.Fatalf("应给出 2 条明细，实际 %d", len(row.Items))
+	}
+	if !row.Items[0].Supported || row.Items[0].Name != "df" {
+		t.Fatalf("第 1 条应为可导入的 df: %+v", row.Items[0])
+	}
+	if row.Items[1].Supported || row.Items[1].SkipReason == "" {
+		t.Fatalf("第 2 条应标为不可导入并带原因: %+v", row.Items[1])
+	}
+
+	// 集合字段一律非 null（前端按数组处理）
+	payload := toJSONMap(t, analysis)
+	rows, ok := payload["rows"].([]any)
+	if !ok || len(rows) != 1 {
+		t.Fatalf("rows 应是数组: %#v", payload["rows"])
+	}
+	items, ok := rows[0].(map[string]any)["items"].([]any)
+	if !ok || len(items) != 2 {
+		t.Fatalf("每段必须带 items 数组: %#v", rows[0])
+	}
+}
+
 // 重复导入同一个 .qbl 必须幂等：第二次全部判为已存在，命令库不增长。
 func TestQuickCommandImport_IsIdempotent(t *testing.T) {
 	workDir := t.TempDir()
@@ -160,7 +295,13 @@ func TestQuickCommandImport_IsIdempotent(t *testing.T) {
 	}
 	writeQBL(t, filepath.Join(qblDir, "commands.qbl"), cleanQBL)
 
-	first, err := app.ApplyQuickCommandImport(qblDir, nil, QuickCommandImportOptions{DefaultGroup: "Xshell"})
+	analysis, err := app.AnalyzeQuickCommandImport(qblDir, QuickCommandImportOptions{DefaultGroup: "Xshell"})
+	if err != nil {
+		t.Fatalf("分析失败: %v", err)
+	}
+	selections := selectionsFromPlan(analysis, nil)
+
+	first, err := app.ApplyQuickCommandImport(qblDir, selections, QuickCommandImportOptions{DefaultGroup: "Xshell"})
 	if err != nil {
 		t.Fatalf("首次导入失败: %v", err)
 	}
@@ -168,7 +309,7 @@ func TestQuickCommandImport_IsIdempotent(t *testing.T) {
 		t.Fatalf("首次应导入 2 条，实际 %d", first.Imported)
 	}
 
-	second, err := app.ApplyQuickCommandImport(qblDir, nil, QuickCommandImportOptions{DefaultGroup: "Xshell"})
+	second, err := app.ApplyQuickCommandImport(qblDir, selections, QuickCommandImportOptions{DefaultGroup: "Xshell"})
 	if err != nil {
 		t.Fatalf("再次导入失败: %v", err)
 	}
@@ -181,8 +322,18 @@ func TestQuickCommandImport_IsIdempotent(t *testing.T) {
 	}
 }
 
-// 不支持的类型要被跳过并说明原因，而不是静默丢弃。
-func TestQuickCommandImport_ReportsUnsupportedButtons(t *testing.T) {
+// 没有任何写入时命令库文件可能压根不存在——"没有内容"同样算通过。
+func loadPersistedQuickCommandsOrEmpty(t *testing.T, workDir string) []config.QuickCommand {
+	t.Helper()
+	if _, err := os.Stat(filepath.Join(workDir, "quick_commands.json")); os.IsNotExist(err) {
+		return nil
+	}
+	return loadPersistedQuickCommands(t, workDir)
+}
+
+// 不支持的类型要在预览阶段就说清楚：逐条明细标记不可导入、带原因，并计入告警。
+// 执行阶段这些条目根本不会被勾选（界面不允许），所以不会被写入。
+func TestQuickCommandImport_ReportsUnsupportedInPreview(t *testing.T) {
 	workDir := t.TempDir()
 	app := newQuickCommandImportTestApp(t, workDir)
 	qblDir := filepath.Join(workDir, "qbl")
@@ -191,22 +342,35 @@ func TestQuickCommandImport_ReportsUnsupportedButtons(t *testing.T) {
 	}
 	writeQBL(t, filepath.Join(qblDir, "mixed.qbl"), mixedQBL)
 
-	report, err := app.ApplyQuickCommandImport(qblDir, nil, QuickCommandImportOptions{DefaultGroup: "Xshell"})
+	analysis, err := app.AnalyzeQuickCommandImport(qblDir, QuickCommandImportOptions{DefaultGroup: "Xshell"})
 	if err != nil {
-		t.Fatalf("导入失败: %v", err)
+		t.Fatalf("分析失败: %v", err)
 	}
-	if report.Imported != 1 || report.SkippedUnsupported != 1 {
-		t.Fatalf("应导入 1 条、跳过 1 条: %+v", report)
+	if analysis.Unsupported != 1 || analysis.Importable != 1 {
+		t.Fatalf("预览应报告 1 条不支持、1 条可导入: %+v", analysis)
 	}
 
 	found := false
-	for _, w := range report.Warnings {
+	for _, w := range analysis.Warnings {
 		if strings.Contains(w, "脚本按钮") && strings.Contains(w, "类型为 2") {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("告警里应说明跳过原因与原始类型: %v", report.Warnings)
+		t.Fatalf("告警里应说明跳过原因与原始类型: %v", analysis.Warnings)
+	}
+
+	// 执行时只回传可导入的条目
+	report, err := app.ApplyQuickCommandImport(qblDir, selectionsFromPlan(analysis, nil), QuickCommandImportOptions{DefaultGroup: "Xshell"})
+	if err != nil {
+		t.Fatalf("导入失败: %v", err)
+	}
+	if report.Imported != 1 {
+		t.Fatalf("应只导入可导入的那 1 条，实际 %d", report.Imported)
+	}
+	persisted := loadPersistedQuickCommands(t, workDir)
+	if len(persisted) != 1 || persisted[0].Name != "df" {
+		t.Fatalf("不该把不可导入的按钮写进命令库: %+v", persisted)
 	}
 }
 

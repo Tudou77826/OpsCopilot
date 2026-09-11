@@ -23,6 +23,21 @@ type ImportedCommand struct {
 	Content string
 }
 
+// QuickCommandItem 是预览里的一条命令明细。
+//
+// 不支持导入的条目同样出现在列表里（界面置灰并附原因），而不是在解析层被静默丢掉：
+// 让用户看到"这一条不会导入、因为什么"比只给一个跳过的总数清楚得多。
+type QuickCommandItem struct {
+	Name       string
+	Content    string
+	Type       string
+	Supported  bool
+	SkipReason string
+	// Existing 表示按所属集合的默认分组判断，这一条已经存在（导入时会被跳过）。
+	// 用户改了分组名之后实际结果可能不同，最终以报告为准。
+	Existing bool
+}
+
 // QuickCommandPlan 是导入前的只读分析结果。
 //
 // Importable + Unsupported + Existing 恒等于 Buttons，界面上的数字因此可以互相校验。
@@ -41,9 +56,9 @@ type QuickCommandPlan struct {
 	Warnings []string
 }
 
-// QuickCommandSetRow 描述一个 .qbl 集合的分析结果，也是界面上"每集合一行"的数据来源。
+// QuickCommandSetRow 描述一个 .qbl 集合的分析结果，也是界面上"每集合一段"的数据来源。
 type QuickCommandSetRow struct {
-	// Source 是 .qbl 文件路径，执行导入时用它回指该集合的目标分组。
+	// Source 是 .qbl 文件路径，执行导入时用它回指该集合。
 	Source      string
 	Name        string
 	Buttons     int
@@ -51,8 +66,10 @@ type QuickCommandSetRow struct {
 	Unsupported int
 	Existing    int
 	// Group 是按 defaultGroup 推导出的建议分组名。界面可改，改动通过 Apply 的
-	// assignments 传回。
+	// selections 传回。
 	Group string
+	// Items 是该集合里逐条命令的明细（含不支持导入的条目）。
+	Items []QuickCommandItem
 }
 
 // QuickCommandReport 是导入结果。
@@ -65,10 +82,29 @@ type QuickCommandReport struct {
 	Warnings []string
 }
 
+// SelectedCommand 是用户在预览里勾选并（可选地）编辑过的一条命令。
+//
+// 名称、内容都可能是改过的，因此导入以它为准，不再回到 .qbl 重新推导。
+type SelectedCommand struct {
+	Name    string
+	Content string
+	// Group 非空时覆盖所属集合的默认分组。
+	Group string
+}
+
+// SetSelection 是用户对某一个 .qbl 集合的最终决定。
+//
+// Items 为空表示这个集合不导入任何命令（用户取消了它，或把里面的条目都取消了）。
+// 没有出现在 selections 里的集合同样不导入。
+type SetSelection struct {
+	Group string
+	Items []SelectedCommand
+}
+
 // AnalyzeQuickCommands 统计导入将会产生的结果，不写入任何数据。
 //
-// defaultGroup 是未逐集合指定目标分组时的落点（界面上默认给 Xshell）。"已存在"按
-// 它计算，因此用户在界面上改了分组名之后实际跳过数可能不同——最终以 Apply 的报告为准。
+// defaultGroup 是各集合的默认落点（界面上默认给 Xshell）。"已存在"按它计算，因此
+// 用户在界面上改了分组名之后实际跳过数可能不同——最终以 Apply 的报告为准。
 func AnalyzeQuickCommands(sets []*QuickButtonSet, writer CommandWriter, defaultGroup string) *QuickCommandPlan {
 	plan := &QuickCommandPlan{
 		Groups:   []string{},
@@ -88,24 +124,40 @@ func AnalyzeQuickCommands(sets []*QuickButtonSet, writer CommandWriter, defaultG
 			Name:    set.Name,
 			Buttons: len(set.Buttons),
 			Group:   defaultGroup,
+			Items:   make([]QuickCommandItem, 0, len(set.Buttons)),
 		}
+
 		for _, button := range set.Buttons {
 			plan.Buttons++
+
+			item := QuickCommandItem{
+				Name:    button.Name,
+				Content: button.Content,
+				Type:    button.Type,
+			}
 			if ok, reason := ButtonSupported(button); !ok {
+				item.Supported = false
+				item.SkipReason = reason
 				plan.Unsupported++
 				row.Unsupported++
 				plan.Warnings = append(plan.Warnings, fmt.Sprintf("%s: %s", set.Name, reason))
+				row.Items = append(row.Items, item)
 				continue
 			}
+
+			item.Supported = true
 			key := commandKey(row.Group, button.Name, button.Content)
 			if seen[key] {
+				item.Existing = true
 				plan.Existing++
 				row.Existing++
+				row.Items = append(row.Items, item)
 				continue
 			}
 			seen[key] = true // 批内去重：同一按钮出现在多个集合里时只算一条
 			plan.Importable++
 			row.Importable++
+			row.Items = append(row.Items, item)
 		}
 
 		plan.Rows = append(plan.Rows, row)
@@ -118,12 +170,15 @@ func AnalyzeQuickCommands(sets []*QuickButtonSet, writer CommandWriter, defaultG
 	return plan
 }
 
-// ApplyQuickCommands 按分组指派把按钮写入快捷命令库。
+// ApplyQuickCommands 按用户在预览里的决定写入快捷命令库。
 //
-// assignments 以 .qbl 文件路径为键给出目标分组；缺失或为空时回落到 defaultGroup。
+// 决定权完全在调用方：名称、内容、目标分组都可以在界面上改过，因此这里以 selections
+// 为准。仍然校验的只有"落盘时会不会出问题"这一层——名称为空、内容为空、以及该集合里
+// 本来就是不可导入类型的同名条目（兜底，防止前端传错）。
+//
 // 整批只调用一次 writer.AddCommands，因此只写盘一次——导入几百条命令不会产生几百次
 // 落盘，中途失败也不会留下写了一半的命令库。
-func ApplyQuickCommands(sets []*QuickButtonSet, assignments map[string]string, writer CommandWriter, defaultGroup string) (*QuickCommandReport, error) {
+func ApplyQuickCommands(sets []*QuickButtonSet, selections map[string]SetSelection, writer CommandWriter, defaultGroup string) (*QuickCommandReport, error) {
 	if writer == nil {
 		return nil, fmt.Errorf("缺少快捷命令写入端口")
 	}
@@ -132,38 +187,49 @@ func ApplyQuickCommands(sets []*QuickButtonSet, assignments map[string]string, w
 	report := &QuickCommandReport{Groups: []string{}, Warnings: []string{}}
 	seen := existingCommandKeys(writer)
 
-	// 初始化为空切片而非 nil：这个字段会一路传到 Wails 边界和前端，
+	// 初始化为空切片而非 nil：这些字段会一路传到 Wails 边界和前端，
 	// nil 会被序列化成 null，而前端按数组处理就会抛异常。
 	var pending []ImportedCommand
-	groups := []string{}
 
 	for _, set := range sets {
 		report.Warnings = append(report.Warnings, set.Warnings...)
 
-		group := fallbackGroup(assignments[set.Path])
-		if group == "" {
-			group = defaultGroup
+		selection, ok := selections[set.Path]
+		if !ok {
+			continue // 用户没有勾选这个集合
 		}
 
-		before := len(pending)
-		for _, button := range set.Buttons {
-			if ok, reason := ButtonSupported(button); !ok {
+		setGroup := fallbackGroup(selection.Group)
+		if setGroup == "" {
+			setGroup = defaultGroup
+		}
+		unsupported := unsupportedButtonNames(set)
+
+		for _, item := range selection.Items {
+			name := strings.TrimSpace(item.Name)
+			content := strings.TrimSpace(item.Content)
+			if name == "" || content == "" {
 				report.SkippedUnsupported++
-				report.Warnings = append(report.Warnings, fmt.Sprintf("%s: %s", set.Name, reason))
+				report.Warnings = append(report.Warnings, fmt.Sprintf("%s: 有一条命令缺少名称或内容，已跳过", set.Name))
 				continue
 			}
-			key := commandKey(group, button.Name, button.Content)
+			if unsupported[name] {
+				report.SkippedUnsupported++
+				report.Warnings = append(report.Warnings, fmt.Sprintf("%s: %s 的类型不受支持，已跳过", set.Name, name))
+				continue
+			}
+
+			group := fallbackGroup(item.Group)
+			if group == "" {
+				group = setGroup
+			}
+			key := commandKey(group, name, content)
 			if seen[key] {
 				report.SkippedExisting++
 				continue
 			}
 			seen[key] = true
-			pending = append(pending, ImportedCommand{Group: group, Name: button.Name, Content: button.Content})
-		}
-
-		// 只记录真正写入了命令的分组：某个集合全部被跳过时不该凭空多出一个分组名。
-		if len(pending) > before {
-			groups = appendGroup(groups, group)
+			pending = append(pending, ImportedCommand{Group: group, Name: name, Content: content})
 		}
 	}
 
@@ -173,11 +239,34 @@ func ApplyQuickCommands(sets []*QuickButtonSet, assignments map[string]string, w
 			return nil, err
 		}
 		report.Imported = added
+		report.Groups = pendingGroups(pending)
 	}
 
-	report.Groups = groups
 	sort.Strings(report.Warnings)
 	return report, nil
+}
+
+// unsupportedButtonNames 返回该集合里本来就不可导入的按钮名。
+//
+// 这些条目在界面上不可勾选；这里再拦一次是为了兜底，避免前端传错时把类型不明的
+// 脚本/菜单类按钮当成普通命令写进命令库。
+func unsupportedButtonNames(set *QuickButtonSet) map[string]bool {
+	out := make(map[string]bool)
+	for _, button := range set.Buttons {
+		if ok, _ := ButtonSupported(button); !ok {
+			out[button.Name] = true
+		}
+	}
+	return out
+}
+
+// pendingGroups 按首次出现顺序去重，给出本次实际写入涉及的分组。
+func pendingGroups(items []ImportedCommand) []string {
+	groups := []string{}
+	for _, item := range items {
+		groups = appendGroup(groups, item.Group)
+	}
+	return groups
 }
 
 // existingCommandKeys 把已有命令摊成判重键集合。

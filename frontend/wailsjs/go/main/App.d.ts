@@ -13,7 +13,7 @@ export function AnalyzeQuickCommandImport(arg1:string,arg2:main.QuickCommandImpo
 
 export function AnalyzeXshellImport(arg1:string,arg2:main.ImportOptions):Promise<main.ImportAnalysis>;
 
-export function ApplyQuickCommandImport(arg1:string,arg2:Array<main.QuickCommandGroupAssignment>,arg3:main.QuickCommandImportOptions):Promise<main.QuickCommandImportReport>;
+export function ApplyQuickCommandImport(arg1:string,arg2:Array<main.QuickCommandImportSelection>,arg3:main.QuickCommandImportOptions):Promise<main.QuickCommandImportReport>;
 
 export function ApplyXshellImport(arg1:string,arg2:main.ImportOptions):Promise<main.ImportReport>;
 
