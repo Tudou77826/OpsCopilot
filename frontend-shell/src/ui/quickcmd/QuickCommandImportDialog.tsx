@@ -13,7 +13,6 @@ import type {
     QuickCommandImportAnalysis,
     QuickCommandImportReport,
     QuickCommandImportSelection,
-    QuickCommandSetRow,
     XshellQuickButtonDir,
 } from '../ports';
 
@@ -36,7 +35,6 @@ type ItemPlan = {
     included: boolean;
     supported: boolean;
     skipReason: string;
-    existing: boolean;
     type: string;
 };
 
@@ -58,12 +56,81 @@ type SetPlan = {
 const DEFAULT_GROUP = 'Xshell';
 
 /**
+ * 判重键：分组 + 名称 + 内容，三者全同才算同一条命令。
+ *
+ * 与后端（pkg/xshellimport 的 commandKey、pkg/config 的 quickCommandKey）保持一致。
+ * 这里重复一次是刻意的：预览里的"已存在"必须随用户在界面上的改动实时变化，而它取决于
+ * 目标分组，所以不能用分析阶段算好的静态标记（那份标记是按默认分组、全选算出来的快照）。
+ */
+function commandKey(group: string, name: string, content: string): string {
+    return `${group}\u0000${name}\u0000${content}`;
+}
+
+type Evaluated = {
+    /** 每个集合里逐条命令的"是否已被占位"标记（与 items 同序）。 */
+    bySource: Record<string, { existing: boolean[]; includeCount: number }>;
+    willImport: number;
+    existing: number;
+    unsupported: number;
+};
+
+/**
+ * 按当前分组与勾选算出"到底会写入哪些"。
+ *
+ * 必须是纯函数在渲染时现算，而不是用分析阶段的静态标记：用户在预览里改分组、改名、
+ * 改内容都会改变某条命令是否已存在，静态标记会让"将导入 N 条"与实际写入数对不上。
+ * 这里同时做批内去重，与后端同规则。
+ */
+function evaluatePlan(
+    rows: QuickCommandImportAnalysis['rows'],
+    plan: Record<string, SetPlan>,
+    existingKeys: Set<string>,
+): Evaluated {
+    const seen = new Set(existingKeys);
+    const bySource: Evaluated['bySource'] = {};
+    let willImport = 0;
+    let existing = 0;
+    let unsupported = 0;
+
+    for (const row of rows) {
+        const set = plan[row.source];
+        if (!set) continue;
+        const setGroup = set.group.trim() || DEFAULT_GROUP;
+        const flags: boolean[] = [];
+        let includeCount = 0;
+
+        set.items.forEach((item) => {
+            if (!item.supported) {
+                unsupported++;
+                flags.push(false);
+                return;
+            }
+            const active = set.included && item.included;
+            const key = commandKey(item.group.trim() || setGroup, item.name.trim(), item.content.trim());
+            const duplicate = active && seen.has(key);
+            flags.push(duplicate);
+            if (!active) return;
+            if (duplicate) {
+                existing++;
+                return;
+            }
+            seen.add(key); // 批内去重：同一命令出现在多套按钮里时只算一条
+            willImport++;
+            includeCount++;
+        });
+
+        bySource[row.source] = { existing: flags, includeCount };
+    }
+    return { bySource, willImport, existing, unsupported };
+}
+
+/**
  * Xshell 快捷命令导入对话框。
  *
  * 粒度分三层，且每一层都能改：
  *  1. 集合级——勾选要导哪几套按钮、每套的默认分组；
  *  2. 命令级——逐条勾选，取消掉不想要的那几条；
- *  3. 字段级——逐条改名称与命令内容，逐条覆盖目标分组（留空跟随集合）。
+ *  3. 字段级——逐条改名称与命令内容，逐条覆盖目标分组（空 = 跟随集合）。
  *
  * 之所以要这么细：Xshell 里按钮的名字常常很潦草、一套按钮里往往混着不同类别的命令，
  * 而导入后逐条改要重复打开编辑弹窗。放在写入之前一次做完，用户只需要在一个地方对齐。
@@ -79,6 +146,8 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
     const [selectedPath, setSelectedPath] = useState('');
     const [analysis, setAnalysis] = useState<QuickCommandImportAnalysis | null>(null);
     const [plan, setPlan] = useState<Record<string, SetPlan>>({});
+    /** 现有命令的判重键，用于实时判断"已存在"。 */
+    const [existingKeys, setExistingKeys] = useState<Set<string>>(() => new Set());
     const [report, setReport] = useState<QuickCommandImportReport | null>(null);
     const [busy, setBusy] = useState('');
     const [error, setError] = useState('');
@@ -105,6 +174,15 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
 
         void (async () => {
             try {
+                // 读一次现有命令：预览里的"已存在"要随分组/名称/内容的改动实时重算
+                const commands = (await hostRef.current.storage.load()) ?? [];
+                setExistingKeys(
+                    new Set(commands.map((c) => commandKey(c.group || 'default', c.name, c.content))),
+                );
+            } catch {
+                setExistingKeys(new Set());
+            }
+            try {
                 const detect = hostRef.current.detectQuickButtonDirs;
                 if (!detect) return;
                 const found = await detect();
@@ -122,8 +200,8 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
         return null; // 宿主未提供导入能力（如 sidecar），入口本就不该出现
     }
 
-    // —— 计划的读与写 ——
     const rows = analysis?.rows ?? [];
+    const evaluated = evaluatePlan(rows, plan, existingKeys);
 
     const updateSet = (source: string, patch: Partial<SetPlan>) => {
         setPlan((prev) => (prev[source] ? { ...prev, [source]: { ...prev[source], ...patch } } : prev));
@@ -138,9 +216,7 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
         });
     };
 
-    const selectedCount = (set: SetPlan) => (set.included ? set.items.filter((i) => i.included && i.supported).length : 0);
-
-    /** 分组输入框的实时提示：与已有分组合并，还是与本批其它集合合并。 */
+    /** 集合分组输入框的实时提示：与已有分组合并，还是与本批其它集合合并。 */
     const groupHint = (set: SetPlan, index: number): string => {
         const name = set.group.trim();
         if (!name) return '集合分组不能为空';
@@ -175,7 +251,6 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
                         included: item.supported,
                         supported: item.supported,
                         skipReason: item.skipReason ?? '',
-                        existing: item.existing,
                         type: item.type,
                     })),
                 };
@@ -242,22 +317,13 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
         }
     };
 
-    // —— 汇总数字由当前计划算出，用户取消勾选后立刻跟着变 ——
-    const setPlans = Object.values(plan);
-    const pickedSets = setPlans.filter((s) => s.included).length;
-    const totalButtons = setPlans.reduce((n, s) => n + s.items.length, 0);
-    const willImport = setPlans.reduce((n, s) => n + selectedCount(s), 0);
-    const unsupportedTotal = setPlans.reduce((n, s) => n + s.items.filter((i) => !i.supported).length, 0);
-    const existingTotal = setPlans.reduce(
-        (n, s) => n + (s.included ? s.items.filter((i) => i.supported && i.included && i.existing).length : 0),
-        0,
-    );
+    const pickedSets = Object.values(plan).filter((s) => s.included).length;
 
     return (
         <ImportDialogShell
             title="导入 Xshell 快捷命令"
             busy={busy}
-            width={920}
+            width={880}
             onClose={onClose}
             footer={
                 step === 'report' ? (
@@ -276,7 +342,7 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
                                     disabled={!!busy || !canApply || pickedSets === 0}
                                     title={pickedSets === 0 ? '至少要勾选一套按钮' : undefined}
                                 >
-                                    {busy || `确认导入${willImport > 0 ? ` ${willImport} 条` : ''}`}
+                                    {busy || `确认导入${evaluated.willImport > 0 ? ` ${evaluated.willImport} 条` : ''}`}
                                 </button>
                             </>
                         ) : (
@@ -348,17 +414,20 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
             {step === 'review' && analysis && (
                 <ImportSection title="导入预览">
                     <ImportStatGrid>
-                        <ImportStat label="已选按钮集" value={pickedSets} tone="ok" />
-                        <ImportStat label="按钮总数" value={totalButtons} />
-                        <ImportStat label="将导入" value={willImport} tone="ok" />
-                        <ImportStat label="类型不支持（跳过）" value={unsupportedTotal} />
-                        <ImportStat label="已存在或重复（跳过）" value={existingTotal} />
+                        <ImportStat label="将导入" value={evaluated.willImport} tone="ok" />
+                        <ImportStat
+                            label="已存在（跳过）"
+                            value={evaluated.existing}
+                            tone={evaluated.existing > 0 ? 'warn' : undefined}
+                        />
+                        <ImportStat label="类型不支持（跳过）" value={evaluated.unsupported} />
                     </ImportStatGrid>
 
                     <div style={styles.setList}>
                         {rows.map((row, setIndex) => {
                             const set = plan[row.source];
                             if (!set) return null;
+                            const setEval = evaluated.bySource[row.source];
                             return (
                                 <div
                                     key={row.source}
@@ -376,26 +445,10 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
                                             />
                                             <span style={styles.setName}>{row.name}</span>
                                             <span style={importStyles.muted}>
-                                                {' '}· 将导入 {selectedCount(set)} / 共 {row.buttons} 条
+                                                {' '}· 共 {row.buttons} 条，将导入 {setEval?.includeCount ?? 0} 条
                                             </span>
                                         </label>
 
-                                        <label style={styles.setGroupField}>
-                                            <span style={styles.fieldLabel}>集合分组</span>
-                                            <input
-                                                style={styles.input}
-                                                value={set.group}
-                                                onChange={(e) => updateSet(row.source, { group: e.target.value })}
-                                                aria-label={`${row.name} 的集合分组`}
-                                                data-testid={`import-group-${setIndex}`}
-                                            />
-                                        </label>
-                                    </div>
-
-                                    <div style={styles.setMeta}>
-                                        <span style={styles.setHint} data-testid={`import-group-hint-${setIndex}`}>
-                                            {groupHint(set, setIndex)}
-                                        </span>
                                         <span style={styles.setActions}>
                                             <button
                                                 style={styles.linkButton}
@@ -416,8 +469,24 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
                                                 onClick={() => updateSet(row.source, { expanded: !set.expanded })}
                                                 data-testid={`import-set-toggle-${setIndex}`}
                                             >
-                                                {set.expanded ? '收起命令' : `展开命令（${set.items.length}）`}
+                                                {set.expanded ? '收起' : '展开'}
                                             </button>
+                                        </span>
+                                    </div>
+
+                                    <div style={styles.setMeta}>
+                                        <label style={styles.setGroupField}>
+                                            <span style={styles.fieldLabel}>集合分组</span>
+                                            <input
+                                                style={styles.input}
+                                                value={set.group}
+                                                onChange={(e) => updateSet(row.source, { group: e.target.value })}
+                                                aria-label={`${row.name} 的集合分组`}
+                                                data-testid={`import-group-${setIndex}`}
+                                            />
+                                        </label>
+                                        <span style={styles.setHint} data-testid={`import-group-hint-${setIndex}`}>
+                                            {groupHint(set, setIndex)}
                                         </span>
                                     </div>
 
@@ -427,8 +496,7 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
                                                 <span />
                                                 <span>名称</span>
                                                 <span>命令内容</span>
-                                                <span>分组（留空跟随集合）</span>
-                                                <span />
+                                                <span>分组（空＝跟随集合）</span>
                                             </div>
                                             {set.items.map((item, itemIndex) =>
                                                 item.supported ? (
@@ -441,13 +509,24 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
                                                             aria-label={`导入 ${item.name}`}
                                                             data-testid={`import-item-${setIndex}-${itemIndex}`}
                                                         />
-                                                        <input
-                                                            style={styles.itemName}
-                                                            value={item.name}
-                                                            onChange={(e) => updateItem(row.source, itemIndex, { name: e.target.value })}
-                                                            aria-label={`${item.name} 的名称`}
-                                                            data-testid={`import-item-name-${setIndex}-${itemIndex}`}
-                                                        />
+                                                        <span style={styles.nameCell}>
+                                                            <input
+                                                                style={styles.itemName}
+                                                                value={item.name}
+                                                                onChange={(e) => updateItem(row.source, itemIndex, { name: e.target.value })}
+                                                                aria-label={`${item.name} 的名称`}
+                                                                data-testid={`import-item-name-${setIndex}-${itemIndex}`}
+                                                            />
+                                                            {setEval?.existing[itemIndex] && (
+                                                                <span
+                                                                    style={styles.tag}
+                                                                    title="目标分组里已有同名同内容的命令，导入时会跳过"
+                                                                    data-testid={`import-item-existing-${setIndex}-${itemIndex}`}
+                                                                >
+                                                                    已存在
+                                                                </span>
+                                                            )}
+                                                        </span>
                                                         <input
                                                             style={styles.itemContent}
                                                             value={item.content}
@@ -463,9 +542,6 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
                                                             aria-label={`${item.name} 的命令分组`}
                                                             data-testid={`import-item-group-${setIndex}-${itemIndex}`}
                                                         />
-                                                        <span style={styles.tagCell}>
-                                                            {item.existing && <span style={styles.tag}>已存在</span>}
-                                                        </span>
                                                     </div>
                                                 ) : (
                                                     <div
@@ -489,8 +565,7 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, existingGroup
                     </div>
 
                     <div style={styles.noteBox}>
-                        .qbl 里只有按钮名称与命令文本，因此只搬这两样。名称、命令内容与分组都可以在这里直接改；
-                        类型不是「发送字符串」的按钮（脚本、菜单等）不可勾选，原因见上方置灰行。
+                        名称、命令内容与分组都可以直接改；类型不是「发送字符串」的按钮不可勾选，原因见置灰行。
                     </div>
 
                     <ImportWarningList warnings={analysis.warnings} />
@@ -540,10 +615,10 @@ const styles: Record<string, React.CSSProperties> = {
     setHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' },
     setCheck: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', minWidth: 0 },
     setName: { fontWeight: 600 },
-    setGroupField: { display: 'flex', alignItems: 'center', gap: 6, flex: '0 0 auto' },
-    setMeta: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 4 },
-    setHint: { fontSize: 11, color: 'var(--text-muted)' },
     setActions: { display: 'flex', gap: 10, flexShrink: 0 },
+    setMeta: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 },
+    setGroupField: { display: 'flex', alignItems: 'center', gap: 6, flex: '0 0 auto' },
+    setHint: { fontSize: 11, color: 'var(--text-muted)' },
     linkButton: {
         background: 'transparent',
         border: 'none',
@@ -561,12 +636,13 @@ const styles: Record<string, React.CSSProperties> = {
         color: 'var(--text-primary)',
         outline: 'none',
         fontSize: 12,
-        width: 160,
+        width: 150,
     },
     itemList: { marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 },
+    // 列宽：勾选框 / 名称（含"已存在"标记）/ 命令内容 / 分组
     itemHead: {
         display: 'grid',
-        gridTemplateColumns: '22px 150px 1fr 150px 54px',
+        gridTemplateColumns: '22px 190px 1fr 140px',
         gap: 6,
         alignItems: 'center',
         fontSize: 10,
@@ -575,18 +651,19 @@ const styles: Record<string, React.CSSProperties> = {
     },
     itemRow: {
         display: 'grid',
-        gridTemplateColumns: '22px 150px 1fr 150px 54px',
+        gridTemplateColumns: '22px 190px 1fr 140px',
         gap: 6,
         alignItems: 'center',
     },
     itemRowOff: {
         display: 'grid',
-        gridTemplateColumns: '22px 150px 1fr 150px 54px',
+        gridTemplateColumns: '22px 190px 1fr 140px',
         gap: 6,
         alignItems: 'center',
         fontSize: 12,
         color: 'var(--text-disabled)',
     },
+    nameCell: { display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 },
     itemName: {
         padding: '4px 6px',
         borderRadius: 4,
@@ -622,14 +699,14 @@ const styles: Record<string, React.CSSProperties> = {
         minWidth: 0,
     },
     itemNameOff: { textDecoration: 'line-through' },
-    itemSkipReason: { gridColumn: '3 / 6', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-    tagCell: { display: 'flex', justifyContent: 'flex-start' },
+    itemSkipReason: { gridColumn: '3 / 5', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
     tag: {
+        flexShrink: 0,
         fontSize: 10,
-        padding: '1px 5px',
+        padding: '1px 4px',
         borderRadius: 3,
-        border: '1px solid var(--border)',
-        color: 'var(--text-muted)',
+        border: '1px solid var(--warning)',
+        color: 'var(--warning)',
         whiteSpace: 'nowrap',
     },
     noteBox: {
