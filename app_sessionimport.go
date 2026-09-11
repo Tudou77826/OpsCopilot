@@ -11,14 +11,14 @@ import (
 
 	"opscopilot/pkg/connectionstore"
 	"opscopilot/pkg/remote"
-	"opscopilot/pkg/sessionimport"
+	"opscopilot/pkg/xshellimport"
 )
 
 // 本文件承载 Xshell 导入的 App 层门面。
 //
 // 与 app_sessionshare.go 一样是独立子文件：按架构治理约定，app.go 只保留生命周期
 // 与依赖组装，导入这类新领域能力不往 app.go 主体堆。真正的解析与合并逻辑在
-// pkg/sessionimport，本层只做 Wails 边界转换、弹原生对话框、读写会话树。
+// pkg/xshellimport，本层只做 Wails 边界转换、弹原生对话框、读写会话树。
 
 // ImportOptions 是导入入参（Wails 边界，驼峰命名）。
 type ImportOptions struct {
@@ -71,8 +71,8 @@ type ImportReport struct {
 	Warnings           []string `json:"warnings"`
 }
 
-// importTreeWriter 把 connectionstore 适配成 sessionimport 需要的写入端口。
-// 适配层很薄，是为了让 sessionimport 不依赖 connectionstore 而能独立测试。
+// importTreeWriter 把 connectionstore 适配成 xshellimport 需要的写入端口。
+// 适配层很薄，是为了让 xshellimport 不依赖 connectionstore 而能独立测试。
 type importTreeWriter struct {
 	store *connectionstore.Store
 }
@@ -89,7 +89,7 @@ func (w importTreeWriter) HasEndpoint(protocol, host string, port int) bool {
 	return w.store.FindByEndpoint(protocol, host, port) != nil
 }
 
-func (w importTreeWriter) AddConnection(record *sessionimport.SessionRecord, parentID string) error {
+func (w importTreeWriter) AddConnection(record *xshellimport.SessionRecord, parentID string) error {
 	cfg := remote.ConnectConfig{
 		Name:     record.Name,
 		Protocol: record.Protocol,
@@ -105,7 +105,7 @@ func (w importTreeWriter) AddConnection(record *sessionimport.SessionRecord, par
 // GetXshellImportStatus 探测本机 Xshell 凭据，用于在导入界面上说明
 // "密码将自动解密"还是"需要补充凭据"。
 func (a *App) GetXshellImportStatus() XshellCredentialStatus {
-	creds, err := sessionimport.LocalCredentials()
+	creds, err := xshellimport.LocalCredentials()
 	if err != nil || creds.SID == "" {
 		return XshellCredentialStatus{
 			Message: "未能读取本机 Windows 账户标识，导入后需要手工填写密码",
@@ -113,7 +113,7 @@ func (a *App) GetXshellImportStatus() XshellCredentialStatus {
 	}
 	return XshellCredentialStatus{
 		Available:   true,
-		MaskedSID:   sessionimport.MaskSID(creds.SID),
+		MaskedSID:   xshellimport.MaskSID(creds.SID),
 		WindowsUser: creds.WindowsUser,
 		Message:     "已检测到本机 Xshell 凭据，导入的密码将自动解密",
 	}
@@ -124,7 +124,7 @@ func (a *App) GetXshellImportStatus() XshellCredentialStatus {
 // 这是同机场景下最省事的导入入口：不需要用户去 Xshell 里做任何导出操作，
 // 直接读会话目录即可（也绕开了 .xts 可能被主密码加密的问题）。
 func (a *App) DetectXshellSessionDirs() ([]XshellSessionDir, error) {
-	dirs := sessionimport.DiscoverXshellSessionDirs()
+	dirs := xshellimport.DiscoverXshellSessionDirs()
 	out := make([]XshellSessionDir, 0, len(dirs))
 	for _, dir := range dirs {
 		out = append(out, XshellSessionDir{
@@ -179,7 +179,7 @@ func (a *App) AnalyzeXshellImport(path string, opts ImportOptions) (*ImportAnaly
 		return nil, err
 	}
 
-	analysis := sessionimport.Analyze(records, importTreeWriter{a.savedSessionMgr})
+	analysis := xshellimport.Analyze(records, importTreeWriter{a.savedSessionMgr})
 
 	// 契约：集合字段一律给空集合而不是 nil。Go 的 nil slice/map 会序列化成 null，
 	// 前端按数组/对象处理就会抛异常，而 React 的渲染异常会把整棵组件树卸载成黑屏。
@@ -212,7 +212,7 @@ func (a *App) ApplyXshellImport(path string, opts ImportOptions) (*ImportReport,
 		return nil, err
 	}
 
-	report, err := sessionimport.Apply(records, importTreeWriter{a.savedSessionMgr}, sessionimport.ConflictSkip)
+	report, err := xshellimport.Apply(records, importTreeWriter{a.savedSessionMgr}, xshellimport.ConflictSkip)
 	if err != nil {
 		return nil, err
 	}
@@ -227,13 +227,13 @@ func (a *App) ApplyXshellImport(path string, opts ImportOptions) (*ImportReport,
 	}, nil
 }
 
-func (a *App) parseXshellImport(path string, opts ImportOptions) ([]*sessionimport.SessionRecord, []string, error) {
+func (a *App) parseXshellImport(path string, opts ImportOptions) ([]*xshellimport.SessionRecord, []string, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return nil, nil, errors.New("请先选择要导入的 Xshell 导出文件或会话目录")
 	}
 
-	records, warnings, err := sessionimport.ParsePath(path, sessionimport.ParseOptions{
+	records, warnings, err := xshellimport.ParsePath(path, xshellimport.ParseOptions{
 		Credentials:     resolveImportCredentials(opts),
 		DecryptPassword: opts.DecryptPassword,
 	})
@@ -244,10 +244,10 @@ func (a *App) parseXshellImport(path string, opts ImportOptions) ([]*sessionimpo
 }
 
 // resolveImportCredentials 组装解密凭据：默认用本机凭据，用户显式提供的覆盖之。
-func resolveImportCredentials(opts ImportOptions) sessionimport.Credentials {
-	creds, err := sessionimport.LocalCredentials()
+func resolveImportCredentials(opts ImportOptions) xshellimport.Credentials {
+	creds, err := xshellimport.LocalCredentials()
 	if err != nil {
-		creds = sessionimport.Credentials{}
+		creds = xshellimport.Credentials{}
 	}
 	if opts.SourceSID != "" {
 		creds.SID = strings.TrimSpace(opts.SourceSID)

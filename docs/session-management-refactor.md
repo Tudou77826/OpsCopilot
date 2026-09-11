@@ -134,7 +134,7 @@ Xshell 5.3+ 的密码密钥依赖导出那台机器的 Windows 账户标识。**
 
 自动化：
 
-- Go 侧 `go test ./...`、`go vet ./...` 全绿。`pkg/connectionstore` 覆盖嵌套增删改移、环检测、索引边界、重命名后归属不变、删除整树、对账幂等、真实样本零迁移、原子写、无变更不写盘；`pkg/sessionimport` 38 个用例覆盖 INI 解析、编码回退、密码解密（每条候选密钥往返 + 错误密钥不误判）、`.xts` 解包、去重与合并。
+- Go 侧 `go test ./...`、`go vet ./...` 全绿。`pkg/connectionstore` 覆盖嵌套增删改移、环检测、索引边界、重命名后归属不变、删除整树、对账幂等、真实样本零迁移、原子写、无变更不写盘；`pkg/xshellimport`（v1.10.1 由 `pkg/sessionimport` 改名而来）38 个用例覆盖 INI 解析、编码回退、密码解密（每条候选密钥往返 + 错误密钥不误判）、`.xts` 解包、去重与合并。
 - 前端 `frontend-shell` 126 个用例、`frontend` 233 个用例全绿，两端类型检查与构建通过。
 
 实机（`start_dev.bat`，Windows + Xshell 8.1 本机）：

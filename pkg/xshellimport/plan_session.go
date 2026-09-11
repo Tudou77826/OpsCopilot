@@ -1,4 +1,4 @@
-package sessionimport
+package xshellimport
 
 import (
 	"fmt"

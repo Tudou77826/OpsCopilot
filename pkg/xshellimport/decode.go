@@ -1,14 +1,15 @@
-// Package sessionimport 解析 Xshell 的会话导出，并给出并入本地连接树的导入计划。
+// Package xshellimport 解析 Xshell 的落盘文件，并给出并入本地模型的导入计划。
 //
 // 它是一个纯叶子包：只依赖标准库与 x/text 的 GBK 解码器，不依赖项目内其他包。
-// 写入会话树通过 TreeWriter 端口注入，由宿主实现（桌面端用 connectionstore 适配），
+// 写入目标通过端口注入，由宿主实现（桌面端用 connectionstore / config 适配），
 // 因此本包可以脱离应用独立测试。
 //
-// 支持的输入形态：
-//   - 单个 .xsh 文件（Xshell 每条会话一个文件）
-//   - 包含 .xsh 的目录树（子目录即分组，Xshell 的 Sessions 目录就是这个形态）
-//   - .xts 备份包（ZIP，内含 xts.zcf 与 Xshell/<分组路径>/<会话>.xsh）
-package sessionimport
+// 它承载两类导入，共用编码回退与 INI 解析：
+//   - 会话（session）：单个 .xsh 文件、包含 .xsh 的目录树（子目录即分组，
+//     Xshell 的 Sessions 目录就是这个形态）、.xts 备份包（ZIP，内含 xts.zcf
+//     与 Xshell/<分组路径>/<会话>.xsh）
+//   - 快捷命令（quickcmd）：单套 .qbl 文件，或包含多个 .qbl 的 QuickButton Files 目录
+package xshellimport
 
 import (
 	"bytes"
