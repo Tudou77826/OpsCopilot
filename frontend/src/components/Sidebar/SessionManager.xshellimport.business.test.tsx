@@ -169,17 +169,26 @@ describe('分析预览（B1）', () => {
         expect(screen.getByText('密码已解密')).toBeInTheDocument();
     });
 
-    it('密码全部解密时不显示补充凭据的提示', async () => {
+    it('密码全部解密时不出现解密失败的提示', async () => {
         await openImportDialog();
         fireEvent.click(screen.getByRole('button', { name: '分析并预览' }));
 
         await screen.findByText('导入预览');
-        expect(screen.queryByText(/建议补充凭据后重试/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/密码无法解密/)).not.toBeInTheDocument();
+    });
+
+    it('不提供"导入选项"：导入行为固定为带密码', async () => {
+        await openImportDialog();
+
+        // 密码总是要带的，同机场景也不需要源机器 SID / 主密码，因此不暴露这些开关。
+        expect(screen.queryByText(/导入选项/)).not.toBeInTheDocument();
+        expect(screen.queryByPlaceholderText(/S-1-5-21/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/源机器 SID/)).not.toBeInTheDocument();
     });
 });
 
 describe('密码解密失败不静默（B5）', () => {
-    it('给出原因、展开补充凭据入口，并支持改参数后重新分析', async () => {
+    it('说明失败原因，且这些会话仍然会被导入（密码留空待补）', async () => {
         AnalyzeXshellImport.mockImplementation(async () => ({
             total: 3,
             supported: 2,
@@ -195,20 +204,28 @@ describe('密码解密失败不静默（B5）', () => {
         await openImportDialog();
         fireEvent.click(screen.getByRole('button', { name: '分析并预览' }));
 
-        // 原因要说清是"密钥依赖导出机器的账户标识"，并给出下一步动作。
+        // 失败原因必须说清（密钥依赖导出机器的账户标识），而不是静默留空。
         expect(await screen.findByText(/有 2 个会话的密码无法解密/)).toBeInTheDocument();
-        expect(screen.getByText(/源机器的 SID 或 Xshell 主密码/)).toBeInTheDocument();
-        // 补充凭据的输入项自动展开。
-        expect(screen.getByPlaceholderText(/S-1-5-21/)).toBeInTheDocument();
+        expect(screen.getByText(/依赖导出那台电脑的 Windows 账户标识/)).toBeInTheDocument();
+        // 并且明确后续怎么办：会话照样导入，密码导入后手工补。
+        expect(screen.getByText(/仍会被导入/)).toBeInTheDocument();
 
-        // 填入源机器 SID 后可以重新分析，参数被带到后端。
-        fireEvent.change(screen.getByPlaceholderText(/S-1-5-21/), {
-            target: { value: 'S-1-5-21-1-2-3-1009' },
-        });
-        fireEvent.click(screen.getByRole('button', { name: '重新分析' }));
+        // 仍然允许直接导入：这些会话不该因为密码解不开就被丢掉。
+        ApplyXshellImport.mockImplementation(async () => ({
+            imported: 2,
+            skippedExisting: 0,
+            skippedUnsupported: 1,
+            passwordDecrypted: 0,
+            passwordFailed: 2,
+            warnings: null,
+        }));
+        fireEvent.click(screen.getByRole('button', { name: '确认导入' }));
 
-        await waitFor(() => expect(AnalyzeXshellImport).toHaveBeenCalledTimes(2));
-        expect(AnalyzeXshellImport.mock.calls[1][1]).toMatchObject({ sourceSid: 'S-1-5-21-1-2-3-1009' });
+        await waitFor(() => expect(ApplyXshellImport).toHaveBeenCalledTimes(1));
+        // 带密码导入是固定行为，不需要用户勾选。
+        expect(ApplyXshellImport.mock.calls[0][1]).toMatchObject({ decryptPassword: true });
+        expect(await screen.findByText('导入结果')).toBeInTheDocument();
+        expect(screen.getByText('密码未解密')).toBeInTheDocument();
     });
 });
 
@@ -243,6 +260,22 @@ describe('执行导入（B2）', () => {
 
         expect(ApplyXshellImport).not.toHaveBeenCalled();
         expect(AnalyzeXshellImport).not.toHaveBeenCalled();
+    });
+});
+
+describe('导入来源区块', () => {
+    it('两种来源收在同一块，底部只有一行"将从此处导入"作为唯一结论', async () => {
+        await openImportDialog();
+
+        expect(screen.getByText('导入来源')).toBeInTheDocument();
+        expect(screen.getByText('本机检测到的 Xshell 会话目录')).toBeInTheDocument();
+        expect(screen.getByText('或从文件 / 目录导入')).toBeInTheDocument();
+
+        // 旧的"已选择："挂在手动选择区下，会把自动探测的结果读成"用户手动选的"，
+        // 同一个路径也因此出现两次。现在只保留一行明确的结论。
+        expect(screen.queryByText(/已选择/)).not.toBeInTheDocument();
+        const summary = screen.getByText(/将从此处导入/);
+        expect(summary).toHaveTextContent('NetSarang Computer');
     });
 });
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useToast } from '../feedback/Toast';
 import type {
     SessionManagerRuntime,
@@ -20,14 +20,22 @@ type Props = {
 type Step = 'source' | 'review' | 'report';
 
 /**
+ * 导入行为固定为"解密密码 + 同机凭据"。
+ *
+ * 不向用户暴露开关：密码就是要带过来的（否则这个功能没有意义），而 Xshell 的密码
+ * 密钥依赖导出机器的 Windows 账户标识，跨机器所需的源机器 SID / 主密码不在本功能的
+ * 使用场景内。后端仍保留这两个入参，供将来确有需要时使用。
+ */
+const IMPORT_OPTIONS: XshellImportOptions = { decryptPassword: true };
+
+/**
  * Xshell 导入对话框。
  *
  * 设计要点：
  *  1. 同机场景下"自动检测本机会话目录"是首选入口——用户不需要会任何 Xshell 操作。
  *  2. 导出引导独立成块，因为多数用户不知道 Xshell 的导出在哪；文案已按实际菜单核实，
  *     并刻意避开三个坑：不写"右键会话导出"、不给固定路径让用户粘贴、提醒导出文件含密码。
- *  3. 先分析后导入。密码解密失败时用户还有机会补上源机器 SID 或主密码，
- *     而不是导完才发现密码是空的。
+ *  3. 先分析后导入：写入前就能看到密码解开了多少条，而不是导完才发现是空的。
  */
 const XshellImportDialog: React.FC<Props> = ({ isOpen, runtime, onClose, onImported }) => {
     const toast = useToast();
@@ -36,12 +44,10 @@ const XshellImportDialog: React.FC<Props> = ({ isOpen, runtime, onClose, onImpor
     const [status, setStatus] = useState<XshellCredentialStatus | null>(null);
     const [dirs, setDirs] = useState<XshellSessionDir[]>([]);
     const [selectedPath, setSelectedPath] = useState('');
-    const [options, setOptions] = useState<XshellImportOptions>({ decryptPassword: true });
     const [analysis, setAnalysis] = useState<XshellImportAnalysis | null>(null);
     const [report, setReport] = useState<XshellImportReport | null>(null);
     const [busy, setBusy] = useState('');
     const [guideOpen, setGuideOpen] = useState(false);
-    const [advancedOpen, setAdvancedOpen] = useState(false);
     const [error, setError] = useState('');
 
     const canAnalyze = typeof runtime.analyzeXshellImport === 'function';
@@ -54,8 +60,6 @@ const XshellImportDialog: React.FC<Props> = ({ isOpen, runtime, onClose, onImpor
         setAnalysis(null);
         setReport(null);
         setError('');
-        setAdvancedOpen(false);
-        setOptions({ decryptPassword: true });
 
         void (async () => {
             try {
@@ -72,11 +76,6 @@ const XshellImportDialog: React.FC<Props> = ({ isOpen, runtime, onClose, onImpor
         })();
     }, [isOpen, runtime]);
 
-    const needsCredentials = useMemo(
-        () => !!analysis && analysis.passwordFailed > 0,
-        [analysis],
-    );
-
     if (!isOpen) return null;
     if (!canAnalyze) {
         return null; // 宿主未提供导入能力（如 sidecar），入口本就不该出现
@@ -90,10 +89,9 @@ const XshellImportDialog: React.FC<Props> = ({ isOpen, runtime, onClose, onImpor
         setBusy('分析中...');
         setError('');
         try {
-            const result = await runtime.analyzeXshellImport!(selectedPath, options);
+            const result = await runtime.analyzeXshellImport!(selectedPath, IMPORT_OPTIONS);
             setAnalysis(result);
             setStep('review');
-            if (result.passwordFailed > 0) setAdvancedOpen(true);
         } catch (e: any) {
             setError(e?.toString?.() || '分析失败');
         } finally {
@@ -105,7 +103,7 @@ const XshellImportDialog: React.FC<Props> = ({ isOpen, runtime, onClose, onImpor
         setBusy('导入中...');
         setError('');
         try {
-            const result = await runtime.applyXshellImport!(selectedPath, options);
+            const result = await runtime.applyXshellImport!(selectedPath, IMPORT_OPTIONS);
             setReport(result);
             setStep('report');
             onImported();
@@ -159,30 +157,38 @@ const XshellImportDialog: React.FC<Props> = ({ isOpen, runtime, onClose, onImpor
 
                     {step === 'source' && (
                         <>
-                            {dirs.length > 0 && (
-                                <section style={styles.section}>
-                                    <div style={styles.sectionTitle}>本机检测到的 Xshell 会话目录</div>
-                                    <div style={styles.sectionHint}>直接选它即可，无需先去 Xshell 做任何导出操作。</div>
-                                    {dirs.map((dir) => (
-                                        <label key={dir.path} style={styles.radioRow}>
-                                            <input
-                                                type="radio"
-                                                name="xsh-dir"
-                                                checked={selectedPath === dir.path}
-                                                onChange={() => setSelectedPath(dir.path)}
-                                            />
-                                            <span style={styles.radioLabel}>
-                                                Xshell {dir.version || '未知版本'}
-                                                <span style={styles.muted}> · {dir.sessions} 个会话</span>
-                                            </span>
-                                            <span style={styles.pathText} title={dir.path}>{dir.path}</span>
-                                        </label>
-                                    ))}
-                                </section>
-                            )}
-
+                            {/* 两种来源放在同一块里，底部只给一行"将从此处导入"作为唯一的选择结论。
+                                此前"已选择"挂在"或手动选择"下面，自动探测到的路径显示在那里会读成
+                                "用户手动选的"，同一个路径也因此出现两次。 */}
                             <section style={styles.section}>
-                                <div style={styles.sectionTitle}>或手动选择导出文件</div>
+                                <div style={styles.sectionTitle}>导入来源</div>
+
+                                {dirs.length > 0 && (
+                                    <>
+                                        <div style={styles.subTitle}>本机检测到的 Xshell 会话目录</div>
+                                        <div style={styles.sectionHint}>
+                                            直接选它即可，无需先去 Xshell 做任何导出操作。
+                                        </div>
+                                        {dirs.map((dir) => (
+                                            <label key={dir.path} style={styles.radioRow}>
+                                                <input
+                                                    type="radio"
+                                                    name="xsh-dir"
+                                                    checked={selectedPath === dir.path}
+                                                    onChange={() => setSelectedPath(dir.path)}
+                                                />
+                                                <span style={styles.radioLabel}>
+                                                    Xshell {dir.version || '未知版本'}
+                                                    <span style={styles.muted}> · {dir.sessions} 个会话</span>
+                                                </span>
+                                                <span style={styles.pathText} title={dir.path}>{dir.path}</span>
+                                            </label>
+                                        ))}
+                                        <div style={styles.divider} />
+                                    </>
+                                )}
+
+                                <div style={styles.subTitle}>或从文件 / 目录导入</div>
                                 <div style={styles.sectionHint}>
                                     支持 Xshell 导出的 .xts 备份包、单个 .xsh 文件，或包含 .xsh 的目录。
                                 </div>
@@ -194,11 +200,19 @@ const XshellImportDialog: React.FC<Props> = ({ isOpen, runtime, onClose, onImpor
                                         选择目录
                                     </button>
                                 </div>
-                                {selectedPath && (
-                                    <div style={styles.selectedPath} title={selectedPath}>
-                                        已选择：{selectedPath}
-                                    </div>
-                                )}
+
+                                <div style={selectedPath ? styles.selectionLine : styles.selectionLineEmpty}>
+                                    {selectedPath ? (
+                                        <>
+                                            将从此处导入：
+                                            <span style={styles.selectionPath} title={selectedPath}>
+                                                {selectedPath}
+                                            </span>
+                                        </>
+                                    ) : (
+                                        '尚未选择导入来源'
+                                    )}
+                                </div>
                             </section>
 
                             <GuidePanel open={guideOpen} onToggle={() => setGuideOpen((v) => !v)} />
@@ -213,16 +227,6 @@ const XshellImportDialog: React.FC<Props> = ({ isOpen, runtime, onClose, onImpor
                             {step === 'review' && analysis && <AnalysisTable analysis={analysis} />}
                             {step === 'report' && report && <ReportTable report={report} />}
                         </section>
-                    )}
-
-                    {(step === 'source' || needsCredentials) && (
-                        <AdvancedOptions
-                            open={advancedOpen || needsCredentials}
-                            onToggle={() => setAdvancedOpen((v) => !v)}
-                            options={options}
-                            onChange={setOptions}
-                            highlight={needsCredentials}
-                        />
                     )}
 
                     {error && <div style={styles.error}>{error}</div>}
@@ -282,9 +286,8 @@ const AnalysisTable: React.FC<{ analysis: XshellImportAnalysis }> = ({ analysis 
             </div>
             {analysis.passwordFailed > 0 && (
                 <div style={styles.hintBox}>
-                    有 {analysis.passwordFailed} 个会话的密码无法解密。Xshell 的密码密钥依赖导出时那台机器的
-                    Windows 账户标识；若这批会话来自其他电脑，请在下方填写源机器的 SID 或 Xshell 主密码后重新分析。
-                    这些会话仍会被导入，只是密码需要手工补充。
+                    有 {analysis.passwordFailed} 个会话的密码无法解密。Xshell 的密码密钥依赖导出那台电脑的
+                    Windows 账户标识，所以不是在本机导出的会话解不开。这些会话仍会被导入，但密码需要导入后手工补充。
                 </div>
             )}
             {protocolEntries.length > 0 && (
@@ -337,52 +340,6 @@ const Stat: React.FC<{ label: string; value: number; tone?: 'ok' | 'warn' }> = (
         </div>
         <div style={styles.statLabel}>{label}</div>
     </div>
-);
-
-const AdvancedOptions: React.FC<{
-    open: boolean;
-    onToggle: () => void;
-    options: XshellImportOptions;
-    onChange: (next: XshellImportOptions) => void;
-    highlight: boolean;
-}> = ({ open, onToggle, options, onChange, highlight }) => (
-    <section style={{ ...styles.section, ...(highlight ? styles.sectionHighlight : null) }}>
-        <button style={styles.collapseHeader} onClick={onToggle}>
-            {open ? '▾' : '▸'} 导入选项
-            {highlight && <span style={styles.muted}> · 建议补充凭据后重试</span>}
-        </button>
-        {open && (
-            <div style={styles.advancedBody}>
-                <label style={styles.checkboxRow}>
-                    <input
-                        type="checkbox"
-                        checked={options.decryptPassword}
-                        onChange={(e) => onChange({ ...options, decryptPassword: e.target.checked })}
-                    />
-                    导入密码（关闭则只导入主机、端口、用户名等非敏感信息）
-                </label>
-                <label style={styles.fieldRow}>
-                    <span style={styles.fieldLabel}>源机器 SID</span>
-                    <input
-                        style={styles.input}
-                        placeholder="跨机器导入时填写，形如 S-1-5-21-..."
-                        value={options.sourceSid ?? ''}
-                        onChange={(e) => onChange({ ...options, sourceSid: e.target.value })}
-                    />
-                </label>
-                <label style={styles.fieldRow}>
-                    <span style={styles.fieldLabel}>Xshell 主密码</span>
-                    <input
-                        style={styles.input}
-                        type="password"
-                        placeholder="导出时若设置过主密码则填写"
-                        value={options.masterPassword ?? ''}
-                        onChange={(e) => onChange({ ...options, masterPassword: e.target.value })}
-                    />
-                </label>
-            </div>
-        )}
-    </section>
 );
 
 const GuidePanel: React.FC<{ open: boolean; onToggle: () => void }> = ({ open, onToggle }) => (
@@ -461,8 +418,9 @@ const styles: Record<string, React.CSSProperties> = {
         padding: '12px 14px',
         backgroundColor: 'var(--bg-secondary)',
     },
-    sectionHighlight: { borderColor: 'var(--warning)' },
     sectionTitle: { fontSize: 13, fontWeight: 600, marginBottom: 6 },
+    subTitle: { fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' },
+    divider: { height: 1, backgroundColor: 'var(--border)', margin: '10px 0' },
     sectionHint: { fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 },
     radioRow: { display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 13, cursor: 'pointer' },
     radioLabel: { flexShrink: 0 },
@@ -476,10 +434,25 @@ const styles: Record<string, React.CSSProperties> = {
     },
     muted: { color: 'var(--text-muted)' },
     buttonRow: { display: 'flex', gap: 8, flexWrap: 'wrap' },
-    selectedPath: {
-        marginTop: 8,
+    // 全块唯一的"选择结论"：把两种来源收敛成一行，避免同一个路径在多处出现、
+    // 让人误以为手动选择区也参与了选择。
+    selectionLine: {
+        marginTop: 10,
+        paddingTop: 10,
+        borderTop: '1px solid var(--border)',
         fontSize: 12,
         color: 'var(--text-secondary)',
+    },
+    selectionLineEmpty: {
+        marginTop: 10,
+        paddingTop: 10,
+        borderTop: '1px solid var(--border)',
+        fontSize: 12,
+        color: 'var(--text-muted)',
+    },
+    selectionPath: {
+        marginLeft: 6,
+        color: 'var(--text-primary)',
         wordBreak: 'break-all',
     },
     statGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 },
@@ -513,20 +486,6 @@ const styles: Record<string, React.CSSProperties> = {
         fontWeight: 600,
         cursor: 'pointer',
         padding: 0,
-    },
-    advancedBody: { marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 },
-    checkboxRow: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer' },
-    fieldRow: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 },
-    fieldLabel: { width: 90, flexShrink: 0, color: 'var(--text-secondary)' },
-    input: {
-        flex: 1,
-        padding: '6px 8px',
-        borderRadius: 4,
-        border: '1px solid var(--border)',
-        backgroundColor: 'var(--bg-input)',
-        color: 'var(--text-primary)',
-        outline: 'none',
-        fontSize: 12,
     },
     guideBody: { marginTop: 10, fontSize: 12, lineHeight: 1.7, color: 'var(--text-secondary)' },
     guideList: { margin: 0, paddingLeft: 20 },
