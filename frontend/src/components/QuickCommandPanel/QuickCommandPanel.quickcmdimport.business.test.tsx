@@ -136,7 +136,8 @@ async function openImportReview() {
  * 再输入——这样用户一眼能看见 OpsCopilot 里已有哪些分组，不必盲打。
  */
 function pickNewGroup(testId: string, name: string) {
-    fireEvent.change(screen.getByTestId(testId), { target: { value: '__new__' } });
+    fireEvent.click(screen.getByTestId(testId));
+    fireEvent.click(screen.getByRole('button', { name: '＋ 新建分组…' }));
     fireEvent.change(screen.getByTestId(testId), { target: { value: name } });
 }
 
@@ -170,7 +171,9 @@ describe('命令级取舍与编辑（B2）', () => {
         fireEvent.click(screen.getByTestId('import-item-0-1')); // 不要 df
         fireEvent.change(screen.getByTestId('import-item-name-0-0'), { target: { value: '跟踪应用日志' } });
         fireEvent.change(screen.getByTestId('import-item-content-0-0'), { target: { value: 'tail -F /var/log/app.log' } });
-        fireEvent.change(screen.getByTestId('import-item-group-0-0'), { target: { value: '日志排查' } }); // 选现有分组
+        // 逐条分组选一个现有分组
+        fireEvent.click(screen.getByTestId('import-item-group-0-0'));
+        fireEvent.click(screen.getByRole('button', { name: '日志排查' }));
         pickNewGroup('import-group-0', '运维命令');
 
         fireEvent.click(screen.getByRole('button', { name: /确认导入 1 条/ }));

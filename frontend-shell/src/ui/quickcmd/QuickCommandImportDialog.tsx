@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useToast } from '../feedback/Toast';
+import FileContextMenu from '../filetransfer/FileContextMenu';
 import {
     ImportDialogShell,
     ImportSection,
@@ -64,9 +65,6 @@ type Library = {
  * 时用它，是为了让最常见的单集合场景一按就得到一个像样的分组名。
  */
 const DEFAULT_GROUP = 'Xshell';
-
-/** 分组选择器里"新建分组"选项的哨兵值（`<select>` 的 value 只能是字符串）。 */
-const NEW_GROUP = '__new__';
 
 /**
  * 判重键：分组 + 名称 + 内容，三者全同才算同一条命令。
@@ -211,6 +209,8 @@ type GroupPickerProps = {
     testId: string;
     ariaLabel: string;
     newPlaceholder: string;
+    /** 固定宽度；不传则填满所在格。 */
+    width?: number;
 };
 
 /**
@@ -218,7 +218,9 @@ type GroupPickerProps = {
  *
  * 之所以不是纯粹的文本框：用户看不到 OpsCopilot 里已有哪些分组，只能盲打，于是同一件事
  * 容易散成「K8S 运维」和「K8s 操作」两个分组。把现有分组列出来，选择本身就是看一眼现状。
- * 当前值不在现有分组里时，它作为「新建：xxx」选项出现，因此下拉始终可达。
+ *
+ * 用项目已有的 FileContextMenu（portal + 边缘翻转）而不是原生 <select>：原生下拉的弹出层
+ * 由浏览器进程绘制，在这种"固定定位弹窗 + 面板过渡"的结构里会脱位到弹窗外面去。
  */
 const GroupPicker: React.FC<GroupPickerProps> = ({
     value,
@@ -228,64 +230,83 @@ const GroupPicker: React.FC<GroupPickerProps> = ({
     testId,
     ariaLabel,
     newPlaceholder,
+    width,
 }) => {
-    // 只有显式点了「＋ 新建分组…」才进入输入态；否则始终给下拉，保证现有分组可达。
-    const [newMode, setNewMode] = useState(false);
+    // 只有显式点了「＋ 新建分组…」才进入输入态；否则始终可下拉，保证现有分组可达。
+    // 库里一个分组都没有时直接进输入态——没有可选项，让用户少点两下。
+    const [newMode, setNewMode] = useState(() => !allowFollow && groups.length === 0);
+    const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
     const isCustom = value !== '' && !groups.includes(value);
 
-    if (newMode) {
-        return (
-            <span style={styles.pickerRow}>
-                <input
-                    style={styles.pickerInput}
-                    value={value}
-                    placeholder={newPlaceholder}
-                    onChange={(e) => onChange(e.target.value)}
-                    aria-label={ariaLabel}
-                    data-testid={testId}
-                />
-                {groups.length > 0 && (
-                    <button
-                        style={styles.backLink}
-                        title="从现有分组中选择"
-                        onClick={() => {
-                            setNewMode(false);
-                            onChange(groups[0]);
-                        }}
-                        data-testid={`${testId}-back`}
-                    >
-                        ↩
-                    </button>
-                )}
-            </span>
-        );
-    }
+    const display = allowFollow && value === '' ? '跟随集合' : value;
 
     return (
-        <select
-            style={styles.pickerSelect}
-            value={value}
-            onChange={(e) => {
-                const next = e.target.value;
-                if (next === NEW_GROUP) {
-                    setNewMode(true);
-                    if (!isCustom) onChange('');
-                    return;
-                }
-                onChange(next);
-            }}
-            aria-label={ariaLabel}
-            data-testid={testId}
-        >
-            {allowFollow && <option value="">跟随集合</option>}
-            {groups.map((g) => (
-                <option key={g} value={g}>
-                    {g}
-                </option>
-            ))}
-            {isCustom && <option value={value}>新建：{value}</option>}
-            <option value={NEW_GROUP}>＋ 新建分组…</option>
-        </select>
+        <span style={{ ...styles.pickerWrap, ...(width ? { width } : null) }}>
+            {newMode ? (
+                <>
+                    <input
+                        style={styles.pickerInput}
+                        value={value}
+                        placeholder={newPlaceholder}
+                        onChange={(e) => onChange(e.target.value)}
+                        aria-label={ariaLabel}
+                        data-testid={testId}
+                    />
+                    {groups.length > 0 && (
+                        <button
+                            style={styles.backLink}
+                            title="从现有分组中选择"
+                            onClick={() => {
+                                setNewMode(false);
+                                onChange(groups[0]);
+                            }}
+                            data-testid={`${testId}-back`}
+                        >
+                            ↩
+                        </button>
+                    )}
+                </>
+            ) : (
+                <button
+                    type="button"
+                    style={styles.pickerButton}
+                    title={display}
+                    aria-label={ariaLabel}
+                    data-testid={testId}
+                    onClick={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setMenuAt({ x: rect.left, y: rect.bottom + 2 });
+                    }}
+                >
+                    <span style={styles.pickerValue}>{display}</span>
+                    <span style={styles.pickerCaret}>▾</span>
+                </button>
+            )}
+
+            {menuAt && (
+                <FileContextMenu
+                    x={menuAt.x}
+                    y={menuAt.y}
+                    onClose={() => setMenuAt(null)}
+                    items={[
+                        ...(allowFollow
+                            ? [{ label: value === '' ? '✓ 跟随集合' : '跟随集合', onClick: () => onChange('') }]
+                            : []),
+                        ...groups.map((g) => ({
+                            label: g === value ? `✓ ${g}` : g,
+                            onClick: () => onChange(g),
+                        })),
+                        {
+                            label: '＋ 新建分组…',
+                            onClick: () => {
+                                setNewMode(true);
+                                if (!isCustom) onChange('');
+                            },
+                        },
+                    ]}
+                />
+            )}
+        </span>
     );
 };
 
@@ -481,10 +502,6 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, onClose }) =>
 
     const pickedSets = Object.values(plan).filter((s) => s.included).length;
 
-    // 现状一览：分组太多时只列前几个，完整列表放 title（开头的总数已经说明有多少个）
-    const shownGroups = library.groups.slice(0, 12);
-    const groupListText = library.groups.map((g) => `${g.name} ${g.count}`).join(' · ');
-
     return (
         <ImportDialogShell
             title="导入 Xshell 快捷命令"
@@ -575,19 +592,12 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, onClose }) =>
                                 '尚未选择导入来源'
                             )}
                         </div>
-                    </ImportSection>
 
-                    {/* 现状一览：导入谁、往哪儿放，都取决于 OpsCopilot 里已经有什么 */}
-                    <ImportSection title="OpsCopilot 现有命令">
-                        {library.total === 0 ? (
-                            <div style={importStyles.sectionHint} data-testid="import-library-empty">
-                                目前还没有快捷命令，导入时会新建分组。
-                            </div>
-                        ) : (
-                            <div style={styles.libraryLine} data-testid="import-library-summary" title={groupListText}>
-                                共 {library.total} 条，{library.groups.length} 个分组：
-                                {shownGroups.map((g) => ` ${g.name} ${g.count}`).join(' ·')}
-                                {library.groups.length > shownGroups.length ? ' …' : ''}
+                        {/* 现有分组不在这里列：预览页的分组选择器本身就是那份清单，
+                            列在这儿只会让人先背一遍再翻页。这里只说"库里有没有东西"。 */}
+                        {library.total === 0 && (
+                            <div style={styles.libraryEmpty} data-testid="import-library-empty">
+                                OpsCopilot 目前还没有快捷命令，导入时会新建分组。
                             </div>
                         )}
                     </ImportSection>
@@ -667,6 +677,7 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, onClose }) =>
                                                 testId={`import-group-${setIndex}`}
                                                 ariaLabel={`${row.name} 的集合分组`}
                                                 newPlaceholder="新分组名"
+                                                width={150}
                                             />
                                         </label>
                                         <span style={styles.setHint} data-testid={`import-group-hint-${setIndex}`}>
@@ -822,17 +833,24 @@ const styles: Record<string, React.CSSProperties> = {
         padding: 0,
     },
     fieldLabel: { fontSize: 11, color: 'var(--text-secondary)', flexShrink: 0 },
-    pickerSelect: {
+    pickerWrap: { display: 'inline-flex', alignItems: 'center', gap: 4, width: '100%', minWidth: 0 },
+    pickerButton: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
         padding: '5px 6px',
         borderRadius: 4,
         border: '1px solid var(--border)',
         backgroundColor: 'var(--bg-input)',
         color: 'var(--text-primary)',
-        outline: 'none',
         fontSize: 12,
-        width: 150,
+        cursor: 'pointer',
+        width: '100%',
+        minWidth: 0,
+        textAlign: 'left',
     },
-    pickerRow: { display: 'flex', alignItems: 'center', gap: 4 },
+    pickerValue: { flex: '1 1 auto', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+    pickerCaret: { flexShrink: 0, color: 'var(--text-muted)', fontSize: 10 },
     pickerInput: {
         padding: '4px 6px',
         borderRadius: 4,
@@ -841,7 +859,7 @@ const styles: Record<string, React.CSSProperties> = {
         color: 'var(--text-primary)',
         outline: 'none',
         fontSize: 12,
-        width: 118,
+        width: '100%',
         minWidth: 0,
     },
     backLink: {
@@ -853,7 +871,7 @@ const styles: Record<string, React.CSSProperties> = {
         padding: 0,
         flexShrink: 0,
     },
-    libraryLine: { fontSize: 12, lineHeight: 1.7, color: 'var(--text-secondary)' },
+    libraryEmpty: { marginTop: 6, fontSize: 12, color: 'var(--text-muted)' },
     itemList: { marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 },
     // 列宽：勾选框 / 名称（含标记）/ 命令内容 / 分组
     itemHead: {

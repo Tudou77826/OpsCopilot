@@ -18,8 +18,6 @@ const COMMANDS_QBL = QBL_DIR + '\\commands.qbl';
 const OPS_QBL = QBL_DIR + '\\ops.qbl';
 
 const UNSUPPORTED_REASON = '按钮 脚本按钮 的类型为 2，OpsCopilot 暂只支持「发送字符串」类型，已跳过';
-const NEW_GROUP_OPTION = '__new__';
-
 type ExistingCommand = { name: string; content: string; group: string };
 
 function item(overrides: Partial<QuickCommandSetItem> = {}): QuickCommandSetItem {
@@ -128,9 +126,27 @@ async function openReview(host: QuickCommandHost) {
     await screen.findByText('导入预览');
 }
 
-const readValue = (testId: string) => (screen.getByTestId(testId) as HTMLInputElement | HTMLSelectElement).value;
-const optionsOf = (testId: string) =>
-    Array.from((screen.getByTestId(testId) as HTMLSelectElement).options).map((o) => o.value);
+/** 分组选择器的当前显示值：输入态读 value，按钮态读文本（去掉 ▾）。 */
+const pickerText = (testId: string) => {
+    const el = screen.getByTestId(testId);
+    if (el.tagName === 'INPUT') return (el as HTMLInputElement).value;
+    return (el.textContent || '').replace('▾', '').trim();
+};
+
+/** 打开分组选择器并点选一项（菜单项是按钮）。 */
+function chooseFromPicker(testId: string, label: string) {
+    fireEvent.click(screen.getByTestId(testId));
+    fireEvent.click(screen.getByRole('button', { name: label }));
+}
+
+/** 通过「＋ 新建分组…」把分组设成一个新名字。 */
+function pickNewGroup(testId: string, name: string) {
+    fireEvent.click(screen.getByTestId(testId));
+    fireEvent.click(screen.getByRole('button', { name: '＋ 新建分组…' }));
+    fireEvent.change(screen.getByTestId(testId), { target: { value: name } });
+}
+
+const readValue = (testId: string) => (screen.getByTestId(testId) as HTMLInputElement).value;
 
 beforeEach(() => {
     vi.clearAllMocks();
@@ -144,20 +160,6 @@ describe('来源与现状', () => {
         await waitFor(() => expect(detectQuickButtonDirs).toHaveBeenCalledTimes(1));
         expect(await screen.findByText(/Xshell 8/)).toBeInTheDocument();
         expect(screen.getByText(/1 套按钮 \/ 3 条/)).toBeInTheDocument();
-    });
-
-    it('列出 OpsCopilot 现有的分组与条数——落点参考现状的前提', async () => {
-        const { host } = makeHost({}, [
-            { name: '查磁盘', content: 'df -h', group: '普通运维' },
-            { name: '看日志', content: 'tail -f app.log', group: '普通运维' },
-            { name: '看 Pod', content: 'kubectl get pods', group: 'K8S运维' },
-        ]);
-        renderDialog(host);
-
-        const summary = await screen.findByTestId('import-library-summary');
-        expect(summary).toHaveTextContent('共 3 条，2 个分组');
-        expect(summary).toHaveTextContent('普通运维 2');
-        expect(summary).toHaveTextContent('K8S运维 1');
     });
 
     it('OpsCopilot 还没有命令时明确说明会新建分组', async () => {
@@ -198,7 +200,7 @@ describe('落点参考现状', () => {
         await openReview(host);
 
         // 两条可导入命令同内容都命中「普通运维」，集合默认分组因此是它，而不是凭空新建
-        expect(readValue('import-group-0')).toBe('普通运维');
+        expect(pickerText('import-group-0')).toBe('普通运维');
         expect(screen.getByTestId('import-group-hint-0')).toHaveTextContent('将追加到已有分组');
     });
 
@@ -206,7 +208,7 @@ describe('落点参考现状', () => {
         const { host } = makeHost({}, [{ name: '别的', content: 'echo other', group: '普通运维' }]);
         await openReview(host);
 
-        expect(readValue('import-group-0')).toBe('Xshell');
+        expect(pickerText('import-group-0')).toBe('Xshell');
         expect(screen.getByTestId('import-group-hint-0')).toHaveTextContent('将新建分组');
     });
 
@@ -232,40 +234,39 @@ describe('落点参考现状', () => {
         const { host } = makeHost({}, opsLibrary);
         await openReview(host);
 
-        const options = optionsOf('import-group-0');
-        expect(options).toContain('普通运维');
-        expect(options).toContain('K8S运维');
-        expect(options).toContain(NEW_GROUP_OPTION);
+        fireEvent.click(screen.getByTestId('import-group-0'));
+        // 菜单列出全部现有分组，当前值带勾
+        expect(screen.getByRole('button', { name: '✓ 普通运维' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'K8S运维' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '＋ 新建分组…' })).toBeInTheDocument();
 
-        fireEvent.change(screen.getByTestId('import-group-0'), { target: { value: 'K8S运维' } });
-        expect(readValue('import-group-0')).toBe('K8S运维');
+        fireEvent.click(screen.getByRole('button', { name: 'K8S运维' }));
+        expect(pickerText('import-group-0')).toBe('K8S运维');
     });
 
     it('选「＋ 新建分组…」切到输入框，↩ 能回到下拉', async () => {
         const { host } = makeHost({}, opsLibrary);
         await openReview(host);
 
-        fireEvent.change(screen.getByTestId('import-group-0'), { target: { value: NEW_GROUP_OPTION } });
+        pickNewGroup('import-group-0', '我的新分组');
         expect(screen.getByTestId('import-group-0').tagName).toBe('INPUT');
-        fireEvent.change(screen.getByTestId('import-group-0'), { target: { value: '我的新分组' } });
         expect(screen.getByTestId('import-group-hint-0')).toHaveTextContent('将新建分组');
 
         fireEvent.click(screen.getByTestId('import-group-0-back'));
-        expect(screen.getByTestId('import-group-0').tagName).toBe('SELECT');
-        expect(readValue('import-group-0')).toBe('普通运维');
+        expect(screen.getByTestId('import-group-0').tagName).toBe('BUTTON');
+        expect(pickerText('import-group-0')).toBe('普通运维');
     });
 
     it('逐条分组默认跟随集合，也可选现有分组', async () => {
         const { host } = makeHost({}, opsLibrary);
         await openReview(host);
 
-        expect(readValue('import-item-group-0-0')).toBe('');
-        const options = optionsOf('import-item-group-0-0');
-        expect(options[0]).toBe(''); // 跟随集合
-        expect(options).toContain('普通运维');
+        expect(pickerText('import-item-group-0-0')).toBe('跟随集合');
 
-        fireEvent.change(screen.getByTestId('import-item-group-0-0'), { target: { value: 'K8S运维' } });
-        expect(readValue('import-item-group-0-0')).toBe('K8S运维');
+        fireEvent.click(screen.getByTestId('import-item-group-0-0'));
+        expect(screen.getByRole('button', { name: '✓ 跟随集合' })).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'K8S运维' }));
+        expect(pickerText('import-item-group-0-0')).toBe('K8S运维');
     });
 });
 
@@ -314,7 +315,7 @@ describe('命令级明细', () => {
 
         fireEvent.change(screen.getByTestId('import-item-name-0-0'), { target: { value: '跟踪应用日志' } });
         fireEvent.change(screen.getByTestId('import-item-content-0-0'), { target: { value: 'tail -F /var/log/new.log' } });
-        fireEvent.change(screen.getByTestId('import-item-group-0-0'), { target: { value: '日志排查' } });
+        chooseFromPicker('import-item-group-0-0', '日志排查');
         fireEvent.click(screen.getByTestId('import-item-0-1')); // 取消 df
 
         fireEvent.click(screen.getByRole('button', { name: /确认导入/ }));
@@ -398,12 +399,13 @@ describe('集合级', () => {
         // 两套默认同名 → 合并提示
         expect(screen.getByTestId('import-group-hint-0')).toHaveTextContent('将与本批其它集合合并到同一分组');
 
-        fireEvent.change(screen.getByTestId('import-group-1'), { target: { value: '容器命令' } });
+        chooseFromPicker('import-group-1', '容器命令');
         expect(screen.getByTestId('import-group-hint-1')).toHaveTextContent('将追加到已有分组');
         expect(screen.getByTestId('import-group-hint-0')).toHaveTextContent('将新建分组');
 
         // 切到新建但还没输入名字 → 提示不能为空
-        fireEvent.change(screen.getByTestId('import-group-1'), { target: { value: NEW_GROUP_OPTION } });
+        fireEvent.click(screen.getByTestId('import-group-1'));
+        fireEvent.click(screen.getByRole('button', { name: '＋ 新建分组…' }));
         expect(screen.getByTestId('import-group-1').tagName).toBe('INPUT');
         expect(screen.getByTestId('import-group-hint-1')).toHaveTextContent('集合分组不能为空');
     });
@@ -418,8 +420,7 @@ describe('数字必须与实际写入一致', () => {
         expect(screen.getByRole('button', { name: '确认导入 1 条' })).toBeInTheDocument();
 
         // 落到一个新分组：tail 不再与已有命令重复，两条都可导入
-        fireEvent.change(screen.getByTestId('import-group-0'), { target: { value: NEW_GROUP_OPTION } });
-        fireEvent.change(screen.getByTestId('import-group-0'), { target: { value: '全新分组' } });
+        pickNewGroup('import-group-0', '全新分组');
         expect(screen.queryByTestId('import-item-existing-0-0')).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: '确认导入 2 条' })).toBeInTheDocument();
     });
@@ -449,7 +450,7 @@ describe('数字必须与实际写入一致', () => {
         expect(screen.queryByTestId('import-item-existing-0-1')).not.toBeInTheDocument();
         expect(screen.getByTestId('import-item-content-hit-0-1')).toHaveTextContent('已在普通运维');
 
-        fireEvent.change(screen.getByTestId('import-item-group-0-1'), { target: { value: '普通运维' } });
+        chooseFromPicker('import-item-group-0-1', '普通运维');
         expect(screen.getByTestId('import-item-existing-0-1')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: '确认导入' })).toBeInTheDocument();
     });
