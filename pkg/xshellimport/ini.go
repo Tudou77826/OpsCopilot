@@ -86,3 +86,20 @@ func (d *Document) Sections() []string {
 	}
 	return d.order
 }
+
+// Keys 返回某个节下出现过的键名（小写，顺序不保证）。
+// 供"元数据字段缺失时扫描实际存在的键"这类兜底逻辑使用。
+func (d *Document) Keys(section string) []string {
+	if d == nil {
+		return nil
+	}
+	sec, ok := d.sections[strings.ToLower(section)]
+	if !ok {
+		return nil
+	}
+	keys := make([]string, 0, len(sec))
+	for k := range sec {
+		keys = append(keys, k)
+	}
+	return keys
+}
