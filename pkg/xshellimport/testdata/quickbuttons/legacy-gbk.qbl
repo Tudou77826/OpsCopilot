@@ -1,0 +1,33 @@
+[Info]
+Version=6.0
+[QuickButton]
+Button_0_Name=重启 nginx
+Button_0_Param=
+Button_0_Icon=0
+Button_0_Desc=
+Button_0_Type=1
+Button_0_Action=systemctl restart nginx
+Button_1_Name=重载 nginx 配置
+Button_1_Param=
+Button_1_Icon=0
+Button_1_Desc=
+Button_1_Type=1
+Button_1_Action=nginx -s reload
+Button_2_Name=查看错误日志
+Button_2_Param=
+Button_2_Icon=0
+Button_2_Desc=
+Button_2_Type=1
+Button_2_Action=tail -f /var/log/nginx/error.log
+Button_3_Name=磁盘大目录
+Button_3_Param=
+Button_3_Icon=0
+Button_3_Desc=
+Button_3_Type=1
+Button_3_Action=du -sh /* 2>/dev/null | sort -h | tail -20
+Button_4_Name=带分号的值
+Button_4_Param=
+Button_4_Icon=0
+Button_4_Desc=
+Button_4_Type=1
+Button_4_Action=echo a; echo b

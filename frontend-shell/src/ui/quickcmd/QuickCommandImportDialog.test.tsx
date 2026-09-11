@@ -217,7 +217,7 @@ describe('落点参考现状', () => {
         await openReview(host);
 
         // tail 与「看日志」内容相同但名字不同：不算已存在，但要点明它在哪儿
-        expect(screen.getByTestId('import-item-content-hit-0-0')).toHaveTextContent('已在普通运维');
+        expect(screen.getByTestId('import-item-content-hit-0-0')).toHaveTextContent('已在 普通运维');
         expect(screen.queryByTestId('import-item-existing-0-0')).not.toBeInTheDocument();
     });
 
@@ -335,6 +335,28 @@ describe('命令级明细', () => {
         expect(await screen.findByText('导入结果')).toBeInTheDocument();
     });
 
+    it('条数多的集合默认收起，展开后能看到逐条', async () => {
+        const many = Array.from({ length: 30 }, (_, i) => item({ name: `批量任务 ${i + 1}`, content: `sh /opt/ops/task-${i + 1}.sh` }));
+        const { host } = makeHost({
+            analyzeQuickCommandImport: vi.fn(async () =>
+                makeAnalysis({
+                    rows: [row({ name: 'batch-30', buttons: 30, importable: 30, unsupported: 0, items: many })],
+                }),
+            ),
+        });
+        await openReview(host);
+
+        // 默认收起：30 条不该一次性铺开（否则后面的集合要翻很久才够得着）
+        expect(screen.queryByTestId('import-item-0-0')).not.toBeInTheDocument();
+        expect(screen.getByTestId('import-set-toggle-0')).toHaveTextContent('展开（30）');
+        // 汇总与集合头的条数仍然可见
+        expect(screen.getByText(/共 30 条，将导入 30 条/)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByTestId('import-set-toggle-0'));
+        expect(screen.getByTestId('import-item-name-0-0')).toHaveValue('批量任务 1');
+        expect(screen.getByTestId('import-set-toggle-0')).toHaveTextContent('收起');
+    });
+
     it('收起/展开不影响已做的选择', async () => {
         const { host } = makeHost();
         await openReview(host);
@@ -411,6 +433,27 @@ describe('集合级', () => {
     });
 });
 
+describe('空集合', () => {
+    it('没有按钮的集合不显示列头与全选，直接给出说明', async () => {
+        const { host } = makeHost({
+            analyzeQuickCommandImport: vi.fn(async () =>
+                makeAnalysis({
+                    rows: [row({ name: 'empty', buttons: 0, importable: 0, unsupported: 0, items: [] })],
+                }),
+            ),
+        });
+        await openReview(host);
+
+        expect(screen.getByTestId('import-set-empty-0')).toHaveTextContent('没有可导入的命令');
+        // 没有可操作项时不给全选/全不选/展开，免得像一套正常按钮
+        expect(screen.queryByTestId('import-select-all-0')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('import-set-toggle-0')).not.toBeInTheDocument();
+        // 集合本身仍可勾选/取消，落点提示也在
+        expect(screen.getByTestId('import-set-0')).toBeInTheDocument();
+        expect(screen.getByTestId('import-group-hint-0')).toBeInTheDocument();
+    });
+});
+
 describe('数字必须与实际写入一致', () => {
     it('改集合分组后"已存在"实时重算——换了分组就不再是重复', async () => {
         const { host } = makeHost({}, [{ name: 'tail', content: 'tail -f /var/log/app.log', group: 'Xshell' }]);
@@ -448,7 +491,7 @@ describe('数字必须与实际写入一致', () => {
 
         // df 的默认落点是集合分组「日志排查」，那里没有它；把它指回它真正所在的分组才成重复
         expect(screen.queryByTestId('import-item-existing-0-1')).not.toBeInTheDocument();
-        expect(screen.getByTestId('import-item-content-hit-0-1')).toHaveTextContent('已在普通运维');
+        expect(screen.getByTestId('import-item-content-hit-0-1')).toHaveTextContent('已在 普通运维');
 
         chooseFromPicker('import-item-group-0-1', '普通运维');
         expect(screen.getByTestId('import-item-existing-0-1')).toBeInTheDocument();

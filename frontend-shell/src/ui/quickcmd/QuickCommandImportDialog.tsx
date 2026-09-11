@@ -67,6 +67,14 @@ type Library = {
 const DEFAULT_GROUP = 'Xshell';
 
 /**
+ * 超过这个条数的集合默认收起。
+ *
+ * 实测一套 30 条的导出会把弹窗内容撑到 2863px、而可视区只有 589px：后面几套按钮要翻
+ * 很久才够得着。收起后每套只占一行，需要逐条调整时再展开；集合头的条数与落点提示始终可见。
+ */
+const AUTO_EXPAND_LIMIT = 8;
+
+/**
  * 判重键：分组 + 名称 + 内容，三者全同才算同一条命令。
  *
  * 与后端（pkg/xshellimport 的 commandKey、pkg/config 的 quickCommandKey）保持一致。
@@ -423,9 +431,10 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, onClose }) =>
             // 每套按钮的默认分组参考现状：同内容的命令已经在哪个分组，就默认落到那里。
             const initial: Record<string, SetPlan> = {};
             for (const row of result.rows ?? []) {
+                const items = row.items ?? [];
                 initial[row.source] = {
                     included: true,
-                    expanded: true,
+                    expanded: items.length <= AUTO_EXPAND_LIMIT,
                     group: suggestGroup(row.items ?? [], library, row.group || DEFAULT_GROUP),
                     items: (row.items ?? []).map((item) => ({
                         name: item.name,
@@ -643,6 +652,7 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, onClose }) =>
                                         </label>
 
                                         <span style={styles.setActions}>
+                                            {set.items.length > 0 && (<>
                                             <button
                                                 style={styles.linkButton}
                                                 onClick={() => updateSet(row.source, { items: set.items.map((i) => ({ ...i, included: i.supported })) })}
@@ -662,8 +672,9 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, onClose }) =>
                                                 onClick={() => updateSet(row.source, { expanded: !set.expanded })}
                                                 data-testid={`import-set-toggle-${setIndex}`}
                                             >
-                                                {set.expanded ? '收起' : '展开'}
+                                                {set.expanded ? '收起' : `展开（${set.items.length}）`}
                                             </button>
+                                            </>)}
                                         </span>
                                     </div>
 
@@ -685,7 +696,11 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, onClose }) =>
                                         </span>
                                     </div>
 
-                                    {set.expanded && (
+                                    {set.items.length === 0 ? (
+                                        <div style={styles.emptySet} data-testid={`import-set-empty-${setIndex}`}>
+                                            该套按钮里没有可导入的命令（原因见下方提示）
+                                        </div>
+                                    ) : set.expanded && (
                                         <div style={styles.itemList}>
                                             <div style={styles.itemHead}>
                                                 <span />
@@ -727,7 +742,7 @@ const QuickCommandImportDialog: React.FC<Props> = ({ isOpen, host, onClose }) =>
                                                                     title={`OpsCopilot 的该分组里已有同内容的命令（名称可能不同），可取消勾选或改名称`}
                                                                     data-testid={`import-item-content-hit-${setIndex}-${itemIndex}`}
                                                                 >
-                                                                    已在{setEval.contentHit[itemIndex]}
+                                                                    已在 {setEval.contentHit[itemIndex]}
                                                                 </span>
                                                             )}
                                                         </span>
@@ -875,7 +890,9 @@ const styles: Record<string, React.CSSProperties> = {
         flexShrink: 0,
     },
     libraryEmpty: { marginTop: 6, fontSize: 12, color: 'var(--text-muted)' },
-    itemList: { marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 },
+    // 高度上限 + 内部滚动：一套 30 条时不要让整个弹窗被撑长，集合头始终留在视野里
+    itemList: { marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 232, overflowY: 'auto' },
+    emptySet: { marginTop: 6, fontSize: 12, color: 'var(--text-muted)' },
     // 列宽：勾选框 / 名称（含标记）/ 命令内容 / 分组
     itemHead: {
         display: 'grid',
