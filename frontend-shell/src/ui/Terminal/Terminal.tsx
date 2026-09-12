@@ -14,6 +14,7 @@ import { parseTimestamp, TimestampResult } from '../timestampParser';
 import { SearchController } from './search/SearchController';
 import { RuleHighlightController } from './highlight/RuleHighlightController';
 import { Theme } from '../appearanceTypes';
+import { currentTheme } from '../appearance';
 import { DEFAULT_THEME } from '../appearance';
 import { getTerminalTheme } from '../terminalSchemes';
 import { AnsiBackgroundFilter } from './ansiBgFilter';
@@ -47,7 +48,7 @@ export interface TerminalRef {
 
 const NOOP_RUNTIME: TerminalRuntime = { resize: () => undefined };
 
-const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionID, onData, completionDelay = 150, terminalConfig, onFontSizeChange, highlightRules, theme = DEFAULT_THEME, onSelectionParsed, runtime = NOOP_RUNTIME }, ref) => {
+const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionID, onData, completionDelay = 150, terminalConfig, onFontSizeChange, highlightRules, theme = currentTheme(), onSelectionParsed, runtime = NOOP_RUNTIME }, ref) => {
     const terminalRef = useRef<HTMLDivElement>(null);
     // 组件最外层容器（含 xterm 宿主与搜索面板），用于限定 Esc 等全局
     // 按键的事件来源范围。
@@ -618,7 +619,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         const fitAddon = new FitAddon();
         term.loadAddon(fitAddon);
         if (terminalConfig?.search_enabled ?? true) {
-            searchControllerRef.current = new SearchController(term, results => {
+            searchControllerRef.current = new SearchController(term, () => themeRef.current, results => {
                 if (results.limitReached) {
                     setSearchCountText(`${results.resultCount}+`);
                 } else if (results.resultCount === 0) {

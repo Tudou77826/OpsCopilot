@@ -270,7 +270,7 @@ const styles: Record<string, React.CSSProperties> = {
         right: 0,
         bottom: 0,
         zIndex: 3500,
-        backgroundColor: 'rgba(0, 0, 0, 0.4)',
+        backgroundColor: 'var(--scrim-soft)',
     },
     container: {
         position: 'fixed',
@@ -282,7 +282,7 @@ const styles: Record<string, React.CSSProperties> = {
         backgroundColor: 'var(--bg-primary)',
         border: '1px solid var(--border)',
         borderRadius: '10px',
-        boxShadow: '0 12px 40px rgba(0, 0, 0, 0.7)',
+        boxShadow: 'var(--shadow-dialog)',
         overflow: 'hidden',
         color: 'var(--text-secondary)',
         display: 'flex',

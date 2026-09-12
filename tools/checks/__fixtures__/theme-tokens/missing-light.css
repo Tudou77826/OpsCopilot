@@ -1,0 +1,10 @@
+/* 门禁 fixture：--shadow 是投影令牌，缺亮色覆写必须报错。 */
+:root {
+  --bg-primary: #1e1e1e;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --scrollbar-size: 10px;
+}
+
+:root[data-theme="light"] {
+  --bg-primary: #fffdf8;
+}

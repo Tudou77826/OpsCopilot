@@ -347,15 +347,15 @@ const GuidePanel: React.FC<{ open: boolean; onToggle: () => void }> = ({ open, o
 // 会话导入特有的样式；公共部分（外壳、分区、数字网格、提示列表）在 ui/common/ImportParts。
 const styles: Record<string, React.CSSProperties> = {
     statusBanner: { padding: '10px 12px', borderRadius: 6, fontSize: 13 },
-    statusOk: { backgroundColor: 'rgba(64, 160, 96, 0.12)', color: 'var(--text-primary)', border: '1px solid var(--success)' },
-    statusWarn: { backgroundColor: 'rgba(200, 150, 60, 0.12)', color: 'var(--text-primary)', border: '1px solid var(--warning)' },
+    statusOk: { backgroundColor: 'var(--success-bg-subtle)', color: 'var(--text-primary)', border: '1px solid var(--success)' },
+    statusWarn: { backgroundColor: 'var(--warning-bg-subtle)', color: 'var(--text-primary)', border: '1px solid var(--warning)' },
     statusDetail: { color: 'var(--text-muted)', marginLeft: 6 },
     hintBox: {
         marginTop: 10,
         fontSize: 12,
         lineHeight: 1.6,
         color: 'var(--text-secondary)',
-        backgroundColor: 'rgba(200, 150, 60, 0.10)',
+        backgroundColor: 'var(--warning-bg-subtle)',
         border: '1px solid var(--warning)',
         borderRadius: 6,
         padding: '8px 10px',

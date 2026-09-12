@@ -123,7 +123,7 @@ const styles: Record<string, React.CSSProperties> = {
         padding: '10px 14px',
         backgroundColor: 'var(--bg-tooltip)',
         borderRadius: 6,
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
+        boxShadow: '0 4px 16px var(--shadow)',
         color: 'var(--text-on-accent)',
         fontSize: 13,
         lineHeight: 1.4,

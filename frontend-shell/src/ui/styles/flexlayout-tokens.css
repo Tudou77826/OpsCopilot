@@ -1,0 +1,129 @@
+/* FlexLayout 主题映射。
+   把第三方库的调色板接到 OpsCopilot 的语义令牌上，取代原来的 flexlayout-dark.css +
+   无条件引入的 flexlayout-react/style/dark.css：后者在亮色下留下黑底弹层、黑色拖拽预览等
+   未覆盖的暗色面，且浮窗规则写的类名（.flexlayout__floating_window）不对应库里任何类名。
+
+   做法与理由：
+   - 结构基座换成库的 light.css（与 dark.css 结构一致、非颜色变量取值相同），
+     颜色全部由本文件覆写；两套文件的差异（暗色独有的 tab 圆角、inset 阴影、
+     tabset-maximized 渐变）随之消失，不再需要 !important 压制。
+   - 库把调色板声明在 .flexlayout__layout 上，本文件用同选择器、靠后声明覆盖，权重相同即可生效。
+   - 库的 --color-* 分两层：基色（--color-1..6 等）与指向基色的别名。两层都显式映射，
+     使库升级新增别名时不会漏回库自带色值（flexlayoutTokens.test.ts 会枚举校验）。
+   - 皮肤块只映射 OpsCopilot 自己的令牌，这里不引用宿主 --ui-*，因此皮肤对 FlexLayout 同样生效。 */
+
+.flexlayout__layout {
+  /* 基色 */
+  --color-text: var(--text-primary);
+  --color-background: var(--bg-primary);
+  --color-base: var(--bg-primary);
+  --color-1: var(--bg-secondary);
+  --color-2: var(--bg-hover);
+  --color-3: var(--bg-elevated);
+  --color-4: var(--border);
+  --color-5: var(--bg-tertiary);
+  --color-6: var(--border);
+  --color-drag1: var(--accent);
+  --color-drag2: var(--success);
+  --color-drag1-background: var(--accent-soft);
+  --color-drag2-background: var(--success-bg-subtle);
+  --color-overflow: var(--text-tertiary);
+  --color-icon: var(--text-muted);
+  --color-drag-rect-border: var(--border-strong);
+  --color-edge-marker: var(--accent);
+  --color-edge-icon: var(--text-on-accent);
+  --color-mini-scroll-indicator: var(--border-strong);
+  --color-mini-scroll-indicator-hovered: var(--text-muted);
+
+  /* 库在亮/暗两套里把同名别名指向不同基色，这里统一到我们的语义 */
+  --color-tabset-background: var(--bg-secondary);
+  --color-tabset-background-selected: var(--bg-secondary);
+  --color-tabset-background-maximized: var(--bg-secondary);
+  --color-tabset-divider-line: var(--border);
+  --color-border-tab-content: var(--bg-primary);
+  --color-border-background: var(--bg-secondary);
+  --color-border-divider-line: var(--border);
+  --color-tab-content: var(--bg-primary);
+  --color-tab-selected: var(--text-primary);
+  --color-tab-selected-background: var(--bg-primary);
+  --color-tab-unselected: var(--text-tertiary);
+  --color-tab-unselected-background: transparent;
+  --color-tab-textbox: var(--text-primary);
+  --color-tab-textbox-background: var(--bg-input);
+  --color-border-tab-selected: var(--text-primary);
+  --color-border-tab-selected-background: var(--bg-primary);
+  --color-border-tab-unselected: var(--text-tertiary);
+  --color-border-tab-unselected-background: var(--bg-secondary);
+  --color-splitter: var(--border);
+  --color-splitter-hover: var(--accent);
+  --color-splitter-drag: var(--accent);
+  --color-splitter-handle: var(--border-strong);
+  --color-drag-rect: var(--text-primary);
+  --color-drag-rect-background: var(--bg-tertiary);
+  --color-popup-border: var(--border);
+  --color-popup-unselected: var(--text-primary);
+  --color-popup-unselected-background: var(--bg-elevated);
+  --color-popup-selected: var(--text-primary);
+  --color-popup-selected-background: var(--bg-hover);
+  --color-toolbar-button-hover: var(--bg-hover);
+  --color-float-window-header-background: var(--bg-secondary);
+}
+
+/* 库变量表达不了的结构规则，自 flexlayout-dark.css 原样迁入（保留 !important，避免改动几何）。 */
+.flexlayout__layout {
+  background: transparent;
+  height: 100%;
+}
+
+.flexlayout__tabset_header {
+  display: none !important;
+}
+
+.flexlayout__tab_button {
+  border-right: none;
+  padding: 2px 10px !important;
+  font-size: 12px !important;
+}
+
+.flexlayout__tabset_content {
+  border-top: none !important;
+}
+
+.flexlayout__tab_toolbar_button-float {
+  display: none !important;
+}
+
+.flexlayout__tab_toolbar_button-maximize {
+  display: none !important;
+}
+
+/* 产品自己的修饰类：库没有 --disconnected，断线标签需要显式状态色。 */
+.flexlayout__tab_button--disconnected {
+  background: var(--danger-bg-subtle);
+  color: var(--severity-danger);
+}
+
+/* 标签工具栏与关闭按钮的悬停态 */
+.flexlayout__tab_toolbar_button {
+  color: var(--text-muted);
+}
+
+.flexlayout__tab_toolbar_button:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.flexlayout__tab_button_trailing {
+  color: var(--text-secondary);
+}
+
+.flexlayout__tab_button_trailing:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* 边缘停靠指示 */
+.flexlayout__edge_rect {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+}

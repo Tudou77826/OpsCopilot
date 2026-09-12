@@ -46,10 +46,10 @@ const Switch: React.FC<SwitchProps> = ({ checked, onChange, disabled = false, si
     width: s.thumbW,
     height: s.thumbH,
     backgroundColor: 'var(--text-primary)',
-    borderRadius: '50%',
+    borderRadius: 'var(--radius-circle)',
     transition: 'transform 0.25s ease',
     transform: checked ? `translateX(${s.slide}px)` : 'translateX(0)',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+    boxShadow: '0 1px 3px var(--shadow)',
   };
 
   const inputStyle: React.CSSProperties = {

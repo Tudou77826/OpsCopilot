@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "lint:style": "node ../tools/checks/check-style-tokens.mjs frontend/src"
   },
   "dependencies": {
     "@opscopilot/shell-terminal": "file:../frontend-shell",

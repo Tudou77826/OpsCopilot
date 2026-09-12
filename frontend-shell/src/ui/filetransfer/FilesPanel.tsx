@@ -2508,7 +2508,7 @@ const styles: Record<string, React.CSSProperties> = {
         border: '1px solid var(--border-subtle)',
         borderRadius: '6px',
         backgroundColor: 'var(--bg-tertiary)',
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)'
+        boxShadow: 'inset 0 1px 0 var(--layer-hairline)'
     },
     segmented: {
         display: 'flex',
@@ -2533,7 +2533,7 @@ const styles: Record<string, React.CSSProperties> = {
         border: 'none',
         borderRight: '1px solid var(--border)',
         backgroundColor: 'var(--bg-active)',
-        color: 'var(--text-on-accent)',
+        color: 'var(--text-primary)',
         cursor: 'pointer',
         fontSize: '12px',
         fontWeight: 600
@@ -2638,7 +2638,7 @@ const styles: Record<string, React.CSSProperties> = {
         minHeight: 0,
         minWidth: 0,
         backgroundColor: 'var(--bg-primary)',
-        boxShadow: '0 1px 0 rgba(255,255,255,0.03)'
+        boxShadow: '0 1px 0 var(--layer-hairline)'
     },
     paneTitle: {
         color: 'var(--text-primary)',

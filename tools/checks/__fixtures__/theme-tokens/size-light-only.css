@@ -1,0 +1,9 @@
+/* 尺寸令牌被写进亮色块：尺寸与明暗无关，检查 4 应报失败。 */
+:root {
+  --bg-primary: #111111;
+}
+
+:root[data-theme="light"] {
+  --bg-primary: #ffffff;
+  --space-8: 8px;
+}

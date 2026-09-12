@@ -24,27 +24,29 @@ export const colors = {
 } as const;
 
 // ---- Border Radius ----
+// 值是 shell-theme.css 的尺寸令牌，不是像素；所有使用者（含桌面旧设置页）因此自动跟随皮肤。
 export const radius = {
-  sm: '4px',
-  md: '6px',
-  lg: '8px',
-  full: '20px',
+  xs: 'var(--radius-xs)',
+  sm: 'var(--radius-sm)',
+  md: 'var(--radius-md)',
+  lg: 'var(--radius-lg)',
+  full: 'var(--radius-full)',
 } as const;
 
 // ---- Font Sizes ----
 export const font = {
-  xs: '11px',
-  sm: '12px',
-  base: '13px',
-  lg: '14px',
-  xl: '18px',
+  xs: 'var(--font-size-xs)',
+  sm: 'var(--font-size-sm)',
+  base: 'var(--font-size-base)',
+  lg: 'var(--font-size-lg)',
+  xl: 'var(--font-size-xl)',
 } as const;
 
 // ---- Shared Component Styles ----
 import React from 'react';
 
 export const inputStyle: React.CSSProperties = {
-  padding: '8px 12px',
+  padding: 'var(--space-8) var(--space-12)',
   borderRadius: radius.sm,
   border: `1px solid ${colors.borderPrimary}`,
   backgroundColor: colors.bgPrimary,
@@ -54,7 +56,7 @@ export const inputStyle: React.CSSProperties = {
 };
 
 export const btnPrimary: React.CSSProperties = {
-  padding: '8px 16px',
+  padding: 'var(--space-8) var(--space-16)',
   borderRadius: radius.sm,
   border: 'none',
   backgroundColor: colors.accent,
@@ -65,7 +67,7 @@ export const btnPrimary: React.CSSProperties = {
 };
 
 export const btnSecondary: React.CSSProperties = {
-  padding: '8px 16px',
+  padding: 'var(--space-8) var(--space-16)',
   borderRadius: radius.sm,
   border: `1px solid ${colors.borderPrimary}`,
   backgroundColor: colors.bgHover,
@@ -75,7 +77,7 @@ export const btnSecondary: React.CSSProperties = {
 };
 
 export const btnSmall: React.CSSProperties = {
-  padding: '4px 10px',
+  padding: 'var(--space-4) var(--space-10)',
   borderRadius: radius.sm,
   border: `1px solid ${colors.borderPrimary}`,
   backgroundColor: colors.bgHover,
@@ -85,7 +87,7 @@ export const btnSmall: React.CSSProperties = {
 };
 
 export const btnDanger: React.CSSProperties = {
-  padding: '4px 10px',
+  padding: 'var(--space-4) var(--space-10)',
   borderRadius: radius.sm,
   border: '1px solid var(--danger-border)',
   backgroundColor: 'transparent',
@@ -95,7 +97,7 @@ export const btnDanger: React.CSSProperties = {
 };
 
 export const btnGhost: React.CSSProperties = {
-  padding: '6px 12px',
+  padding: 'var(--space-6) var(--space-12)',
   borderRadius: radius.sm,
   border: '1px solid var(--border-strong)',
   backgroundColor: 'transparent',
@@ -105,7 +107,7 @@ export const btnGhost: React.CSSProperties = {
 };
 
 export const sectionCard: React.CSSProperties = {
-  padding: '16px',
+  padding: 'var(--space-16)',
   backgroundColor: colors.bgPrimary,
   borderRadius: radius.md,
   border: `1px solid ${colors.borderPrimary}`,
@@ -152,7 +154,7 @@ export const modalContainer: React.CSSProperties = {
 };
 
 export const modalHeader: React.CSSProperties = {
-  padding: '16px 24px',
+  padding: 'var(--space-16) var(--space-24)',
   borderBottom: `1px solid ${colors.borderPrimary}`,
   display: 'flex',
   justifyContent: 'space-between',
@@ -162,7 +164,7 @@ export const modalHeader: React.CSSProperties = {
 
 export const modalTitle: React.CSSProperties = {
   margin: 0,
-  fontSize: '1.1rem',
+  fontSize: 'var(--font-size-modal-title)',
   color: colors.textPrimary,
   fontWeight: 600,
 };
@@ -171,11 +173,11 @@ export const modalCloseBtn: React.CSSProperties = {
   background: 'none',
   border: 'none',
   color: colors.textSecondary,
-  fontSize: '1.5rem',
+  fontSize: 'var(--font-size-modal-close)',
   cursor: 'pointer',
   padding: '0',
   width: '32px',
-  height: '32px',
+  height: 'var(--space-32)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -188,31 +190,31 @@ export const pageContainer: React.CSSProperties = {
   width: '100%',
   maxWidth: '1100px',
   margin: '0 auto',
-  padding: '20px 40px 32px',
+  padding: 'var(--space-20) var(--space-40) var(--space-32)',
   boxSizing: 'border-box' as const,
   display: 'flex',
   flexDirection: 'column',
-  gap: '24px',
+  gap: 'var(--space-24)',
 };
 
 // 页面顶部大标题 + 描述 + 分隔线（orca SettingsSection 头部）
 export const pageHeader: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  gap: '6px',
-  paddingBottom: '18px',
+  gap: 'var(--space-6)',
+  paddingBottom: 'var(--space-18)',
   borderBottom: `1px solid ${colors.borderPrimary}`,
 };
 
 export const pageTitle: React.CSSProperties = {
   margin: 0,
-  fontSize: '1.6rem',
+  fontSize: 'var(--font-size-page-title)',
   fontWeight: 600,
   color: colors.textPrimary,
   lineHeight: 1.3,
   display: 'flex',
   alignItems: 'center',
-  gap: '10px',
+  gap: 'var(--space-10)',
 };
 
 export const pageDesc: React.CSSProperties = {
@@ -226,17 +228,17 @@ export const settingsCard: React.CSSProperties = {
   backgroundColor: 'var(--bg-dialog)',
   borderRadius: radius.lg,
   border: `1px solid ${colors.borderPrimary}`,
-  padding: '24px 28px',
+  padding: 'var(--space-24) var(--space-28)',
   display: 'flex',
   flexDirection: 'column',
-  gap: '4px',
+  gap: 'var(--space-4)',
 };
 
 // 卡片内小标题
 export const cardTitle: React.CSSProperties = {
   ...sectionTitle,
   fontSize: font.lg,
-  marginBottom: '6px',
+  marginBottom: 'var(--space-6)',
 };
 
 // 两列设置行：左 label+desc（固定宽度），右 control（自适应填充）
@@ -244,8 +246,8 @@ export const cardTitle: React.CSSProperties = {
 export const settingRow: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  gap: '24px',
-  padding: '12px 0',
+  gap: 'var(--space-24)',
+  padding: 'var(--space-12) 0',
 };
 
 export const settingRowTop: React.CSSProperties = {
@@ -258,7 +260,7 @@ export const settingRowLeft: React.CSSProperties = {
   flexShrink: 0,
   display: 'flex',
   flexDirection: 'column',
-  gap: '4px',
+  gap: 'var(--space-4)',
 };
 
 export const settingRowRight: React.CSSProperties = {
@@ -266,7 +268,7 @@ export const settingRowRight: React.CSSProperties = {
   minWidth: 0,
   display: 'flex',
   alignItems: 'center',
-  gap: '10px',
+  gap: 'var(--space-10)',
   flexWrap: 'wrap' as const,
 };
 
@@ -281,7 +283,7 @@ export const settingRowDesc: React.CSSProperties = {
 // ---- 侧边栏导航 ----
 // 分组小标题（orca：11px uppercase 字母间距 muted）
 export const navGroupTitle: React.CSSProperties = {
-  margin: '0 12px 6px',
+  margin: '0 var(--space-12) var(--space-6)',
   fontSize: font.xs,
   fontWeight: 600,
   color: colors.textTertiary,
@@ -293,9 +295,9 @@ export const navItem: React.CSSProperties = {
   position: 'relative' as const,
   display: 'flex',
   alignItems: 'center',
-  gap: '10px',
+  gap: 'var(--space-10)',
   width: '100%',
-  padding: '8px 12px',
+  padding: 'var(--space-8) var(--space-12)',
   cursor: 'pointer',
   fontSize: font.base,
   color: colors.textSecondary,
@@ -316,7 +318,7 @@ export const navItemActive: React.CSSProperties = {
 export const cardDivider: React.CSSProperties = {
   height: 1,
   backgroundColor: colors.borderSubtle,
-  margin: '8px 0',
+  margin: 'var(--space-8) 0',
 };
 
 // 两列行内的输入框：flex 填充右列（左缘/右缘与其它行完全对齐），大屏封顶 520px

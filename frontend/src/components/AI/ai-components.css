@@ -42,7 +42,7 @@
     padding: 2px 5px;
     border-radius: 3px;
     background: var(--bg-primary);
-    color: var(--teal-fg, #4ec9b0);
+    color: var(--teal-fg);
     font-family: var(--font-mono);
     font-size: .9em;
 }
@@ -259,7 +259,7 @@
     overflow-x: auto;
     border: 1px solid var(--border-subtle);
     border-radius: 4px;
-    background: color-mix(in srgb, var(--bg-primary) 82%, #000);
+    background: var(--bg-sunken);
     color: var(--stage-orange);
     font: 11.5px/1.55 var(--font-mono);
     white-space: pre-wrap;
@@ -388,7 +388,7 @@
 .sidebar-troubleshoot,
 .sidebar-chat {
     min-width: 390px;
-    box-shadow: -12px 0 34px rgb(0 0 0 / 12%);
+    box-shadow: -12px 0 34px var(--shadow);
 }
 .sidebar-troubleshoot .sidebar-header,
 .sidebar-chat .sidebar-header {
@@ -452,7 +452,7 @@
     background:
         linear-gradient(145deg, color-mix(in srgb, var(--stage-blue) 13%, var(--bg-elevated)), var(--bg-primary));
     color: var(--stage-blue);
-    box-shadow: 0 12px 30px rgb(0 0 0 / 18%), inset 0 1px rgb(255 255 255 / 5%);
+    box-shadow: 0 12px 30px var(--shadow), inset 0 1px var(--layer-1);
     font: 700 13px var(--font-mono);
     letter-spacing: .08em;
 }
@@ -588,7 +588,7 @@
     background:
         linear-gradient(145deg, color-mix(in srgb, var(--stage-blue) 20%, var(--bg-elevated)), color-mix(in srgb, var(--stage-blue) 10%, var(--bg-primary)));
     color: var(--text-primary);
-    box-shadow: 0 6px 18px rgb(0 0 0 / 10%);
+    box-shadow: 0 6px 18px var(--shadow);
     font-size: 12px;
     line-height: 1.55;
     word-break: break-word;
@@ -696,7 +696,7 @@
     border-radius: 8px;
     background: color-mix(in srgb, var(--bg-input) 88%, var(--bg-primary));
     color: var(--text-primary);
-    box-shadow: inset 0 1px rgb(255 255 255 / 2%);
+    box-shadow: inset 0 1px var(--layer-hairline);
 }
 .ai-stop-confirmation-input input {
     width: 100%;
@@ -709,7 +709,7 @@
 .ai-stop-confirmation-input input::placeholder { color: var(--text-disabled); }
 .ai-stop-confirmation-input input:focus {
     border-color: color-mix(in srgb, var(--stage-blue) 72%, var(--border));
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--stage-blue) 8%, transparent), inset 0 1px rgb(255 255 255 / 3%);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--stage-blue) 8%, transparent), inset 0 1px var(--layer-hairline);
 }
 .ai-stop-polish-button {
     display: inline-flex;
@@ -757,8 +757,8 @@
     color: var(--text-primary);
 }
 .ai-stop-confirmation-actions button.is-primary {
-    border-color: color-mix(in srgb, var(--accent) 82%, #fff 7%);
-    background: color-mix(in srgb, var(--accent) 88%, #fff 4%);
+    border-color: color-mix(in srgb, var(--accent) 82%, var(--text-on-accent) 7%);
+    background: color-mix(in srgb, var(--accent) 88%, var(--text-on-accent) 4%);
     color: var(--text-on-accent);
     box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 20%, transparent);
 }
@@ -772,13 +772,13 @@
     border-color: color-mix(in srgb, var(--border-strong) 76%, transparent);
     border-radius: 10px;
     background: color-mix(in srgb, var(--bg-input) 88%, var(--bg-primary));
-    box-shadow: inset 0 1px rgb(255 255 255 / 2%);
+    box-shadow: inset 0 1px var(--layer-hairline);
 }
 .ai-composer-shell:focus-within {
     border-color: color-mix(in srgb, var(--stage-blue) 72%, var(--border));
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--stage-blue) 8%, transparent), inset 0 1px rgb(255 255 255 / 3%);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--stage-blue) 8%, transparent), inset 0 1px var(--layer-hairline);
 }
-.ai-composer-send { border-radius: 7px; background: color-mix(in srgb, var(--accent) 84%, #fff 5%); }
+.ai-composer-send { border-radius: 7px; background: color-mix(in srgb, var(--accent) 84%, var(--text-on-accent) 5%); }
 .ai-composer-send:not(:disabled):hover { filter: brightness(1.08); }
 
 .ai-trace {
@@ -788,7 +788,7 @@
     background:
         linear-gradient(135deg, color-mix(in srgb, var(--stage-blue) 5%, transparent), transparent 45%),
         color-mix(in srgb, var(--bg-primary) 76%, transparent);
-    box-shadow: inset 0 1px rgb(255 255 255 / 2%);
+    box-shadow: inset 0 1px var(--layer-hairline);
 }
 .ai-trace-header { min-height: 39px; padding: 0 11px; }
 .ai-trace-title { font-weight: 550; }
@@ -810,7 +810,7 @@
     background:
         linear-gradient(135deg, color-mix(in srgb, var(--stage-blue) 3%, transparent), transparent 45%),
         color-mix(in srgb, var(--bg-primary) 88%, var(--bg-secondary));
-    box-shadow: 0 7px 20px rgb(0 0 0 / 8%);
+    box-shadow: 0 7px 20px var(--shadow);
 }
 .ai-command-card:hover { border-color: color-mix(in srgb, var(--stage-blue) 28%, var(--border-strong)); transform: translateY(-1px); }
 .ai-command-header { min-height: 37px; padding: 8px 10px 6px; }
@@ -819,8 +819,8 @@
     padding: 10px 11px;
     border-color: color-mix(in srgb, var(--border) 75%, transparent);
     border-radius: 6px;
-    background: color-mix(in srgb, var(--bg-primary) 70%, #000 30%);
-    color: #d7ba7d;
+    background: var(--bg-sunken);
+    color: var(--stage-orange);
 }
 .ai-command-actions button { border-radius: 5px; background: color-mix(in srgb, var(--bg-tertiary) 80%, transparent); }
 .ai-command-actions .ai-command-type { font-weight: 550; }

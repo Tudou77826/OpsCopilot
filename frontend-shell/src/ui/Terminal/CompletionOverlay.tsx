@@ -140,7 +140,7 @@ const styles = {
         backgroundColor: 'var(--bg-secondary)',
         border: '1px solid var(--border)',
         borderRadius: '4px',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+        boxShadow: '0 4px 12px var(--shadow)',
         zIndex: 3000,
         minWidth: '300px',
         maxWidth: '500px',

@@ -704,6 +704,7 @@ const styles: Record<string, React.CSSProperties> = {
         height: 42,
         borderRadius: radius.md,
         flexShrink: 0,
+        filter: 'var(--brand-logo-filter)',
     },
     productMain: {
         display: 'flex',
@@ -917,7 +918,7 @@ const styles: Record<string, React.CSSProperties> = {
         overflow: 'hidden',
         backgroundColor: colors.bgPrimary,
         border: `1px solid ${colors.borderPrimary}`,
-        boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.02)',
+        boxShadow: 'inset 0 1px 0 var(--layer-hairline)',
     },
     releaseCardNormal: {
         // 普通（历史）版本卡片
@@ -1022,7 +1023,7 @@ const styles: Record<string, React.CSSProperties> = {
     aiChip: {
         fontSize: '10px',
         fontWeight: 700,
-        color: 'var(--text-on-accent, #fff)',
+        color: 'var(--text-on-accent)',
         backgroundColor: colors.accent,
         borderRadius: radius.sm,
         padding: '1px 6px',

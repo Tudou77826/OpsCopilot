@@ -158,7 +158,7 @@ const styles = {
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        backgroundColor: 'var(--scrim-strong)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -172,7 +172,7 @@ const styles = {
         maxHeight: '90vh',
         display: 'flex',
         flexDirection: 'column' as const,
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+        boxShadow: '0 4px 6px var(--shadow)',
         color: 'var(--text-primary)',
     },
     header: {

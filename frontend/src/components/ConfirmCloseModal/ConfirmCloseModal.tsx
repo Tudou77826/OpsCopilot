@@ -51,7 +51,7 @@ const styles = {
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+        backgroundColor: 'var(--scrim-heavy)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -64,7 +64,7 @@ const styles = {
         width: '460px',
         maxWidth: '90%',
         borderRadius: '8px',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)',
+        boxShadow: 'var(--shadow-dialog)',
         border: '1px solid var(--border)',
         animation: 'slideIn 0.2s ease-out',
     },
@@ -79,7 +79,7 @@ const styles = {
     },
     warningIcon: {
         fontSize: '48px',
-        filter: 'drop-shadow(0 2px 4px rgba(255, 152, 0, 0.3))',
+        filter: 'drop-shadow(0 2px 4px color-mix(in srgb, var(--warning) 30%, transparent))',
     },
     title: {
         margin: 0,

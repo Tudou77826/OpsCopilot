@@ -599,7 +599,7 @@ const styles = {
         fontSize: '13px',
         fontWeight: '500',
         transition: 'all 0.2s ease',
-        boxShadow: '0 2px 8px rgba(0, 122, 204, 0.3)',
+        boxShadow: '0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent)',
     },
     stopButtonIcon: {
         fontSize: '16px',
@@ -623,7 +623,7 @@ const styles = {
         fontSize: '13px',
         fontWeight: '500',
         transition: 'all 0.2s ease',
-        boxShadow: '0 2px 8px rgba(244, 67, 54, 0.3)',
+        boxShadow: '0 2px 8px color-mix(in srgb, var(--danger) 30%, transparent)',
     },
     cancelButtonIcon: {
         fontSize: '16px',

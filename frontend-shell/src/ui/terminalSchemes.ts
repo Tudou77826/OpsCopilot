@@ -1,4 +1,5 @@
 import { ITheme } from '@xterm/xterm';
+import { ISearchDecorationOptions } from '@xterm/addon-search';
 import { Theme } from './appearanceTypes';
 
 /**
@@ -76,3 +77,40 @@ export const terminalSchemes: Record<Theme, ITheme> = {
 
 /** 返回当前主题对应的终端配色方案 */
 export const getTerminalTheme = (theme: Theme): ITheme => terminalSchemes[theme] ?? darkScheme;
+
+/**
+ * 终端搜索命中的高亮配色，随主题切换。
+ * 这也是 xterm 的配色数据（需要具体色值，不能用 CSS 变量），所以与终端配色放在同一处。
+ * 暗色那套（橄榄底 + 琥珀边）在亮色终端上不可读，故亮色另给一套浅底深边。
+ */
+export const terminalSearchDecorations: Record<Theme, ISearchDecorationOptions> = {
+    dark: {
+        matchBackground: '#665c00',
+        matchBorder: '#d7ba00',
+        matchOverviewRuler: '#d7ba00',
+        // 亮琥珀底配浅灰前景只有 1.45，当前匹配基本读不出来；改深琥珀底 + 亮边框定位。
+        activeMatchBackground: '#7a4a00',
+        activeMatchBorder: '#ffd75f',
+        activeMatchColorOverviewRuler: '#f59e0b',
+    },
+    light: {
+        matchBackground: '#ffe08a',
+        matchBorder: '#8a5a00',
+        matchOverviewRuler: '#8a5a00',
+        activeMatchBackground: '#f0a020',
+        activeMatchBorder: '#5c3a00',
+        activeMatchColorOverviewRuler: '#8a5a00',
+    },
+};
+
+export const getTerminalSearchDecorations = (theme: Theme): ISearchDecorationOptions =>
+    terminalSearchDecorations[theme] ?? terminalSearchDecorations.dark;
+
+/** 新建高亮规则的默认前景/背景，随主题切换（原先写死深蓝底白字，亮色终端下突兀）。 */
+export const terminalHighlightDefaults: Record<Theme, { background_color: string; color: string }> = {
+    dark: { background_color: '#1d3a5a', color: '#ffffff' },
+    light: { background_color: '#fff3c4', color: '#5c4700' },
+};
+
+export const getTerminalHighlightDefaults = (theme: Theme) =>
+    terminalHighlightDefaults[theme] ?? terminalHighlightDefaults.dark;

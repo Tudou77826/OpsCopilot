@@ -1,0 +1,4 @@
+.flexlayout__layout {
+  --color-text: var(--text-primary);
+  --color-background: var(--bg-primary);
+}

@@ -1,0 +1,6 @@
+.flexlayout__layout {
+  --color-text: black;
+  --color-background: white;
+  --color-popup-selected-background: var(--color-3);
+  --font-size: medium;
+}

@@ -93,8 +93,8 @@ const GroupStrip: React.FC<GroupStripProps> = ({ groups, selectedGroup, onSelect
                                     ...(isFront ? {
                                         ...styles.itemFront,
                                         boxShadow: hoveredGroup === g
-                                            ? '0 0 12px rgba(0,122,204,0.3)'
-                                            : '0 2px 6px rgba(0,122,204,0.2)',
+                                            ? '0 0 12px color-mix(in srgb, var(--accent) 30%, transparent)'
+                                            : '0 2px 6px color-mix(in srgb, var(--accent) 20%, transparent)',
                                         cursor: 'default',
                                     } : {
                                         color: hoveredGroup === g ? 'var(--text-muted)' : 'var(--text-disabled)',

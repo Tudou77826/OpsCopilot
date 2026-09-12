@@ -79,6 +79,8 @@
 
 另有一处已核实的类名不匹配：本地覆盖写的是 `.flexlayout__floating_window`（`flexlayout-dark.css:91`），而库定义的是 `.flexlayout__float_window`（第三方 `dark.css:672`）。本地选择器不对应任何库类名，浮窗及其标题栏、内容区的样式实际从未被覆盖。
 
+再补一条核实到的事实，它决定了修法：**库的两套调色板声明在同一个选择器 `.flexlayout__layout` 上**（`--color-text`、`--color-background`、`--color-1..6`、`--color-drag1/2`、`--color-overflow`、`--color-icon` 等），`light.css` 与 `dark.css` 结构一致，只有少量声明不同——`.flexlayout__border_button`（暗色多 `border-radius`、`box-shadow`）、`.flexlayout__tabset-maximized`（暗色多一层 `background-image` 渐变），暗色另有 `.flexlayout__tab_top`、`.flexlayout__tab_bottom`。因此存在比继续追加 `!important` 覆盖更彻底的修法：换 `light.css` 作结构基座，把库的 `--color-*` 映射到语义令牌，删除本地覆盖文件。第 9 节第 2 步按此实施。
+
 ### 4.3 未走令牌的硬编码
 
 组件内联样式与部分 CSS 中存在假定深色背景的写法，按类型归纳：
@@ -138,6 +140,16 @@
 因此皮肤是**部分覆写**：宿主没有对应语义的令牌（见 6.4）继续使用模式层的取值，在两种模式下都正确。
 
 实现约束：`:root[data-skin="teams"]` 与 `:root[data-theme="light"]` 的选择器权重相同，皮肤块必须在文件中位于模式块之后；构建时的 `:root`→`:host` 改写不改变该顺序，但任何后续的 CSS 重排都需保持这一约束。
+
+皮肤层的取值一律是 `var(--ui-x, <兜底>)`，而兜底写法有硬约束——实测（真实浏览器，三种写法各注入一次读 computed 值）：
+
+| 写法 | 解析结果 | 后果 |
+| --- | --- | --- |
+| `var(--ui-x, var(--bg-primary))` | 空值 | 自定义属性自我引用成环，皮肤层与模式层一起失效 |
+| `var(--ui-x)` | 空值 | 不会回落到上一条声明，也不会自动降级 |
+| `var(--ui-x, var(--mode-bg-primary))` | 兜底生效；宿主变量存在时取宿主值（实测 22px 覆盖 11px） | 正确 |
+
+因此模式层为每个被映射的令牌另存一份**字面量镜像** `--mode-<token>`（暗亮各一份），皮肤块引用镜像作兜底；镜像不能写成 `var(--本体)`（与皮肤块对同一属性的覆写成环）。契约测试逐条断言镜像与本体取值相等，防止漂移。
 
 ### 5.3 皮肤不改变模式
 
@@ -230,7 +242,7 @@ iCode Teams 以自研 CSS 自定义属性 `--ui-*` 作为视觉真相源，定�
 | 字体族 | 系统默认 | Inter + 系统栈 |
 | 块内边距 | 未统一 | 24px |
 
-OpsCopilot 目前的圆角与字号是 `frontend-shell/src/ui/settings/settingsStyles.ts` 中的像素常量，不是主题令牌，无法被皮肤覆写。因此需要先把它们令牌化（例如 `--radius-sm/md/lg`、`--font-size-xs..xl`、`--space-*`、`--control-height`），再让皮肤映射到宿主取值。
+OpsCopilot 目前的圆角与字号是 `frontend-shell/src/ui/settings/settingsStyles.ts` 中的像素常量，不是主题令牌，无法被皮肤覆写。因此需要先把它们令牌化（`--radius-*`、`--font-size-*`、`--space-*`；控件高度并入 `--space-*` 刻度，见步骤 5），再让皮肤映射到宿主取值。
 
 令牌化与映射是两个步骤：令牌化本身就有价值（消除散落常量），映射才产生皮肤效果。
 
@@ -261,21 +273,25 @@ OpsCopilot 目前的圆角与字号是 `frontend-shell/src/ui/settings/settingsS
 
 ## 8. 门禁与验收
 
-现有门禁的两处盲区（4.6）必须补上，否则第 4 节的缺陷会随迭代复发。iCode Teams 已有一套可直接参照的做法：`npm run lint:style` 的裸色值扫描加双主题完整性校验，再由 CI 契约测试作为第二道。
+现有门禁的两处盲区（4.6）必须补上，否则第 4 节的缺陷会随迭代复发。iCode Teams 已有一套可直接参照的做法：`npm run lint:style` 的裸色值扫描加双主题完整性校验，再由 CI 契约测试作为第二道。实际落地为 `tools/checks/check-style-tokens.mjs` 的四条检查，自测在 `tools/checks/check-style-tokens.test.mjs`（`node --test`，8 条用例，含 fixture 反证）。
 
 ### 8.1 裸色值扫描
 
-除令牌文件与终端配色数据外，组件中不得出现字面色值。检测范围包括共享前台与宿主壳的 TS/TSX/CSS，豁免项为 `shell-theme.css`、`terminalSchemes.ts` 与皮肤块自身。这条直接对应 4.3 的全部缺陷。
+除令牌文件与终端配色数据外，组件中不得出现字面色值。检测范围包括共享前台与宿主壳的 TS/TSX/CSS，豁免项为 `shell-theme.css`、`terminalSchemes.ts` 与皮肤块自身。这条直接对应 4.3 的全部缺陷。`color-mix(in srgb, var(--x) N%, transparent)` 与全透明字面量放行：前者随令牌走，后者不构成主题依赖。
 
 ### 8.2 双主题完整性
 
-`:root` 中声明的每个颜色与投影令牌，必须在 `:root[data-theme="light"]` 中有同名覆写；`data-skin` 的每个皮肤块中引用的宿主变量必须存在于宿主契约清单。这条对应 4.1 的盲区，也是后续增加令牌时的防漏网。
+`:root` 中声明的每个颜色与投影令牌，必须在 `:root[data-theme="light"]` 中有同名覆写；`data-skin` 的每个皮肤块中引用的宿主变量必须存在于宿主契约清单。这条对应 4.1 的盲区，也是后续增加令牌时的防漏网。与模式无关的令牌（从文字色派生的 `--layer-*`）在行尾标注 `mode-independent` 豁免，每次运行打印豁免清单，避免它变成静默例外。
 
-### 8.3 对比度
+### 8.3 尺寸令牌引用完整性
+
+第 5 步引入 `--space-*`/`--radius-*`/`--font-size-*` 时补的一条。自定义属性写错名字不会报错，只会让整条声明静默失效、属性回落初始值，页面直接塌掉；所以每个 `var()` 引用都必须在令牌文件里有声明，且尺寸令牌只能声明在 `:root`（尺寸与明暗无关，写进亮色块意味着两模式密度不同）。这条是本步"机械替换 144 处"能安全落地的依据。
+
+### 8.4 对比度
 
 对比度断言从当前的抽样扩展到全部文字/背景语义组合，覆盖两种模式与每个皮肤。这条对应 4.3 中“对比度不达标”一类问题。
 
-### 8.4 皮肤验收
+### 8.5 皮肤验收
 
 - 皮肤块的取值全部来自宿主契约变量或兜底值，不出现字面色值。
 - 桌面壳在引入皮肤前后的渲染输出一致（截图比对）。
@@ -283,27 +299,232 @@ OpsCopilot 目前的圆角与字号是 `frontend-shell/src/ui/settings/settingsS
 - 共享组件不含宿主私有选择器与宿主组件库依赖。
 - 同一花园状态在各模式与皮肤下的场景与植物快照保持一致。
 
-## 9. 分阶段实施
+## 9. 落地步骤与验证
 
-### 第一阶段：令牌收敛与门禁
+排序原则：先建立"能不能验证"，再改代码。缺陷修复（第 2–4 步）与令牌化（第 5 步）必须在皮肤之前完成——它们是皮肤的前置条件（第 1 节），也共用同一套门禁。每一步独立可验收、可单独回退；除第 9 步外都不改变桌面壳的渲染结果，因此每一步都能用"桌面壳与基线一致"作为兜底回归。
 
-- 修正 `shell-theme.css` 文件头已过期的亮色色板注释；
-- 补齐 4.2–4.5 的缺陷：改造或替换第三方暗色样式引入方式、清理写死色值、补齐 `::selection` 与统一 `:focus-visible`、修正 logo 与畸形声明；
-- 把圆角、间距、字号、控件高度令牌化，替换 `settingsStyles.ts` 中的常量；
-- 建立 8.1–8.3 三道门禁。
+验证工具的现状需要如实说明：两个仓库都没有像素级视觉回归工具。本方案用**令牌级等价断言**（在真实浏览器里读 computed 值，判断皮肤在无宿主变量的环境下降级为模式层取值）替代像素比对，它比截图更精确、可进 CI；只有真正由交互触发的面（拖拽预览、溢出菜单、停靠标签、浮窗）保留人工截图复核。是否引入像素级工具是独立决策，见第 10 节。
 
-此阶段不引入皮肤，但产出皮肤所依赖的令牌层。
+### 步骤总览
 
-### 第二阶段：皮肤机制
+| # | 步骤 | 主要产出 | 依赖 |
+| --- | --- | --- | --- |
+| 1 | 门禁与基线 | 三条门禁 + 两模式基线截图 | — |
+| 2 | FlexLayout 第三方样式令牌化 | 去掉 `style/dark.css`，库调色板映射到语义令牌 | 1 |
+| 3 | 硬编码与缺失项收敛 | 4.3、4.5 全部消除 | 1 |
+| 4 | 终端旁路与主题错位 | 4.4 全部消除 | 1 |
+| 5 | 尺寸类令牌化 | `--radius-*`/`--font-size-*`/`--space-*`（含控件高度） | 1 |
+| 6 | `data-skin` 轴与解析顺序 | 皮肤机制（只有 `default`） | 5 |
+| 7 | iCode Teams 色彩映射 | 6.3 映射，宿主内验收 | 6 |
+| 8 | 模式跟随与用户覆盖 | 6.6 行为 | 7 |
+| 9 | 密度、圆角与字体映射 | 6.5 尺寸映射（取决于待确认 5） | 8 |
+| 10 | 门禁收口与元验证 | CI 接入 + 门禁自检 | 9 |
 
-- 引入 `data-skin` 轴与令牌解析顺序；
-- 实现 iCode Teams 皮肤块与 6.3 的映射；
-- 实现 6.6 的模式跟随与用户覆盖；
-- 按 8.4 验收。
+### 步骤 1：门禁与基线
 
-### 第三阶段：宿主扩展
+改动：
 
-按需增加皮肤，扩展只增加映射，不改动组件、不新增模式。
+- 新增 `tools/checks/check-style-tokens.mjs`（仓库根，带目录参数以便用 fixture 自测），实现三条检查：除 `shell-theme.css`、`terminalSchemes.ts` 与皮肤块外，TS/TSX/CSS 不得出现字面色值；`:root` 中每个颜色与投影令牌必须在 `:root[data-theme="light"]` 有同名覆写；FlexLayout 映射文件必须覆盖库声明的每个 `--color-*` 变量且入口不得再引入库的暗色样式。前两条的写法参照宿主 `tools/checks/check-style-tokens.mjs`（把 `--ui-*` 换成我们的令牌前缀，把 `:root[data-theme='dark']` 换成 `:root[data-theme="light"]`）。
+- 门禁自身的用例放在 `tools/checks/check-style-tokens.test.mjs`，用 `node --test` 运行（`npm --prefix frontend-shell run lint:style:self`）。放在 vitest 里会需要给浏览器代码放开 Node 类型，削弱 `boundaries.test.ts` 的防线。
+- `frontend-shell` 与 `frontend` 各加 `lint:style` 入口。**接入 CI 放在第 10 步**：门禁与对比度在修完第 2–4 步之前是红的，提前接入会让 main 一直失败。
+- 对比度断言从 `appearance.contract.test.ts` 现有的 4 组抽样扩到全部文字/背景组合、覆盖两模式。
+- 基线取证：`start_dev.bat` 起桌面壳，在两种模式下截取标签条、标签页、分隔条、边缘停靠标签、tab 溢出菜单、拖拽预览、拖拽遮罩、浮窗，以及消息渲染器的引用块、行内代码、斑马行，存入 `docs/assets/theme-verification/baseline/`。
+- 修正 `shell-theme.css` 文件头已过期的亮色色板注释。
+
+验证（顺序不可颠倒）：
+
+1. **门禁必须先跑出红**：在修复前运行，确认裸色值检查命中 4.3 列举的每一处；再临时新增一个只有暗色取值的令牌，确认双主题完整性检查失败。门禁没有红过就不算建成，这一步本身就是元验证。
+
+   实测基线（2026-09-12，本轮）：裸色值 **98 处**，覆盖 4.3 列举的全部位置；双主题完整性**通过**（暗色 95 个令牌、亮色覆写 93 个，与 4.1 一致）；扩到全组合的对比度断言发现 **35 组不达标**（暗色 20、亮色 15），其中一类是用户可见的：亮色下 `--text-on-accent` 落在 `--bg-active` 上只有 1.30，而文件传输的段选控件正是这个组合（`FilesPanel.tsx` 的 `segmentedActive`）。这批即第 3 步的修复清单。
+
+   门禁自身另有 6 条用例（`tools/checks/check-style-tokens.test.mjs`），覆盖"该红必红、该绿必绿"，含用 fixture 证明缺覆写与漏映射会被抓到。
+2. 门禁接线可用：`node tools/checks/check-style-tokens.mjs`、`npm --prefix frontend-shell run lint:style`、`npm --prefix frontend run lint:style` 均有确定退出码。
+3. 基线截图存在且可复核（两模式共 22 张）。
+
+门槛：第 1 条的命令输出留存，写入 release notes 的 `## 验证`。
+
+### 步骤 2：第三方 FlexLayout 样式令牌化
+
+依据是 4.2 补充的事实：库的调色板声明在 `.flexlayout__layout` 上，两套文件结构一致。
+
+改动：
+
+- `frontend-shell/src/ui/styles.css` 与 `frontend/src/main.tsx` 的 `flexlayout-react/style/dark.css` 改为 `style/light.css`；
+- 新增 `frontend-shell/src/ui/styles/flexlayout-tokens.css`，写成 `.flexlayout__layout { --color-text: var(--text-primary); --color-background: var(--bg-primary); … }`，把库声明的每个 `--color-*` 映射到语义令牌。该块与模式无关，映射后随 `data-theme` 自动翻转；
+- 删除 `frontend-shell/src/ui/FlexLayout/flexlayout-dark.css`（含那条匹配不到任何库类名的 `.flexlayout__floating_window`）与桌面壳的转发文件；`frontend/src/components/FlexLayout/` 下如仍有必须保留的规则，逐条迁入新文件并注明原因；
+- 显式决定是否保留暗色独有的两项结构差异。实测结论：**不保留**。`.flexlayout__tab_top`/`.flexlayout__tab_bottom` 的 inset 阴影与 3px 圆角、`.flexlayout__border_button` 的 inset 阴影与圆角、以及 `.flexlayout__tabset-maximized` 的渐变只存在于库的暗色文件里，属暗色装饰；换基座后自然消失。标签圆角若要保留，应在第 5 步作为我们自己的 `--radius-*` 令牌给出，而不是抄库的暗色取值。
+
+验证：
+
+1. 枚举检查（门禁第三条，`check-style-tokens.mjs`）：解析库 `light.css` 声明的全部 `--color-*` 变量（实测 51 个），断言每个都在映射文件里有取值；同时断言两个样式入口不再引用 `style/dark.css` 且都引用了 `style/light.css`。库升级新增变量时该检查失败，而不是静默漏色。
+2. 静态测试：两处 `style/dark.css` 引用消失；`flexlayout-dark.css` 不再被任何文件引用。
+3. computed 值断言（真实浏览器，不用 jsdom）：把 `data-theme` 依次设为 `light`/`dark`，读取 `.flexlayout__layout` 上 `--color-background`、`--color-text` 的解析结果，断言等于 `--bg-primary`、`--text-primary` 的解析值；再断言 `.flexlayout__tab`、`.flexlayout__tabset` 的 `background-color` 与令牌一致。只断言变量名存在是自证，必须断言解析后的颜色。
+4. 交互取证：逐一触发这 8 个面。亮色下不得出现暗块，暗色下需与基线一致。这是本步唯一不能自动化的一环。
+
+   实测（2026-09-12，本机 dev 应用 + 阿里云会话）：库的 51 个 `--color-*` 全部映射，两模式下逐项读取，12 组库变量与其语义令牌的解析值**完全相等**；标签条、标签页、会话侧栏与终端在两种模式下均无暗块（亮色下终端背景 `#faf8f3`、正文字色 `#39362f`，与语义令牌一致）。4.2 表中"未覆盖"的选择器现在都跟随令牌：
+
+   | 选择器 | 暗色解析值 | 亮色解析值 | 原缺陷 |
+   | --- | --- | --- | --- |
+   | `.flexlayout__popup_menu_container` | `#2a2a2a` | `#fffdf8` | 标签溢出菜单整块黑底 |
+   | `.flexlayout__drag_rect` | `#2d2d2d` | `#eae4d8` | 拖拽预览为近黑方块 |
+   | `.flexlayout__border_tab_contents` | `#1e1e1e` | `#faf8f3` | 边缘停靠标签近黑 |
+   | `.flexlayout__tab_button_textbox` | `#3c3c3c` | `#fffefa` | 重命名输入框深灰 |
+   | `.flexlayout__splitter_handle` | `#555555` | `#a99a84` | 分隔条手柄深灰 |
+   | `.flexlayout__float_window` | `#252526` | `#f2eee5` | 类名不匹配，从未被覆盖 |
+
+   `.flexlayout__tab_overlay` 两模式下都是库自己的 24% 中性黑遮罩（`rgba(0,0,0,.24)`），与 4.3 对遮罩的判断一致，未强行改。
+
+   溢出菜单与拖拽预览需要多标签或拖拽手势才出现，所以用注入同级节点读级联结果的方式验证（上表即探针结果），未为此连接更多服务器；真实截图覆盖标签条、标签页、侧栏与终端，存 `docs/assets/theme-verification/baseline/connected-layout-{dark,light}.png`（空壳状态另有 `empty-shell-{dark,light}.png`）。
+
+门槛：第 4 条的亮色截图逐面复核通过。若某面仍有暗色残留，说明还有未映射的库变量，回到第 1 条补齐。
+
+### 步骤 3：硬编码与缺失项收敛
+
+改动：
+
+- 4.3 的六类逐条替换为语义令牌：固定色值的语义色、以白色透明度做层次、固定暗灰实心块、写死的主色与焦点环、未走令牌的状态底色、写死的图表色；
+- 新增四组令牌承接这些位置：`--scrim-soft/-strong/-heavy`（遮挡层，亮色用暖褐而非纯黑）、`--layer-hairline/-1/-2`（从文字色派生的半透明层次，暗色提亮、亮色压暗，故与模式无关）、`--bg-sunken`（凹陷表面，取代"把画布混黑"）、阴影改用既有的 `--shadow` 与 `--shadow-dialog`；
+- 4.5 的缺失项：`::selection` 与统一的 `:focus-visible` 落进 `shell-theme.css`（规则一套，取值走随模式切换的令牌；组件自定义焦点用「类名 + :focus-visible」覆盖）、`AboutPanel` 的 logo 改用 `--brand-logo-filter`、`BottomBar.tsx:133` 的 `var(--text-muted)777` 修正；
+- 新增令牌必须同步补两模式取值，否则门禁红。
+
+验证：
+
+1. 门禁裸色值从 **98 处降到 12 处**（30 个文件，82 处替换，每处都校验过命中次数），剩下 12 处全部属于 4.4 的终端旁路，留给第 4 步。
+2. 对比度用例从 **35 组不达标转为全绿**。修复不是靠目测：先用脚本按 4.5 阈值反算每个令牌所需的最小调整量，再按方向分块改值（语义色保饱和、过于靠色的"柔和底"压深、反色文字那对压暗底色）。最终改动 16 个取值，暗色如 `--text-muted #888→#a6a6a6`、`--accent-hover #1f8ad3→#1470b0`、`--success-bg-subtle #2e5a3a→#1e3a26`，亮色如 `--warning #b08800→#866700`、`--severity-warning #bf8700→#8f6500`。
+3. `--layer-*` 是半透明叠加层，不能当实心表面算对比度。用例里补了按 alpha 合成到具体底色的计算（只认 `color-mix(in srgb, var(--x) N%, transparent)`，出现别的写法直接报"无法计算"），并只对真实出现在这些层上的主/次文字断言。
+4. 真实浏览器复核：亮色下 `--warning`/`--severity-warning`/`--scrim-soft`/`--bg-sunken`/`--shadow` 均为改后的取值，`--layer-1` 解析为 `color-mix(in srgb, #39362f 5%, transparent)`——证实层次令牌确实按当前模式的文字色派生。
+
+门槛与遗留：新增令牌无遗漏（门禁证明）；4.3 列举的每一处都有断言或截图。**4.5 第 3 条（键盘 Tab 遍历断言可见焦点）尚未自动化**，目前只有规则存在性；取证截图不得包含设置页（该页按产品决定明文显示密钥）。
+
+### 步骤 4：终端旁路与主题错位
+
+改动：
+
+- 新增 `terminalSearchDecorations` 与 `terminalHighlightDefaults`（均在 `terminalSchemes.ts`）：搜索命中与高亮规则默认色属于 xterm 配色数据，必须给具体色值、不能用 CSS 变量，所以与终端配色放在同一处、按主题两套；
+- `Terminal/search/SearchController.ts` 不再持有模块级的写死装饰色，改为构造时接收 `() => Theme` 取值函数（复用 `Terminal.tsx` 已有的 `themeRef`，主题切换时无需重建控制器）；
+- `settings/HighlightRulesModal.tsx` 新建规则的默认前景/背景改为 `getTerminalHighlightDefaults(currentTheme())`；
+- `Terminal.tsx` 的 `theme` 默认值由 `DEFAULT_THEME` 改为 `currentTheme()`；`appearance.ts` 新增 `currentTheme()`（以 `<html data-theme>` 为准），供拿不到 theme 属性的组件取值；
+- 顺带修正一处既有可读性缺陷：暗色下"当前匹配"用亮琥珀底（`#f59e0b`）配浅灰前景，对比度只有 **1.45**，基本读不出内容；改为深琥珀底 `#7a4a00` + 亮边框 `#ffd75f`（滚动条指示条仍是亮色）。
+
+验证：
+
+1. `Terminal.search-highlight.test.tsx`（壳与桌面各一份）改为断言"取当前主题的装饰色"，并新增亮色用例；不再复述字面值，取色真相源只有 `terminalSchemes` 一处。
+2. `appearance.contract.test.ts` 新增：两种主题下，匹配底与当前匹配底分别与终端前景色的对比度 ≥ 4.5（这条抓出了上面那处 1.45）；新建高亮规则默认前景/背景对比度 ≥ 4.5；两套主题取值互不相同。
+3. `currentTheme()` 单测：以 `data-theme` 为准，缺失或非法值回退暗色。
+
+门槛与遗留：第 2 条用等比计算覆盖了"可读"，但**第 3 条的实机截图未做**——搜索面板需要聚焦终端后按 Ctrl+F 再输入才能出现命中高亮，本次未在真实界面上取到。另外发现 `Terminal.search-highlight.test.tsx` 在壳与桌面各存一份完全重复的用例，桌面包那份测的只是转发组件，属重复维护，本次只同步了断言语义，未做合并。
+
+### 步骤 5：尺寸类令牌化（不改外观）
+
+改动：
+
+- `shell-theme.css` 的 `:root` 新增一套与明暗无关的尺寸令牌：圆角 6 档（`--radius-xs/sm/md/lg/full/circle`）、字号 10 档（`--font-size-xs`…`2xl` 与三个 rem 显示档）、间距刻度 19 档。间距刻度把**像素值写进名字**（`--space-8: 8px`）：这样"某个值该用哪个令牌"没有判断空间，换密度时按刻度整体换算即可；间距与控件高度共用一套刻度，与 Tailwind 的做法同构。
+- `settingsStyles.ts` 的 `radius`/`font` 两个导出对象由像素值改为令牌引用。这是本步的杠杆：所有消费者（壳设置页、桌面壳旧设置页、`DiagnosePanel`）不改一行就随皮肤走。
+- 设置 UI 的尺寸字面量机械替换为令牌，共 **144 处**（`settingsStyles.ts` 28 处、壳设置页六个组件 116 处）。脚本逐处打印 `行号: 属性 '旧值' → '令牌'` 供核对后再写盘。
+- 有意保留字面量的三类：`width`/`maxWidth`/`minWidth` 等布局几何（皮肤改的是密度与圆角，不是布局宽度）、`88vh` 与 `auto`、负偏移（布局对齐，不属密度刻度）。
+
+验证：
+
+1. **零外观变化的硬证据**：新增 `settingsStyles.contract.test.ts`，把导出对象里 31 个样式的 **64 个**尺寸字段解析后与冻结表逐条比对。这条用例在令牌化**之前**跑是绿的（字面量即取值），令牌化**之后**跑仍是绿的（`var()` 解析回同名令牌取值），两次绿之间的差集就是"外观没变"。同一文件还断言三件事：`--space-N` 必须等于 `Npx`（否则按刻度换算密度会算错）、每个尺寸字段都必须走令牌（令牌化前这条列出 **64 处**未走令牌的字段，令牌化后为 0）、布局几何**不得**被令牌化。
+2. **引用完整性**：门禁新增检查 4（8.3），并当场验证它有效——故意把 `ShellSettingsModal.tsx` 的一处 `var(--space-12)` 改成 `--space-13`，门禁报 `ShellSettingsModal.tsx:276 引用了未声明的尺寸令牌 --space-13` 并以退出码 1 结束；还原后恢复通过。这条比截图更能兜住"写错名字 → 声明静默失效 → 页面塌掉"。
+3. 全量回归：`frontend-shell` 21 文件 185 用例、`frontend` 35 文件 242 用例、两包 `build`、`go test ./...`、`go vet ./...` 全绿；门禁自测 8/8。
+4. 真实浏览器（运行中的桌面壳，只读计算值、不取页面文本）：`<html>` 上 18 个尺寸令牌全部解析为预期像素（`--space-8 → 8px`、`--radius-sm → 4px`、`--font-size-base → 13px`…），且没有任何尺寸令牌声明在亮色块。
+
+门槛与遗留：
+
+- 第 1 条零差异成立。第 2 条的红/绿两次输出都留存。
+- 原第 3 条（两模式截图与基线逐张一致）**改为上面的令牌级断言**：本步唯一改动的是设置页，而设置页按产品决定明文显示密钥、不纳入截图取证（步骤 3 的门槛）；非设置面则用"本步没有改动任何非设置文件"直接证明，比截图更确定。将来若引入像素级工具（第 10 节），这条可补回。
+- 遗留：`frontend/src/components/SettingsModal/` 是桌面壳当前使用的旧设置页（2310 行），其中可令牌化的尺寸字面量还有 **253 处**。它的圆角与字号已经通过 `settingsStyles.ts` 的导出跟随令牌，但自带的内边距/间距仍是字面量，因此在密度映射下不会跟随。这属独立的机械收敛，复用同一脚本即可，但需要单列一次提交——混进本步会把 144 处的可复核 diff 变成 397 处，反而看不清。
+
+### 步骤 6：`data-skin` 轴与解析顺序
+
+改动：
+
+- `appearanceTypes.ts` 增加 `Skin` 类型；`appearance.ts` 增加 `DEFAULT_SKIN`、`normalizeSkin`（只接受 `default`/`teams`，其余回落 `default`）、`currentSkin`、`applySkin(skin, root?)`，以及与主题键分开的 `SKIN_STORAGE_KEY` 与 `persistSkin`/`readPersistedSkin`。
+- `data-skin` 写到与 `data-theme` 同一元素（桌面壳是 `<html>`，插件是 shadow host）。`applySkin` 的 `root` 参数就是为插件传 shadow host 预留的。
+- `shell-theme.css` 末尾加 `:root[data-skin="teams"]` 块。本步为空块——只建立机制，`data-skin="teams"` 与 `default` 渲染完全一致。
+- 决定：**皮肤不进后端 `AppearanceConfig`**。用哪个皮肤由宿主决定、桌面壳恒为 `default`，所以只存前端的独立 localStorage 键，不需要 Go 侧往返；用户明暗偏好仍走原有键与后端配置。
+
+验证：
+
+1. 单元用例（并入 `appearance.contract.test.ts`，该文件从 20 条增至 28 条）：归一化只接受 `default`/`teams`（`undefined`/`null`/空串/`'dark'`/`'teams-x'` 均回落）；写皮肤不动主题键；`applySkin` 写入与 `data-theme` 同一元素且 `currentSkin` 读回。
+2. 顺序约束（静态断言）：断言 `:root[data-skin="teams"]` 在文本上位于 `:root[data-theme="light"]` 之后。5.2 的实现约束靠人记不住，用用例钉住。
+3. **桌面壳无副作用**：在运行中的桌面壳（无宿主变量）里，把 `data-skin` 依次设为 `default`/`teams`，对**两种模式**各取一次全量计算样式指纹——`document.querySelectorAll('*')` 覆盖 **436 个元素**，每个元素取 `backgroundColor`/`color`/`borderRadius`/`padding`/`margin`/`gap`/`fontSize`/`fontFamily`/`borderColor`/`boxShadow`/`outlineColor`/`outlineWidth` 共 12 个属性。结果：两模式下 `default` 与 `teams` 的指纹哈希**完全相同**（暗色 `-1460168067`、亮色 `-1420089030`），6.3 映射表里的 30 个令牌逐项零差异。同皮肤连测两次哈希一致（证明指纹可复现，上述相等不是抖动）；暗亮两模式哈希不同（证明这个指纹有分辨力，不是恒等式）。另确认运行中的样式表确实含 `[data-skin]` 规则，排除"测的是旧 CSS"。
+4. 门禁两条新断言——皮肤块取值必须来自 `var(--ui-*)`、模式层不得引用宿主变量——在本步是空跑（皮肤块还没有声明），它们随第 7 步写映射立刻生效。之所以放在契约测试而不是 shell 门禁：`shell-theme.css` 整体在裸色值扫描的豁免名单里，皮肤块的字面色值只有解析该块才能发现。
+
+元验证（两次故意注入，都要先红）：
+
+- 把皮肤块移到亮色块之前 → 顺序断言报 `找不到皮肤块: expected 7033 to be greater than 7063`，1 条失败。
+- 在皮肤块里写死 `--bg-primary: #123456` → 2 条失败：等价断言报 `暗色 --bg-primary: teams #123456 ≠ default …`，皮肤块契约报 `--bg-primary: #123456`。还原后 28 条全绿。
+
+门槛与遗留：第 3 条成立，可以进入步骤 7。第 4 条的"截图与基线一致"改为上面的全量计算样式指纹比对：登记的基线是空壳状态，而当前应用已连着会话（且设置页不纳入截图），逐张对比不可复现；指纹比对覆盖了每个元素的 12 个属性，比截图更精确且已进 CI。遗留：桌面壳首屏内联脚本暂不读皮肤键（桌面壳恒为 `default`，不产生 FOUC），插件的首屏跟随在第 8 步处理。
+
+### 步骤 7：iCode Teams 色彩映射
+
+改动：`:root[data-skin="teams"]` 按 6.3 写全映射，每个值形如 `var(--ui-color-xxx, <兜底>)`；兜底取模式层默认值，保证宿主缺变量时不崩。
+
+验证：
+
+1. 门禁：皮肤块内不出现字面色值；每个引用的宿主变量名必须存在于随仓库维护的契约清单。契约清单的取法（已按宿主实际文件形态修正）：`src/client/ui/design-system.ts` 导出的是一个模板字符串，内含 `:root{…}` 与 `:root[data-theme='dark']{…}` 两段、`--ui-*` 变量共 46 个，所以快照是对整份文件文本做 `--ui-[a-zA-Z0-9-]+` 提取而非解析某个 `:root {}` 块，且必须在快照里注明取自哪个 revision（见第 10 节第 8 条）。清单同时是"宿主改契约我们能知道"的提醒机制，更新方式需写入文档。其中"皮肤块取值必须来自 `var(--ui-*)`""模式层不得引用宿主变量"两条已在步骤 6 立起来（在 `appearance.contract.test.ts`，因为 `shell-theme.css` 整体在裸色值扫描的豁免名单里，皮肤块的字面色值只有解析该块才能发现）；本步只需补宿主变量名清单。
+2. 真实宿主冒烟：本地起宿主（`ICODE_LOCAL_CREDENTIAL=local-dev-credential npm run dev`）→ 打包并应用 OpsCopilot 插件 bundle → 打开插件页。在宿主 `light`/`dark` 两种状态下读取插件内根元素的令牌 computed 值，断言 `--bg-primary` 等于宿主 `--ui-color-bg`、`--accent` 等于宿主主色。这是"映射真的穿过 shadow 边界"的唯一证据，6.2 的两条推论都在这里被检验。
+
+   **已用注入模拟验证到机制层（2026-09-13）**：宿主服务运行时（API 45831 / UI 45833，插件页 `#/plugins/opscopilot`），把当前 `shell-theme.css` **原样套用 `build.ts` 的选择器改写规则**（`:root[…]`→`:host([…])`、`:root`→`:host`）后临时注入插件自己的 shadow root，读到的结果——宿主文档 `--ui-color-bg: #fafafa`、`--ui-color-primary: #9470c4` 确实出现在 shadow host 元素上，也出现在 shadow 内部元素上（继承穿透成立）；`data-skin` 切到 `teams` 后，映射令牌全部取宿主值（`--bg-primary` `#faf8f3`→`#fafafa`、`--accent` `#855b23`→`#9470c4`、`--text-primary` `#39362f`→`#18211c`、`--success` `#197c36`→`#08783e`、`--danger` `#cf222e`→`#a12622`、`--border-subtle` `#e9e2d6`→`#ececf1`），6.4 不映射的 `--warning`(`#866700`) 与 `--severity-danger`(`#d1242f`) 一个都没动，且没有空值令牌；尺寸令牌在 shadow 内解析正常（`--radius-sm` 4px、`--space-8` 8px、`--font-size-base` 13px）。注入已撤除、属性已还原。**这只是模拟**：没有验证 `pack.ts`/`build.ts` 的产物体（改写规则是照抄其代码，未跑打包）与 12 个面的观感。
+3. 覆盖矩阵：工具栏、导航、会话栏、终端外框、快捷命令面板、脚本、文件、设置、对话框、tooltip、滚动条、风险与严重度徽标共 12 个面，在宿主两种模式下截图。6.4 明确不映射的语义（风险等级、状态徽标、图标族、滚动条）标注为"预期保持默认语言"，不算缺陷。
+4. 反例检查：故意把某个宿主变量名写错，确认兜底值生效、界面不崩，证明 6.4 的降级语义成立。
+
+已落地的一半（2026-09-13）：
+
+- `shell-theme.css` 按 6.3 写入 **27 条**映射，值一律 `var(--ui-x, var(--mode-<token>))`；模式层两处各新增 **27 条**字面量镜像（共 54 条），理由见 5.2 的兜底写法表——这是本步唯一偏离原计划的写法：原计划写的是"兜底取模式层默认值"，但模式层默认值无法用 `var()` 表达（写 `var(--本体)` 会成环），所以改成镜像副本。
+- 宿主契约快照落在 `frontend-shell/src/ui/styles/teams-host-contract.json`：46 个名字，取自 `icode-teams` 的 `origin/main` = `ed88a1d6c4d1`，由 `tools/checks/extract-teams-host-contract.mjs` 生成（宿主路径用 `ICODE_TEAMS_REPO` 传入，脚本本身不含机器路径）。
+- 契约测试 `appearance.contract.test.ts` 增至 **31 条**，本步新增/强化的四条：皮肤块取值形状必须严格是 `var(--ui-*, var(--mode-*))`；引用的宿主变量必须都在快照清单内（先断言引用的确非空，避免空转）；兜底镜像与模式层本体逐项相等；快照自身可信（非空、名字规范、带 40 位 revision）。**两次故意注入**验证有效：把镜像取值改一位、把宿主名拼错、去掉一条兜底，三条断言分别报错（外加等价断言兜住，共 4 红），还原后 31 条全绿。
+- **无宿主环境下的真实浏览器验证**（桌面壳，非宿主内）：① 不注入宿主变量时，teams 与 default 在全部映射令牌与未映射令牌上零差异，且没有任何令牌解析为空值——这是镜像兜底在真实 CSS 引擎里确实生效（不成环、不漏兜底）的证据；② 注入 `origin/main` 亮色块的真实 `--ui-*` 取值后，15 个抽样映射令牌**全部**跟随宿主（`--bg-primary` → `#fafafa`、`--accent` → `#9470c4`、`--text-primary` → `#18211c`），而 6.4 明确不映射的 `--warning`/`--severity-danger`/`--risk-moderate-fg`/`--overlay` **一个都没被改动**，即 6.4 的降级语义成立；③ 注入宿主变量的同时切到亮色，令牌仍取宿主值（皮肤不区分模式）；④ 渲染指纹：436 个元素 × 8 个属性在 teams 与 default 下哈希相同，非空皮肤块对桌面壳零影响。
+- 第 4 条"反例检查"中的"宿主变量名写错"在桌面壳等价于"宿主变量全部缺失"（就是上面 ①），已证明不缺兜底、不塌且逐项等于模式层；真正的"写错名字 + 宿主存在"要在宿主内验证。
+
+门槛与遗留：第 1、4 条成立，第 2 条的机制层已按上述注入模拟验证（继承穿透 + 映射取宿主值 + 不映射的不动）。第 3 条的 `--shadow-dialog` 有一个待观察点——宿主的 `--ui-shadow-block` 比我们的浮层投影轻得多（`0 1px 2px #18181b08`），直接映射会让对话框的层次感明显变平，这是"向宿主语言靠"的预期代价，需在打包后的宿主冒烟里目视确认是否可接受。**仍未做的是"打包产物"这一环**：本仓库 `main` 的 `plugins/teams-opscopilot` 不存在，插件包在独立工作树 `D:\dev\workspace-go\OpsCopilot-teams-plugin`（分支 `feat/teams-plugin`），主题改动必须先整合过去才能打包验证；整合方案与其风险见第 10 节第 10 条。
+
+另外两点实测（2026-09-13，运行中的宿主）：该宿主的文档根元素上**没有** `data-theme`（其检出早于暗色模式，见第 10 节第 8 条），所以"宿主亮暗两套"在当前宿主构建里并不可得；插件 shadow host 上写死的 `data-theme="light"` 仍在（步骤 8 未做）。
+
+### 步骤 8：模式跟随与用户覆盖
+
+改动：
+
+- 插件 `ui.tsx` 不再写死 `host.dataset.theme = 'light'`；改为读取外层文档根元素的 `data-theme` 并监听其运行期变化；
+- 统一插件内现有的两处主题状态（`ui.tsx` 的初始值与 `app.tsx` 的 `initialSettings.theme`、`surface.dataset.theme`）到一个来源；
+- 用户显式覆盖后持久化，并另提供"恢复跟随宿主"入口；
+- 桌面壳沿用现有默认与用户设置，不受影响。
+
+验证：
+
+1. 单元/集成用例：宿主属性 `light→dark` 变化时 shadow host 的 `data-theme` 跟随；显式覆盖后宿主再变化不再改写；恢复跟随后重新跟随。
+2. 终端一致性：宿主切暗色后，断言终端配色（`getTerminalTheme` 的输出）与界面同时翻转，不出现"界面暗、终端亮"（4.4 的同型错位）。
+3. 真实宿主：切换宿主主题，插件即时跟随，截图佐以终端背景的 computed 值。
+4. 兜底：宿主根元素缺 `data-theme` 时的取值需明确并有用例——取默认暗色、默认亮色还是读 `prefers-color-scheme`，实现时确认。
+
+门槛：第 1、2 条自动化通过，第 3 条实机通过；桌面壳截图与基线一致。
+
+### 步骤 9：密度、圆角与字体映射（取决于待确认 5）
+
+前置：待确认 5 需先定论。若结论是"皮肤只换颜色"，本步取消，步骤 7 即终态。
+
+改动：皮肤块引入宿主圆角、间距、字号与字体族。宿主不提供控件高度令牌（32px 是 antd 默认值，不在 `--ui-*` 清单内），控件高度只能取我们自己的令牌值，需明确是固定对齐 32px 还是维持现状。
+
+验证：
+
+1. 令牌级断言：宿主页内读取控件高度与圆角的 computed 值，与约定值一致；`default` 皮肤下这些值与本步之前完全相同，尺寸类改动不得外溢到桌面壳。
+2. 变更面清单：本步必然改变宿主内观感，需按 6.5 的五个维度列出全部受影响面并逐面截图，与步骤 7 的截图对比，确认无裁切、错位、对比度下降。
+3. 可访问性：字号与控件高度变化后，最小可点击区域与对比度断言仍通过。
+
+门槛：第 1、3 条自动化通过，第 2 条逐面复核通过。
+
+### 步骤 10：门禁收口与元验证
+
+改动：三条门禁接入 `shared-shell.yml`；对比度断言覆盖每个皮肤；8.4 的验收清单固化为 PR 自查项；基线截图更新为当前状态。
+
+验证（证明门禁本身有效，而不是碰巧全绿）：
+
+1. 三次故意注入，每次都要求失败：往组件加一行 `color: '#ff0000'` → 裸色值门禁失败；在 `:root` 加一个颜色令牌但不加亮色覆写 → 双主题完整性失败；把某处文字改成对比度不足 → 对比度用例失败。三次注入后回滚，门禁恢复全绿。
+2. 门禁在 CI 上确实被执行：在 PR 上看到该 step 的运行记录，而非仅本机可跑。
+3. 步骤 1 的基线与当前状态的每一处差异，都已在对应步骤中被解释或消除。
 
 ## 10. 待确认事项
 
@@ -311,4 +532,24 @@ OpsCopilot 目前的圆角与字号是 `frontend-shell/src/ui/settings/settingsS
 2. 在 iCode Teams 中首次进入时的默认模式是否直接跟随宿主，还是先给出一次可见提示。
 3. 用户显式覆盖模式后，回到“跟随宿主”的入口放在哪里。
 4. 宿主缺失语义（警告色、风险等级、严重度、状态徽标、图标族、滚动条）是否推动宿主纳入 `--ui-*` 契约，还是在皮肤内保持默认语言。
-5. 令牌化后的圆角与密度是否允许 `default` 与 `teams` 使用不同取值，还是所有皮肤共用 OpsCopilot 自己的密度，仅换颜色。
+5. 令牌化后的圆角与密度是否允许 `default` 与 `teams` 使用不同取值，还是所有皮肤共用 OpsCopilot 自己的密度，仅换颜色。该结论决定第 9 步是否实施。
+6. 是否引入像素级视觉回归工具（如 Playwright）纳入 CI。不引入时由第 9 节的令牌级断言加人工截图承担，代价是交互触发的面（拖拽、浮窗、溢出菜单）无法自动回归。
+7. **插件包以哪个为准**：`main` 上没有 `plugins/` 目录；Teams 插件在独立工作树 `OpsCopilot-teams-plugin`（`plugins/teams-opscopilot`，分支 `feat/teams-plugin`），另有一条 DSH 宿主插件线在 `codex/workbench-architecture`（`plugins/dsh-opscopilot-shell`）。三者的收敛方式见第 10 条；第 7、8 步的"插件 `ui.tsx` 不写死 `host.dataset.theme`"要落在 `plugins/teams-opscopilot/src/ui.tsx`。
+8. **宿主以哪个 revision 为准**：本地 `icode-teams` 的 `main` 落后 `origin/main` 48 个提交，且当前检出的 `codex/opscopilot-host-adapter` 早于暗色模式（全仓库 0 处 `data-theme`）；`origin/main` 的 `src/client/ui/design-system.ts` 已有 `:root[data-theme='dark']`（该文件是含 `:root{}` 与 `:root[data-theme='dark']{}` 两段的模板字符串，`--ui-*` 变量 46 个，快照见 `frontend-shell/src/ui/styles/teams-host-contract.json`）。第 7 步的宿主内冒烟必须先落到有暗色模式的 revision，否则第 8 步的"跟随宿主"无从验证。
+9. 键盘焦点的自动化判据：jsdom 不算层叠，要自动化"Tab 后焦点可见"只有两条路——引入真浏览器测试基准（即第 6 条），或在门禁里加静态规则（例如 `outline: none` 必须与该文件内的 `:focus-visible` 覆写成对出现）。当前只有规则存在性断言。
+10. **主题改动如何整合到插件（2026-09-13 实测，相关结论已修正一次）**：本仓库有 5 个工作树、4 条线：
+    | 工作树 | 分支 | 相对 main | 内容 |
+    | --- | --- | --- | --- |
+    | `OpsCopilot` | `main` | — | 本次主题工作（未提交）+ 其他产品提交 |
+    | `OpsCopilot-teams-plugin` | `feat/teams-plugin` | **1 领先 / 42 落后** | 单个提交 `8a26721`（121 文件，+8091/−2702）：Teams 插件包 + 把产品 UI 从桌面挪进壳的 `product/*` 层 |
+    | `OpsCopilot-workbench-architecture` | `codex/workbench-architecture` | **118 领先 / 49 落后** | 另一条插件线（DSH 宿主，`plugins/dsh-opscopilot-shell`），且**没有**拿到 `15646dd`（shared-shell 恢复） |
+    | `OpsCopilot-shell-integration` | `integration/shared-shell` | 0 领先 / 43 落后 | 已被 main 完全包含 → 陈旧指针 |
+    | `.codex/worktrees/a6e9/OpsCopilot` | 游离 HEAD | — | 会话临时工作树 |
+
+    共同祖先是 `7d16780`（quick command context menu safety），不是 `917d443`。
+    - **单分支已是既定意图**：插件提交自带 `.github/workflows/shared-shell.yml`，触发条件是 `push: branches: [main]`，并在同一个提交上跑 `frontend-shell`（typecheck/test/build）+ `frontend`（test/build）+ `plugins/teams-opscopilot`（typecheck/test/integration/package）+ `go test/vet/build ./cmd/shellsidecar`。也就是说目标态是 main 同时装下共享壳、桌面与插件。该工作流目前只在插件分支上，收敛时要一并进 main（它同时也承接了第 10 步"门禁进 CI"的落点，本方案自己的 `lint:style` 应加进去）。
+    - **合并面实测（`git merge-tree` 预演，非两棵树对比）**：把 `8a26721` 合到 main 上是 **7 个冲突文件**——`app.go`、`frontend-shell/src/ui/session/SessionManager.tsx`、`frontend/src/components/SettingsModal/SettingsModal.tsx`、`internal/shellsidecar/configs.go`、`pkg/config/store.go`、`pkg/sshclient/client.go`，以及一个结构性冲突 `pkg/sessionmanager/manager.go`（main 删除、插件修改）。`FlexLayoutAdapter.tsx`、`CommandGrid.tsx`、`QuickCommandPanel.tsx`、`AIConfigCard.tsx`、`frontend/src/App.tsx`、`go.mod` 等均自动合并成功。
+    - **修正**：先前记的"插件提交有意删掉 12 个桌面专属 shell 文件"是错的两点对比读法。实测这 12 个文件（`ImportParts`、`ErrorBoundary`、`QuickCommandImportDialog`、`ConnectionPropertiesModal`、`XshellImportDialog`、`SessionTreeView/SessionContextMenu/treeModel/useSessionTree`）在分叉点 `917d443` 上**都不存在**，是 main 之后的 42 个提交新增的；插件提交一个文件都没删。
+    - 唯一的结构性冲突是"同一个问题两套并行解法"：main 把会话持久化搬到了 `pkg/session` + `pkg/filetxn`/`internal/atomicfile`（`7bd3ad3` 删除了 `pkg/sessionmanager`），而插件提交是在旧的 `pkg/sessionmanager/manager.go` 上加原子写、baseline、`PreserveCredentials`。这需要按语义重新落到 main 的新位置，不是文本合并。
+    - 需要拍板的是**方向**（不是技术细节）：插件提交把产品 UI 从 `frontend/` 挪进共享壳的 `product/*`（`Surface.tsx`、`ProductSidebar/ProductChrome/BottomBar`、`ProductShellSettingsPage`、`productSettingsStyles.ts` 等 17 个新文件），同时给桌面瘦身（`App.tsx` −369、`SettingsModal.tsx` −969、`Sidebar.tsx` −167）。桌面是否就此变成"薄宿主 + 共享壳"，决定了下面两件事：壳是否要保留 `ConnectionPropertiesModal`/`XshellImportDialog` 这些导出（桌面当前从包里导入它们），以及**遗留项"桌面旧设置页 253 处令牌化"是否应当直接取消**——那个文件在这个方向上正被 `Product*` 设置页取代。
+    - 主题工作自身的落点不受影响：令牌层三件套（`shell-theme.css`、`settingsStyles.ts`、`appearance.ts`）**不在**上面 7 个冲突文件里，收敛后可直接落地；插件的 `productSettingsStyles.ts` 本来就 `import ... from './settingsStyles'`，会自动吃到令牌。唯一耦合仍是"`settingsStyles.ts` 与 `shell-theme.css` 必须同一次过去"（当前插件里 `--radius-sm` 读出为空即为证）。

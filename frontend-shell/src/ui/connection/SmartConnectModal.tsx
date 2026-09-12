@@ -347,7 +347,7 @@ const SmartConnectModal: React.FC<SmartConnectModalProps> = ({ isOpen, onClose, 
                                     style={{
                                         ...styles.card,
                                         borderColor: isSelected ? 'var(--accent)' : 'var(--border)',
-                                        boxShadow: isSelected ? '0 0 0 1px rgba(0, 122, 204, 0.18)' : 'none'
+                                        boxShadow: isSelected ? '0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent)' : 'none'
                                     }}
                                 >
                                     {/* Card Header */}

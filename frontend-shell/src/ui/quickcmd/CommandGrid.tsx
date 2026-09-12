@@ -299,7 +299,7 @@ const styles = {
         position: 'fixed' as const,
         backgroundColor: 'var(--bg-secondary)',
         border: '1px solid var(--border)',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
+        boxShadow: '0 4px 16px var(--shadow)',
         borderRadius: '6px',
         zIndex: 999,
         minWidth: '90px',

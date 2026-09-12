@@ -1,0 +1,12 @@
+/* 尺寸令牌齐全的令牌文件：检查 4 应放行其中的引用。 */
+:root {
+  --space-8: 8px;
+  --space-12: 12px;
+  --radius-sm: 4px;
+  --font-size-base: 13px;
+  --bg-primary: #111111;
+}
+
+:root[data-theme="light"] {
+  --bg-primary: #ffffff;
+}

@@ -3,6 +3,8 @@ import { assessPattern } from '../Terminal/highlight/regexSafety';
 import type { HighlightRule } from '../Terminal/highlightTypes';
 import { colors, radius, font } from './settingsStyles';
 import Switch from './Switch';
+import { currentTheme } from '../appearance';
+import { getTerminalHighlightDefaults } from '../terminalSchemes';
 
 interface HighlightRulesModalProps {
     isOpen: boolean;
@@ -71,6 +73,8 @@ function UnsavedChangesModal({ isOpen, changedCount, onSave, onDiscard, onCancel
 }
 
 export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, onClose, embedded = false }: HighlightRulesModalProps) {
+    // 新建规则的默认配色随主题走：写死深蓝底白字在亮色终端下很突兀。
+    const defaults = getTerminalHighlightDefaults(currentTheme());
     const [draft, setDraft] = useState<HighlightRule[]>(rules);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [hoveredBgOption, setHoveredBgOption] = useState<string | null>(null);
@@ -153,7 +157,7 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
             pattern: '',
             is_enabled: false,
             priority: sorted.length > 0 ? (sorted[sorted.length - 1].priority + 10) : 10,
-            style: { background_color: '#1d3a5a', color: '#ffffff' }
+            style: { ...defaults }
         };
         setDraft([...sorted, r]);
         if (embedded) {
@@ -425,7 +429,7 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
                                                             <input
                                                                 type="checkbox"
                                                                 checked={!r.style?.background_color}
-                                                                onChange={(e) => patchStyle(r.id, { background_color: e.target.checked ? '' : '#1d3a5a' })}
+                                                                onChange={(e) => patchStyle(r.id, { background_color: e.target.checked ? '' : defaults.background_color })}
                                                                 style={{...styles.checkbox, position: 'absolute', opacity: 0, pointerEvents: 'none'}}
                                                             />
                                                             <span style={{
@@ -441,7 +445,7 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
                                                             <div style={styles.colorInput}>
                                                                 <input
                                                                     type="color"
-                                                                    value={r.style?.background_color || '#1d3a5a'}
+                                                                    value={r.style?.background_color || defaults.background_color}
                                                                     onChange={(e) => patchStyle(r.id, { background_color: e.target.value })}
                                                                     style={styles.colorPicker}
                                                                 />
@@ -459,7 +463,7 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
                                                         <div style={styles.colorInput}>
                                                             <input
                                                                 type="color"
-                                                                value={r.style?.color || '#ffffff'}
+                                                                value={r.style?.color || defaults.color}
                                                                 onChange={(e) => patchStyle(r.id, { color: e.target.value })}
                                                                 style={styles.colorPicker}
                                                             />
@@ -479,9 +483,9 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
                                                         <div style={styles.previewBg}>
                                                             <span style={{
                                                                 backgroundColor: r.style?.background_color ? r.style.background_color : 'unset',
-                                                                color: r.style?.color || '#ffffff',
-                                                                padding: '2px 6px',
-                                                                borderRadius: '3px',
+                                                                color: r.style?.color || defaults.color,
+                                                                padding: 'var(--space-2) var(--space-6)',
+                                                                borderRadius: 'var(--radius-xs)',
                                                                 whiteSpace: 'nowrap',
                                                             }}>
                                                                 {r.name || '未命名'} 示例文本
@@ -562,25 +566,25 @@ const styles = {
     embeddedContainer: {
         display: 'flex',
         flexDirection: 'column' as const,
-        gap: '12px',
+        gap: 'var(--space-12)',
     },
     embeddedToolbar: {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        gap: '12px',
+        gap: 'var(--space-12)',
         // 固定在卡片顶部：规则很多滚动时「+ 新建规则」仍可见可用
         position: 'sticky' as const,
         top: 0,
         zIndex: 2,
         backgroundColor: colors.bgTertiary,
-        padding: '8px 0',
+        padding: 'var(--space-8) 0',
         margin: '-8px 0 0',
     },
     embeddedList: {
         display: 'flex',
         flexDirection: 'column' as const,
-        gap: '12px',
+        gap: 'var(--space-12)',
         minHeight: 0,
     },
     overlay: {
@@ -594,7 +598,7 @@ const styles = {
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 2100,
-        padding: '20px',
+        padding: 'var(--space-20)',
     },
     modal: {
         backgroundColor: colors.bgSecondary,
@@ -610,7 +614,7 @@ const styles = {
         alignSelf: 'center' as const,
     },
     header: {
-        padding: '16px 24px',
+        padding: 'var(--space-16) var(--space-24)',
         borderBottom: `1px solid ${colors.borderPrimary}`,
         display: 'flex',
         justifyContent: 'space-between',
@@ -620,11 +624,11 @@ const styles = {
     titleContainer: {
         display: 'flex',
         alignItems: 'center',
-        gap: '12px',
+        gap: 'var(--space-12)',
     },
     title: {
         margin: 0,
-        fontSize: '1.1rem',
+        fontSize: 'var(--font-size-modal-title)',
         color: colors.textPrimary,
         fontWeight: 600,
     },
@@ -637,11 +641,11 @@ const styles = {
         background: 'none',
         border: 'none',
         color: colors.textSecondary,
-        fontSize: '1.5rem',
+        fontSize: 'var(--font-size-modal-close)',
         cursor: 'pointer',
         padding: '0',
         width: '32px',
-        height: '32px',
+        height: 'var(--space-32)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -661,7 +665,7 @@ const styles = {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: '16px 24px',
+        padding: 'var(--space-16) var(--space-24)',
         borderBottom: `1px solid ${colors.borderPrimary}`,
         backgroundColor: colors.bgTertiary,
     },
@@ -673,18 +677,18 @@ const styles = {
         flex: 1,
         overflowY: 'auto' as const,
         overflowX: 'hidden' as const,
-        padding: '16px 24px',
+        padding: 'var(--space-16) var(--space-24)',
         backgroundColor: colors.bgTertiary,
         display: 'flex',
         flexDirection: 'column' as const,
-        gap: '12px',
+        gap: 'var(--space-12)',
         minHeight: 0,
     },
     empty: {
         color: colors.textMuted,
         fontSize: font.base,
         textAlign: 'center' as const,
-        padding: '40px 0',
+        padding: 'var(--space-40) 0',
     },
     item: {
         border: `1px solid ${colors.borderPrimary}`,
@@ -697,20 +701,20 @@ const styles = {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: '12px',
-        gap: '12px',
+        padding: 'var(--space-12)',
+        gap: 'var(--space-12)',
     },
     itemLeft: {
         display: 'flex',
         flexDirection: 'column' as const,
-        gap: '4px',
+        gap: 'var(--space-4)',
         flex: 1,
         minWidth: 0,
     },
     ruleInfo: {
         display: 'flex',
         alignItems: 'center',
-        gap: '10px',
+        gap: 'var(--space-10)',
     },
     nameText: {
         color: colors.textSecondary,
@@ -723,7 +727,7 @@ const styles = {
     },
     riskBadge: {
         fontSize: font.xs,
-        padding: '2px 6px',
+        padding: 'var(--space-2) var(--space-6)',
         borderRadius: radius.sm,
         fontWeight: 600,
         flexShrink: 0,
@@ -731,15 +735,15 @@ const styles = {
     statusText: {
         fontSize: font.xs,
         color: colors.textTertiary,
-        marginLeft: '50px',
+        marginLeft: 'var(--space-50)',
     },
     actions: {
         display: 'flex',
-        gap: '6px',
+        gap: 'var(--space-6)',
         flexShrink: 0,
     },
     editBtn: {
-        padding: '6px 12px',
+        padding: 'var(--space-6) var(--space-12)',
         borderRadius: radius.sm,
         border: `1px solid ${colors.borderPrimary}`,
         backgroundColor: colors.bgHover,
@@ -748,7 +752,7 @@ const styles = {
         fontSize: font.sm,
         display: 'flex',
         alignItems: 'center',
-        gap: '4px',
+        gap: 'var(--space-4)',
         ':hover': {
             backgroundColor: 'var(--border-strong)',
         }
@@ -756,7 +760,7 @@ const styles = {
     iconBtn: {
         padding: '0',
         width: '28px',
-        height: '28px',
+        height: 'var(--space-28)',
         borderRadius: radius.sm,
         border: `1px solid ${colors.borderPrimary}`,
         backgroundColor: colors.bgHover,
@@ -771,28 +775,28 @@ const styles = {
         }
     },
     expanded: {
-        padding: '16px',
+        padding: 'var(--space-16)',
         borderTop: `1px solid ${colors.borderPrimary}`,
         display: 'flex',
         flexDirection: 'column' as const,
-        gap: '12px',
+        gap: 'var(--space-12)',
         backgroundColor: colors.bgSecondary,
         maxWidth: '900px',
     },
     row: {
         display: 'flex',
-        gap: '12px',
+        gap: 'var(--space-12)',
     },
     col: {
         flex: 1,
         display: 'flex',
         flexDirection: 'column' as const,
-        gap: '6px',
+        gap: 'var(--space-6)',
     },
     field: {
         display: 'flex',
         flexDirection: 'column' as const,
-        gap: '6px',
+        gap: 'var(--space-6)',
     },
     fieldLabel: {
         fontSize: font.base,
@@ -800,7 +804,7 @@ const styles = {
         fontWeight: 500,
     },
     input: {
-        padding: '8px 12px',
+        padding: 'var(--space-8) var(--space-12)',
         borderRadius: radius.sm,
         border: `1px solid ${colors.borderPrimary}`,
         backgroundColor: colors.bgPrimary,
@@ -812,7 +816,7 @@ const styles = {
         }
     },
     select: {
-        padding: '8px 12px',
+        padding: 'var(--space-8) var(--space-12)',
         borderRadius: radius.sm,
         border: `1px solid ${colors.borderPrimary}`,
         backgroundColor: colors.bgPrimary,
@@ -823,22 +827,22 @@ const styles = {
     },
     colorInput: {
         display: 'flex',
-        gap: '8px',
+        gap: 'var(--space-8)',
         alignItems: 'center',
     },
     colorPicker: {
         width: '40px',
-        height: '34px',
+        height: 'var(--space-34)',
         border: `1px solid ${colors.borderPrimary}`,
         borderRadius: radius.sm,
         cursor: 'pointer',
-        padding: '2px',
+        padding: 'var(--space-2)',
         backgroundColor: colors.bgPrimary,
     },
     bgOption: {
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
+        gap: 'var(--space-8)',
         cursor: 'pointer',
         fontSize: font.base,
         color: colors.textSecondary,
@@ -847,9 +851,9 @@ const styles = {
     },
     customCheckbox: {
         width: '16px',
-        height: '16px',
+        height: 'var(--space-16)',
         border: `2px solid ${colors.borderPrimary}`,
-        borderRadius: '3px',
+        borderRadius: 'var(--radius-xs)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -868,21 +872,21 @@ const styles = {
     },
     checkbox: {
         width: '16px',
-        height: '16px',
+        height: 'var(--space-16)',
         cursor: 'pointer',
         flexShrink: 0,
     },
     warningBox: {
-        padding: '12px',
+        padding: 'var(--space-12)',
         borderRadius: radius.sm,
         border: '1px solid',
-        marginTop: '8px',
+        marginTop: 'var(--space-8)',
     },
     warningHeader: {
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
-        marginBottom: '8px',
+        gap: 'var(--space-8)',
+        marginBottom: 'var(--space-8)',
     },
     warningIcon: {
         fontSize: font.lg,
@@ -892,40 +896,40 @@ const styles = {
         fontSize: font.base,
     },
     warningList: {
-        margin: '0 0 12px 0',
-        paddingLeft: '24px',
+        margin: '0 0 var(--space-12) 0',
+        paddingLeft: 'var(--space-24)',
     },
     warningItem: {
         fontSize: font.sm,
         color: colors.textSecondary,
-        marginBottom: '4px',
+        marginBottom: 'var(--space-4)',
     },
     ackLabel: {
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
+        gap: 'var(--space-8)',
         fontSize: font.sm,
         color: colors.textSecondary,
         cursor: 'pointer',
     },
     ackCheckbox: {
         width: '14px',
-        height: '14px',
+        height: 'var(--space-14)',
         cursor: 'pointer',
     },
     severeMessage: {
         fontSize: font.sm,
         color: colors.danger,
-        marginTop: '8px',
+        marginTop: 'var(--space-8)',
     },
     previewBg: {
         backgroundColor: 'var(--bg-primary)',
-        padding: '12px',
+        padding: 'var(--space-12)',
         borderRadius: radius.sm,
         border: `1px solid ${colors.borderPrimary}`,
     },
     footer: {
-        padding: '16px 24px',
+        padding: 'var(--space-16) var(--space-24)',
         borderTop: `1px solid ${colors.borderPrimary}`,
         display: 'flex',
         justifyContent: 'space-between',
@@ -938,10 +942,10 @@ const styles = {
     },
     footerActions: {
         display: 'flex',
-        gap: '12px',
+        gap: 'var(--space-12)',
     },
     saveBtn: {
-        padding: '8px 20px',
+        padding: 'var(--space-8) var(--space-20)',
         borderRadius: radius.sm,
         border: 'none',
         backgroundColor: colors.accent,
@@ -954,7 +958,7 @@ const styles = {
         }
     },
     cancelBtn: {
-        padding: '8px 20px',
+        padding: 'var(--space-8) var(--space-20)',
         borderRadius: radius.sm,
         border: `1px solid ${colors.borderPrimary}`,
         backgroundColor: 'transparent',
@@ -967,7 +971,7 @@ const styles = {
         }
     },
     primaryButton: {
-        padding: '8px 16px',
+        padding: 'var(--space-8) var(--space-16)',
         borderRadius: radius.sm,
         border: 'none',
         backgroundColor: colors.accent,
@@ -997,28 +1001,28 @@ const unsavedStyles = {
     modal: {
         backgroundColor: colors.bgSecondary,
         borderRadius: radius.lg,
-        padding: '24px',
+        padding: 'var(--space-24)',
         width: '400px',
         boxShadow: '0 4px 12px var(--shadow)',
     },
     title: {
         color: colors.textPrimary,
-        fontSize: '16px',
+        fontSize: 'var(--font-size-md)',
         fontWeight: 600,
-        margin: '0 0 12px 0',
+        margin: '0 0 var(--space-12) 0',
     },
     message: {
         color: colors.textSecondary,
         fontSize: font.base,
-        margin: '0 0 20px 0',
+        margin: '0 0 var(--space-20) 0',
     },
     actions: {
         display: 'flex',
-        gap: '10px',
+        gap: 'var(--space-10)',
         justifyContent: 'flex-end',
     },
     cancelBtn: {
-        padding: '8px 16px',
+        padding: 'var(--space-8) var(--space-16)',
         borderRadius: radius.sm,
         border: `1px solid ${colors.borderPrimary}`,
         backgroundColor: 'transparent',
@@ -1028,7 +1032,7 @@ const unsavedStyles = {
         fontSize: font.base,
     },
     discardBtn: {
-        padding: '8px 16px',
+        padding: 'var(--space-8) var(--space-16)',
         borderRadius: radius.sm,
         border: '1px solid var(--danger-border)',
         backgroundColor: 'var(--danger-bg-subtle)',
@@ -1037,7 +1041,7 @@ const unsavedStyles = {
         fontSize: font.base,
     },
     saveBtn: {
-        padding: '8px 16px',
+        padding: 'var(--space-8) var(--space-16)',
         borderRadius: radius.sm,
         border: 'none',
         backgroundColor: colors.accent,

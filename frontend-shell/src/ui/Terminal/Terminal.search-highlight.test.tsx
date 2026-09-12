@@ -3,6 +3,8 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { act, render } from '@testing-library/react';
 import TerminalComponent, { TerminalRef } from './Terminal';
 import { HighlightRule, TerminalConfig } from './highlightTypes';
+import { getTerminalSearchDecorations } from '../terminalSchemes';
+import { currentTheme } from '../appearance';
 
 let lastKeyHandler: ((e: any) => boolean) | null = null;
 let termWrite: ((data: string) => void) | null = null;
@@ -144,14 +146,36 @@ describe('Terminal search/highlight integration', () => {
         expect(searchFindNext).toHaveBeenCalled();
         expect(searchAddonOptions).toEqual({ highlightLimit: 10_000 });
         const options = searchFindNext.mock.calls.at(-1)?.[1];
+        // 断言"按当前主题取高亮配色"这个行为，而不是复述字面值：取色真相源是 terminalSchemes。
         expect(options).toMatchObject({
             incremental: true,
-            decorations: {
-                matchBackground: '#665c00',
-                activeMatchBackground: '#f59e0b'
-            }
+            decorations: getTerminalSearchDecorations(currentTheme()),
         });
         vi.useRealTimers();
+    });
+
+    it('follows the terminal theme for search highlight colors', async () => {
+        vi.useFakeTimers();
+        const original = document.documentElement.dataset.theme;
+        try {
+            document.documentElement.dataset.theme = 'light';
+            const ref = React.createRef<TerminalRef>();
+            render(<TerminalComponent id="t3-light" ref={ref} />);
+            selectionText = 'error';
+            await act(async () => {
+                lastKeyHandler!({ type: 'keydown', ctrlKey: true, code: 'KeyF', preventDefault: vi.fn() });
+            });
+            await act(async () => {
+                await vi.runAllTimersAsync();
+            });
+            const options = searchFindNext.mock.calls.at(-1)?.[1];
+            expect(options).toMatchObject({ decorations: getTerminalSearchDecorations('light') });
+            expect(getTerminalSearchDecorations('light').matchBackground).not.toBe(getTerminalSearchDecorations('dark').matchBackground);
+        } finally {
+            if (original === undefined) delete document.documentElement.dataset.theme;
+            else document.documentElement.dataset.theme = original;
+            vi.useRealTimers();
+        }
     });
 
     it('does not recreate search highlights when output arrives immediately after closing search', async () => {

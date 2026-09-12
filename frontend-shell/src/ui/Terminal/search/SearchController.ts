@@ -1,5 +1,7 @@
 import type { IDisposable, Terminal } from '@xterm/xterm';
-import { SearchAddon, type ISearchDecorationOptions, type ISearchOptions } from '@xterm/addon-search';
+import { SearchAddon, type ISearchOptions } from '@xterm/addon-search';
+import type { Theme } from '../../appearanceTypes';
+import { getTerminalSearchDecorations } from '../../terminalSchemes';
 
 export interface SearchQueryOptions {
     caseSensitive: boolean;
@@ -14,23 +16,16 @@ export interface SearchResults {
 
 const HIGHLIGHT_LIMIT = 10_000;
 
-const decorations: ISearchDecorationOptions = {
-    matchBackground: '#665c00',
-    matchBorder: '#d7ba00',
-    matchOverviewRuler: '#d7ba00',
-    activeMatchBackground: '#f59e0b',
-    activeMatchBorder: '#ffffff',
-    activeMatchColorOverviewRuler: '#f59e0b',
-};
-
 export class SearchController {
     private readonly terminal: Terminal;
+    private readonly theme: () => Theme;
     private readonly addon = new SearchAddon({ highlightLimit: HIGHLIGHT_LIMIT });
     private readonly resultDisposable: IDisposable;
     private disposed = false;
 
-    constructor(terminal: Terminal, onResults: (results: SearchResults) => void) {
+    constructor(terminal: Terminal, theme: () => Theme, onResults: (results: SearchResults) => void) {
         this.terminal = terminal;
+        this.theme = theme;
         terminal.loadAddon(this.addon);
         this.resultDisposable = this.addon.onDidChangeResults(({ resultIndex, resultCount }) => {
             onResults({
@@ -75,7 +70,7 @@ export class SearchController {
             regex: options.regex,
             wholeWord: options.wholeWord,
             incremental,
-            decorations,
+            decorations: getTerminalSearchDecorations(this.theme()),
         };
     }
 }

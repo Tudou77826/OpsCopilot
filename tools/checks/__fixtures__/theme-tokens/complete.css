@@ -1,0 +1,12 @@
+/* 门禁 fixture：投影有亮色覆写、非颜色尺寸令牌不要求覆写、与模式无关的令牌须显式标注。 */
+:root {
+  --bg-primary: #1e1e1e;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --scrim: rgba(0, 0, 0, 0.5); /* mode-independent */
+  --scrollbar-size: 10px;
+}
+
+:root[data-theme="light"] {
+  --bg-primary: #fffdf8;
+  --shadow: 0 2px 8px rgba(52, 43, 29, 0.16);
+}

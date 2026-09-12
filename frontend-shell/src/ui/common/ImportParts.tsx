@@ -85,7 +85,7 @@ export const importStyles: Record<string, React.CSSProperties> = {
     overlay: {
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        backgroundColor: 'var(--scrim-strong)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -100,7 +100,7 @@ export const importStyles: Record<string, React.CSSProperties> = {
         display: 'flex',
         flexDirection: 'column',
         color: 'var(--text-primary)',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+        boxShadow: 'var(--shadow-dialog)',
     },
     header: {
         display: 'flex',

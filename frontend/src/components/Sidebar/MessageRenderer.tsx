@@ -142,7 +142,7 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({ content, role }) => {
                     margin: 0.5em 0;
                     padding: 0.5em 1em;
                     border-left: 3px solid var(--border-strong);
-                    background: rgba(255, 255, 255, 0.05);
+                    background: var(--layer-1);
                     color: var(--text-secondary);
                 }
 
@@ -164,7 +164,7 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({ content, role }) => {
                 }
 
                 .message-markdown-content .inline-code {
-                    background: rgba(255, 255, 255, 0.1);
+                    background: var(--layer-2);
                     padding: 2px 6px;
                     border-radius: 3px;
                     font-family: var(--font-mono);
@@ -234,13 +234,13 @@ const MessageRenderer: React.FC<MessageRendererProps> = ({ content, role }) => {
                 }
 
                 .message-markdown-content th {
-                    background: rgba(255, 255, 255, 0.05);
+                    background: var(--layer-1);
                     font-weight: 600;
                     color: var(--text-primary);
                 }
 
                 .message-markdown-content tr:nth-child(even) {
-                    background: rgba(255, 255, 255, 0.02);
+                    background: var(--layer-hairline);
                 }
 
                 .message-markdown-content img {

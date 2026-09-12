@@ -130,7 +130,7 @@ const styles = {
         textOverflow: 'ellipsis',
     },
     version: {
-        color: 'var(--text-muted)777',
+        color: 'var(--text-muted)',
         fontSize: '11px',
         fontFamily: 'var(--font-mono)',
         flexShrink: 0,

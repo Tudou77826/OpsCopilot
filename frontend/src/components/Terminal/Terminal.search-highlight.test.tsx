@@ -3,6 +3,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { act, render } from '@testing-library/react';
 import TerminalComponent, { TerminalRef } from './Terminal';
 import { HighlightRule, TerminalConfig } from './highlightTypes';
+import { getTerminalSearchDecorations, currentTheme } from '@opscopilot/shell-terminal/ui';
 
 let lastKeyHandler: ((e: any) => boolean) | null = null;
 let termWrite: ((data: string) => void) | null = null;
@@ -144,12 +145,10 @@ describe('Terminal search/highlight integration', () => {
         expect(searchFindNext).toHaveBeenCalled();
         expect(searchAddonOptions).toEqual({ highlightLimit: 10_000 });
         const options = searchFindNext.mock.calls.at(-1)?.[1];
+        // 断言"按当前主题取高亮配色"，而不是复述字面值：取色真相源是 shell 的 terminalSchemes。
         expect(options).toMatchObject({
             incremental: true,
-            decorations: {
-                matchBackground: '#665c00',
-                activeMatchBackground: '#f59e0b'
-            }
+            decorations: getTerminalSearchDecorations(currentTheme()),
         });
         vi.useRealTimers();
     });

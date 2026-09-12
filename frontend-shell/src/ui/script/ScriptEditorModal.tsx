@@ -48,14 +48,14 @@ const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
                 width: 16px; height: 16px; background-color: var(--text-on-accent);
                 border-radius: 50%; transition: transform 0.2s ease;
             }
-            .se-input:focus { outline: none; border-color: var(--accent) !important; box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2); }
+            .se-input:focus { outline: none; border-color: var(--accent) !important; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent); }
             .se-btn:hover { transform: translateY(-1px); }
             .se-btn-action:hover { background-color: var(--bg-tertiary); color: var(--text-primary); }
             .se-btn-close:hover { background-color: var(--bg-tertiary); color: var(--text-primary); }
-            .se-btn-add:hover { background-color: var(--accent-hover); box-shadow: 0 4px 12px rgba(0, 122, 204, 0.4); }
-            .se-btn-save:hover { background-color: var(--accent-hover); box-shadow: 0 4px 12px rgba(0, 122, 204, 0.4); }
+            .se-btn-add:hover { background-color: var(--accent-hover); box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 40%, transparent); }
+            .se-btn-save:hover { background-color: var(--accent-hover); box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 40%, transparent); }
             .se-btn-cancel:hover { background-color: var(--bg-input); border-color: var(--border-strong); }
-            .se-command-card:hover { border-color: var(--border-strong); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
+            .se-command-card:hover { border-color: var(--border-strong); box-shadow: 0 2px 8px var(--shadow); }
             .se-meta-input:hover, .se-delay-group:hover { border-color: var(--border-strong); }
         `;
         document.head.appendChild(style);
@@ -408,7 +408,7 @@ const styles: Record<string, React.CSSProperties> = {
     modal: {
         width: '960px', maxHeight: '85vh', backgroundColor: 'var(--bg-primary)',
         borderRadius: '12px', border: '1px solid var(--border)',
-        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
+        boxShadow: 'var(--shadow-dialog)',
         display: 'flex', flexDirection: 'column' as const,
         animation: 'scriptEditorSlideUp 0.3s ease-out',
     },

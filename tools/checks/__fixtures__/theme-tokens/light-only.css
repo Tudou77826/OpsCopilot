@@ -1,0 +1,9 @@
+/* 门禁 fixture：只声明在亮色块里的令牌在暗色下没有取值，同样是缺陷。 */
+:root {
+  --bg-primary: #1e1e1e;
+}
+
+:root[data-theme="light"] {
+  --bg-primary: #fffdf8;
+  --accent-hover: #6d491b;
+}

@@ -175,7 +175,7 @@ const styles: Record<string, React.CSSProperties> = {
         padding: '8px 10px',
         color: 'var(--text-primary)',
         minWidth: '420px',
-        boxShadow: '0 6px 20px rgba(0,0,0,0.35)',
+        boxShadow: '0 6px 20px var(--shadow)',
         display: 'flex',
         flexDirection: 'column',
         gap: '6px',

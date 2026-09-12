@@ -418,7 +418,7 @@ const menuStyles = {
         position: 'fixed' as const,
         backgroundColor: 'var(--bg-secondary)',
         border: '1px solid var(--border)',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+        boxShadow: '0 2px 8px var(--shadow)',
         borderRadius: '4px',
         zIndex: 1000,
         minWidth: '130px',

@@ -45,7 +45,7 @@ const TerminalAppearanceCard: React.FC<TerminalAppearanceCardProps> = ({ termina
     return (
         <div style={styles.card}>
             <div style={styles.cardTitle}>外观与字体</div>
-            <div style={{ ...styles.row, alignItems: 'flex-start', paddingBottom: '8px' }}>
+            <div style={{ ...styles.row, alignItems: 'flex-start', paddingBottom: 'var(--space-8)' }}>
                 <div style={styles.rowLeft}>
                     <div style={styles.rowLabel}>字体</div>
                     <div style={styles.rowDesc}>选择终端使用的等宽字体，字体卡片中展示实际渲染效果</div>
@@ -142,14 +142,14 @@ const styles: Record<string, React.CSSProperties> = {
         backgroundColor: 'var(--bg-secondary)',
         border: `1px solid ${colors.borderSubtle}`,
         borderRadius: radius.md,
-        padding: '16px',
+        padding: 'var(--space-16)',
         display: 'flex',
         flexDirection: 'column',
-        gap: '12px',
+        gap: 'var(--space-12)',
     },
     cardTitle: { fontSize: font.lg, fontWeight: 600, color: colors.textPrimary },
-    row: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' },
-    rowLeft: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 },
+    row: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-16)' },
+    rowLeft: { display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', minWidth: 0 },
     rowRight: { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexShrink: 0 },
     rowLabel: { fontSize: font.base, color: colors.textPrimary, fontWeight: 500 },
     rowDesc: { fontSize: font.sm, color: colors.textTertiary },
@@ -157,13 +157,13 @@ const styles: Record<string, React.CSSProperties> = {
     fontList: {
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-        gap: '8px',
+        gap: 'var(--space-8)',
     },
     fontCard: {
         display: 'flex',
         flexDirection: 'column',
-        gap: '8px',
-        padding: '10px 12px',
+        gap: 'var(--space-8)',
+        padding: 'var(--space-10) var(--space-12)',
         borderRadius: radius.md,
         border: `1px solid ${colors.borderPrimary}`,
         backgroundColor: 'var(--bg-primary)',
@@ -175,20 +175,20 @@ const styles: Record<string, React.CSSProperties> = {
         backgroundColor: 'var(--bg-hover)',
         boxShadow: '0 0 0 1px var(--accent)',
     },
-    fontHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' },
-    fontName: { fontSize: font.base, color: colors.textPrimary, marginRight: '6px' },
+    fontHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-8)' },
+    fontName: { fontSize: font.base, color: colors.textPrimary, marginRight: 'var(--space-6)' },
     fontDesc: { fontSize: font.xs, color: colors.textTertiary },
     fontSelected: { color: colors.accent, display: 'inline-flex' },
     fontSample: {
-        fontSize: '13px',
+        fontSize: 'var(--font-size-base)',
         color: colors.textSecondary,
         whiteSpace: 'nowrap',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
     },
-    sizeRow: { display: 'flex', alignItems: 'center', gap: '6px' },
+    sizeRow: { display: 'flex', alignItems: 'center', gap: 'var(--space-6)' },
     sizeButton: {
-        width: '28px', height: '28px', padding: 0,
+        width: '28px', height: 'var(--space-28)', padding: 0,
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         borderRadius: radius.sm,
         border: `1px solid ${colors.borderPrimary}`,
@@ -203,14 +203,14 @@ const styles: Record<string, React.CSSProperties> = {
         overflow: 'hidden',
     },
     sizeInput: {
-        width: '52px', padding: '5px 4px', textAlign: 'center',
+        width: '52px', padding: 'var(--space-5) var(--space-4)', textAlign: 'center',
         border: 'none', backgroundColor: 'transparent',
         color: colors.textPrimary, fontSize: font.base, outline: 'none',
     },
-    sizeUnit: { padding: '0 8px', fontSize: font.sm, color: colors.textTertiary, backgroundColor: 'var(--bg-tertiary)', alignSelf: 'stretch', display: 'flex', alignItems: 'center' },
+    sizeUnit: { padding: '0 var(--space-8)', fontSize: font.sm, color: colors.textTertiary, backgroundColor: 'var(--bg-tertiary)', alignSelf: 'stretch', display: 'flex', alignItems: 'center' },
     resetButton: {
-        display: 'inline-flex', alignItems: 'center', gap: '5px',
-        marginLeft: '4px', padding: '5px 10px',
+        display: 'inline-flex', alignItems: 'center', gap: 'var(--space-5)',
+        marginLeft: 'var(--space-4)', padding: 'var(--space-5) var(--space-10)',
         borderRadius: radius.sm,
         border: `1px solid ${colors.borderPrimary}`,
         backgroundColor: 'var(--bg-hover)',

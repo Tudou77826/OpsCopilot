@@ -8,6 +8,6 @@
 @import '@fontsource/ibm-plex-mono/700.css';
 @import '@fontsource/inconsolata/400.css';
 @import '@fontsource/inconsolata/700.css';
-@import 'flexlayout-react/style/dark.css';
+@import 'flexlayout-react/style/light.css';
 @import './styles/shell-theme.css';
-@import './FlexLayout/flexlayout-dark.css';
+@import './styles/flexlayout-tokens.css';

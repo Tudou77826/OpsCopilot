@@ -875,7 +875,7 @@ const editorStyles: Record<string, React.CSSProperties> = {
     maxHeight: '80vh',
     display: 'flex',
     flexDirection: 'column',
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+    boxShadow: '0 4px 12px var(--shadow)',
   },
   header: {
     padding: '16px 20px',

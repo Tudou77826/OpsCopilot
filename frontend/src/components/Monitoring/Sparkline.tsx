@@ -21,7 +21,7 @@ export default function Sparkline({
     data,
     height = 44,
     stroke = 'var(--severity-info)',
-    fill = 'rgba(77,163,255,0.18)',
+    fill = 'color-mix(in srgb, var(--accent) 18%, transparent)',
     min,
     max,
     showArea = true,
