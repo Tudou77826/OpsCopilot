@@ -2,7 +2,7 @@ import { OpsError } from './errors.js'
 
 export const pluginMarker = 'OpsCopilot.TeamsPlugin.Protocol1.SharedConfig1'
 export const compatibility = {
-  hostApi: '3', protocol: 1, apiRevision: { min: 1, max: 1 }, sharedConfig: 1, installationLifecycle: 1,
+  hostApi: '6', protocol: 1, apiRevision: { min: 1, max: 1 }, sharedConfig: 1, installationLifecycle: 1,
   requiredCapabilities: ['connections.v1', 'terminal.v1', 'files.v1', 'scripts.v1', 'quickCommands.v1', 'settings.v1'],
 } as const
 

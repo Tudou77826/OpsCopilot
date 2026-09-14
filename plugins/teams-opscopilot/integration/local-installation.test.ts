@@ -79,7 +79,7 @@ test('the selected desktop exe launches distinct processes and shares exe-relati
 
 test('unconfigured adapter remains mountable and installation mutations require authenticated context', async () => {
   const ctx = new Context(), dataDirectory = join(root, 'first-use')
-  await plugin(ctx, { host: { protocol: 1, bundleId: 'opscopilot', version: '0.1.0', artifactDirectory: root, dataDirectory } })
+  await plugin(ctx, { dataDir: dataDirectory })
   try {
   const service = (ctx as any).opscopilot
   assert.deepEqual(await service.health(), { healthy: true })

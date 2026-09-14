@@ -14,13 +14,13 @@ export async function pack(output: string, signingKey?: string) {
   const business = await build({ entryPoints: [join(root, 'src/entry.ts')], bundle: true, write: false, format: 'esm', platform: 'node', packages: 'external' })
   const ui = await readFile(join(root, 'dist/ui.js'), 'utf8')
   const { contributions } = await import('./dist/ui.js' as string)
-  const manifest = { id: 'opscopilot', version, hostApi: compatibility.hostApi, business: 'business.js', ui: 'ui.js', contract: 'contract.js', publisher: 'OpsCopilot', contributions }
+  const manifest = { id: 'opscopilot', version, hostApi: compatibility.hostApi, uiApi: '1' as const, business: 'business.js', ui: 'ui.js', contract: 'contract.js', publisher: 'OpsCopilot', contributions }
   const texts = { 'business.js': business.outputFiles[0].text, 'ui.js': ui, 'contract.js': `export const schemaVersion = 1; export const compatibility = ${JSON.stringify(compatibility)};` }
   await Promise.all([writeFile(join(output, 'manifest.json'), JSON.stringify(manifest, null, 2)), ...Object.entries(texts).map(([name, contents]) => writeFile(join(output, name), contents))])
-  const artifact = Buffer.from(JSON.stringify({ format: 2, manifest, files: texts }))
+  const artifact = Buffer.from(JSON.stringify({ manifest, files: Object.fromEntries(Object.entries(texts).map(([name, contents]) => [name, Buffer.from(contents).toString('base64')])) }))
   await writeFile(join(output, 'opscopilot.bundle.json'), artifact)
   const sha256 = createHash('sha256').update(artifact).digest('hex')
-  const release = { componentId: manifest.id, version, artifact: 'opscopilot.bundle.json', sha256, ...(signingKey ? { signature: sign(null, Buffer.from(`${manifest.id}\n${version}\n${sha256}`), signingKey).toString('base64') } : {}) }
+  const release = { componentId: manifest.id, version, type: 'feature', artifact: 'opscopilot.bundle.json', sha256, publisher: manifest.publisher, hostApi: manifest.hostApi, ...(signingKey ? { signature: sign(null, Buffer.from(`${manifest.id}\n${version}\n${sha256}`), signingKey).toString('base64') } : {}) }
   await writeFile(join(output, signingKey ? 'release.json' : 'release.unsigned.json'), JSON.stringify(release, null, 2))
   return { manifest, output, release }
 }
