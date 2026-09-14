@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint:style": "node ../tools/checks/check-style-tokens.mjs frontend-shell/src",
-    "lint:style:self": "node --test ../tools/checks/check-style-tokens.test.mjs"
+    "lint:style:self": "node --test ../tools/checks/check-style-tokens.test.mjs",
+    "lint:style:all": "node ../tools/checks/check-style-tokens.mjs"
   },
   "dependencies": {
     "@fontsource/fira-code": "^5.2.7",

@@ -27,6 +27,11 @@ jobs:
       - run: npm --prefix plugins/teams-opscopilot ci
       - run: npm --prefix frontend-shell run typecheck
       - run: npm --prefix frontend-shell test -- --maxWorkers=2
+      # 样式门禁：裸色值、双主题完整性、皮肤块契约、尺寸令牌引用完整性。
+      # 自测先跑，保证门禁规则本身是活的（改了规则却只剩空转时要能发现）。
+      # lint:style 只扫 frontend-shell/src（本机快跑用），CI 用全量 :all 连 frontend/src 一起扫。
+      - run: npm --prefix frontend-shell run lint:style:self
+      - run: npm --prefix frontend-shell run lint:style:all
       - run: npm --prefix frontend test -- --run --maxWorkers=2
       - run: npm --prefix frontend-shell run build
       - run: npm --prefix frontend run build

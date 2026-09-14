@@ -559,6 +559,13 @@ OpsCopilot 目前的圆角与字号是 `frontend-shell/src/ui/settings/settingsS
 2. 门禁在 CI 上确实被执行：在 PR 上看到该 step 的运行记录，而非仅本机可跑。
 3. 步骤 1 的基线与当前状态的每一处差异，都已在对应步骤中被解释或消除。
 
+**已做的一半（2026-09-14）**：样式门禁接进 `.github/workflows/shared-shell.yml` 的 `verify` 作业，紧跟 `frontend-shell` 的 typecheck/test 之后、`frontend` 回归之前，用两条 npm 脚本而不是裸 `node` 命令，让门禁入口只有一处定义：
+
+- `npm --prefix frontend-shell run lint:style:self`（门禁规则自测，8 条）——放在前一条，规则本身被改坏时先报，避免"规则失效但仍全绿"；
+- `npm --prefix frontend-shell run lint:style:all`（全量扫描，187 个文件）。为此在 `frontend-shell/package.json` 新增 `lint:style:all`：原有的 `lint:style` 只扫 `frontend-shell/src`（93 个文件，本机快跑用），CI 要连 `frontend/src` 一起扫，用 `node tools/checks/check-style-tokens.mjs` 的默认根集。
+
+本机三条命令都已跑通（自测 8/8；全量 187 文件通过；局部 93 文件通过）。**原第 1 条（三次注入）与第 2 条（在 PR 上看到运行记录）仍未做**：前者在本仓已由门禁自测的 8 条用例覆盖了规则的注入验证（见 8.3 与步骤 5），但没有"往组件里塞红字"这三次端到端注入；后者要等一次带 PR 的运行，本仓改为单分支后由 `push: [main]` 触发，还没有留下 CI 运行记录。第 3 条（基线与现状逐处对齐）已在步骤 1–8 的登记里逐条交代。
+
 ## 10. 待确认事项
 
 1. 花园入口与快捷命令入口是否统一放在现有右侧工具栏——该决定同时影响入口选中态在皮肤下的规范。
