@@ -605,6 +605,8 @@ OpsCopilot 目前的圆角与字号是 `frontend-shell/src/ui/settings/settingsS
 6. 是否引入像素级视觉回归工具（如 Playwright）纳入 CI。不引入时由第 9 节的令牌级断言加人工截图承担，代价是交互触发的面（拖拽、浮窗、溢出菜单）无法自动回归。
 7. **插件包以哪个为准（已定）**：`main` 已包含 `plugins/teams-opscopilot`（`fe1f3f6` 之后），它随 main 演进，桌面与插件共用一份令牌层；`OpsCopilot-teams-plugin` / `OpsCopilot-shell-integration` / `OpsCopilot-workbench-architecture` 三个工作树此后只作历史参考。第 7、8 步的"插件 `ui.tsx` 不写死 `host.dataset.theme`"落在 `plugins/teams-opscopilot/src/ui.tsx`。
 8. **宿主 revision（已解决）**：宿主仓库 `D:\dev\workspace-ai\icode-teams` 已把同事暂存的原生插件传输层提交为 `fed9cd9`（hostApi 6 的浏览器终端与文件通道），再并入 `origin/main`（`c9d99e9`，领先 26 个提交，含 `fda781f` 的深浅色主题）为 `1cfd32e`；10 个冲突文件按语义逐个合并，细节见该仓库的合并提交说明。宿主的 `--ui-*` 契约在这 26 个提交里**没有变化**（46 个名字全在），所以本仓的契约快照无需更新。宿主明暗的运行方式：`<head>` 内联脚本按 `localStorage['ui.theme']` 优先、否则 `prefers-color-scheme` 初始化 `<html data-theme>`，侧边栏 Switch 切换并写回 localStorage（只在浏览器本地，不落服务端）。该分支的推送与 PR 由宿主仓库负责人决定。
+
+   另外宿主侧还有两处修复（都与主题无关，但影响插件在宿主里的呈现）：① `native-relay.ts` 的 `Promise.resolve(lease.close()).catch(() => {})` 被宿主的兜底门禁判为未登记的静默兜底，按仓内约定登记 `terminal-relay-lease-close` 并补了回归用例；② 合并后插件页塌成 225px——宿主在 `<main>` 内多了一层内容包裹 div，`.native-workspace` 的 `height:100%` 落在 auto 高度的父层上，补 `.native-main>div{height:100%}` 并把整高链条写进 `ui.test.ts` 的契约断言。第 7 步的"12 个面"复核里，这类"比例被压扁"的缺陷截图最容易漏掉，所以本仓的结论只对已量的几何负责。
 9. 键盘焦点的自动化判据：jsdom 不算层叠，要自动化"Tab 后焦点可见"只有两条路——引入真浏览器测试基准（即第 6 条），或在门禁里加静态规则（例如 `outline: none` 必须与该文件内的 `:focus-visible` 覆写成对出现）。当前只有规则存在性断言。
 10. **主题改动如何整合到插件（2026-09-13 实测，相关结论已修正一次）**：本仓库有 5 个工作树、4 条线：
     | 工作树 | 分支 | 相对 main | 内容 |
