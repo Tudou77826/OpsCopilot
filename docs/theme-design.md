@@ -581,6 +581,19 @@ OpsCopilot 目前的圆角与字号是 `frontend-shell/src/ui/settings/settingsS
 
 所以结论：**皮肤只做色彩与圆角；字体、字号、界面密度属于人体工学，走独立设置。** 第 9 步的范围随之收窄为"圆角映射（+ 视需要挪出间距）"，而不是原提案的四类一起上。
 
+**形状已实施（2026-09-15）**：评审确认"形状"属于皮肤，并明确"宿主不给这个参数也可以读宿主代码把值敲定"。实际情况是宿主的圆角**有契约**（`--ui-radius` 9 / `--ui-radius-card` 12 / `--ui-radius-block` 16，其 antd 主题也是 `borderRadius: 9`），所以 teams 皮肤直接引用宿主令牌、按角色对齐；Windows 那套没有宿主可读，按 Fluent 的 4px 控件 / 8px 卡片写死。
+
+| 皮肤 | xs 徽标 | sm 控件 | md 卡片 | lg 弹窗 |
+| --- | --- | --- | --- | --- |
+| default | 3 | 4 | 6 | 8 |
+| windows | 4 | 4 | 8 | 8 |
+| teams | 3（不映射） | `var(--ui-radius, 4px)` | `var(--ui-radius-card, 6px)` | `var(--ui-radius-block, 8px)` |
+
+- 徽标那档在 teams 里**故意不映射**：宿主对它没有契约（它自己在 `.nav-type` 里硬编码 4px），我们那档是 3px，1px 差别肉眼无感，不值得为它写死一个字面量。
+- 契约测试随之分化：**颜色令牌**的兜底必须是 `var(--mode-*)`（有镜像），**形状令牌**的兜底必须是字面量（`--mode-*` 只镜像颜色）；另加三条：形状引用的正是宿主那三个圆角、自带调色板的皮肤圆角次序自洽（xs≤sm≤md≤lg）、windows 的形状就是 4/8。门禁自测补了一条 fixture，明确"皮肤块可以声明尺寸令牌，只有亮色块不行"。
+- **一个必须说的教训**：令牌改对了不等于看得见。改完先量真实控件，发现 `新建连接` 与会话搜索框在三套皮肤下**都是 4px**——因为整个共享壳里 260 处 `borderRadius` 只有 57 处走了令牌，其余是内联写死的。本次把**当前可见面**上的 24 处收敛成令牌（`styles.css` 11、`ProductChrome` 4、`CommandGrid` 4、`SessionManager` 2、`FlexLayoutAdapter` 3），收敛后再量：`新建连接` 与原版/Windows 是 4px、teams 是 **9px**，与宿主的 antd 控件一致。
+- **遗留**：仍有约 179 处 `borderRadius` 字面量，集中在对话框与面板（`FilesPanel`、`ScriptEditorModal`、`HighlightRulesModal`、`SmartConnectModal`、`productSettingsStyles` 等），以及 `styles.css` 里 12 处**不在刻度上**的取值（2/5/7/9/11/12/13px）。要让形状在所有面上一致，需要一次与步骤 5 同规格的机械收敛（逐处打印 + 冻结表 + 逐面截图），并先决定那些离刻度值归到哪一档。
+
 **前置证据（2026-09-14，为待确认 5 取数，尚未实施）**：把宿主 `ed88a1d` 的 `design-system.ts` 与我们 `shell-theme.css` 的尺寸令牌并排看，宿主**确实**提供了圆角/间距/字号/字体族，但两套刻度并不一一对应：
 
 | 维度 | 宿主 `--ui-*` | 我们 | 对应关系 |
