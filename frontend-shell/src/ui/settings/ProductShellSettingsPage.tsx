@@ -6,14 +6,17 @@ import { normalizeTerminalConfig } from '../Terminal/terminalAppearance';
 import { colors, font } from './settingsStyles';
 import { productSettingsStyles as styles } from './productSettingsStyles';
 import ThemeChoiceCard from './ThemeChoiceCard';
+import SkinChoiceCard, { type SkinChoice } from './SkinChoiceCard';
 import TerminalAppearanceCard from './TerminalAppearanceCard';
 import HighlightRulesModal from './HighlightRulesModal';
 import KeysMap from './KeysMap';
 export type ShellPageId = 'appearance' | 'highlight' | 'shortcuts';
 export interface ShellPageConfig { terminal?: TerminalConfig; highlight_rules?: HighlightRule[]; command_query_shortcut: string }
-export function ProductShellSettingsPage<T extends ShellPageConfig>({ activeTab, config, setConfig, theme, onThemeChange, highlightIssues }: {
+export function ProductShellSettingsPage<T extends ShellPageConfig>({ activeTab, config, setConfig, theme, onThemeChange, highlightIssues, skin }: {
  activeTab: ShellPageId; config: T; setConfig(value: T): void; theme: Theme; onThemeChange(theme: Theme): void;
  highlightIssues: { name: string; issues: string[] }[];
+ /** 只在有宿主令牌的环境（如 Teams 插件）注入；桌面壳不注入，因此看不到皮肤卡。 */
+ skin?: SkinChoice;
 }) {
  const formatShortcutLabel = (value: string) => (value || '').trim() || 'Ctrl+K';
  switch(activeTab) {
@@ -21,6 +24,7 @@ export function ProductShellSettingsPage<T extends ShellPageConfig>({ activeTab,
                 return (
                     <div style={styles.settingsGroup}>
                         <ThemeChoiceCard theme={theme} onThemeChange={onThemeChange} />
+                        {skin ? <SkinChoiceCard skin={skin} /> : null}
                         {/* 终端外观已收纳在本页 */}
                         <TerminalAppearanceCard terminal={normalizeTerminalConfig(config.terminal)} onChange={terminal => setConfig({ ...config, terminal })} />
                     </div>

@@ -6,6 +6,7 @@ import type { AIConfigRuntime } from './AIConfigCard';
 import { assessPattern } from '../Terminal/highlight/regexSafety';
 import { ProductSettingsFrame, type SettingsNavGroup } from './ProductSettingsFrame';
 import { ProductShellSettingsPage } from './ProductShellSettingsPage';
+import type { SkinChoice } from './SkinChoiceCard';
 import { ProductLLMSettings, type ProductLLMConfig } from './ProductLLMSettings';
 import { CompletionDelayCard } from './CompletionDelayCard';
 
@@ -36,13 +37,15 @@ export interface ShellSettingsModalProps {
     initial?: ShellSettings | null;
     /** AI 接入配置（独立持久化域）。未注入时 AI 配置卡不渲染（能力边界纪律）。 */
     aiRuntime?: AIConfigRuntime;
+    /** 皮肤选择（前端键，不走后端配置）。未注入时皮肤卡不渲染——没有宿主令牌的环境换了也没效果。 */
+    skin?: SkinChoice;
 }
 
 
 type Tab = 'host' | 'llm' | 'appearance' | 'highlight' | 'shortcuts' | 'experimental';
 const emptyLLM: ProductLLMConfig = { APIKey: '', BaseURL: '', FastModel: '', ComplexModel: '' };
 /** Host persistence adapter; all rendered pages and chrome come from the desktop product. */
-export default function ShellSettingsModal({ hostSettings, isOpen, embedded, onClose, runtime, onApply, initial, aiRuntime }: ShellSettingsModalProps) {
+export default function ShellSettingsModal({ hostSettings, isOpen, embedded, onClose, runtime, onApply, initial, aiRuntime, skin }: ShellSettingsModalProps) {
  const [settings, setSettings] = useState<ShellSettings | null>(null);
  const [saved, setSaved] = useState<ShellSettings | null>(null);
  const [llm, setLLM] = useState(emptyLLM);
@@ -129,6 +132,6 @@ export default function ShellSettingsModal({ hostSettings, isOpen, embedded, onC
      activeTab === 'experimental' ? <CompletionDelayCard value={settings.completionDelay} onChange={completionDelay=>update({...settings,completionDelay})}/> :
      <ProductShellSettingsPage activeTab={activeTab} config={{terminal:settings.terminal,highlight_rules:settings.highlightRules,command_query_shortcut:settings.commandQueryShortcut || 'Ctrl+K'}}
        setConfig={next=>update({...settings,terminal:next.terminal!,highlightRules:next.highlight_rules!,commandQueryShortcut:next.command_query_shortcut})}
-       theme={settings.theme} onThemeChange={theme=>update({...settings,theme})} highlightIssues={highlightIssues}/>}
+       theme={settings.theme} onThemeChange={theme=>update({...settings,theme})} highlightIssues={highlightIssues} skin={skin}/>}
  </ProductSettingsFrame>;
 }

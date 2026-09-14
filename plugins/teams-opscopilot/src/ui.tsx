@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { OpsEntry } from './local-ops-setup'
 import { TeamsOpsClient } from './browser-client'
 import { ShellSurface } from '../../../frontend-shell/src/ui/Surface'
-import { applySkin, hostTheme } from '../../../frontend-shell/src/ui/appearance'
+import { applySkin, hostTheme, readPersistedSkinChoice } from '../../../frontend-shell/src/ui/appearance'
 import { ToastProvider } from '../../../frontend-shell/src/ui/feedback/Toast'
 import { ConfirmDialogInternal } from '../../../frontend-shell/src/ui/feedback/ConfirmDialog'
 import '../../../frontend-shell/src/ui/styles.css'
@@ -11,7 +11,7 @@ import '../../../frontend/src/style.css'
 import './workspace.css'
 
 declare const OPS_STYLES: string
-export const version = '0.1.3'
+export const version = '0.1.4'
 export const uiApi = '1'
 export const contributions = [
   { id: 'ops-nav', slot: 'navigation', title: 'OpsCopilot', href: '/plugins/opscopilot' },
@@ -24,9 +24,9 @@ export function mount(container: HTMLElement, context?: { bundleId: string; page
   // 首帧明暗取宿主的 data-theme：宿主没有明暗（旧构建）时才用 light，
   // 这样"宿主是暗色"不会先闪一帧亮色。运行期跟随在 app.tsx。
   host.dataset.theme = hostTheme() ?? 'light'
-  // 皮肤固定为 teams：插件只跑在 iCode Teams 里，明暗（data-theme）才跟随宿主（第 8 步）。
+  // 皮肤默认跟随宿主（teams）；用户在外观页显式选过就以选择为准，所以读"选过的值"而不是"带默认的值"。
   // 两个属性必须写在同一个元素上——构建会把选择器改写成 :host([data-skin="teams"])。
-  applySkin('teams', host)
+  applySkin(readPersistedSkinChoice() ?? 'teams', host)
   const shadow = host.attachShadow({ mode: 'open' }), style = document.createElement('style'), main = document.createElement('div'), portals = document.createElement('div')
   style.textContent = OPS_STYLES; main.className = 'ops-root'; portals.className = 'ops-portals'; shadow.append(style, main, portals); container.append(host)
   const client = new TeamsOpsClient(context?.bundleId || 'opscopilot'), root = createRoot(main)

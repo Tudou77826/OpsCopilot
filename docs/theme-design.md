@@ -459,6 +459,10 @@ OpsCopilot 目前的圆角与字号是 `frontend-shell/src/ui/settings/settingsS
 
 门槛与遗留：第 3 条成立，可以进入步骤 7。第 4 条的"截图与基线一致"改为上面的全量计算样式指纹比对：登记的基线是空壳状态，而当前应用已连着会话（且设置页不纳入截图），逐张对比不可复现；指纹比对覆盖了每个元素的 12 个属性，比截图更精确且已进 CI。遗留：桌面壳首屏内联脚本暂不读皮肤键（桌面壳恒为 `default`，不产生 FOUC），插件的首屏跟随在第 8 步处理。
 
+**皮肤入口与持久化（2026-09-14 补）**：原先 `persistSkin`/`readPersistedSkin`/`currentSkin` 只有测试在用，插件里写死 `applySkin('teams')`，桌面壳从不设 `data-skin`——机制在、但没有入口。现在：插件首帧按 `readPersistedSkinChoice() ?? 'teams'` 应用（新增该函数是因为"没选过"与"选成了 default"必须分开：宿主内默认跟随宿主，桌面壳默认 default，同一个键不能既表默认又表选择）；外观页在 `ThemeChoiceCard` 之后多一张 `SkinChoiceCard`（`ShellSettingsModal` 的可选 `skin` 属性注入，桌面壳不注入所以看不到——在没有宿主令牌的环境里换皮肤是**空操作**，已用 436 元素 × 12 属性的指纹证明 teams 与 default 逐项等值，所以那张卡在那里只会误导）；换皮肤只写前端键 `opscopilot-skin` 并 `applySkin(next, surface)`，不碰明暗、不写后端配置。
+
+实测（宿主内，宿主保持暗色不动）：`teams` → `--bg-primary #1c1c1c`、`--accent #af87ff`；在外观页点"OpsCopilot 默认" → 皮肤键落 `default`、**宿主仍是暗色、插件也仍是暗色**，而令牌切成 OpsCopilot 自己的暗色 `#1e1e1e` / `#2a2a2a` / `--accent #007acc`；整页重载后 `data-skin` 仍为 `default`（持久化生效）；点回"跟随 iCode Teams"令牌回到宿主的 `#1c1c1c` / `#af87ff`。这就是两轴正交的可操作证据：换皮肤只换颜色来源，明暗一个 bit 都没动。
+
 ### 步骤 7：iCode Teams 色彩映射
 
 改动：`:root[data-skin="teams"]` 按 6.3 写全映射，每个值形如 `var(--ui-color-xxx, <兜底>)`；兜底取模式层默认值，保证宿主缺变量时不崩。
@@ -577,6 +581,8 @@ OpsCopilot 目前的圆角与字号是 `frontend-shell/src/ui/settings/settingsS
 - **不做**：控件高度（宿主没有契约）。
 
 若结论是"只做间距 + 字体族"，那是一次小改动，风险面可控；若连字号与圆角一起换，必须按上面第 2 条逐面截图复核。若结论是"皮肤只换颜色"，本步取消，步骤 7 即终态。
+
+补充一条取数结论：宿主的尺寸类变量（`--ui-radius*`、`--ui-space-*`、`--ui-font-size-*`、`--ui-font-family`）**只在 `:root` 声明一次，暗色块不覆写**（`design-system.ts` 里逐条核对过声明位置），所以把它们纳入皮肤只会让几何跟随宿主那**一套**刻度，与明暗无关——不会破坏"皮肤/模式正交"。若决定做圆角，建议按**角色**对齐而不是按数值：控件 `--radius-sm`(4px) → `--ui-radius`(9px)、卡片 `--radius-md`(6px) → `--ui-radius-card`(12px)、弹窗 `--radius-lg`(8px) → `--ui-radius-block`(16px)，徽标 `--radius-xs`(3px) 暂不映射（宿主没有对应小档）。代价是控件圆角从 4px 跳到 9px，比颜色变化明显，必须逐面复核且先看工具栏/输入框/徽标这三处。
 
 ### 步骤 10：门禁收口与元验证
 

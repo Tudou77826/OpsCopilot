@@ -11,7 +11,8 @@ import ScriptRecordingPanel from '../../../frontend-shell/src/ui/script/ScriptRe
 import { useToast } from '../../../frontend-shell/src/ui/feedback/Toast'
 import { SessionStatus } from '../../../frontend-shell/src/ui/types'
 import { normalizeTerminalConfig } from '../../../frontend-shell/src/ui/Terminal/terminalAppearance'
-import { hostTheme, observeHostTheme, persistThemeFollow, readPersistedThemeFollow, type ThemeFollow } from '../../../frontend-shell/src/ui/appearance'
+import { applySkin, hostTheme, observeHostTheme, persistSkin, persistThemeFollow, readPersistedSkinChoice, readPersistedThemeFollow, type ThemeFollow } from '../../../frontend-shell/src/ui/appearance'
+import type { Skin } from '../../../frontend-shell/src/ui/appearanceTypes'
 import ShellSettingsModal, { type ShellSettings } from '../../../frontend-shell/src/ui/settings/ShellSettingsModal'
 import ScriptListPanel from '../../../frontend-shell/src/ui/script/ScriptListPanel'
 import ScriptEditorModal from '../../../frontend-shell/src/ui/script/ScriptEditorModal'
@@ -51,6 +52,8 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
   const [themeFollow, setThemeFollow] = useState<ThemeFollow>(readPersistedThemeFollow)
   // 异步回调（settings.load）里要读当下的跟随状态，用 ref 避免读到闭包里的旧值。
   const themeFollowRef = useRef(themeFollow)
+  // 皮肤是前端键（不进后端配置）：没选过就跟随宿主，选过就以选择为准。
+  const [skin, setSkin] = useState<Skin>(() => readPersistedSkinChoice() ?? 'teams')
   const [error, setError] = useState(''), [busy, setBusy] = useState(false), [connected, setConnected] = useState(false)
 
   const [scriptId, setScriptId] = useState<string>(), scriptsRef = useRef<{ loadScripts(): void }>(null)
@@ -180,6 +183,8 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
     if (next.theme !== settings.theme) { setThemeFollow('manual'); persistThemeFollow('manual') }
     setSettings(next)
   };
+  // 皮肤与明暗是两个轴：换皮肤只改视觉语言来源，不动明暗，也不写后端配置。
+  const changeSkin = (next: Skin) => { setSkin(next); persistSkin(next); applySkin(next, surface) };
   return <ProductFrame
     toolbar={<ProductToolbar status={connected ? '就绪' : '连接中…'} theme={settings.theme}
       onNewConnection={() => { setConnectingSavedId(undefined); setConnectSeed([]); setConnectModal(true) }}
@@ -216,7 +221,11 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
   >
     <SmartConnectModal isOpen={connectModal} initialConfigs={connectSeed} onClose={() => setConnectModal(false)} onConnect={connectBatch}
       onParse={async input => (await client.call('ai.parse',{input})).configs ?? []}/>
-    <ShellSettingsModal hostSettings={hostSettings} embedded isOpen={showSettings} onClose={() => setShowSettings(false)} runtime={settingsRuntime} initial={settings} onApply={applySettings} aiRuntime={aiRuntime}/>
+    <ShellSettingsModal hostSettings={hostSettings} embedded isOpen={showSettings} onClose={() => setShowSettings(false)} runtime={settingsRuntime} initial={settings} onApply={applySettings} aiRuntime={aiRuntime}
+      skin={{ value: skin, onChange: changeSkin, options: [
+        { id: 'teams', label: '跟随 iCode Teams', hint: '颜色、圆角与字号取自宿主公开的样式契约，宿主换主题时自动跟随' },
+        { id: 'default', label: 'OpsCopilot 默认', hint: '使用 OpsCopilot 自己的视觉语言，不跟随宿主' },
+      ] }}/>
     <CommandQueryOverlay visible={commandQuery.visible} query={commandQuery.query} onQueryChange={commandQuery.setQuery} loading={commandQuery.loading} result={commandQuery.result} error={commandQuery.error}
       onGenerate={() => void commandQuery.generate()} onRegenerate={() => void commandQuery.generate()} onCopy={() => void commandQuery.copy()}
       onType={commandQuery.type} onClose={() => commandQuery.setVisible(false)}/>

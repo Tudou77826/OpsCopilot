@@ -79,6 +79,34 @@ export const readPersistedSkin = (): Skin => {
 };
 
 /**
+ * 读取用户**显式选过**的皮肤：没选过时返回 undefined。
+ * 与 readPersistedSkin 的区别是"没选过"和"选成了 default"必须能分开——
+ * 宿主内的插件默认要跟随宿主（teams），桌面壳默认是 default，同一个键不能既表默认又表选择。
+ */
+export const readPersistedSkinChoice = (): Skin | undefined => {
+    try {
+        const raw = (window.localStorage.getItem(SKIN_STORAGE_KEY) ?? '').trim().toLowerCase();
+        return raw === 'teams' || raw === 'default' ? raw : undefined;
+    } catch {
+        return undefined;
+    }
+};
+
+/**
+ * 当前环境是否真的提供了宿主令牌。皮肤块的值全部来自 `var(--ui-*)`，
+ * 没有这些变量时 teams 与 default 逐项等值（已用 436 元素 × 12 属性的指纹验证），
+ * 所以"换皮肤"在没有宿主令牌的环境里是个空操作——入口该按这个结论决定是否出现。
+ */
+export const hostTokensAvailable = (): boolean => {
+    if (typeof document === 'undefined' || typeof getComputedStyle !== 'function') return false;
+    try {
+        return getComputedStyle(document.documentElement).getPropertyValue('--ui-color-bg').trim() !== '';
+    } catch {
+        return false;
+    }
+};
+
+/**
  * 当前生效皮肤：以 data-skin 为准。
  * 与 data-theme 写在同一元素上：桌面壳是 <html>，插件是 shadow host——
  * 皮肤块经插件构建改写为 :host([data-skin="teams"])，属性必须落在同一个宿主元素上才匹配得到。

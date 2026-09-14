@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import css from './styles/shell-theme.css?raw';
 import hostContract from './styles/teams-host-contract.json';
 import { getTerminalTheme, getTerminalSearchDecorations, terminalHighlightDefaults } from './terminalSchemes';
-import { currentTheme, normalizeSkin, applySkin, currentSkin, persistSkin, readPersistedSkin, DEFAULT_SKIN, SKIN_STORAGE_KEY, THEME_STORAGE_KEY, DEFAULT_THEME_FOLLOW, THEME_FOLLOW_STORAGE_KEY, normalizeThemeFollow, persistThemeFollow, readPersistedThemeFollow, hostTheme, observeHostTheme } from './appearance';
+import { currentTheme, normalizeSkin, applySkin, currentSkin, persistSkin, readPersistedSkin, DEFAULT_SKIN, SKIN_STORAGE_KEY, THEME_STORAGE_KEY, DEFAULT_THEME_FOLLOW, THEME_FOLLOW_STORAGE_KEY, normalizeThemeFollow, persistThemeFollow, readPersistedThemeFollow, hostTheme, observeHostTheme, readPersistedSkinChoice, hostTokensAvailable } from './appearance';
 import { btnPrimary, settingsCard } from './settings/settingsStyles';
 
 function tokens(selector: string): Record<string, string> {
@@ -471,5 +471,45 @@ describe('模式跟随宿主', () => {
       await settle();
       expect(seen, '解除监听后不应再收到回调').toEqual(['dark']);
     });
+  });
+});
+
+// 皮肤入口的前置判断：没选过 ≠ 选成了 default；有没有宿主令牌决定入口该不该出现。
+describe('皮肤选择的前置判断', () => {
+  const withSkinKey = async (run: () => void | Promise<void>) => {
+    const saved = window.localStorage.getItem(SKIN_STORAGE_KEY);
+    try {
+      await run();
+    } finally {
+      if (saved === null) window.localStorage.removeItem(SKIN_STORAGE_KEY);
+      else window.localStorage.setItem(SKIN_STORAGE_KEY, saved);
+    }
+  };
+
+  it('没选过时返回 undefined，选过才返回具体值', async () => {
+    await withSkinKey(() => {
+      window.localStorage.removeItem(SKIN_STORAGE_KEY);
+      expect(readPersistedSkinChoice()).toBeUndefined();
+      persistSkin('teams');
+      expect(readPersistedSkinChoice()).toBe('teams');
+      persistSkin('default');
+      expect(readPersistedSkinChoice(), '选成 default 与没选过必须能分开').toBe('default');
+      window.localStorage.setItem(SKIN_STORAGE_KEY, 'nonsense');
+      expect(readPersistedSkinChoice()).toBeUndefined();
+    });
+  });
+
+  it('hostTokensAvailable 以 --ui-color-bg 是否解析出值为准', async () => {
+    const html = document.documentElement;
+    const saved = html.getAttribute('style');
+    try {
+      html.removeAttribute('style');
+      expect(hostTokensAvailable(), '没有宿主变量时应为 false').toBe(false);
+      html.style.setProperty('--ui-color-bg', '#fafafa');
+      expect(hostTokensAvailable(), '有宿主变量时应为 true').toBe(true);
+    } finally {
+      if (saved === null) html.removeAttribute('style');
+      else html.setAttribute('style', saved);
+    }
   });
 });
