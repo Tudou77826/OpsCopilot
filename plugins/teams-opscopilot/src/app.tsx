@@ -11,7 +11,7 @@ import ScriptRecordingPanel from '../../../frontend-shell/src/ui/script/ScriptRe
 import { useToast } from '../../../frontend-shell/src/ui/feedback/Toast'
 import { SessionStatus } from '../../../frontend-shell/src/ui/types'
 import { normalizeTerminalConfig } from '../../../frontend-shell/src/ui/Terminal/terminalAppearance'
-import { applySkin, hostTheme, observeHostTheme, persistSkin, persistThemeFollow, readPersistedSkinChoice, readPersistedThemeFollow, type ThemeFollow } from '../../../frontend-shell/src/ui/appearance'
+import { applySkin, availableSkins, hostTheme, observeHostTheme, persistSkin, persistThemeFollow, readPersistedSkinChoice, readPersistedThemeFollow, type ThemeFollow } from '../../../frontend-shell/src/ui/appearance'
 import type { Skin } from '../../../frontend-shell/src/ui/appearanceTypes'
 import ShellSettingsModal, { type ShellSettings } from '../../../frontend-shell/src/ui/settings/ShellSettingsModal'
 import ScriptListPanel from '../../../frontend-shell/src/ui/script/ScriptListPanel'
@@ -49,7 +49,9 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
   const [settings, setSettings] = useState(initialSettings)
   // 明暗默认跟随宿主；用户手动切过之后才停在这一条上（跟随与否与"选了哪个"分开记，
   // 所以恢复跟随时不会丢掉用户原来的偏好）。
-  const [themeFollow, setThemeFollow] = useState<ThemeFollow>(readPersistedThemeFollow)
+  // 初值也必须遵守上面的规则：持久化的是 teams + manual 时，加载就不能停在半暗半亮，
+  // 直接把跟随定为 host（teams 皮肤的明暗本来就来自宿主）。
+  const [themeFollow, setThemeFollow] = useState<ThemeFollow>(() => (readPersistedSkinChoice() ?? 'teams') === 'teams' ? 'host' : readPersistedThemeFollow())
   // 异步回调（settings.load）里要读当下的跟随状态，用 ref 避免读到闭包里的旧值。
   const themeFollowRef = useRef(themeFollow)
   // 皮肤是前端键（不进后端配置）：没选过就跟随宿主，选过就以选择为准。
@@ -176,15 +178,30 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
     }
   });
   // 手动切明暗 = 显式覆盖：记成 manual，宿主之后再变也不改写；用户原来的选择照旧存进 sidecar。
-  const toggleTheme = () => { const updated = {...settings, theme:settings.theme === 'dark' ? 'light' as const : 'dark' as const}; setThemeFollow('manual'); persistThemeFollow('manual'); setSettings(updated); void act(() => settingsRuntime.save(updated)) };
+  const toggleTheme = () => {
+    if (modeFromHost) return refuseModeChange();
+    const updated = {...settings, theme:settings.theme === 'dark' ? 'light' as const : 'dark' as const};
+    setThemeFollow('manual'); persistThemeFollow('manual'); setSettings(updated); void act(() => settingsRuntime.save(updated))
+  };
   const resumeHostTheme = () => { setThemeFollow('host'); persistThemeFollow('host') };
   // 设置页里改明暗同样是显式覆盖，否则下一次宿主切换会把它盖掉。
   const applySettings = (next: ShellSettings) => {
-    if (next.theme !== settings.theme) { setThemeFollow('manual'); persistThemeFollow('manual') }
+    if (next.theme !== settings.theme) {
+      if (modeFromHost) return refuseModeChange();
+      setThemeFollow('manual'); persistThemeFollow('manual')
+    }
     setSettings(next)
   };
-  // 皮肤与明暗是两个轴：换皮肤只改视觉语言来源，不动明暗，也不写后端配置。
-  const changeSkin = (next: Skin) => { setSkin(next); persistSkin(next); applySkin(next, surface) };
+  // 皮肤与明暗是两个轴，但**宿主映射型皮肤（teams）把明暗也映射了**：它的颜色取自宿主变量，
+  // 而宿主是按自己的模式换那批变量的。所以选 teams 就等于"明暗跟随宿主"，
+  // 否则会出现"映射过的令牌是宿主暗色、没映射的仍是插件亮色"的半暗半亮。
+  // 想自己定明暗，就选自带调色板的皮肤（原版 / Windows 风格）。
+  const modeFromHost = skin === 'teams';
+  const changeSkin = (next: Skin) => {
+    setSkin(next); persistSkin(next); applySkin(next, surface)
+    if (next === 'teams') { setThemeFollow('host'); persistThemeFollow('host') }
+  };
+  const refuseModeChange = () => { toast.warning('iCode Teams 皮肤的明暗取自宿主。要自己选明暗，请先把皮肤换成原版或 Windows 风格。') };
   return <ProductFrame
     toolbar={<ProductToolbar status={connected ? '就绪' : '连接中…'} theme={settings.theme}
       onNewConnection={() => { setConnectingSavedId(undefined); setConnectSeed([]); setConnectModal(true) }}
@@ -222,10 +239,7 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
     <SmartConnectModal isOpen={connectModal} initialConfigs={connectSeed} onClose={() => setConnectModal(false)} onConnect={connectBatch}
       onParse={async input => (await client.call('ai.parse',{input})).configs ?? []}/>
     <ShellSettingsModal hostSettings={hostSettings} embedded isOpen={showSettings} onClose={() => setShowSettings(false)} runtime={settingsRuntime} initial={settings} onApply={applySettings} aiRuntime={aiRuntime}
-      skin={{ value: skin, onChange: changeSkin, options: [
-        { id: 'teams', label: '跟随 iCode Teams', hint: '颜色、圆角与字号取自宿主公开的样式契约，宿主换主题时自动跟随' },
-        { id: 'default', label: 'OpsCopilot 默认', hint: '使用 OpsCopilot 自己的视觉语言，不跟随宿主' },
-      ] }}/>
+      skin={{ value: skin, onChange: changeSkin, options: availableSkins(), previewRoot: surface }}/>
     <CommandQueryOverlay visible={commandQuery.visible} query={commandQuery.query} onQueryChange={commandQuery.setQuery} loading={commandQuery.loading} result={commandQuery.result} error={commandQuery.error}
       onGenerate={() => void commandQuery.generate()} onRegenerate={() => void commandQuery.generate()} onCopy={() => void commandQuery.copy()}
       onType={commandQuery.type} onClose={() => commandQuery.setVisible(false)}/>

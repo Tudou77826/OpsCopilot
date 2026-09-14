@@ -1,4 +1,5 @@
-import { AppearanceConfig, Skin, Theme } from './appearanceTypes';
+import { AppearanceConfig, Skin, SKINS, type SkinInfo } from './appearanceTypes';
+import type { Theme } from './appearanceTypes';
 
 /** 默认主题：暗色（与历史版本一致，老用户配置无感） */
 export const DEFAULT_THEME: Theme = 'dark';
@@ -24,7 +25,7 @@ export const normalizeTheme = (value?: string | null): Theme => {
 /** 归一化皮肤值：仅接受 default/teams，其余回退默认 default。 */
 export const normalizeSkin = (value?: string | null): Skin => {
     const v = (value ?? '').trim().toLowerCase();
-    return v === 'teams' || v === 'default' ? v : DEFAULT_SKIN;
+    return v === 'teams' || v === 'windows' || v === 'default' ? v : DEFAULT_SKIN;
 };
 
 /** 归一化整个 AppearanceConfig */
@@ -86,7 +87,7 @@ export const readPersistedSkin = (): Skin => {
 export const readPersistedSkinChoice = (): Skin | undefined => {
     try {
         const raw = (window.localStorage.getItem(SKIN_STORAGE_KEY) ?? '').trim().toLowerCase();
-        return raw === 'teams' || raw === 'default' ? raw : undefined;
+        return raw === 'teams' || raw === 'windows' || raw === 'default' ? raw : undefined;
     } catch {
         return undefined;
     }
@@ -183,4 +184,36 @@ export const observeHostTheme = (listener: (theme: Theme) => void): (() => void)
     });
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     return () => observer.disconnect();
+};
+
+/** 当前环境下真正可选的皮肤：hostOnly 的皮肤没有宿主令牌时换不出差别，列出来只会误导。 */
+export const availableSkins = (): SkinInfo[] => {
+    const hostReady = hostTokensAvailable();
+    return SKINS.filter(skin => !skin.hostOnly || hostReady);
+};
+
+export interface SkinSwatch { bg: string; surface: string; accent: string; text: string }
+
+/**
+ * 预览色块：临时把候选皮肤写到目标元素上、读真实计算值，再还原。
+ * 之所以不把色值抄一份到 TS 里——那必然与 CSS 漂移，而预览的意义就是"它实际长什么样"。
+ * 三步在同一个任务里完成，浏览器不会绘制中间态，所以不会闪。
+ */
+export const skinSwatch = (skin: Skin, root?: HTMLElement): SkinSwatch | undefined => {
+    const target = root ?? (typeof document === 'undefined' ? undefined : document.documentElement);
+    if (!target || typeof getComputedStyle !== 'function') return undefined;
+    const previous = target.dataset.skin;
+    target.dataset.skin = normalizeSkin(skin);
+    const computed = getComputedStyle(target);
+    // getComputedStyle 返回的是活对象：必须在还原之前把值取完。
+    const swatch = {
+        bg: computed.getPropertyValue('--bg-primary').trim(),
+        surface: computed.getPropertyValue('--bg-elevated').trim(),
+        accent: computed.getPropertyValue('--accent').trim(),
+        text: computed.getPropertyValue('--text-primary').trim(),
+    };
+    if (previous === undefined) delete target.dataset.skin;
+    else target.dataset.skin = previous;
+    // 样式表没加载（如 jsdom 或早期首帧）时全部为空——此时宁可不画预览，也不要画四个空格子。
+    return Object.values(swatch).every(value => value !== '') ? swatch : undefined;
 };

@@ -24,7 +24,7 @@ export function ProductShellSettingsPage<T extends ShellPageConfig>({ activeTab,
                 return (
                     <div style={styles.settingsGroup}>
                         <ThemeChoiceCard theme={theme} onThemeChange={onThemeChange} />
-                        {skin ? <SkinChoiceCard skin={skin} /> : null}
+                        {skin ? <SkinChoiceCard skin={skin} mode={theme} /> : null}
                         {/* 终端外观已收纳在本页 */}
                         <TerminalAppearanceCard terminal={normalizeTerminalConfig(config.terminal)} onChange={terminal => setConfig({ ...config, terminal })} />
                     </div>

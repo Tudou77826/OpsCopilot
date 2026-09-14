@@ -4,13 +4,16 @@
     <meta charset="UTF-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>ops_temp</title>
-    <!-- 防 FOUC：在 React 渲染前同步读 localStorage 写 data-theme，让首帧 CSS 变量即正确。
-         与 src/components/appearance.ts 的 THEME_STORAGE_KEY / DEFAULT_THEME 保持一致。 -->
+    <!-- 防 FOUC：在 React 渲染前同步读 localStorage 写 data-theme / data-skin，让首帧 CSS 变量即正确。
+         与共享壳的 THEME_STORAGE_KEY / DEFAULT_THEME / SKIN_STORAGE_KEY 保持一致。
+         皮肤也在这里写：选的是自带你调色板的皮肤（如 windows）时，晚写一步就会先闪一帧默认配色。 -->
     <script>
         try {
             var t = localStorage.getItem('opscopilot-theme') || 'dark';
             if (t !== 'light' && t !== 'dark') t = 'dark';
             document.documentElement.setAttribute('data-theme', t);
+            var s = localStorage.getItem('opscopilot-skin');
+            if (s === 'default' || s === 'teams' || s === 'windows') document.documentElement.setAttribute('data-skin', s);
         } catch (e) {
             document.documentElement.setAttribute('data-theme', 'dark');
         }

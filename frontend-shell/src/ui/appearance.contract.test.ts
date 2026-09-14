@@ -92,12 +92,26 @@ describe('shared light theme contract', () => {
 // 原来的对比度断言只抽样 4 组文字/背景。这里把两种模式下的语义组合枚举出来，组合取自
 // 组件里真实存在的叠放关系（按钮底色配反色文字、状态色当文字用在面板上等），
 // 新增令牌或调整取值时对比度会跟着被检查，不依赖人去记（见 docs/theme-design.md 8.3）。
+const defaultDark = tokens(':root {');
+const defaultLight = { ...defaultDark, ...tokens(':root[data-theme="light"] {') };
+// 自带调色板的皮肤（windows）按模式各写一块，合成方式与模式层一致：
+// 以该模式的默认取值为底，再叠加皮肤块（暗色那份多一个属性、权重更高）。
+const windowsLight = { ...defaultLight, ...tokens(':root[data-skin="windows"] {') };
+const windowsDark = { ...defaultDark, ...tokens(':root[data-skin="windows"] {'), ...tokens(':root[data-theme="dark"][data-skin="windows"] {') };
 const palettes: Array<[string, Record<string, string>]> = [
-  ['暗色', tokens(':root {')],
+  ['暗色', defaultDark],
   // 亮色块是覆写层：未在亮色块声明的令牌应从 :root 继承（如 mode-independent 的 --layer-*），
   // 只解析单块会把它们读成空值，等于漏测。
-  ['亮色', { ...tokens(':root {'), ...tokens(':root[data-theme="light"] {') }],
+  ['亮色', defaultLight],
+  // 皮肤不是"另一个主题"，而是同一套轴线上的另一组取值，所以对比度矩阵必须覆盖它——
+  // 手写调色板最容易出的问题就是某个文字/底色配对比度不够。
+  ['windows 亮色', windowsLight],
+  ['windows 暗色', windowsDark],
 ];
+
+// 只含模式层。下面两条断言问的是「模式层是否自足」与「镜像是否等于本体」，
+// 皮肤会覆写令牌，把皮肤层混进来等于问错了对象。
+const modePalettes = palettes.slice(0, 2);
 
 const textTokens = ['--text-primary', '--text-secondary', '--text-tertiary', '--text-muted'];
 // 只列真实承载正文的表面。--bg-active/--bg-active-soft 上叠的是主文字与反色文字（见下方配对），
@@ -356,7 +370,7 @@ describe('皮肤轴', () => {
 
   it('无宿主变量时 teams 与 default 逐项等值（皮肤不得泄漏到桌面壳）', () => {
     const failures: string[] = [];
-    for (const [label, palette] of palettes) {
+    for (const [label, palette] of modePalettes) {
       for (const name of mappedTokens) {
         const modeValue = resolve(palette, name);
         const declared = teamsBlock[name];
@@ -384,7 +398,7 @@ describe('皮肤轴', () => {
 
   it('兜底镜像与模式层本体逐一相等（错一个字就会兜出另一个颜色）', () => {
     const failures: string[] = [];
-    for (const [label, palette] of palettes) {
+    for (const [label, palette] of modePalettes) {
       for (const name of Object.keys(teamsBlock)) {
         const mirror = `--mode-${name.slice(2)}`;
         const expected = resolve(palette, name);

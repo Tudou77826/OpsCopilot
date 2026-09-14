@@ -513,3 +513,139 @@
   --danger-bg-subtle: var(--ui-color-danger-soft, var(--mode-danger-bg-subtle));
   --shadow-dialog: var(--ui-shadow-block, var(--mode-shadow-dialog));
 }
+
+/*
+ * 皮肤：windows（Windows 11 / Fluent 取向）
+ *
+ * 与 teams 皮肤的区别：teams 的取值全部来自宿主契约变量，是"映射"；windows 没有宿主，
+ * 取值是本块自己的字面量，所以它必须按模式各写一份——:root[data-skin="windows"] 给亮色，
+ * :root[data-theme="dark"][data-skin="windows"] 给暗色（后者多一个属性，权重更高，
+ * 因此能覆盖前者的同名声明）。这也说明皮肤机制本身允许两类皮肤：
+ * 宿主映射型（一个块覆盖两种模式）与自带调色板型（每模式一个块）。
+ *
+ * 覆盖范围：表面、边框、文字、强调、语义色及其浅底/描边、遮罩、阴影、滚动条，
+ * 以及对话框/设置画布这几个别名。**不覆盖**风险等级、严重度、状态徽标、chip、图标族、
+ * 拖放态、星标——那些在 6.4 已定为我们自己的语言，宿主也没有对应语义色，Windows 侧同样没有。
+ * 圆角与间距不在皮肤里（见 docs/theme-design.md 第 9 步：字体与密度归独立设置）。
+ */
+:root[data-skin="windows"] {
+  --bg-primary: #f3f3f3;
+  --bg-secondary: #ececec;
+  --bg-tertiary: #e8e8e8;
+  --bg-sunken: #ebebeb;
+  --bg-elevated: #ffffff;
+  --bg-input: #ffffff;
+  --bg-hover: #f0f0f0;
+  --bg-active: #e5effa;
+  --bg-active-soft: #f2f7fd;
+  --bg-tooltip: #f9f9f9;
+  --border: #d6d6d6;
+  --border-subtle: #e5e5e5;
+  --border-strong: #b3b3b3;
+  --border-focus: #0067c0;
+  --text-primary: #1b1b1b;
+  --text-secondary: #4d4d4d;
+  --text-tertiary: #525252;
+  --text-muted: #5c5c5c;
+  --text-disabled: #a0a0a0;
+  --text-on-accent: #ffffff;
+  --accent: #0067c0;
+  --accent-hover: #005a9e;
+  --accent-soft: #e5f1fb;
+  --success: #0d6f0d;
+  --success-bg-subtle: #f1faf1;
+  --success-tint: #f1faf1;
+  --success-tint-border: #9ed89e;
+  --warning: #855200;
+  --warning-bg-subtle: #fff9f0;
+  --warning-tint: #fff9f0;
+  --warning-tint-border: #e0b072;
+  --danger: #c42b1c;
+  --danger-bg-subtle: #fdf3f2;
+  --danger-border: #e0a19b;
+  --danger-tint: #fdf3f2;
+  --danger-tint-border: #e0a19b;
+  --info: #0067c0;
+  --info-bg-subtle: #f0f6fc;
+  --info-tint: #f0f6fc;
+  --info-tint-border: #8fbcea;
+  /* 严重度：皮肤自带调色板时必须连这批一起定义——它们的可读性取决于本皮肤的底色，
+     沿用模式层那份（为暖白底调的）会在更深的底上掉到 4.5 以下。这里用别名而不是复制色值：
+     暗色块覆写了 --warning 等本体，别名在计算值阶段解析，因此两种模式各取各的。 */
+  --severity-success: var(--success);
+  --severity-warning: var(--warning);
+  --severity-danger: var(--danger);
+  --severity-info: var(--info);
+  --bg-dialog: var(--bg-elevated);
+  --bg-dialog-section: var(--bg-primary);
+  --bg-settings-canvas: var(--bg-primary);
+  --overlay: rgba(0, 0, 0, 0.35);
+  --scrim-soft: rgba(0, 0, 0, 0.25);
+  --scrim-strong: rgba(0, 0, 0, 0.45);
+  --scrim-heavy: rgba(0, 0, 0, 0.6);
+  --shadow: rgba(0, 0, 0, 0.14);
+  --shadow-dialog: 0 8px 24px rgba(0, 0, 0, 0.18);
+  --app-scrollbar-size: 6px;
+  --app-scrollbar-track: transparent;
+  --app-scrollbar-thumb: #c8c8c8;
+  --app-scrollbar-thumb-hover: #a8a8a8;
+}
+
+/* windows 暗色：多一个属性、权重更高，用来覆盖上面那份亮色取值 */
+:root[data-theme="dark"][data-skin="windows"] {
+  --bg-primary: #202020;
+  --bg-secondary: #1c1c1c;
+  --bg-tertiary: #262626;
+  --bg-sunken: #1a1a1a;
+  --bg-elevated: #2b2b2b;
+  --bg-input: #2d2d2d;
+  --bg-hover: #333333;
+  --bg-active: #1f3a52;
+  --bg-active-soft: #22384a;
+  --bg-tooltip: #2b2b2b;
+  --border: #3d3d3d;
+  --border-subtle: #2e2e2e;
+  --border-strong: #545454;
+  --border-focus: #60cdff;
+  --text-primary: #ffffff;
+  --text-secondary: #c8c8c8;
+  --text-tertiary: #b3b3b3;
+  --text-muted: #adadad;
+  --text-disabled: #6b6b6b;
+  /* Windows 11 暗色的强调色是浅蓝，因此强调面上的文字是黑色——这是它自己的语言，
+     不是"暗色就用白字"的通用规则。 */
+  --text-on-accent: #000000;
+  --accent: #60cdff;
+  --accent-hover: #7ed6ff;
+  --accent-soft: #1f3340;
+  --success: #6ccb5f;
+  --success-bg-subtle: #1f2f1f;
+  --success-tint: #1f2f1f;
+  --success-tint-border: #3f6b3f;
+  --warning: #ffd23f;
+  --warning-bg-subtle: #33290f;
+  --warning-tint: #33290f;
+  --warning-tint-border: #6b5a2a;
+  --danger: #ff99a4;
+  --danger-bg-subtle: #2f1f21;
+  --danger-border: #6b3f44;
+  --danger-tint: #2f1f21;
+  --danger-tint-border: #6b3f44;
+  --info: #60cdff;
+  --info-bg-subtle: #1f2f3d;
+  --info-tint: #1f2f3d;
+  --info-tint-border: #3f5f7a;
+  --bg-dialog: var(--bg-elevated);
+  --bg-dialog-section: var(--bg-primary);
+  --bg-settings-canvas: var(--bg-primary);
+  --overlay: rgba(0, 0, 0, 0.5);
+  --scrim-soft: rgba(0, 0, 0, 0.35);
+  --scrim-strong: rgba(0, 0, 0, 0.55);
+  --scrim-heavy: rgba(0, 0, 0, 0.7);
+  --shadow: rgba(0, 0, 0, 0.5);
+  --shadow-dialog: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --app-scrollbar-size: 6px;
+  --app-scrollbar-track: transparent;
+  --app-scrollbar-thumb: #4d4d4d;
+  --app-scrollbar-thumb-hover: #6b6b6b;
+}

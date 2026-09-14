@@ -22,6 +22,8 @@ import { assessPattern } from './components/Terminal/highlight/regexSafety';
 import { normalizeTerminalConfig } from './components/Terminal/terminalAppearance';
 import { Theme } from './components/appearanceTypes';
 import { DEFAULT_THEME, normalizeTheme, persistTheme, readPersistedTheme } from './components/appearance';
+import type { Skin } from '../../frontend-shell/src/ui/appearanceTypes';
+import { applySkin, persistSkin, readPersistedSkinChoice } from '../../frontend-shell/src/ui/appearance';
 import { TimestampResult } from './utils/timestampParser';
 import { writeTerminalModeReset } from './terminalModeReset';
 import { flushTerminalInitialOutput } from './terminalOutputFlush';
@@ -65,6 +67,8 @@ function App() {
     const [terminalConfig, setTerminalConfig] = useState<TerminalConfig>(() => normalizeTerminalConfig());
     // 主题初值读 localStorage（与 index.html 防闪屏脚本同源），保证 React 首帧与内联脚本一致。
     const [theme, setTheme] = useState<Theme>(() => readPersistedTheme());
+    // 皮肤轴：与主题正交，独立前端键。桌面壳没有宿主令牌，所以宿主映射型皮肤不会出现在选项里。
+    const [skin, setSkin] = useState<Skin>(() => readPersistedSkinChoice() ?? 'default');
     const [highlightRules, setHighlightRules] = useState<HighlightRule[]>([]);
     // 高亮规则存量校验：存在语法错/灾难正则（!canEnable）时，外层设置按钮亮红点，
     // 与 SettingsModal 内「突出显示」导航项的红点形成层层引导。直接由 highlightRules 派生，
@@ -152,9 +156,19 @@ function App() {
         applyThemeAll(theme);
     }, [theme, applyThemeAll]);
 
+    // 皮肤与明暗写在同一元素（<html>）但互不干涉：这里只写 data-skin。
+    useEffect(() => {
+        applySkin(skin, document.documentElement);
+    }, [skin]);
+
     // 主题切换（顶栏快捷按钮 + 设置面板共用）：更新 state 并落盘后端。
     // useEffect([theme]) 会负责写 data-theme/localStorage/广播终端；这里只做持久化到配置文件。
     const themeSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const handleSkinChange = useCallback((nextSkin: Skin) => {
+        setSkin(nextSkin);
+        persistSkin(nextSkin);
+    }, []);
+
     const handleThemeChange = useCallback((nextTheme: Theme) => {
         setTheme(nextTheme);
         if (themeSaveTimerRef.current) clearTimeout(themeSaveTimerRef.current);
@@ -713,6 +727,8 @@ function App() {
                 onTerminalConfigChange={handleTerminalConfigChange}
                 theme={theme}
                 onThemeChange={handleThemeChange}
+                skin={skin}
+                onSkinChange={handleSkinChange}
                 updateAvailable={updateAvailable}
             />
 

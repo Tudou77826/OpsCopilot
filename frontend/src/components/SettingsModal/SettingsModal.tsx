@@ -16,6 +16,8 @@ import {
     clampTerminalFontSize,
     normalizeTerminalConfig,
 } from '../Terminal/terminalAppearance';
+import type { Skin } from '../../../../frontend-shell/src/ui/appearanceTypes';
+import { availableSkins, skinSwatch } from '../../../../frontend-shell/src/ui/appearance';
 import { colors, radius, font, inputStyle, btnSecondary, descStyle, labelStyle, pageContainer, settingsCard, cardTitle, settingRow, settingRowTop, settingRowLeft, settingRowRight, settingRowLabel, settingRowDesc, navGroupTitle, navItem, navItemActive, cardDivider, inputWide } from './settingsStyles';
 import Switch from './Switch';
 
@@ -67,6 +69,9 @@ interface SettingsModalProps {
     onTerminalConfigChange?: (config: TerminalConfig) => void;
     theme?: Theme;
     onThemeChange?: (theme: Theme) => void;
+    /** 皮肤轴（前端键）：与主题正交，管颜色取自哪里。未注入时不渲染皮肤卡。 */
+    skin?: Skin;
+    onSkinChange?: (skin: Skin) => void;
     updateAvailable?: boolean;
 }
 
@@ -264,6 +269,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     onTerminalConfigChange,
     theme = 'dark',
     onThemeChange,
+    skin,
+    onSkinChange,
     updateAvailable
 }) => {
     const [config, setConfig] = useState<AppConfig | null>(null);
@@ -1130,6 +1137,49 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 </div>
                             </div>
                         </div>
+                        {skin ? (
+                            <div style={styles.card}>
+                                <div style={styles.cardTitle}>皮肤</div>
+                                <div style={styles.row}>
+                                    <div style={styles.rowLeft}>
+                                        <div style={styles.rowLabel}>视觉语言来源</div>
+                                        <div style={styles.rowDesc}>
+                                            皮肤决定颜色取自哪里；明暗由上面的主题决定，两者互不影响。字体与字号在「终端外观」里，不随皮肤变。
+                                        </div>
+                                    </div>
+                                    <div style={styles.rowRight}>
+                                        <div style={styles.themeChoiceRow} role="radiogroup" aria-label="皮肤">
+                                            {availableSkins().map(option => {
+                                                const swatch = skinSwatch(option.id);
+                                                return (
+                                                    <button
+                                                        key={option.id}
+                                                        type="button"
+                                                        role="radio"
+                                                        aria-checked={skin === option.id}
+                                                        title={option.hint}
+                                                        style={{
+                                                            ...styles.themeChoiceCard,
+                                                            ...(skin === option.id ? styles.themeChoiceCardActive : {}),
+                                                        }}
+                                                        onClick={() => onSkinChange?.(option.id)}
+                                                    >
+                                                        {swatch ? (
+                                                            <span aria-hidden="true" style={{ display: 'flex', gap: '2px', flex: 'none' }}>
+                                                                {[swatch.bg, swatch.surface, swatch.accent, swatch.text].map((color, index) => (
+                                                                    <span key={index} style={{ width: '10px', height: '16px', borderRadius: '2px', backgroundColor: color, border: '1px solid var(--border-subtle)' }} />
+                                                                ))}
+                                                            </span>
+                                                        ) : null}
+                                                        <span>{option.label}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : null}
                         {/* 终端外观已收纳在本页 */}
                         {renderTerminalAppearance()}
                     </div>
