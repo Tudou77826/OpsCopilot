@@ -95,3 +95,64 @@ export const applySkin = (skin: Skin, root?: HTMLElement): Skin => {
     if (target) target.dataset.skin = normalized;
     return normalized;
 };
+
+/**
+ * 主题是否跟随宿主。第三个前端键，与主题键、皮肤键都分开：
+ * 跟着宿主时展示的是宿主的明暗，用户手动切过之后才展示他自己的选择，
+ * 所以"是否跟随"与"选了什么"必须能分别记住，否则恢复跟随时会丢掉用户原来的偏好。
+ */
+export type ThemeFollow = 'host' | 'manual';
+
+export const THEME_FOLLOW_STORAGE_KEY = 'opscopilot-theme-follow';
+
+/** 默认跟随宿主：宿主已经表达了明暗，插件没有理由再加一次选择。 */
+export const DEFAULT_THEME_FOLLOW: ThemeFollow = 'host';
+
+/** 归一化跟随值：仅接受 host/manual，其余回退默认 host。 */
+export const normalizeThemeFollow = (value?: string | null): ThemeFollow => {
+    const v = (value ?? '').trim().toLowerCase();
+    return v === 'manual' || v === 'host' ? v : DEFAULT_THEME_FOLLOW;
+};
+
+/** 持久化是否跟随宿主（独立键，不动主题键与皮肤键） */
+export const persistThemeFollow = (value: ThemeFollow) => {
+    try {
+        window.localStorage.setItem(THEME_FOLLOW_STORAGE_KEY, normalizeThemeFollow(value));
+    } catch {
+        // 忽略隐私模式 / 配额等异常
+    }
+};
+
+/** 读取是否跟随宿主 */
+export const readPersistedThemeFollow = (): ThemeFollow => {
+    try {
+        return normalizeThemeFollow(window.localStorage.getItem(THEME_FOLLOW_STORAGE_KEY));
+    } catch {
+        return DEFAULT_THEME_FOLLOW;
+    }
+};
+
+/**
+ * 宿主当前的明暗：读外层文档根元素的 data-theme，**没有就返回 undefined**。
+ * 返回 undefined 而不是回退到 DEFAULT_THEME 是关键——宿主没有明暗（旧构建、非宿主环境）
+ * 与"宿主说是暗色"是两件事，后者才允许改写插件自己的取值。
+ */
+export const hostTheme = (): Theme | undefined => {
+    if (typeof document === 'undefined') return undefined;
+    const raw = (document.documentElement.dataset.theme ?? '').trim().toLowerCase();
+    return raw === 'dark' || raw === 'light' ? raw : undefined;
+};
+
+/**
+ * 监听宿主明暗的运行期变化。只在宿主真的改了 data-theme 时回调，
+ * 返回的函数用于解除监听（React effect 清理）。
+ */
+export const observeHostTheme = (listener: (theme: Theme) => void): (() => void) => {
+    if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return () => {};
+    const observer = new MutationObserver(() => {
+        const next = hostTheme();
+        if (next) listener(next);
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+};

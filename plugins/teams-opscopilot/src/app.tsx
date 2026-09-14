@@ -11,6 +11,7 @@ import ScriptRecordingPanel from '../../../frontend-shell/src/ui/script/ScriptRe
 import { useToast } from '../../../frontend-shell/src/ui/feedback/Toast'
 import { SessionStatus } from '../../../frontend-shell/src/ui/types'
 import { normalizeTerminalConfig } from '../../../frontend-shell/src/ui/Terminal/terminalAppearance'
+import { hostTheme, observeHostTheme, persistThemeFollow, readPersistedThemeFollow, type ThemeFollow } from '../../../frontend-shell/src/ui/appearance'
 import ShellSettingsModal, { type ShellSettings } from '../../../frontend-shell/src/ui/settings/ShellSettingsModal'
 import ScriptListPanel from '../../../frontend-shell/src/ui/script/ScriptListPanel'
 import ScriptEditorModal from '../../../frontend-shell/src/ui/script/ScriptEditorModal'
@@ -45,6 +46,9 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
   const terminalRefs = useRef(new Map<string, TerminalRef>())
   const toast = useToast()
   const [settings, setSettings] = useState(initialSettings)
+  // 明暗默认跟随宿主；用户手动切过之后才停在这一条上（跟随与否与"选了哪个"分开记，
+  // 所以恢复跟随时不会丢掉用户原来的偏好）。
+  const [themeFollow, setThemeFollow] = useState<ThemeFollow>(readPersistedThemeFollow)
   const [error, setError] = useState(''), [busy, setBusy] = useState(false), [connected, setConnected] = useState(false)
 
   const [scriptId, setScriptId] = useState<string>(), scriptsRef = useRef<{ loadScripts(): void }>(null)
@@ -101,6 +105,14 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
     return () => { disposed = true; clearTimeout(timer) }
   }, [client, refresh])
   useEffect(() => { surface.dataset.theme = settings.theme }, [surface, settings.theme])
+  // 跟随宿主明暗：初始对齐一次，之后监听宿主的运行期切换。
+  // 宿主没有 data-theme（旧构建）时 hostTheme() 返回 undefined，此时保持插件自己的取值不变。
+  useEffect(() => {
+    if (themeFollow !== 'host') return
+    const sync = () => setSettings(previous => { const next = hostTheme(); return next && next !== previous.theme ? { ...previous, theme: next } : previous })
+    sync()
+    return observeHostTheme(sync)
+  }, [themeFollow])
   useEffect(() => { if (error) toast.error(error) }, [error, toast])
   const settingsRuntime = useMemo(() => ({ load: () => client.call<ShellSettings>('settings.load'), save: async (next: ShellSettings) => { await client.call('settings.save', { settings: next }) } }), [client])
   const aiRuntime = useMemo<AIConfigRuntime>(() => ({ persistence: 'session', status: () => client.call('ai.status'), save: update => client.call('ai.configure', update) }), [client])
@@ -155,11 +167,19 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
       catch (e) { await client.call('connections.disconnect', {connectionId}); throw e }
     }
   });
-  const toggleTheme = () => { const updated = {...settings, theme:settings.theme === 'dark' ? 'light' as const : 'dark' as const}; setSettings(updated); void act(() => settingsRuntime.save(updated)) };
+  // 手动切明暗 = 显式覆盖：记成 manual，宿主之后再变也不改写；用户原来的选择照旧存进 sidecar。
+  const toggleTheme = () => { const updated = {...settings, theme:settings.theme === 'dark' ? 'light' as const : 'dark' as const}; setThemeFollow('manual'); persistThemeFollow('manual'); setSettings(updated); void act(() => settingsRuntime.save(updated)) };
+  const resumeHostTheme = () => { setThemeFollow('host'); persistThemeFollow('host') };
+  // 设置页里改明暗同样是显式覆盖，否则下一次宿主切换会把它盖掉。
+  const applySettings = (next: ShellSettings) => {
+    if (next.theme !== settings.theme) { setThemeFollow('manual'); persistThemeFollow('manual') }
+    setSettings(next)
+  };
   return <ProductFrame
     toolbar={<ProductToolbar status={connected ? '就绪' : '连接中…'} theme={settings.theme}
       onNewConnection={() => { setConnectingSavedId(undefined); setConnectSeed([]); setConnectModal(true) }}
-      onThemeToggle={toggleTheme} onSettings={() => setShowSettings(true)} />}
+      onThemeToggle={toggleTheme} onSettings={() => setShowSettings(true)}
+      hostThemeFollow={{ following: themeFollow === 'host', onResume: resumeHostTheme }} />}
     terminal={<FlexLayoutAdapter
       terminals={snapshot.terminals.map(t => ({ id:t.terminalId, title:titles[t.terminalId] || `终端 ${t.terminalId.slice(0,8)}`, status:connected ? SessionStatus.CONNECTED : SessionStatus.DISCONNECTED }))}
       terminalRefs={terminalRefs} onTerminalData={(id,data) => senders.current.get(id)?.(data)}
@@ -191,7 +211,7 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
   >
     <SmartConnectModal isOpen={connectModal} initialConfigs={connectSeed} onClose={() => setConnectModal(false)} onConnect={connectBatch}
       onParse={async input => (await client.call('ai.parse',{input})).configs ?? []}/>
-    <ShellSettingsModal hostSettings={hostSettings} embedded isOpen={showSettings} onClose={() => setShowSettings(false)} runtime={settingsRuntime} initial={settings} onApply={setSettings} aiRuntime={aiRuntime}/>
+    <ShellSettingsModal hostSettings={hostSettings} embedded isOpen={showSettings} onClose={() => setShowSettings(false)} runtime={settingsRuntime} initial={settings} onApply={applySettings} aiRuntime={aiRuntime}/>
     <CommandQueryOverlay visible={commandQuery.visible} query={commandQuery.query} onQueryChange={commandQuery.setQuery} loading={commandQuery.loading} result={commandQuery.result} error={commandQuery.error}
       onGenerate={() => void commandQuery.generate()} onRegenerate={() => void commandQuery.generate()} onCopy={() => void commandQuery.copy()}
       onType={commandQuery.type} onClose={() => commandQuery.setVisible(false)}/>

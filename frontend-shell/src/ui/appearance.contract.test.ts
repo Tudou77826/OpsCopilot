@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import css from './styles/shell-theme.css?raw';
 import hostContract from './styles/teams-host-contract.json';
 import { getTerminalTheme, getTerminalSearchDecorations, terminalHighlightDefaults } from './terminalSchemes';
-import { currentTheme, normalizeSkin, applySkin, currentSkin, persistSkin, readPersistedSkin, DEFAULT_SKIN, SKIN_STORAGE_KEY, THEME_STORAGE_KEY } from './appearance';
+import { currentTheme, normalizeSkin, applySkin, currentSkin, persistSkin, readPersistedSkin, DEFAULT_SKIN, SKIN_STORAGE_KEY, THEME_STORAGE_KEY, DEFAULT_THEME_FOLLOW, THEME_FOLLOW_STORAGE_KEY, normalizeThemeFollow, persistThemeFollow, readPersistedThemeFollow, hostTheme, observeHostTheme } from './appearance';
 import { btnPrimary, settingsCard } from './settings/settingsStyles';
 
 function tokens(selector: string): Record<string, string> {
@@ -402,5 +402,74 @@ describe('皮肤轴', () => {
       .filter(([, value]) => value.includes('var(--ui-'))
       .map(([name, value]) => `${name}: ${value}`);
     expect(offenders.join('\n')).toBe('');
+  });
+});
+
+// 步骤 8：模式跟随宿主。跟随与否、跟随到的值、以及"宿主没有明暗"这三种状态必须能分开判断——
+// 把它们合成一个值是这套逻辑最容易出的错（宿主没声明明暗时会被误当成"宿主说是亮色"）。
+describe('模式跟随宿主', () => {
+  const root = () => document.documentElement;
+  // 用例会改 documentElement 的属性与 localStorage，跑完必须复原，否则污染同文件里的其它断言。
+  const withAttrs = async (run: () => void | Promise<void>) => {
+    const saved = { theme: root().dataset.theme, skin: root().dataset.skin, follow: window.localStorage.getItem(THEME_FOLLOW_STORAGE_KEY), stored: window.localStorage.getItem(THEME_STORAGE_KEY) };
+    try {
+      await run();
+    } finally {
+      if (saved.theme === undefined) delete root().dataset.theme; else root().dataset.theme = saved.theme;
+      if (saved.skin === undefined) delete root().dataset.skin; else root().dataset.skin = saved.skin;
+      if (saved.follow === null) window.localStorage.removeItem(THEME_FOLLOW_STORAGE_KEY); else window.localStorage.setItem(THEME_FOLLOW_STORAGE_KEY, saved.follow);
+      if (saved.stored === null) window.localStorage.removeItem(THEME_STORAGE_KEY); else window.localStorage.setItem(THEME_STORAGE_KEY, saved.stored);
+    }
+  };
+
+  it('归一化只接受 host/manual，其余回退默认 host', () => {
+    expect(DEFAULT_THEME_FOLLOW).toBe('host');
+    expect(normalizeThemeFollow('manual')).toBe('manual');
+    expect(normalizeThemeFollow('HOST')).toBe('host');
+    for (const bad of [undefined, null, '', 'dark', 'light', 'follow', 'host-x']) expect(normalizeThemeFollow(bad as never)).toBe('host');
+  });
+
+  it('写跟随键不动主题键与皮肤键', async () => {
+    await withAttrs(() => {
+      window.localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+      const themeBefore = window.localStorage.getItem(THEME_STORAGE_KEY);
+      persistThemeFollow('manual');
+      expect(readPersistedThemeFollow()).toBe('manual');
+      persistThemeFollow('host');
+      expect(readPersistedThemeFollow()).toBe('host');
+      expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe(themeBefore);
+      expect(root().dataset.skin).toBeUndefined();
+    });
+  });
+
+  it('宿主没有明暗时返回 undefined 而不是回退默认主题', async () => {
+    await withAttrs(() => {
+      delete root().dataset.theme;
+      expect(hostTheme()).toBeUndefined();
+      root().dataset.theme = 'dark';
+      expect(hostTheme()).toBe('dark');
+      root().dataset.theme = 'light';
+      expect(hostTheme()).toBe('light');
+      root().dataset.theme = 'nonsense';
+      expect(hostTheme(), '宿主写了非法值应当视为"没有明暗"').toBeUndefined();
+    });
+  });
+
+  it('宿主运行期改明暗会被回调，解除监听后不再回调', async () => {
+    // MutationObserver 的回调在下一轮任务投递，所以必须真的等一次宏任务，
+    // 不能在同一个同步块里断言（那样看到的永远是空数组）。
+    const settle = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+    await withAttrs(async () => {
+      root().dataset.theme = 'light';
+      const seen: string[] = [];
+      const stop = observeHostTheme(theme => seen.push(theme));
+      root().dataset.theme = 'dark';
+      await settle();
+      expect(seen).toEqual(['dark']);
+      stop();
+      root().dataset.theme = 'light';
+      await settle();
+      expect(seen, '解除监听后不应再收到回调').toEqual(['dark']);
+    });
   });
 });

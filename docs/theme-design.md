@@ -490,7 +490,7 @@ OpsCopilot 目前的圆角与字号是 `frontend-shell/src/ui/settings/settingsS
 
 **这一轮顺带解决的两个前置问题**（都属于"不改就没法挂上去"）：插件的 `entry.ts` 原先要求宿主传 `config.host = {protocol, bundleId, version, artifactDirectory, dataDirectory}`，那是宿主 `demo/src/v2` 原型分支的契约；真实宿主对 `hostApi` 4/5/6 传的是 `config.dataDir`，所以插件必须迁到 `hostApi: '6'` + `uiApi: '1'`（同事在工作树里的未提交改动正是这个，已一并整合）。另外宿主的旧版本号内容不可变（`retained bundle version cannot change its contents`），所以插件版本从 `0.1.0` 升到 `0.1.1`。
 
-另外两点实测（2026-09-13，运行中的宿主）：该宿主的文档根元素上**没有** `data-theme`（其检出早于暗色模式，见第 10 节第 8 条），所以"宿主亮暗两套"在当前宿主构建里并不可得；插件 shadow host 上写死的 `data-theme="light"` 仍在（步骤 8 未做）。
+另外两点实测（2026-09-13，运行中的宿主）：该宿主的文档根元素上**没有** `data-theme`（其检出早于暗色模式，见第 10 节第 8 条），所以"宿主亮暗两套"在当前宿主构建里并不可得。该宿主至今仍未换 revision，因此步骤 8 的跟随机制是在它上面**手工改 `data-theme`** 验证的（见步骤 8），暗色观感待换 revision 后补。
 
 门槛与遗留：第 1、2、4 条成立，第 3 条在可及的面里无失衡色块、`--shadow-dialog` 目视可接受，第 7 步的"打包产物在真实宿主里跑通"这一环已完成。遗留：上面第 5 条列出的五个面（终端、文件、tooltip、滚动条、徽标）待有会话时补截图；设置面按产品决定不再纳入。
 
@@ -511,6 +511,29 @@ OpsCopilot 目前的圆角与字号是 `frontend-shell/src/ui/settings/settingsS
 4. 兜底：宿主根元素缺 `data-theme` 时的取值需明确并有用例——取默认暗色、默认亮色还是读 `prefers-color-scheme`，实现时确认。
 
 门槛：第 1、2 条自动化通过，第 3 条实机通过；桌面壳截图与基线一致。
+
+**已实施（2026-09-14）**：
+
+- 共享壳 `appearance.ts` 新增跟随三件套（前端键，与主题键、皮肤键并列）：`ThemeFollow = 'host' | 'manual'`、`THEME_FOLLOW_STORAGE_KEY = 'opscopilot-theme-follow'`（默认 `host`）、`hostTheme()`、`observeHostTheme(listener)`。
+- 关键设计：`hostTheme()` **宿主没有 `data-theme` 时返回 `undefined` 而不是回退 `DEFAULT_THEME`**。"宿主没有明暗"与"宿主说是亮色"是两件事，合成一个值会让旧宿主的插件被强行翻成暗色；返回 `undefined` 时保持插件自己的取值。
+- "跟随与否"与"用户选了哪个"分开记：跟随期间展示宿主的明暗，但**不把宿主的取值写进 sidecar**，所以用户手动选过的那一份偏好原样留着，将来恢复跟随时不会丢。
+- 插件侧：`ui.tsx` 首帧 `host.dataset.theme = hostTheme() ?? 'light'`；`app.tsx` 用 `themeFollow` 状态驱动一个 effect——`host` 时先对齐一次再 `observeHostTheme` 订阅运行期切换，`manual` 时不订阅。两处显式覆盖入口（工具栏明暗按钮、设置页里改明暗）都会把跟随置为 `manual`；`ProductToolbar` 新增可选 `hostThemeFollow` 属性，只在被覆盖时渲染一个「跟随宿主明暗」按钮，桌面壳不传该属性因此不受影响。
+
+验证：
+
+1. **共享壳用例 31 → 35 条**（`appearance.contract.test.ts` 新增"模式跟随宿主"一组 4 条）：归一化只接受 `host`/`manual`（`undefined`/`null`/空串/`'dark'`/`'light'`/`'host-x'` 均回落 `host`）；写跟随键不动主题键与皮肤键；`hostTheme()` 在属性缺失或写了非法值时返回 `undefined`、写了 `dark`/`light` 时原样返回；`observeHostTheme` 在宿主改属性后被回调一次、解除监听后不再回调。第 4 条**先红后绿**过：最初在同一个同步块里断言，看到的是空数组，改成真的等一轮宏任务才通过——这条同时证明了 MutationObserver 是下一轮任务投递。
+2. **真实宿主（打包后的插件，`0.1.2`）完整走了一遍状态机**：
+   - 宿主无 `data-theme` → 插件 `light`（兜底分支，与改动前一致）；
+   - 宿主置 `dark` → 插件随之为 `dark`（跟随）；
+   - 点插件工具栏明暗按钮 → 插件 `light`、`opscopilot-theme-follow = manual`、工具栏出现「跟随宿主明暗」；
+   - 覆盖后宿主再 `light→dark` → 插件**停在 `light` 不动**（覆盖生效）；
+   - 点「跟随宿主明暗」→ 插件立刻取到 `dark`、跟随键回到 `host`、按钮消失；
+   - 之后再让宿主 `dark→light` → 插件随之为 `light`（确实回到跟随，不是碰巧对上）。
+   收尾已把宿主的 `data-theme` 删回原状；期间明暗按钮把主题写回 sidecar 的值仍是原来的 `light`（已核对 exe 旁的 `config.json` 未变）。
+3. 桌面壳：`frontend-shell` 216 条、`frontend` 242 条全绿，`ProductToolbar` 的新属性是可选且桌面不传，渲染结果不变。
+4. 终端一致性（原第 2 条）**只在界面侧验证**：`getTerminalTheme` 的输入是同一个 `settings.theme`，`FlexLayoutAdapter` 与 `Terminals` 都吃它，代码路径上不存在第二个主题源（这正是 4.4 修掉的那类错位）。但**当前宿主没有暗色令牌**，"界面暗、终端亮"的实机截图仍取不到，留待宿主换到暗色 revision 后补。
+
+门槛与遗留：第 1、3、4 条成立，第 2 条自动化通过、实机待补。**仍未验证的是暗色下的观感**：宿主的暗色 `--ui-*` 只在 `origin/main`（`ed88a1d`）里有，而本地在跑的是 `codex/opscopilot-host-adapter`（`901dd58`，早于暗色模式），本次跟随机制是在该宿主上**手工驱动 `data-theme`** 验证的——属性监听、覆盖、恢复这套逻辑与宿主从哪里改属性无关，但"宿主的暗色配色套到插件上好不好看"必须在有暗色令牌的宿主里另做一遍。宿主仓库里有同事未提交的暂存改动，**不要**自行切分支/还原，换 revision 前先与人确认。
 
 ### 步骤 9：密度、圆角与字体映射（取决于待确认 5）
 
@@ -539,13 +562,13 @@ OpsCopilot 目前的圆角与字号是 `frontend-shell/src/ui/settings/settingsS
 ## 10. 待确认事项
 
 1. 花园入口与快捷命令入口是否统一放在现有右侧工具栏——该决定同时影响入口选中态在皮肤下的规范。
-2. 在 iCode Teams 中首次进入时的默认模式是否直接跟随宿主，还是先给出一次可见提示。
-3. 用户显式覆盖模式后，回到“跟随宿主”的入口放在哪里。
+2. 在 iCode Teams 中首次进入时的默认模式是否直接跟随宿主，还是先给出一次可见提示。**实施时按"直接跟随、不提示"落地**（宿主已经表达了明暗，再加一次询问是多余的）；若产品上更希望有一次可见告知，改的是 `ui.tsx` 首帧与 `app.tsx` 的初值，机制本身不用动。
+3. 用户显式覆盖模式后，回到“跟随宿主”的入口放在哪里。**实施时放在插件工具栏明暗按钮右侧**（仅被覆盖时出现；`ProductToolbar` 的新属性是可选的，桌面壳不传所以看不到）。位置本身是易改的 UI 细节，若更希望放进设置页，把 `hostThemeFollow` 的渲染位置挪过去即可。
 4. 宿主缺失语义（警告色、风险等级、严重度、状态徽标、图标族、滚动条）是否推动宿主纳入 `--ui-*` 契约，还是在皮肤内保持默认语言。
 5. 令牌化后的圆角与密度是否允许 `default` 与 `teams` 使用不同取值，还是所有皮肤共用 OpsCopilot 自己的密度，仅换颜色。该结论决定第 9 步是否实施。
 6. 是否引入像素级视觉回归工具（如 Playwright）纳入 CI。不引入时由第 9 节的令牌级断言加人工截图承担，代价是交互触发的面（拖拽、浮窗、溢出菜单）无法自动回归。
 7. **插件包以哪个为准（已定）**：`main` 已包含 `plugins/teams-opscopilot`（`fe1f3f6` 之后），它随 main 演进，桌面与插件共用一份令牌层；`OpsCopilot-teams-plugin` / `OpsCopilot-shell-integration` / `OpsCopilot-workbench-architecture` 三个工作树此后只作历史参考。第 7、8 步的"插件 `ui.tsx` 不写死 `host.dataset.theme`"落在 `plugins/teams-opscopilot/src/ui.tsx`。
-8. **宿主以哪个 revision 为准**：本地 `icode-teams` 的 `main` 落后 `origin/main` 48 个提交，且当前检出的 `codex/opscopilot-host-adapter`（`901dd58`）早于暗色模式（全仓库 0 处 `data-theme`，`--ui-*` 47 个）；`origin/main`（`ed88a1d`，= `901dd58` + 8 个提交，含 `fda781f` 深浅色主题）的 `src/client/ui/design-system.ts` 已有 `:root[data-theme='dark']`（该文件是含 `:root{}` 与 `:root[data-theme='dark']{}` 两段的模板字符串，`--ui-*` 变量 46 个，快照见 `frontend-shell/src/ui/styles/teams-host-contract.json`）。**实测结论**：第 7 步的宿主冒烟（映射穿透、取值跟随、兜底、对话框观感）在 `901dd58` 上已全部通过——它缺的只是暗色模式，不影响映射本身；第 8 步的"跟随宿主亮暗"必须换到 `origin/main` 或更新的 revision 才能验证。
+8. **宿主以哪个 revision 为准**：本地 `icode-teams` 的 `main` 落后 `origin/main` 48 个提交，且当前检出的 `codex/opscopilot-host-adapter`（`901dd58`）早于暗色模式（全仓库 0 处 `data-theme`，`--ui-*` 47 个）；`origin/main`（`ed88a1d`，= `901dd58` + 8 个提交，含 `fda781f` 深浅色主题）的 `src/client/ui/design-system.ts` 已有 `:root[data-theme='dark']`（该文件是含 `:root{}` 与 `:root[data-theme='dark']{}` 两段的模板字符串，`--ui-*` 变量 46 个，快照见 `frontend-shell/src/ui/styles/teams-host-contract.json`）。**实测结论**：第 7 步的宿主冒烟（映射穿透、取值跟随、兜底、对话框观感）在 `901dd58` 上已全部通过——它缺的只是暗色模式，不影响映射本身；第 8 步的跟随逻辑也已在该宿主上手工驱动 `data-theme` 验证通过，但"宿主暗色配色套到插件上的观感"仍需换到 `origin/main` 或更新 revision 才能看。**换 revision 前先与人确认**：该仓库有未提交的暂存改动（`bundle-host.ts`/`gateway/server.ts`/`protocol/native-plugin.ts` 等 15 个文件），切分支或 `git restore` 会动到别人的工作。
 9. 键盘焦点的自动化判据：jsdom 不算层叠，要自动化"Tab 后焦点可见"只有两条路——引入真浏览器测试基准（即第 6 条），或在门禁里加静态规则（例如 `outline: none` 必须与该文件内的 `:focus-visible` 覆写成对出现）。当前只有规则存在性断言。
 10. **主题改动如何整合到插件（2026-09-13 实测，相关结论已修正一次）**：本仓库有 5 个工作树、4 条线：
     | 工作树 | 分支 | 相对 main | 内容 |

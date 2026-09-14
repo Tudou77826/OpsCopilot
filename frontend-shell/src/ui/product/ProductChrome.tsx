@@ -6,9 +6,11 @@ export type ProductTab = 'sessions' | 'troubleshoot' | 'chat' | 'knowledge' | 's
 const ATTENTION_DOT_COLOR = 'var(--danger)';
 
 /** Extracted from the desktop App. Both desktop and plugin mount this same toolbar. */
-export function ProductToolbar({ status = '就绪', theme, onNewConnection, onThemeToggle: handleThemeToggle, onSettings, updateAvailable = false, highlightNeedsAttention = false, parsedTimestamp }: {
+export function ProductToolbar({ status = '就绪', theme, onNewConnection, onThemeToggle: handleThemeToggle, onSettings, updateAvailable = false, highlightNeedsAttention = false, parsedTimestamp, hostThemeFollow }: {
   status?: string; theme: 'dark' | 'light'; onNewConnection(): void; onThemeToggle(): void; onSettings(): void;
   updateAvailable?: boolean; highlightNeedsAttention?: boolean; parsedTimestamp?: { local: string } | null;
+  /** 只在宿主内挂载时传：用户手动切过明暗之后，给一个回到"跟随宿主"的入口。 */
+  hostThemeFollow?: { following: boolean; onResume(): void };
 }) {
   const setIsSmartModalOpen = (_value: boolean) => onNewConnection();
   const setIsSettingsOpen = (_value: boolean) => onSettings();
@@ -54,6 +56,11 @@ export function ProductToolbar({ status = '就绪', theme, onNewConnection, onTh
                             </svg>
                         )}
                     </button>
+                    {hostThemeFollow && !hostThemeFollow.following && (
+                        <button onClick={hostThemeFollow.onResume} style={styles.textBtn} title="明暗改为跟随宿主">
+                            跟随宿主明暗
+                        </button>
+                    )}
                     <button onClick={() => setIsSettingsOpen(true)} style={{ ...styles.iconBtnUnified, position: 'relative' }} title="设置">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <circle cx="12" cy="12" r="3"></circle>
@@ -231,6 +238,19 @@ const styles = {
         alignItems: 'center',
         gap: '8px',
         fontSize: '0.8rem',
+    },
+    textBtn: {
+        height: '28px',
+        display: 'flex',
+        alignItems: 'center',
+        padding: '0 8px',
+        backgroundColor: 'transparent',
+        border: '1px solid var(--border)',
+        borderRadius: '4px',
+        color: 'var(--text-secondary)',
+        cursor: 'pointer',
+        fontSize: '0.78rem',
+        transition: 'color 0.15s, border-color 0.15s',
     },
     rightNav: {
         width: '40px',
