@@ -1,0 +1,15 @@
+/* 尺寸令牌（形状）声明在皮肤块里：皮肤是形状的来源之一，检查 4 应放行。
+   规则只禁止把它写进亮色块——尺寸与明暗无关。 */
+:root {
+  --space-8: 8px;
+  --radius-sm: 4px;
+  --bg-primary: #111111;
+}
+
+:root[data-theme="light"] {
+  --bg-primary: #ffffff;
+}
+
+:root[data-skin="windows"] {
+  --radius-md: 8px;
+}

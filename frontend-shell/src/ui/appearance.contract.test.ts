@@ -381,11 +381,49 @@ describe('皮肤轴', () => {
     expect(failures.join('\n')).toBe('');
   });
 
-  it('皮肤块的取值形状一律是 var(--ui-*, var(--mode-*))', () => {
+  // 颜色令牌与尺寸令牌的兜底写法不同，因为兜底对象不同：颜色的兜底是模式层本体，用
+  // var(--mode-*) 指过去；形状没有 --mode-* 镜像（--mode-* 只镜像颜色），所以形状的兜底
+  // 必须是字面量。两者都要求"取值来自宿主契约变量"。
+  const isSizeToken = (name: string) => /^--(radius|font-size|space)-/.test(name);
+
+  it('皮肤块的取值形状：颜色取 var(--ui-*, var(--mode-*))，形状取 var(--ui-*, 字面量)', () => {
     const offenders = Object.entries(teamsBlock)
-      .filter(([, value]) => !/^var\(--ui-[\w-]+,\s*var\(--mode-[\w-]+\)\)$/.test(value))
+      .filter(([name, value]) => isSizeToken(name)
+        ? !/^var\(--ui-[\w-]+,\s*[\w.%]+\)$/.test(value)
+        : !/^var\(--ui-[\w-]+,\s*var\(--mode-[\w-]+\)\)$/.test(value))
       .map(([name, value]) => `${name}: ${value}`);
     expect(offenders.join('\n')).toBe('');
+  });
+
+  it('形状令牌引用的正是宿主公开的那三个圆角', () => {
+    const referenced = Object.entries(teamsBlock)
+      .filter(([name]) => isSizeToken(name))
+      .flatMap(([, value]) => [...value.matchAll(/var\((--ui-[\w-]+)/g)].map((m) => m[1]));
+    expect(referenced.sort()).toEqual(['--ui-radius', '--ui-radius-block', '--ui-radius-card']);
+  });
+
+  it('自带调色板的皮肤圆角自洽：从小到大，控件不比卡片圆', () => {
+    const skins: Array<[string, Record<string, string>]> = [
+      ['default', tokens(':root {')],
+      ['windows', { ...tokens(':root {'), ...tokens(':root[data-skin="windows"] {') }],
+    ];
+    const failures: string[] = [];
+    for (const [label, palette] of skins) {
+      const px = (name: string) => Number((palette[name] ?? '').replace('px', ''));
+      const values = ['--radius-xs', '--radius-sm', '--radius-md', '--radius-lg'].map(px);
+      if (values.some(value => !Number.isFinite(value))) { failures.push(`${label}: 圆角令牌有非像素值`); continue; }
+      const [xs, sm, md, lg] = values;
+      if (!(xs <= sm && sm <= md && md <= lg)) failures.push(`${label}: 圆角次序错乱 ${values.join('/')}`);
+    }
+    expect(failures.join('\n')).toBe('');
+  });
+
+  it('windows 的形状就是 Fluent 的 4px 控件 / 8px 卡片', () => {
+    const windows = { ...tokens(':root {'), ...tokens(':root[data-skin="windows"] {') };
+    expect(windows['--radius-xs']).toBe('4px');
+    expect(windows['--radius-sm']).toBe('4px');
+    expect(windows['--radius-md']).toBe('8px');
+    expect(windows['--radius-lg']).toBe('8px');
   });
 
   it('皮肤块引用的宿主变量都在快照清单里', () => {
@@ -399,7 +437,8 @@ describe('皮肤轴', () => {
   it('兜底镜像与模式层本体逐一相等（错一个字就会兜出另一个颜色）', () => {
     const failures: string[] = [];
     for (const [label, palette] of modePalettes) {
-      for (const name of Object.keys(teamsBlock)) {
+      // 只查颜色令牌：--mode-* 是颜色的镜像，形状的兜底是字面量（见上一条的说明）。
+      for (const name of Object.keys(teamsBlock).filter(name => !/^--(radius|font-size|space)-/.test(name))) {
         const mirror = `--mode-${name.slice(2)}`;
         const expected = resolve(palette, name);
         const actual = resolve(palette, mirror);

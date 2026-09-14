@@ -341,7 +341,7 @@ const styles: Record<string, React.CSSProperties> = {
     searchInput: {
         flex: 1,
         padding: '6px',
-        borderRadius: 4,
+        borderRadius: 'var(--radius-sm)',
         border: '1px solid var(--border)',
         backgroundColor: 'var(--bg-input)',
         color: 'var(--text-primary)',
@@ -351,7 +351,7 @@ const styles: Record<string, React.CSSProperties> = {
     },
     importButton: {
         padding: '6px 12px',
-        borderRadius: 4,
+        borderRadius: 'var(--radius-sm)',
         border: '1px solid var(--border-strong)',
         backgroundColor: 'var(--bg-elevated)',
         color: 'var(--text-primary)',

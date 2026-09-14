@@ -81,6 +81,12 @@ test('尺寸令牌只声明在亮色块时失败', () => {
   assert.match(result.stderr, /尺寸令牌 --space-8 声明在亮色块/)
 })
 
+test('皮肤块可以声明尺寸令牌（形状属于皮肤），只有亮色块不行', () => {
+  const result = run([emptyFixture, `--token-file=${tokenFixture('size-in-skin.css')}`])
+  assert.equal(result.code, 0)
+  assert.doesNotMatch(result.stderr, /声明在亮色块/)
+})
+
 test('真实仓库的 FlexLayout 映射完整且入口不再引入第三方暗色样式', () => {
   const result = run([])
   assert.doesNotMatch(result.stderr, /未映射库变量/)

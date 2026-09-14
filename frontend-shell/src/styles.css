@@ -81,7 +81,7 @@ button { font: inherit; }
   place-items: center;
   width: 20px;
   height: 20px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--st-accent-soft);
   color: var(--st-accent);
   font-size: 11px;
@@ -232,7 +232,7 @@ button { font: inherit; }
 .script-row .row-del {
   align-self: center;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--st-faint);
   font-size: 12px;
@@ -281,7 +281,7 @@ button { font: inherit; }
   gap: 2px;
   height: 28px;
   padding: 0 4px 0 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid transparent;
   color: var(--st-text-2);
   transition: background var(--st-dur) var(--st-ease), border-color var(--st-dur) var(--st-ease), color var(--st-dur) var(--st-ease);
@@ -438,7 +438,7 @@ button { font: inherit; }
   font-size: 14px;
   cursor: pointer;
   padding: 2px 6px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .modal-close:hover { color: var(--st-text); background: var(--bg-hover); }
@@ -459,7 +459,7 @@ button { font: inherit; }
 .modal-field input {
   padding: 7px 10px;
   border: 1px solid var(--st-hair-2);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--st-bg);
   color: var(--st-text);
   font: inherit;
@@ -497,7 +497,7 @@ button { font: inherit; }
 .btn-primary {
   padding: 7px 16px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--st-accent);
   color: var(--text-on-accent);
   font: inherit;
@@ -513,7 +513,7 @@ button { font: inherit; }
 .error-banner {
   margin: 8px 12px 0;
   padding: 7px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--danger) 12%, transparent);
   color: var(--st-bad);
   font-size: 11.5px;
@@ -576,7 +576,7 @@ button { font: inherit; }
 .gate-field input {
   padding: 7px 10px;
   border: 1px solid var(--st-hair-2);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--st-bg);
   color: var(--st-text);
   font: 11.5px Consolas, 'JetBrains Mono', monospace;
@@ -670,7 +670,7 @@ button { font: inherit; }
   display: inline-flex;
   align-items: stretch;
   border: 1px solid var(--st-hair);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--st-surface);
   box-shadow: 0 0 0 0.5px var(--st-ring);
   overflow: hidden;
@@ -847,7 +847,7 @@ button { font: inherit; }
   align-items: stretch;
   gap: 2px;
   margin-bottom: 2px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .script-row:hover { background: var(--bg-hover); }
@@ -876,7 +876,7 @@ button { font: inherit; }
 .modal-field textarea {
   padding: 7px 10px;
   border: 1px solid var(--st-hair-2);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--st-bg);
   color: var(--st-text);
   font: 11.5px/1.5 Consolas, 'JetBrains Mono', monospace;

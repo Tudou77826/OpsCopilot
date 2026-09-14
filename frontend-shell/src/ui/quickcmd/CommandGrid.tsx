@@ -226,7 +226,7 @@ const styles = {
     },
     card: {
         padding: '4px 10px',
-        borderRadius: '4px',
+        borderRadius: 'var(--radius-sm)',
         cursor: 'pointer',
         border: '1px solid var(--bg-elevated)',
         fontSize: '12px',
@@ -242,7 +242,7 @@ const styles = {
     },
     addCard: {
         padding: '4px 10px',
-        borderRadius: '4px',
+        borderRadius: 'var(--radius-sm)',
         cursor: 'pointer',
         border: '1px dashed var(--border)',
         display: 'flex',
@@ -259,7 +259,7 @@ const styles = {
     // 输入框宽度收紧到与一个普通命令卡片相近，避免它比其它卡片长出一截而扎眼。
     searchCard: {
         padding: '4px 8px',
-        borderRadius: '4px',
+        borderRadius: 'var(--radius-sm)',
         cursor: 'text',
         border: '1px solid var(--bg-elevated)',
         display: 'flex',
@@ -299,7 +299,7 @@ const styles = {
         backgroundColor: 'var(--bg-secondary)',
         border: '1px solid var(--border)',
         boxShadow: '0 4px 16px var(--shadow)',
-        borderRadius: '6px',
+        borderRadius: 'var(--radius-md)',
         zIndex: 999,
         minWidth: '90px',
         padding: '4px 0',

@@ -512,6 +512,14 @@
   --danger: var(--ui-color-danger, var(--mode-danger));
   --danger-bg-subtle: var(--ui-color-danger-soft, var(--mode-danger-bg-subtle));
   --shadow-dialog: var(--ui-shadow-block, var(--mode-shadow-dialog));
+  /* 形状：宿主对控件高度没有契约，但圆角是公开的（--ui-radius 9 用于控件与小组件、
+     --ui-radius-card 12 用于卡片/分区、--ui-radius-block 16 用于弹层），它的 antd 主题里
+     也是 borderRadius: 9。按角色对齐，兜底用我们自己的取值，宿主缺变量时不塌。
+     徽标那档（--radius-xs）不映射：宿主对它没有契约（它自己在 .nav-type 里硬编码 4px），
+     而我们那档是 3px，1px 的差别肉眼无感，不值得为它在皮肤里写死一个字面量。 */
+  --radius-sm: var(--ui-radius, 4px);
+  --radius-md: var(--ui-radius-card, 6px);
+  --radius-lg: var(--ui-radius-block, 8px);
 }
 
 /*
@@ -589,6 +597,10 @@
   --app-scrollbar-track: transparent;
   --app-scrollbar-thumb: #c8c8c8;
   --app-scrollbar-thumb-hover: #a8a8a8;
+  /* 形状：Windows 11 的控件是 4px、卡片与浮出层是 8px（徽标同控件）。我们默认那套是 4/6/8，
+     所以这里改的是徽标 3→4、卡片 6→8；控件与弹窗本来就一致，不必写。 */
+  --radius-xs: 4px;
+  --radius-md: 8px;
 }
 
 /* windows 暗色：多一个属性、权重更高，用来覆盖上面那份亮色取值 */
