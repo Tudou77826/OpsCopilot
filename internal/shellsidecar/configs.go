@@ -22,7 +22,13 @@ func NewConfigService(dataDir string) (*ConfigService, error) {
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return nil, fmt.Errorf("创建数据目录失败: %w", err)
 	}
-	mgr := connectionstore.NewStoreWithPath(filepath.Join(dataDir, "saved-connections.json"))
+	return NewConfigServiceWithPath(filepath.Join(dataDir, "saved-connections.json"))
+}
+
+// NewConfigServiceWithPath 以指定文件构造配置服务。桌面模式（sidecar 读写桌面应用
+// 自己的 sessions.json）必须指定路径，而不是在 dataDir 下另起一个文件。
+func NewConfigServiceWithPath(path string) (*ConfigService, error) {
+	mgr := connectionstore.NewStoreWithPath(path)
 	if err := mgr.Load(); err != nil {
 		return nil, fmt.Errorf("读取连接配置失败: %w", err)
 	}
@@ -40,11 +46,13 @@ type SavedNode struct {
 	Config   *remote.ConnectConfig `json:"config,omitempty"`
 }
 
-// ConnectionInput 是 RPC 入参侧的连接配置，JSON tag 为驼峰，与前端 TS 类型一致。
+// ConnectionInput 是 RPC 入参侧的连接配置。
 //
-// 不能直接用 remote.ConnectConfig 接 RPC 入参：它的 JSON tag 是下划线风格
-// （root_password），前端发来的 rootPassword 会被静默丢弃，导致整体替换保存时
-// 清空已存的 root 密码。桌面端 Wails 边界存在同样的坑，两端用同一套转换约定。
+// 字段名不是任意选的：唯一客户端是插件的 business.ts，它发出的 payload 里
+// 名字与密码相关字段用的是下划线风格（host_key / root_password，见
+// plugins/teams-opscopilot/src/business.ts 与 connections.ts）。名字写错不会报错，
+// 只会静默丢掉该字段——保存时会把已存的主机密钥/root 密码清空，所以这里必须与
+// 客户端逐字一致。其余字段（name/host/port/user/password/protocol/group）都是单词。
 type ConnectionInput struct {
 	Name         string           `json:"name"`
 	Protocol     string           `json:"protocol,omitempty"`
@@ -52,7 +60,8 @@ type ConnectionInput struct {
 	Port         int              `json:"port"`
 	User         string           `json:"user"`
 	Password     string           `json:"password"`
-	RootPassword string           `json:"rootPassword,omitempty"`
+	RootPassword string           `json:"root_password,omitempty"`
+	HostKey      string           `json:"host_key,omitempty"`
 	Group        string           `json:"group,omitempty"`
 	Bastion      *ConnectionInput `json:"bastion,omitempty"`
 }
@@ -67,6 +76,7 @@ func (in ConnectionInput) toRemote() remote.ConnectConfig {
 		User:         in.User,
 		Password:     in.Password,
 		RootPassword: in.RootPassword,
+		HostKey:      in.HostKey,
 		Group:        in.Group,
 	}
 	if in.Bastion != nil {
@@ -96,6 +106,10 @@ func convertTree(nodes []*connectionstore.Node) []SavedNode {
 func (s *ConfigService) List() ([]SavedNode, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// 共享模式下文件可能被桌面端改过：先按 filetxn 重新读一次，再给出快照。
+	if err := s.mgr.Load(); err != nil {
+		return nil, err
+	}
 	return convertTree(s.mgr.Snapshot()), nil
 }
 

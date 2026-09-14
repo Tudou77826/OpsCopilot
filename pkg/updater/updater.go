@@ -121,6 +121,8 @@ func backoffDelay(attempt int) time.Duration {
 
 // Files that should NOT be overwritten during update.
 var protectedFiles = map[string]bool{
+	".ops-install-runtime.lock":   true,
+	".ops-install-admission.lock": true,
 	// User data
 	"config.json":            true,
 	"sessions.json":          true,
@@ -130,7 +132,7 @@ var protectedFiles = map[string]bool{
 	"file_access.json":       true,
 	"mcp.json":               true,
 	// Independent executables — updated separately
-	"mcp-server.exe":  true,
+	"mcp-server.exe": true,
 }
 
 // CheckForUpdate queries the GitHub API for the latest release and compares

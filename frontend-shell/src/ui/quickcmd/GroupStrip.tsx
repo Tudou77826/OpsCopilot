@@ -128,7 +128,7 @@ const styles = {
         alignItems: 'center',
         padding: '10px 4px',
         backgroundColor: 'var(--bg-primary)',
-        borderLeft: '1px solid var(--border-subtle)',
+        borderLeft: '1px solid var(--border)',
         userSelect: 'none' as const,
         flex: '0 0 64px',
     },

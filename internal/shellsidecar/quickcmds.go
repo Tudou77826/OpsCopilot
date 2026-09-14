@@ -3,6 +3,8 @@ package shellsidecar
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
+	"opscopilot/pkg/filetxn"
 	"os"
 	"sync"
 	"time"
@@ -53,11 +55,16 @@ func (s *jsonListService) list() []QuickCommand {
 func (s *jsonListService) upsert(item QuickCommand) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	release, err := s.begin()
+	if err != nil {
+		return "", err
+	}
+	defer release()
 	if item.Name == "" || item.Content == "" {
 		return "", fmt.Errorf("name 和 content 不能为空")
 	}
 	if item.ID == "" {
-		item.ID = fmt.Sprintf("qc-%d", timeNowUnixMilli())
+		item.ID = uuid.NewString()
 		// 同毫秒连建时追加序号
 		for _, existing := range s.items {
 			if existing.ID == item.ID {
@@ -86,6 +93,11 @@ func (s *jsonListService) upsert(item QuickCommand) (string, error) {
 func (s *jsonListService) remove(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	release, err := s.begin()
+	if err != nil {
+		return err
+	}
+	defer release()
 	for i := range s.items {
 		if s.items[i].ID == id {
 			s.items = append(s.items[:i], s.items[i+1:]...)
@@ -100,7 +112,7 @@ func (s *jsonListService) persist() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.path, data, 0o644)
+	return filetxn.Write(s.path, data)
 }
 
 // QuickCmdService 快捷命令（与终端应用同格式，可直接拷贝旧 quick_commands.json）。
@@ -123,6 +135,11 @@ func (s *QuickCmdService) Delete(id string) error                { return s.inne
 func (s *QuickCmdService) Reorder(ids []string) error {
 	s.inner.mu.Lock()
 	defer s.inner.mu.Unlock()
+	release, err := s.inner.begin()
+	if err != nil {
+		return err
+	}
+	defer release()
 	byID := make(map[string]QuickCommand, len(s.inner.items))
 	for _, item := range s.inner.items {
 		byID[item.ID] = item
@@ -154,3 +171,37 @@ func (s *QuickCmdService) Reorder(ids []string) error {
 }
 
 // 结构化脚本服务见 scriptsvc.go（阶段 5 起复用 pkg/script，旧文本脚本自动迁移）。
+
+func (s *jsonListService) reload() error {
+	data, err := filetxn.Read(s.path)
+	if err != nil {
+		return err
+	}
+	items := []QuickCommand{}
+	if len(data) > 0 {
+		if err = json.Unmarshal(data, &items); err != nil {
+			return err
+		}
+	}
+	s.items = items
+	return nil
+}
+func (s *jsonListService) begin() (func(), error) {
+	release, err := filetxn.Lock(s.path)
+	if err != nil {
+		return nil, err
+	}
+	if err = s.reload(); err != nil {
+		release()
+		return nil, err
+	}
+	return release, nil
+}
+func (s *QuickCmdService) ListChecked() ([]QuickCommand, error) {
+	s.inner.mu.Lock()
+	defer s.inner.mu.Unlock()
+	if err := s.inner.reload(); err != nil {
+		return nil, err
+	}
+	return append([]QuickCommand{}, s.inner.items...), nil
+}

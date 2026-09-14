@@ -1,0 +1,15 @@
+{
+  "name": "@opscopilot/teams-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --import tsx --test tests/*.test.ts",
+    "test:integration": "node --import tsx --test integration/*.test.ts",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.ui.json",
+    "build": "tsx build.ts",
+    "package": "tsx pack.ts"
+  },
+  "dependencies": { "@deepseek-ai/cordis": "4.0.1", "react": "18.3.1", "react-dom": "18.3.1" },
+  "devDependencies": { "@types/node": "24.3.0", "@types/react": "18.3.12", "@types/react-dom": "18.3.1", "esbuild": "0.25.9", "tsx": "4.20.5", "typescript": "5.9.2" }
+}

@@ -27,13 +27,16 @@ type dataPlane struct {
 }
 
 // ServeDataPlane 启动数据面监听。返回 http.Server 由调用方 Shutdown。
-func ServeDataPlane(addr, token string, service *TerminalService, dev *DevHub) (*http.Server, string, error) {
+func ServeDataPlane(addr, token string, service *TerminalService, dev *DevHub, workspace ...http.Handler) (*http.Server, string, error) {
 	// 本地 sidecar 场景：前端 origin 与 sidecar 端口必然不同源（浏览器 WS 带
 	// Origin，Go 探针不带——零值 CheckOrigin 会把浏览器全拒掉）。鉴权由
 	// token + 仅绑定 127.0.0.1 承担，Origin 一律放行。
 	dp := &dataPlane{service: service, token: token, upgrader: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/terminals/", dp.handleTerminal)
+	if len(workspace) > 0 && workspace[0] != nil {
+		mux.Handle("/workspace", workspace[0])
+	}
 	if dev != nil {
 		mux.HandleFunc("/rpc", dev.handleRPC)
 	}

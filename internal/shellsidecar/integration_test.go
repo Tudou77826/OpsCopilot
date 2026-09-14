@@ -72,20 +72,15 @@ func TestIntegrationRealSSHFullChain(t *testing.T) {
 	defer att.Detach()
 
 	// 横幅（服务器主动下发）应出现在订阅流
-	bannerSeen := false
-	select {
-	case data := <-att.Ch:
-		if strings.Contains(string(data), "fakessh ready") {
-			bannerSeen = true
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("timeout waiting banner")
-	}
+	// Output already received before Attach is delivered in Replay, not Ch.
+	banner := string(att.Replay)
+	bannerSeen := strings.Contains(banner, "fakessh ready")
 	// 若首个包不含横幅（拆包），继续读有限次
 	for i := 0; i < 5 && !bannerSeen; i++ {
 		select {
 		case data := <-att.Ch:
-			if strings.Contains(string(data), "fakessh ready") {
+			banner += string(data)
+			if strings.Contains(banner, "fakessh ready") {
 				bannerSeen = true
 			}
 		case <-time.After(1 * time.Second):

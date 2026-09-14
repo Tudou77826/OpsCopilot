@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"opscopilot/pkg/filetxn"
 	"opscopilot/pkg/recorder"
 )
 
@@ -135,6 +136,18 @@ func (m *Manager) UpdateScript(script *Script) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	release, err := filetxn.Lock(filepath.Join(m.storagePath, "scripts"))
+	if err != nil {
+		return err
+	}
+	defer release()
+	current, err := m.LoadScript(script.ID)
+	if err != nil {
+		return err
+	}
+	if !current.UpdatedAt.Equal(script.UpdatedAt) {
+		return filetxn.ErrConflict
+	}
 	script.UpdatedAt = time.Now()
 
 	// 同步 Steps → Commands（保持向后兼容）
@@ -199,6 +212,11 @@ func (m *Manager) ListScripts() ([]*Script, error) {
 
 // DeleteScript 删除脚本（支持文件被改名的情况）
 func (m *Manager) DeleteScript(scriptID string) error {
+	release, err := filetxn.Lock(filepath.Join(m.storagePath, "scripts"))
+	if err != nil {
+		return err
+	}
+	defer release()
 	// 先按标准文件名删除
 	standardFile := filepath.Join(m.storagePath, fmt.Sprintf("script_%s.json", scriptID))
 	if os.Remove(standardFile) == nil {
@@ -394,7 +412,7 @@ func (m *Manager) saveScript(script *Script) error {
 		return fmt.Errorf("failed to marshal script: %w", err)
 	}
 
-	if err := os.WriteFile(filename, data, 0644); err != nil {
+	if err := filetxn.Write(filename, data); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 

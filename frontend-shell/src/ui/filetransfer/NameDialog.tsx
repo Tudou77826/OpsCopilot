@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
+import { usePortalRoot } from '../Surface';
 
 interface NameDialogProps {
     title: string;
@@ -13,6 +14,7 @@ const INVALID_CHARS = /[\\/:*?"<>|]/;
 
 // 应用内新建/重命名对话框：替代原生 prompt()，带空名与非法字符校验。
 const NameDialog: React.FC<NameDialogProps> = ({ title, defaultValue = '', placeholder, onConfirm, onCancel }) => {
+    const portalRoot = usePortalRoot();
     const [value, setValue] = useState(defaultValue);
     const invalid = value.trim() === '' || INVALID_CHARS.test(value);
 
@@ -51,7 +53,7 @@ const NameDialog: React.FC<NameDialogProps> = ({ title, defaultValue = '', place
                 </div>
             </div>
         </div>,
-        document.body
+        portalRoot
     );
 };
 

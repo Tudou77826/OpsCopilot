@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"opscopilot/internal/atomicfile"
+	"opscopilot/pkg/filetxn"
 	"opscopilot/pkg/remote"
 
 	"github.com/google/uuid"
@@ -65,6 +65,11 @@ type Store struct {
 	filePath  string
 	nodes     []*Node
 	lastSaved []byte // 上一次落盘的内容，用于跳过无变更写入
+
+	// PreserveCredentials 为 true 时，更新已有连接会保留调用方没有提供的敏感字段
+	// （密码、root 密码、跳板机）。sidecar 以桌面模式运行时写的是桌面应用自己的
+	// sessions.json：插件界面保存连接时不会回传密码，整体替换会把已存的密码清空。
+	PreserveCredentials bool
 }
 
 func NewStore() *Store {
@@ -85,8 +90,8 @@ func (s *Store) Load() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	raw, err := os.ReadFile(s.filePath)
-	missing := os.IsNotExist(err)
+	raw, err := filetxn.Read(s.filePath)
+	missing := raw == nil
 	if err != nil && !missing {
 		return fmt.Errorf("读取 %s 失败: %w", s.filePath, err)
 	}
@@ -106,14 +111,23 @@ func (s *Store) Load() error {
 		return err
 	}
 
-	if !missing && repaired {
-		if err := s.backupLocked(); err != nil {
-			return fmt.Errorf("备份 %s 失败: %w", s.filePath, err)
-		}
-	}
 	if missing || repaired {
-		if err := atomicfile.Write(s.filePath, encoded, 0o644); err != nil {
-			return fmt.Errorf("写入 %s 失败: %w", s.filePath, err)
+		// 备份与写入必须同一把锁：共享模式下别的进程随时可能读这个文件，
+		// 中间态（文件被改名成 .bak 而新文件还没落盘）不能让它们看到。
+		release, lockErr := filetxn.Lock(s.filePath)
+		if lockErr != nil {
+			return fmt.Errorf("锁定 %s 失败: %w", s.filePath, lockErr)
+		}
+		if !missing && repaired {
+			if err := s.backupLocked(); err != nil {
+				release()
+				return fmt.Errorf("备份 %s 失败: %w", s.filePath, err)
+			}
+		}
+		writeErr := filetxn.Write(s.filePath, encoded)
+		release()
+		if writeErr != nil {
+			return fmt.Errorf("写入 %s 失败: %w", s.filePath, writeErr)
 		}
 	}
 	s.lastSaved = encoded
@@ -121,9 +135,17 @@ func (s *Store) Load() error {
 }
 
 // Save 把当前树落盘。内容与上次写入完全相同时跳过写盘。
+// Save 把当前内存状态落盘，不做刷新：调用方的语义是"把我这份写下去"，
+// 刷新会丢掉调用方刚做的内存改动（共享模式的刷新发生在各变更方法里）。
+// 仍需持有文件锁——filetxn.Write 要求如此。
 func (s *Store) Save() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	release, err := filetxn.Lock(s.filePath)
+	if err != nil {
+		return fmt.Errorf("锁定 %s 失败: %w", s.filePath, err)
+	}
+	defer release()
 	return s.saveLocked()
 }
 
@@ -160,6 +182,13 @@ func (s *Store) CreateFolder(name, parentID string) (*Node, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// 先合入别的进程的改动，再施加本次变更。
+	release, err := s.beginMutation()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
 	siblings, err := s.childrenOfLocked(parentID)
 	if err != nil {
 		return nil, err
@@ -186,6 +215,13 @@ func (s *Store) EnsureFolderByNamePath(path string) (string, error) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// 先合入别的进程的改动，再施加本次变更。
+	release, err := s.beginMutation()
+	if err != nil {
+		return "", err
+	}
+	defer release()
 
 	siblings := &s.nodes
 	var current *Node
@@ -214,6 +250,13 @@ func (s *Store) CreateConnection(cfg remote.ConnectConfig, parentID string) (*No
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// 先合入别的进程的改动，再施加本次变更。
+	release, err := s.beginMutation()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 
 	siblings, err := s.childrenOfLocked(parentID)
 	if err != nil {
@@ -249,6 +292,13 @@ func (s *Store) UpsertByEndpoint(cfg remote.ConnectConfig, parentID string) (*No
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// 先合入别的进程的改动，再施加本次变更。
+	release, err := s.beginMutation()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
 	siblings, err := s.childrenOfLocked(parentID)
 	if err != nil {
 		return nil, err
@@ -256,6 +306,10 @@ func (s *Store) UpsertByEndpoint(cfg remote.ConnectConfig, parentID string) (*No
 
 	var removed *Node
 	removeByEndpoint(&s.nodes, &cfg, &removed)
+
+	if s.PreserveCredentials && removed != nil {
+		preserveCredentials(&cfg, removed.Config)
+	}
 
 	// 用户若在会话树里改过显示名，而本次连接携带的配置名仍为空或还是旧配置名，
 	// 则保留改过的显示名，否则用户的改名会在每次连接后被覆盖。
@@ -295,6 +349,13 @@ func (s *Store) RenameNode(id, name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// 先合入别的进程的改动，再施加本次变更。
+	release, err := s.beginMutation()
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	loc := locate(&s.nodes, id)
 	if loc == nil {
 		return fmt.Errorf("%w: %s", ErrNotFound, id)
@@ -323,6 +384,13 @@ func (s *Store) UpdateConnection(id string, cfg remote.ConnectConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// 先合入别的进程的改动，再施加本次变更。
+	release, err := s.beginMutation()
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	loc := locate(&s.nodes, id)
 	if loc == nil {
 		return fmt.Errorf("%w: %s", ErrNotFound, id)
@@ -332,6 +400,10 @@ func (s *Store) UpdateConnection(id string, cfg remote.ConnectConfig) error {
 	}
 	if findEndpoint(s.nodes, &cfg, id) != nil {
 		return fmt.Errorf("%w: %s:%d", ErrDuplicateEndpoint, cfg.Host, cfg.Port)
+	}
+
+	if s.PreserveCredentials {
+		preserveCredentials(&cfg, loc.node.Config)
 	}
 
 	oldName := loc.node.Name
@@ -371,6 +443,13 @@ func (s *Store) MoveNode(id, newParentID string, index int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// 先合入别的进程的改动，再施加本次变更。
+	release, err := s.beginMutation()
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	loc := locate(&s.nodes, id)
 	if loc == nil {
 		return fmt.Errorf("%w: %s", ErrNotFound, id)
@@ -409,6 +488,13 @@ func (s *Store) ReorderNodes(parentID string, orderedIDs []string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// 先合入别的进程的改动，再施加本次变更。
+	release, err := s.beginMutation()
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	siblings, err := s.childrenOfLocked(parentID)
 	if err != nil {
 		return err
@@ -445,6 +531,13 @@ func (s *Store) DeleteNode(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// 先合入别的进程的改动，再施加本次变更。
+	release, err := s.beginMutation()
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	loc := locate(&s.nodes, id)
 	if loc == nil {
 		return fmt.Errorf("%w: %s", ErrNotFound, id)
@@ -460,6 +553,13 @@ func (s *Store) DeleteNode(id string) error {
 func (s *Store) DuplicateConnection(id string) (*Node, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// 先合入别的进程的改动，再施加本次变更。
+	release, err := s.beginMutation()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 
 	loc := locate(&s.nodes, id)
 	if loc == nil {
@@ -483,6 +583,26 @@ func (s *Store) DuplicateConnection(id string) (*Node, error) {
 
 // location 描述一个节点在树中的位置。siblings 指向包含该节点的切片
 // （可能是 &s.nodes，也可能是某个父节点的 Children 字段）。
+// preserveCredentials 把旧配置里调用方未提供的敏感字段补回 next。
+// 只在端点与账号都相同时生效：绝不能把 A 服务器的密码带到 B。
+func preserveCredentials(next, old *remote.ConnectConfig) {
+	if old == nil {
+		return
+	}
+	if next.Host != old.Host || next.Port != old.Port || next.Protocol != old.Protocol || next.User != old.User {
+		return
+	}
+	if next.Password == "" {
+		next.Password = old.Password
+	}
+	if next.RootPassword == "" {
+		next.RootPassword = old.RootPassword
+	}
+	if next.Bastion == nil {
+		next.Bastion = old.Bastion
+	}
+}
+
 type location struct {
 	node     *Node
 	siblings *[]*Node
@@ -662,6 +782,33 @@ func (s *Store) encodeLocked() ([]byte, error) {
 	return data, nil
 }
 
+// beginMutation 在文件锁内把磁盘上的最新内容读进内存，再让调用方施加本次变更。
+//
+// 共享模式（sidecar 与桌面应用写同一个 sessions.json）下，两次变更之间文件可能已被
+// 别的进程改过：不先刷新就会覆盖它人的改动。返回的函数必须在本方法返回前调用。
+// 调用顺序固定为先 s.mu 后文件锁，与 Load 一致，避免互锁。
+func (s *Store) beginMutation() (func(), error) {
+	release, err := filetxn.Lock(s.filePath)
+	if err != nil {
+		return nil, fmt.Errorf("锁定 %s 失败: %w", s.filePath, err)
+	}
+	raw, err := filetxn.Read(s.filePath)
+	if err != nil {
+		release()
+		return nil, fmt.Errorf("读取 %s 失败: %w", s.filePath, err)
+	}
+	if len(bytes.TrimSpace(raw)) > 0 {
+		var nodes []*Node
+		if err := json.Unmarshal(raw, &nodes); err != nil {
+			release()
+			return nil, fmt.Errorf("解析 %s 失败: %w", s.filePath, err)
+		}
+		// 归一化结果会随本次落盘一起写回，因此这里不需要单独补写。
+		s.nodes, _ = reconcile(nodes)
+	}
+	return release, nil
+}
+
 func (s *Store) saveLocked() error {
 	encoded, err := s.encodeLocked()
 	if err != nil {
@@ -670,7 +817,7 @@ func (s *Store) saveLocked() error {
 	if bytes.Equal(encoded, s.lastSaved) {
 		return nil // 无变更不写盘
 	}
-	if err := atomicfile.Write(s.filePath, encoded, 0o644); err != nil {
+	if err := filetxn.Write(s.filePath, encoded); err != nil {
 		return fmt.Errorf("写入 %s 失败: %w", s.filePath, err)
 	}
 	s.lastSaved = encoded

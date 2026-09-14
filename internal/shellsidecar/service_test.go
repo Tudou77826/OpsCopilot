@@ -469,7 +469,7 @@ func TestConfigRPCMethods(t *testing.T) {
 	}
 	send(3, "shell.configs.list", nil)
 	resp = waitResponse(t, outBuf, 3)
-	sessions := resp.Result.(map[string]any)["nodes"].([]any)
+	sessions := resp.Result.(map[string]any)["sessions"].([]any)
 	if len(sessions) != 1 {
 		t.Fatalf("expect 1 saved, got %d", len(sessions))
 	}

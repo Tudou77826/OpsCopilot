@@ -106,3 +106,4 @@ frontend-shell/node_modules/
 frontend-shell/dist/
 frontend-shell/data/
 shellsidecar.exe
+plugins/teams-opscopilot/dist/

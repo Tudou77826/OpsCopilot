@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"opscopilot/pkg/installguard"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -60,6 +62,13 @@ func SelfUpdate(ctx context.Context, m *Manifest, fs Filesystem, waiter ProcessW
 		return fmt.Errorf("wait parent: %w", err)
 	}
 	log.info("parent process exited")
+	release, err := installguard.AcquireUpdate(m.AppDir)
+	if err != nil {
+		writeResult(m.AppDir, &UpdateResult{Success: false, Version: m.Version, Error: err.Error(), Timestamp: time.Now().Format(time.RFC3339)}, fs)
+		launchExe(m.ExePath)
+		return fmt.Errorf("installation busy: %w", err)
+	}
+	defer release()
 
 	// 2. Settle delay for file handle release.
 	time.Sleep(settleTime)
@@ -141,7 +150,7 @@ func planUpdate(extractedDir, appDir string, fs Filesystem) ([]fileOp, error) {
 			continue
 		}
 		name := e.Name()
-		if protectedFiles[name] {
+		if protectedFiles[strings.ToLower(name)] {
 			slog.Info("updater: skipping protected file", "file", name)
 			continue
 		}
@@ -231,7 +240,7 @@ func CleanupAfterUpdate(appDir string, fs Filesystem) (*UpdateResult, error) {
 	for _, e := range entries {
 		name := e.Name()
 		if ext := filepath.Ext(name); ext == bakSuffix || ext == oldSuffix {
-		 fullPath := filepath.Join(appDir, name)
+			fullPath := filepath.Join(appDir, name)
 			if err := fs.Remove(fullPath); err != nil {
 				slog.Warn("updater: failed to cleanup", "file", name, "error", err)
 			} else {

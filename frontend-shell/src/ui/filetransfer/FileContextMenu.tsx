@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
+import { usePortalRoot } from '../Surface';
 
 export interface ContextMenuItem {
     label: string;
@@ -19,6 +20,7 @@ const MENU_WIDTH = 168;
 
 // 可复用的右键菜单：fixed 定位、边缘翻转、点击外部 / ESC 关闭。
 const FileContextMenu: React.FC<FileContextMenuProps> = ({ x, y, items, onClose }) => {
+    const portalRoot = usePortalRoot();
     const ref = useRef<HTMLDivElement | null>(null);
     const [pos, setPos] = useState<{ left: number; top: number }>({ left: x, top: y });
 
@@ -83,7 +85,7 @@ const FileContextMenu: React.FC<FileContextMenuProps> = ({ x, y, items, onClose 
                 </button>
             ))}
         </div>,
-        document.body
+        portalRoot
     );
 };
 

@@ -11,7 +11,8 @@ import (
 // 字段形状与共享 TS 类型对齐（TerminalConfig/HighlightRule 见
 // frontend-shell/src/ui/Terminal/highlightTypes.ts），重启后保持。
 type SettingsService struct {
-	path string
+	path    string
+	desktop *desktopSettings
 }
 
 // TerminalConfigJSON 与共享 TerminalConfig 同构（snake_case）。
@@ -44,6 +45,7 @@ type HighlightRuleJSON struct {
 
 // ShellSettingsJSON 与共享 ShellSettings 同构。
 type ShellSettingsJSON struct {
+	Revision        string              `json:"revision,omitempty"`
 	Theme           string              `json:"theme"`
 	Terminal        TerminalConfigJSON  `json:"terminal"`
 	CompletionDelay int                 `json:"completionDelay"`
@@ -62,9 +64,9 @@ func defaultShellSettings() ShellSettingsJSON {
 			FontFamily:      "JetBrains Mono",
 			FontSize:        14,
 		},
-		CompletionDelay:       150,
-		HighlightRules:        []HighlightRuleJSON{},
-		CommandQueryShortcut:  "Ctrl+K",
+		CompletionDelay:      150,
+		HighlightRules:       []HighlightRuleJSON{},
+		CommandQueryShortcut: "Ctrl+K",
 	}
 }
 
@@ -77,6 +79,9 @@ func NewSettingsService(dataDir string) (*SettingsService, error) {
 
 // Get 返回设置（缺失/损坏时回退默认并落盘）。
 func (s *SettingsService) Get() (ShellSettingsJSON, error) {
+	if s.desktop != nil {
+		return s.desktop.get()
+	}
 	data, err := os.ReadFile(s.path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -133,6 +138,9 @@ func (s *SettingsService) Get() (ShellSettingsJSON, error) {
 
 // Save 全量保存。
 func (s *SettingsService) Save(next ShellSettingsJSON) error {
+	if s.desktop != nil {
+		return s.desktop.save(next)
+	}
 	if next.HighlightRules == nil {
 		next.HighlightRules = []HighlightRuleJSON{}
 	}
