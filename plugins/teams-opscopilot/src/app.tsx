@@ -49,6 +49,8 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
   // 明暗默认跟随宿主；用户手动切过之后才停在这一条上（跟随与否与"选了哪个"分开记，
   // 所以恢复跟随时不会丢掉用户原来的偏好）。
   const [themeFollow, setThemeFollow] = useState<ThemeFollow>(readPersistedThemeFollow)
+  // 异步回调（settings.load）里要读当下的跟随状态，用 ref 避免读到闭包里的旧值。
+  const themeFollowRef = useRef(themeFollow)
   const [error, setError] = useState(''), [busy, setBusy] = useState(false), [connected, setConnected] = useState(false)
 
   const [scriptId, setScriptId] = useState<string>(), scriptsRef = useRef<{ loadScripts(): void }>(null)
@@ -101,13 +103,16 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
     let disposed = false, timer: ReturnType<typeof setTimeout>
     const poll = async () => { try { await refresh() } catch (e) { if (!disposed) { setConnected(false); setError((e as Error).message) } } finally { if (!disposed) timer = setTimeout(poll, 2000) } }
     void poll()
-    void client.call<ShellSettings>('settings.load').then(setSettings).catch(e => setError(e.message))
+    // settings.load 是异步的：跟随时它的返回值不能直接盖掉宿主明暗，否则持久化的旧值
+    // 会在加载完成时把已对齐的宿主模式冲掉（表现就是宿主暗、插件模式层仍是亮）。
+    void client.call<ShellSettings>('settings.load').then(loaded => setSettings(() => themeFollowRef.current === 'host' ? { ...loaded, theme: hostTheme() ?? loaded.theme } : loaded)).catch(e => setError(e.message))
     return () => { disposed = true; clearTimeout(timer) }
   }, [client, refresh])
   useEffect(() => { surface.dataset.theme = settings.theme }, [surface, settings.theme])
   // 跟随宿主明暗：初始对齐一次，之后监听宿主的运行期切换。
   // 宿主没有 data-theme（旧构建）时 hostTheme() 返回 undefined，此时保持插件自己的取值不变。
   useEffect(() => {
+    themeFollowRef.current = themeFollow
     if (themeFollow !== 'host') return
     const sync = () => setSettings(previous => { const next = hostTheme(); return next && next !== previous.theme ? { ...previous, theme: next } : previous })
     sync()
