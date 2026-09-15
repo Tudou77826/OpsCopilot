@@ -30,54 +30,61 @@ function levelProgress(specimen: GardenSpecimen): number {
   return Math.min(1, Math.max(0, specimen.xp / (80 + specimen.level * 20)))
 }
 
-/** 详情抽屉：只展示业务类别，不出现命令正文、凭据、服务器地址或文件内容。 */
-function SpecimenDetail({ specimen, packId, onClose }: { specimen: GardenSpecimen; packId: string; onClose(): void }) {
+/**
+ * 收藏详情卡（与美术预览同一张卡）：场景上居中浮出，深色档案质感。
+ * 左侧大图（image 画法直接放图，SVG 画法用无盆地面形态），右侧收藏档案：
+ * 编号 / 学名 / 名称 / 含义 / 描述 / 等级与本级成长 / 品质徽章 / 获得日期。
+ * 只展示业务类别，不出现命令正文、凭据、服务器地址或文件内容。
+ */
+function SpecimenDetail({ specimen, collectionNo, packId, onClose }: {
+  specimen: GardenSpecimen
+  collectionNo: number
+  packId: string
+  onClose(): void
+}) {
   const pack = getPack(packId)
   const meta = pack?.species[specimen.speciesId]
   const stage = stageOf(specimen.level)
   const image = resolveSpecimenImage(pack, specimen.speciesId, specimen.level, specimen.shiny, specimen.instanceId)
-  const rows: Array<[string, React.ReactNode]> = [
-    ['物种', meta?.name ?? specimen.speciesId],
-    ['含义', meta?.meaning ?? '—'],
-    ['形态', `${stageLabel(pack, stage)}（第 ${stage + 1} / 6 档）`],
-    ['品质', specimen.shiny
-      ? <span key="q" className="garden-quality" data-tier="shiny">✦ 闪光</span>
-      : <span key="q" className="garden-quality" data-tier="normal">普通</span>],
-    ['获得', specimen.acquiredAt.slice(0, 10)],
-  ]
+  React.useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
   return (
-    <aside
-      role="dialog"
-      aria-label={`${meta?.name ?? specimen.speciesId} 详情`}
-      className="garden-drawer"
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <strong style={{ fontSize: font.base }}>{meta?.name ?? specimen.speciesId}</strong>
-        <button type="button" onClick={onClose} aria-label="关闭详情">×</button>
+    <div role="dialog" aria-label={`${meta?.name ?? specimen.speciesId} 收藏详情`} className="garden-collection-card">
+      <div className="garden-collection-figure">
+        {image
+          ? <ImageSpecimen src={image.src} anchor={image.anchor} size={168} label={meta?.name} />
+          : <FloraSpecimen speciesId={specimen.speciesId} level={specimen.level} shiny={specimen.shiny} size={168} label={meta?.name} variant="grounded" />}
       </div>
-      {/* 预览底座与场景同款（天空 + 草地）；image 画法直接放图，SVG 画法用无盆地面形态 */}
-      <div className="garden-drawer-stage">
-        <div style={{ position: 'absolute', left: '50%', bottom: -2, transform: 'translateX(-50%)' }}>
-          {image
-            ? <ImageSpecimen src={image.src} anchor={image.anchor} size={94} label={meta?.name} />
-            : <FloraSpecimen speciesId={specimen.speciesId} level={specimen.level} shiny={specimen.shiny} size={94} label={meta?.name} variant="grounded" />}
+      <div className="garden-collection-body">
+        <p className="garden-collection-eyebrow">收藏档案 · No.{String(collectionNo).padStart(2, '0')}</p>
+        {meta?.latin ? <p className="garden-collection-latin">{meta.latin}</p> : null}
+        <h3 className="garden-collection-name">{meta?.name ?? specimen.speciesId}</h3>
+        <p className="garden-collection-meaning">{meta?.meaning ?? '—'}</p>
+        {meta?.description ? <p className="garden-collection-description">{meta.description}</p> : null}
+        <div className="garden-collection-stats">
+          <div className="garden-progress-row">
+            等级 {specimen.level} / {MAX_LEVEL}{specimen.level >= MAX_LEVEL ? '（常青）' : ''} · 本级成长 {Math.round(levelProgress(specimen) * 100)}%
+            <span className="garden-pity-bar" aria-hidden="true">
+              <span style={{ width: `${Math.round(levelProgress(specimen) * 100)}%` }} />
+            </span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2.5px 0', fontSize: font.sm }}>
+            <span className="garden-collection-stat">形态 {stageLabel(pack, stage)}（第 {stage + 1} / 6 档）</span>
+            {specimen.shiny
+              ? <span className="garden-quality" data-tier="shiny">✦ 闪光</span>
+              : <span className="garden-quality" data-tier="normal">普通</span>}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: font.sm }}>
+            <span className="garden-collection-stat">获得</span>
+            <span>{specimen.acquiredAt.slice(0, 10)}</span>
+          </div>
         </div>
       </div>
-      <div className="garden-progress-row">
-        等级 {specimen.level} / {MAX_LEVEL}{specimen.level >= MAX_LEVEL ? '（常青）' : ''} · 本级成长 {Math.round(levelProgress(specimen) * 100)}%
-        <span className="garden-pity-bar" aria-hidden="true">
-          <span style={{ width: `${Math.round(levelProgress(specimen) * 100)}%` }} />
-        </span>
-      </div>
-      <dl style={{ margin: '6px 0 0', fontSize: font.sm }}>
-        {rows.map(([key, value]) => (
-          <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', padding: '2.5px 0' }}>
-            <dt>{key}</dt>
-            <dd>{value}</dd>
-          </div>
-        ))}
-      </dl>
-    </aside>
+      <button type="button" className="garden-collection-close" onClick={onClose} aria-label="关闭收藏详情">×</button>
+    </div>
   )
 }
 
@@ -156,7 +163,15 @@ export default function GardenPanel({ host, isOpen = true, height = 260 }: Garde
           </span>
         </span>
       </div>
-      {opened ? <SpecimenDetail specimen={opened} packId={DEFAULT_PACK_ID} onClose={() => setOpenId(undefined)} /> : null}
+      {opened ? (
+        <SpecimenDetail
+          specimen={opened}
+          // 收藏编号按获得顺序（快照即按 acquiredAt 升序）。
+          collectionNo={specimens.indexOf(opened) + 1}
+          packId={DEFAULT_PACK_ID}
+          onClose={() => setOpenId(undefined)}
+        />
+      ) : null}
     </div>
   )
 }

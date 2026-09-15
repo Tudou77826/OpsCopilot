@@ -23,12 +23,30 @@ export const botanicalPack: GardenPack = {
   art: 'image',
   schemaVersions: '1',
   species: {
-    'session-tree': { name: '会话杉', meaning: '稳定连接与持续值守' },
-    'cmd-mint': { name: '命令薄荷', meaning: '把重复工作变得轻巧' },
-    'script-vine': { name: '脚本藤', meaning: '自动化能力持续延展' },
-    'transfer-fern': { name: '传输蕨', meaning: '信息在环境间安全流动' },
-    'guard-orchid': { name: '守护兰', meaning: '克制、边界与安全操作' },
-    'knowledge-tree': { name: '知识树', meaning: '把经验沉淀为可复用能力' },
+    'session-tree': {
+      name: '会话杉', latin: 'Picea connexa', meaning: '稳定连接与持续值守',
+      description: '挺拔的针叶从不停歇生长，像一条始终在线的会话，安静地守着每一次登录与值守。',
+    },
+    'cmd-mint': {
+      name: '命令薄荷', latin: 'Mentha', meaning: '把重复工作变得轻巧',
+      description: '一簇清新的绿意，记录那些被认真整理、反复复用的快捷命令。',
+    },
+    'script-vine': {
+      name: '脚本藤', latin: 'Vitis scripta', meaning: '自动化能力持续延展',
+      description: '蜿蜒的藤蔓沿着支架不断伸展，每一片新叶都是一段被固化的自动化流程。',
+    },
+    'transfer-fern': {
+      name: '传输蕨', latin: 'Pteridophyta', meaning: '信息在环境间安全流动',
+      description: '舒展的羽叶与卷曲的新芽，记录每一次可靠完成的文件传输。',
+    },
+    'guard-orchid': {
+      name: '守护兰', latin: 'Orchidaceae', meaning: '克制、边界与安全操作',
+      description: '淡紫花瓣沿着花茎舒展，为认真守护操作边界的你而绽放。',
+    },
+    'knowledge-tree': {
+      name: '知识树', latin: 'Arbor scientiae', meaning: '把经验沉淀为可复用能力',
+      description: '年轮一圈圈生长，把排查过的故障与沉淀的答案都收进树冠里。',
+    },
   },
   stageLabels: ['发芽', '幼苗', '分枝', '繁茂', '开花', '成熟'],
   images: {

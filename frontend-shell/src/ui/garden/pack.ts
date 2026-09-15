@@ -44,6 +44,10 @@ export interface GardenPackSpecies {
   name: string
   /** 该物种代表的行为含义。 */
   meaning: string
+  /** 学名（可选，收藏卡展示用；建筑等题材可省略）。 */
+  latin?: string
+  /** 收藏描述（可选，比 meaning 更长一段的"这条收藏记录了什么"）。 */
+  description?: string
 }
 
 /**
