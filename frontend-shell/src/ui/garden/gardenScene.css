@@ -491,29 +491,29 @@
 .garden-progress-row .garden-pity-bar { width: 100%; margin-top: 4px; }
 
 /* —— 收藏详情卡：场景居中浮出的深色档案卡（与美术预览同一张卡） —— */
-/* 尺寸按 320px 停靠面板收口：卡片是场景里的一个浮层，不能盖住整座花园 */
+/* 尺寸按 320px 停靠面板收口：卡片是轻量信息浮层，只占场景的一角 */
 .garden-collection-card {
   position: absolute;
   left: 50%; top: 50%;
   transform: translate(-50%, -50%);
-  width: min(392px, 76%);
+  width: min(300px, 62%);
   max-height: calc(100% - 16px);
   overflow: auto;
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
-  padding: 12px 14px;
-  border-radius: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
   background: linear-gradient(160deg, rgba(26, 36, 30, 0.95), rgba(12, 18, 15, 0.95));
   border: 1px solid rgba(214, 228, 255, 0.16);
   color: #e8efe6;
-  box-shadow: 0 14px 36px rgba(8, 12, 10, 0.4);
+  box-shadow: 0 10px 28px rgba(8, 12, 10, 0.4);
   backdrop-filter: blur(8px);
   z-index: 50;
 }
 .garden-collection-figure {
   flex: 0 0 auto;
-  width: 108px;
+  width: 76px;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -523,12 +523,12 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 .garden-collection-eyebrow {
   margin: 0;
-  font-size: 9px;
-  letter-spacing: 2px;
+  font-size: 8px;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
   color: var(--g-sparkle);
   opacity: 0.9;
@@ -536,25 +536,25 @@
 .garden-collection-latin {
   margin: 0;
   font-style: italic;
-  font-size: 11px;
+  font-size: 10px;
   color: #9db0a4;
 }
 .garden-collection-name {
   margin: 0;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.3;
   color: #f2f6ee;
 }
 .garden-collection-meaning {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 10.5px;
   color: #cfe0cc;
 }
 .garden-collection-description {
   margin: 1px 0 0;
-  font-size: 11px;
-  line-height: 1.55;
+  font-size: 10px;
+  line-height: 1.5;
   color: #9db0a4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -562,20 +562,20 @@
   overflow: hidden;
 }
 .garden-collection-stats {
-  margin-top: 6px;
-  padding-top: 6px;
+  margin-top: 4px;
+  padding-top: 4px;
   border-top: 1px solid rgba(214, 228, 255, 0.12);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 .garden-collection-stat { color: #9db0a4; }
 .garden-collection-close {
   position: absolute;
-  top: 6px; right: 8px;
-  font-size: 14px;
+  top: 4px; right: 6px;
+  font-size: 12px;
   line-height: 1;
-  padding: 3px;
+  padding: 2px;
   background: transparent;
   border: none;
   color: #9db0a4;

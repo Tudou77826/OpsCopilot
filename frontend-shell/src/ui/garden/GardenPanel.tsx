@@ -55,8 +55,8 @@ function SpecimenDetail({ specimen, collectionNo, packId, onClose }: {
     <div role="dialog" aria-label={`${meta?.name ?? specimen.speciesId} 收藏详情`} className="garden-collection-card">
       <div className="garden-collection-figure">
         {image
-          ? <ImageSpecimen src={image.src} anchor={image.anchor} size={116} label={meta?.name} />
-          : <FloraSpecimen speciesId={specimen.speciesId} level={specimen.level} shiny={specimen.shiny} size={116} label={meta?.name} variant="grounded" />}
+          ? <ImageSpecimen src={image.src} anchor={image.anchor} size={80} label={meta?.name} />
+          : <FloraSpecimen speciesId={specimen.speciesId} level={specimen.level} shiny={specimen.shiny} size={80} label={meta?.name} variant="grounded" />}
       </div>
       <div className="garden-collection-body">
         <p className="garden-collection-eyebrow">收藏档案 · No.{String(collectionNo).padStart(2, '0')}</p>
