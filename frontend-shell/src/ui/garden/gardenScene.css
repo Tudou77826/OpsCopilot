@@ -645,12 +645,10 @@
 .garden-image-footer summary { cursor: pointer; }
 .garden-missing-list { position: absolute; bottom: 38px; right: 8px; display: grid; gap: 8px; padding: 12px; border-radius: 8px; background: var(--g-drawer-bg); border: 1px solid var(--g-chip-border); }
 .garden-missing-list button { padding: 8px 12px; text-align: left; }
-.garden-expand-button { pointer-events: auto; margin-left: auto; border: 1px solid var(--g-chip-border); color: var(--g-chip-text); background: var(--g-chip-bg); border-radius: 6px; padding: 5px 9px; font-size: 12px; white-space: nowrap; cursor: pointer; }
 .garden-picture-panel .garden-chip-row { z-index: 120; }
 .garden-picture-panel .garden-chip { background: transparent; border: 0; padding: 3px 0; border-radius: 0; }
 .garden-picture-panel .garden-pity-summary { font-size: 10px; }
 .garden-picture-panel .garden-pity-summary .garden-pity-bar { display: none; }
-.garden-expanded.garden-root { position: fixed; left: 24px; right: 24px; top: 50%; transform: translateY(-50%); height: min(80vh, calc((100vw - 48px) / 3 + 84px)) !important; z-index: 1000; box-shadow: 0 20px 90px rgba(0,0,0,.5); }
 .garden-picture-panel .garden-collection-card { box-sizing: border-box; left: auto; right: 10px; top: 50%; transform: translateY(-50%); width: min(460px, calc(100% - 20px)); max-height: calc(100% - 20px); padding: 16px; gap: 16px; background: var(--g-drawer-bg); color: var(--g-drawer-text); border-color: var(--g-drawer-frame); z-index: 150; }
 .garden-picture-panel .garden-collection-eyebrow { color: var(--g-drawer-muted); font-size: 10px; }
 .garden-picture-panel .garden-quality[data-tier='shiny'] { color: var(--g-chip-text); border-color: var(--g-chip-muted); }

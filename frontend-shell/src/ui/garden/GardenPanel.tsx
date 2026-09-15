@@ -91,7 +91,6 @@ function SpecimenDetail({ specimen, collectionNo, packId, onClose }: {
 
 export default function GardenPanel({ host, isOpen = true, height = 260, packId = DEFAULT_PACK_ID }: GardenPanelProps) {
   const pack = getPack(packId)
-  const [expanded, setExpanded] = useState(false)
   const [snapshot, setSnapshot] = useState<GardenSnapshot | null>(null)
   const [error, setError] = useState('')
   const [openId, setOpenId] = useState<string>()
@@ -134,7 +133,7 @@ export default function GardenPanel({ host, isOpen = true, height = 260, packId 
   }
 
   return (
-    <div className={`garden-root${pack?.art === 'image' ? ' garden-picture-panel' : ''}${expanded ? ' garden-expanded' : ''}`} style={{ height, border: '1px solid var(--g-chip-border)' }}>
+    <div className={`garden-root${pack?.art === 'image' ? ' garden-picture-panel' : ''}`} style={{ height, border: '1px solid var(--g-chip-border)' }}>
       {pack?.art === 'image' || specimens.length > 0 ? <GardenScene specimens={specimens} pending={pending} packId={packId} selectedId={openId} onOpen={setOpenId} onDismissPending={dismissPending} /> : null}
       {specimens.length === 0 ? (
         <>
@@ -157,7 +156,6 @@ export default function GardenPanel({ host, isOpen = true, height = 260, packId 
             <span style={{ width: `${Math.min(100, Math.round(((snapshot?.pitySinceShiny ?? 0) / PITY_AT) * 100))}%` }} />
           </span>
         </span>
-        <button className="garden-expand-button" onClick={() => setExpanded(value => !value)}>{expanded ? '收起' : '展开欣赏'}</button>
       </div>
       {opened ? (
         <SpecimenDetail

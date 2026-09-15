@@ -10,7 +10,7 @@ import { EventJournal } from './events.js'
 import { connectionDraft, sessionPassword } from './connections.js'
 import { workspacePath, remotePath, type Transfer } from './files.js'
 
-export const version = '0.1.25'
+export const version = '0.1.26'
 type ObjectValue = Record<string, unknown>
 function object(value: unknown): ObjectValue {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new OpsError('INVALID_ARGUMENT', '需要对象参数')
