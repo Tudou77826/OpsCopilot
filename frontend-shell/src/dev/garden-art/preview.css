@@ -1,0 +1,79 @@
+/* 预览页的外部控件使用产品令牌；画内控件沿用花园独立色板。 */
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg-primary); color: var(--text-primary); font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; }
+button, input { font: inherit; }
+button { cursor: pointer; }
+button:focus-visible, .art-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.art-page { max-width: 1600px; margin: auto; padding: 40px 36px 24px; }
+.art-heading { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 30px; }
+.art-eyebrow { font-size: 10px; letter-spacing: .2em; color: var(--text-secondary); margin: 0 0 14px; }
+.art-heading h1 { font-family: 'Georgia', 'Source Han Serif SC', 'SimSun', serif; font-size: clamp(24px, 2.6vw, 36px); font-weight: 500; letter-spacing: .04em; margin: 0; }
+.art-intro { font-size: 13px; color: var(--text-secondary); margin: 12px 0 0; }
+.art-preview-label { flex-shrink: 0; font-size: 11px; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 20px; padding: 8px 12px; }
+.art-workbench { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: var(--bg-secondary); }
+.art-controls { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; padding: 13px 18px; }
+.art-control-group { display: flex; gap: 3px; }
+.art-control-group button { border: 0; border-radius: 6px; padding: 7px 12px; background: transparent; color: var(--text-secondary); font-size: 12px; }
+.art-control-group button[aria-pressed='true'] { color: var(--text-primary); background: var(--bg-primary); box-shadow: 0 1px 3px color-mix(in srgb, var(--text-primary) 9%, transparent); }
+.art-check { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+.art-check input { accent-color: var(--accent); }
+.art-frame.garden-root { height: var(--art-height); border-radius: 0; isolation: isolate; container-type: size; }
+.art-scroll { width: 100%; height: 100%; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: var(--g-chip-border) transparent; }
+.art-scene { position: relative; height: 100%; width: max(100%, calc(var(--art-height) * 2.8)); overflow: hidden; }
+.art-landscape { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; pointer-events: none; transition: opacity 700ms ease; }
+.art-night { opacity: 0; }
+[data-night='true'] .art-night { opacity: 1; }
+.art-specimen { position: absolute; aspect-ratio: 1; transform: translateX(-50%); border: 0; padding: 0; background: transparent; -webkit-tap-highlight-color: transparent; }
+.art-plant-image { position: relative; width: 100%; height: 100%; object-fit: contain; transform-origin: var(--art-root); animation: art-breathe 11s ease-in-out infinite; transition: filter 700ms ease; }
+.art-fern .art-plant-image { animation-delay: -3s; animation-duration: 13s; }
+.art-orchid .art-plant-image { animation-delay: -7s; animation-duration: 15s; }
+.art-contact { position: absolute; left: 32%; right: 32%; bottom: 8%; height: 4%; border-radius: 50%; background: color-mix(in srgb, var(--g-drawer-text) 65%, transparent); filter: blur(5px); opacity: .75; }
+.art-fern .art-contact { bottom: 15%; }
+.art-orchid .art-contact { left: 42%; right: 42%; bottom: 6%; }
+[data-night='true'] .art-plant-image { filter: brightness(.52) saturate(.64) hue-rotate(16deg); }
+[data-night='true'] .art-orchid .art-plant-image { filter: brightness(.74) saturate(.67) hue-rotate(5deg); }
+[data-night='true'] .art-contact { background: var(--g-sky-top); }
+.art-plant-label { position: absolute; left: 50%; bottom: 0; transform: translate(-50%, 6px); opacity: 0; white-space: nowrap; border: 1px solid var(--g-chip-border); border-radius: 7px; background: var(--g-drawer-bg); color: var(--g-drawer-text); padding: 7px 12px; font-size: 12px; box-shadow: 0 3px 12px color-mix(in srgb, var(--g-ground-deep) 20%, transparent); transition: opacity 180ms, transform 180ms; pointer-events: none; }
+.art-plant-label small { display: block; margin-top: 3px; font-size: 10px; color: var(--g-drawer-muted); }
+.art-specimen:hover .art-plant-label, .art-specimen:focus-visible .art-plant-label, .art-specimen[aria-pressed='true'] .art-plant-label { opacity: 1; transform: translate(-50%, 0); }
+.art-scene-title { position: absolute; top: 18px; left: 20px; pointer-events: none; padding: 11px 16px; background: var(--g-chip-bg); backdrop-filter: blur(12px); border: 1px solid var(--g-chip-border); border-radius: 9px; color: var(--g-chip-text); }
+.art-scene-title span { font-family: 'Georgia', 'SimSun', serif; font-size: 17px; letter-spacing: .08em; }
+.art-scene-title small { display: block; margin-top: 6px; font-size: 10px; color: var(--g-chip-muted); letter-spacing: .08em; }
+.art-sparkles { position: absolute; inset: 0; pointer-events: none; color: var(--g-glow-core); }
+.art-sparkles i { position: absolute; font-style: normal; font-size: 17px; left: 32%; top: 24%; animation: art-glimmer 7s ease-in-out infinite; text-shadow: 0 0 5px var(--g-sparkle); }
+.art-sparkles i:nth-child(2) { left: 74%; top: 36%; animation-delay: -2s; }
+.art-sparkles i:nth-child(3) { left: 58%; top: 10%; animation-delay: -4s; font-size: 11px; }
+.art-empty { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--g-chip-bg); backdrop-filter: blur(12px); color: var(--g-chip-text); border-radius: 9px; padding: 16px 22px; text-align: center; max-width: 90%; width: max-content; }
+.art-empty span { font-family: 'SimSun', serif; font-size: 19px; }
+.art-empty small { display: block; margin-top: 9px; font-size: 11px; line-height: 1.8; color: var(--g-chip-muted); }
+.art-detail { position: absolute; top: 12px; bottom: 12px; right: 12px; width: min(310px, calc(100% - 24px)); border: 1px solid var(--g-drawer-frame); border-radius: 10px; background: var(--g-drawer-bg); color: var(--g-drawer-text); padding: 18px 22px; overflow-y: auto; box-shadow: -8px 0 30px color-mix(in srgb, var(--g-ground-deep) 22%, transparent); animation: art-arrive 220ms ease-out; }
+.art-close { position: absolute; right: 10px; top: 8px; width: 30px; height: 30px; border: 0; background: transparent; color: var(--g-drawer-text); font-size: 23px; border-radius: 5px; }
+.art-close:hover { background: var(--g-chip-border); }
+.art-detail-kicker { font-size: 8px; letter-spacing: .1em; color: var(--g-drawer-muted); }
+.art-detail-image { display: block; width: 100%; height: clamp(78px, calc(var(--art-height) * .37), 205px); object-fit: contain; margin: 5px 0 8px; }
+.art-latin { font-family: Georgia, serif; font-size: 11px; font-style: italic; color: var(--g-drawer-muted); }
+.art-detail h2 { margin: 5px 0 10px; font-family: 'SimSun', serif; font-size: 23px; font-weight: 500; }
+.art-detail p { font-size: 11px; line-height: 1.8; color: var(--g-drawer-muted); margin: 7px 0; }
+.art-detail .art-meaning { font-size: 12px; color: var(--g-drawer-text); }
+.art-detail-meta { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--g-drawer-frame); display: flex; justify-content: space-between; color: var(--g-drawer-muted); font-size: 11px; }
+.art-detail-meta strong { color: var(--g-drawer-text); font-size: 16px; padding-left: 4px; font-weight: 500; }
+.art-image-error { position: absolute; inset: 0; display: grid; place-items: center; background: var(--g-drawer-bg); color: var(--g-error); }
+.art-caption { display: flex; justify-content: space-between; gap: 12px; font-size: 10px; color: var(--text-secondary); padding: 13px 18px; }
+.art-notes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin-top: 27px; }
+.art-notes p { margin: 0; font-size: 12px; line-height: 1.9; color: var(--text-secondary); }
+.art-notes span { display: block; color: var(--text-primary); font-size: 10px; letter-spacing: .12em; margin-bottom: 5px; }
+.art-footnote { margin-top: 28px; padding-top: 15px; border-top: 1px solid var(--border-subtle); color: var(--text-muted); font-size: 10px; }
+/* 低面板采用横向标牌，保持图片和收藏信息同时可见。 */
+@container (max-height: 340px) {
+  .art-detail { width: min(460px, calc(100% - 24px)); display: grid; grid-template-columns: minmax(80px, .7fr) minmax(0, 1fr); grid-template-rows: auto 1fr; gap: 10px 18px; padding: 16px 20px; }
+  .art-detail-kicker { grid-column: 1 / -1; padding-right: 18px; }
+  .art-detail-image { height: calc(var(--art-height) - 90px); min-height: 0; margin: 0; align-self: center; }
+  .art-detail-copy { align-self: center; }
+  .art-detail h2 { font-size: 21px; margin-bottom: 6px; }
+  .art-detail-meta { margin-top: 8px; padding-top: 8px; }
+}
+@keyframes art-breathe { 0%, 100% { transform: rotate(-.28deg); } 50% { transform: rotate(.38deg); } }
+@keyframes art-glimmer { 0%, 70%, 100% { opacity: 0; transform: translateY(0); } 35% { opacity: .8; transform: translateY(-6px); } }
+@keyframes art-arrive { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+@media (prefers-reduced-motion: reduce) { .art-frame *, .art-frame *::before { animation: none !important; transition: none !important; } .art-sparkles { display: none; } }
+@media (max-width: 720px) { .art-page { padding: 24px 12px; } .art-heading { align-items: flex-start; } .art-preview-label { display: none; } .art-controls { gap: 9px 12px; padding: 10px; } .art-controls button { padding: 7px 9px; } .art-caption span:last-child { display: none; } .art-notes { grid-template-columns: 1fr; gap: 12px; } .art-scene-title { left: 12px; top: 12px; } }

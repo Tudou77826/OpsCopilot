@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react'
-import FloraSpecimen, { stageNames } from './packs/floraRenderer'
+import FloraSpecimen from './packs/floraRenderer'
+import ImageSpecimen from './packs/imageSpecimen'
 import GardenScene, { Backdrop } from './GardenScene'
-import { DEFAULT_PACK_ID, getPack, stageOf, MAX_LEVEL, PITY_AT, type GardenSnapshot, type GardenSpecimen } from './pack'
+import { DEFAULT_PACK_ID, getPack, stageOf, stageLabel, resolveSpecimenImage, MAX_LEVEL, PITY_AT, type GardenSnapshot, type GardenSpecimen } from './pack'
 // 引入即登记内置呈现包（见 packs/index.ts）。
 import './packs'
 import { font } from '../settings/settingsStyles'
@@ -34,10 +35,11 @@ function SpecimenDetail({ specimen, packId, onClose }: { specimen: GardenSpecime
   const pack = getPack(packId)
   const meta = pack?.species[specimen.speciesId]
   const stage = stageOf(specimen.level)
+  const image = resolveSpecimenImage(pack, specimen.speciesId, specimen.level, specimen.shiny, specimen.instanceId)
   const rows: Array<[string, React.ReactNode]> = [
     ['物种', meta?.name ?? specimen.speciesId],
     ['含义', meta?.meaning ?? '—'],
-    ['形态', `${stageNames[stage]}（第 ${stage + 1} / 6 档）`],
+    ['形态', `${stageLabel(pack, stage)}（第 ${stage + 1} / 6 档）`],
     ['品质', specimen.shiny
       ? <span key="q" className="garden-quality" data-tier="shiny">✦ 闪光</span>
       : <span key="q" className="garden-quality" data-tier="normal">普通</span>],
@@ -53,10 +55,12 @@ function SpecimenDetail({ specimen, packId, onClose }: { specimen: GardenSpecime
         <strong style={{ fontSize: font.base }}>{meta?.name ?? specimen.speciesId}</strong>
         <button type="button" onClick={onClose} aria-label="关闭详情">×</button>
       </div>
-      {/* 预览底座与场景同款（天空 + 草地），植株种在地里而不是栽在花盆里 */}
+      {/* 预览底座与场景同款（天空 + 草地）；image 画法直接放图，SVG 画法用无盆地面形态 */}
       <div className="garden-drawer-stage">
         <div style={{ position: 'absolute', left: '50%', bottom: -2, transform: 'translateX(-50%)' }}>
-          <FloraSpecimen speciesId={specimen.speciesId} level={specimen.level} shiny={specimen.shiny} size={94} label={meta?.name} variant="grounded" />
+          {image
+            ? <ImageSpecimen src={image.src} anchor={image.anchor} size={94} label={meta?.name} />
+            : <FloraSpecimen speciesId={specimen.speciesId} level={specimen.level} shiny={specimen.shiny} size={94} label={meta?.name} variant="grounded" />}
         </div>
       </div>
       <div className="garden-progress-row">
@@ -123,7 +127,7 @@ export default function GardenPanel({ host, isOpen = true, height = 260 }: Garde
     <div className="garden-root" style={{ height, border: '1px solid var(--g-chip-border)' }}>
       {specimens.length === 0 ? (
         <>
-          <Backdrop />
+          <Backdrop scene={getPack(DEFAULT_PACK_ID)?.images?.scene} />
           <div className="garden-empty" role="status">
             🌱 空花园 —— 建立一次连接、完成一次传输或跑完一次脚本，就会长出第一株
           </div>

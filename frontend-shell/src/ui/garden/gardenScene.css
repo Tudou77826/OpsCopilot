@@ -250,6 +250,33 @@
 .garden-specimen[data-depth='0'] .garden-plant-sway { filter: saturate(0.82); }
 .garden-specimen[data-depth='1'] { opacity: 0.92; }
 
+/* —— image 画法：一张图 + 落地接触阴影，题材无关 —— */
+.garden-image-specimen { position: relative; display: block; }
+.garden-image-specimen img {
+  width: 100%; height: 100%;
+  object-fit: contain;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.garden-contact-shadow {
+  position: absolute;
+  left: 50%; bottom: 0;
+  width: 64%; height: 7%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(20, 32, 24, 0.45), transparent 70%);
+}
+
+/* —— 包自带的场景背景（昼/夜同视角成对图），替换 CSS 天空 + SVG 地面 —— */
+.garden-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  object-position: center bottom;
+}
+
 /* 前景压角：虚化的大草叶，制造"站在花园里看"的框景 */
 .garden-frame-grass {
   position: absolute;

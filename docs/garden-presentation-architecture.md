@@ -198,3 +198,13 @@ theme.css              可选：该包的少量局部样式（限 --garden-* 前
 - 状态层修复（由桌面接入的测试抓出）：`garden.Store` 增加 `sync.Mutex` 串行化本进程访问——`pending` 只存活在内存，而每次快照的 `refresh` 会整体替换 state，无锁时异步结算与并发快照会把刚产生的 pending 覆盖丢失（`TestConcurrentRecordAndSnapshotKeepsPending` 固化）；另外全新花园的 `GardenLevel` 显式初始化为 1（此前要等首次结算才由 recompute 写入）。
 
 独立评审（非作者 subAgent 看图评审）两轮：第一轮 FAIL（虚线环像蚂蚁线、光晕过曝、纵深"排排坐"、抽屉裁字透光斑），按其三条最高优先级意见重做后第二轮 **PASS**（白天 7 / 夜晚 7.5 / 抽屉 7），遗留打磨项：蕨的小尺寸剪影、抽屉进度条可见性（均已在本轮修复）、中景层叠密度（留待下轮）。
+
+## 7.7 image 画法落地：绘本素材包（2026-09-15，v3）
+
+美术方向升级为精细植物绘本 PNG 素材（用户已认可的 garden-art.html 预览方向），本轮把该方向**实装进正式呈现链路**，并完成素材**主题无关化**：
+
+- **包格式扩展**（`pack.ts`）：`GardenPack` 新增可选 `stageLabels`（题材自有的阶段语言）与 `images`（`scene.day/night` 场景背景对 + `species: Record<speciesId, GardenImageSpecies>`）。`GardenImageSpecies` = `stages[6]`（每形态阶段一图，空串回退）+ `shinyStages[6]`（可选闪光替代）+ `matureVariants`（最高阶段姿态变体，按 instanceId 确定性挑选）+ `anchor`（落地锚点，默认 50%/88%）。形状对动物/建筑题材同样成立——状态层与场景层不解读图片内容。
+- **按物种选画法**：`resolveSpecimenImage()` 优先取包内图片；未覆盖或缺图的物种自动回退内置 SVG 画法（`floraRenderer`）。当前薄荷/蕨/兰三物种有原画（各阶段暂用同一张成熟体，九宫格素材到位后按下标填充），杉/藤/树为 SVG 回退——混合渲染是已知的过渡态。
+- **场景背景**：`GardenScene` 的 Backdrop 按"包是否提供 scene"二分——提供则渲染昼/夜背景图对（沿用 data-theme 显隐机制），并切换到贴合手绘地形的 `IMAGE_SCENE_ROWS` 种植带（比内置布景更贴底）；未提供则维持内置布景全套（日月星云萤火/ SVG 地面/框景草叶）。题材自有装饰（蝴蝶/落叶/城市车流…）留作包的后续字段。
+- **资产管线**：素材在构建前归一化（植株 512px、场景 1600px，全部 WebP：植株带 alpha、总量 718KB），随构建内联为 dataURL（插件 build.ts 的 loader 增加 `.webp`）；插件 ui.js 单文件 6.2MB，仍在宿主 20MB/文件限额内。九宫格原图（3072²）不得直接进包。
+- **版本**：0.1.18→0.1.20（0.1.19 修 Backdrop 未接包场景、0.1.20 切种植带）。真机（iCode Teams dev 宿主）已验证：绘本背景 + 图/SVG 混合植株 + 昼夜切换 + 详情抽屉均正常。

@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react'
-import FloraSpecimen, { stageNames } from './packs/floraRenderer'
-import { getPack, stageOf, MAX_LEVEL, DEFAULT_PACK_ID, type GardenSpecimen, type GardenPending } from './pack'
+import FloraSpecimen from './packs/floraRenderer'
+import ImageSpecimen from './packs/imageSpecimen'
+import { getPack, stageOf, stageLabel, resolveSpecimenImage, MAX_LEVEL, DEFAULT_PACK_ID, type GardenPack, type GardenSpecimen, type GardenPending } from './pack'
 import { gardenScene as palette } from './palette'
 import './gardenScene.css'
 
@@ -17,11 +18,24 @@ import './gardenScene.css'
  */
 
 /** 三层种植带：bottom 是距场景底部百分比，scale 是相对基准的尺寸倍率。 */
-const ROWS = [
+export type PlantingRow = { bottom: number; scale: number; z: number }
+
+/** 内置布景（CSS 天空 + SVG 地面）的种植带。 */
+const ROWS: readonly PlantingRow[] = [
   { bottom: 33, scale: 0.62, z: 10 },
   { bottom: 18, scale: 0.82, z: 20 },
   { bottom: 4, scale: 1.04, z: 30 },
-] as const
+]
+
+/**
+ * 包自带手绘场景时的种植带：贴合画出来的可种植区（前景土路/草地边缘），
+ * 整体比内置布景更贴近底边，避免植株踩到画中的岩石与远景。
+ */
+const IMAGE_SCENE_ROWS: readonly PlantingRow[] = [
+  { bottom: 20, scale: 0.58, z: 10 },
+  { bottom: 11, scale: 0.78, z: 20 },
+  { bottom: 2, scale: 1.0, z: 30 },
+]
 
 /** 基准尺寸（近带最大边长，px）。 */
 const BASE_SIZE = 132
@@ -66,12 +80,12 @@ export interface Placed {
  * 远→中→近——相邻植株必然处于不同层带，形成错落有致的种植，而不是三排各自的
  * 等分点竖向叠柱。最新的一株总在最前排，成长的可见性最好。
  */
-export function layoutSpecimens(specs: GardenSpecimen[]): Placed[] {
+export function layoutSpecimens(specs: GardenSpecimen[], rows: readonly PlantingRow[] = ROWS): Placed[] {
   const rowOrder = [2, 1, 0] as const
   return specs.map((spec, index) => {
     const distanceFromNewest = specs.length - 1 - index
     const row = rowOrder[distanceFromNewest % 3]
-    const info = ROWS[row]
+    const info = rows[row]
     const base = ((index + 0.5) / specs.length) * 100
     // 抖动幅度允许相邻株轻微互相压边——零遮挡的"贴纸拼贴"没有前后关系。
     const jitterAmp = Math.min(7, 60 / Math.max(specs.length, 1))
@@ -271,7 +285,19 @@ function FrameGrass() {
   )
 }
 
-export function Backdrop() {
+/**
+ * 场景背景：包自带昼/夜成对背景图时用它（题材自有世界），否则回退内置植物风布景
+ * （CSS 天空 + 日月星云萤火 + SVG 地面）。空花园复用同一片天地。
+ */
+export function Backdrop({ scene }: { scene?: { day?: string; night?: string } }) {
+  if (scene?.day && scene.night) {
+    return (
+      <div className="garden-sky" aria-hidden="true">
+        <img className="garden-backdrop garden-day-only" src={scene.day} alt="" />
+        <img className="garden-backdrop garden-night-only" src={scene.night} alt="" />
+      </div>
+    )
+  }
   return (
     <div className="garden-sky" aria-hidden="true">
       <StarField />
@@ -303,7 +329,9 @@ export interface GardenSceneProps {
 
 export default function GardenScene({ specimens, pending, packId = DEFAULT_PACK_ID, selectedId, onOpen, onDismissPending }: GardenSceneProps) {
   const pack = getPack(packId)
-  const placed = useMemo(() => layoutSpecimens(specimens), [specimens])
+  // 手绘场景的可种植区更贴底：有包背景时用 IMAGE_SCENE_ROWS。
+  const rows = pack?.images?.scene ? IMAGE_SCENE_ROWS : ROWS
+  const placed = useMemo(() => layoutSpecimens(specimens, rows), [specimens, rows])
   const pendingByInstance = useMemo(() => {
     const map = new Map<string, GardenPending>()
     pending.forEach(item => { if (item.instanceId) map.set(item.instanceId, item) })
@@ -314,12 +342,15 @@ export default function GardenScene({ specimens, pending, packId = DEFAULT_PACK_
 
   return (
     <div className="garden-planting" role="group" aria-label="花园场景">
-      <Backdrop />
+      <Backdrop scene={pack?.images?.scene} />
       <div style={{ position: 'absolute', inset: 0, minWidth }}>
         {placed.map(({ spec, x, bottom, size, row }) => {
           const meta = pack?.species[spec.speciesId]
           const name = meta?.name ?? spec.speciesId
-          const label = `${name} ${spec.level} 级 ${stageNames[stageOf(spec.level)]}${spec.shiny ? ' 闪光' : ''}`
+          const stage = stageOf(spec.level)
+          const label = `${name} ${spec.level} 级 ${stageLabel(pack, stage)}${spec.shiny ? ' 闪光' : ''}`
+          // 每物种选画法：包里给了图就走 image 画法，没覆盖的物种回退内置 SVG。
+          const image = resolveSpecimenImage(pack, spec.speciesId, spec.level, spec.shiny, spec.instanceId)
           const item = pendingByInstance.get(spec.instanceId)
           return (
             <div
@@ -338,17 +369,20 @@ export default function GardenScene({ specimens, pending, packId = DEFAULT_PACK_
                 title={label}
                 style={{ width: size, height: size, position: 'relative' }}
               >
+                {/* 光效强度按画法收敛：绘本图自带金边配色，只留地面光池与少量闪星；SVG 画法保留光晕 */}
+                {spec.shiny && !image ? <span className="garden-halo" aria-hidden="true" /> : null}
                 {spec.shiny ? <span className="garden-glow-pool" aria-hidden="true" /> : null}
-                {spec.shiny ? <span className="garden-halo" aria-hidden="true" /> : null}
                 <span className={spec.shiny ? 'garden-plant-sway garden-shiny-plant' : 'garden-plant-sway'} style={{ display: 'block', animationDelay: `${(hash01(spec.instanceId) * 3).toFixed(2)}s` }}>
-                  <FloraSpecimen speciesId={spec.speciesId} level={spec.level} shiny={spec.shiny} size={size} label={label} variant="grounded" />
+                  {image
+                    ? <ImageSpecimen src={image.src} anchor={image.anchor} size={size} label={label} />
+                    : <FloraSpecimen speciesId={spec.speciesId} level={spec.level} shiny={spec.shiny} size={size} label={label} variant="grounded" />}
                 </span>
                 {/* 画面层闪星 + 双层盘旋光尘：环绕植株转动的"魔力粒子" */}
                 {spec.shiny ? (
                   <>
                     <span className="garden-sparkle" style={{ left: '2%', top: '12%', fontSize: 14, animationDelay: '0.2s' }} aria-hidden="true">✦</span>
                     <span className="garden-sparkle" style={{ right: '4%', top: '4%', fontSize: 10, animationDelay: '1.1s' }} aria-hidden="true">✦</span>
-                    <span className="garden-sparkle" style={{ right: '10%', bottom: '28%', fontSize: 12, animationDelay: '1.7s' }} aria-hidden="true">✦</span>
+                    {!image ? <span className="garden-sparkle" style={{ right: '10%', bottom: '28%', fontSize: 12, animationDelay: '1.7s' }} aria-hidden="true">✦</span> : null}
                     <span className="garden-mote-orbit" aria-hidden="true">
                       <span className="garden-mote" style={{ left: '50%', top: '4%' }} />
                       <span className="garden-mote" style={{ left: '88%', top: '46%' }} />

@@ -1,5 +1,5 @@
 import React, { useId } from 'react'
-import { stageOf, NUM_STAGES, MAX_LEVEL } from '../pack'
+import { stageOf, NUM_STAGES, MAX_LEVEL, DEFAULT_STAGE_LABELS } from '../pack'
 import { gardenScene as palette } from '../palette'
 
 /**
@@ -42,8 +42,8 @@ const shapes: Record<string, SpeciesShape> = {
 
 const fallbackShape: SpeciesShape = { height: 1, spread: 1, accent: palette.bloom, fruit: false }
 
-/** 阶段名：用于详情与无障碍标签。 */
-export const stageNames = ['发芽', '幼苗', '分枝', '繁茂', '开花', '成熟']
+/** 阶段名：植物语汇（缺省词表）。包级标签统一走 pack.stageLabels / stageLabel()。 */
+export const stageNames = DEFAULT_STAGE_LABELS
 
 /** 四角闪星路径（以原点为中心）；外层 g 负责定位，CSS 类负责缩放旋转动画。 */
 const SPARKLE_PATH = 'M0,-4.6 L1.15,-1.15 L4.6,0 L1.15,1.15 L0,4.6 L-1.15,1.15 L-4.6,0 L-1.15,-1.15 Z'
