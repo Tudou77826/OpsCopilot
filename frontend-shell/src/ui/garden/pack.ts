@@ -56,7 +56,7 @@ export interface GardenPackSpecies {
  * 状态层与场景层不解读图片内容，只按 (speciesId, stage, shiny, 姿态序号) 取图。
  */
 export interface GardenImageSpecies {
-  /** 与 NUM_STAGES 等长的阶段图列表；空串表示缺图，收藏保留在待配图列表。 */
+  /** 与 NUM_STAGES 等长的阶段图列表；空串表示缺图，缺图收藏不进场景。 */
   stages: string[]
   /** 闪光替代图（可选）：与 stages 按下标对齐；缺省用普通图。 */
   shinyStages?: string[]
@@ -82,7 +82,7 @@ export interface GardenPack {
   presentation?: { title: string; unit: string; empty: string; maxLevel: string }
   /**
    * image 画法的资源清单（其余画法忽略）。scene 是题材自有的场景背景
-   * （花园/草原/城市天际线……）；未覆盖的收藏显式列为待配图，不混入其他画法。
+   * （花园/草原/城市天际线……）；未覆盖的收藏不进场景，不混入其他画法。
    */
   images?: {
     scene?: { day: string; night: string }
@@ -126,7 +126,7 @@ function hashMod(text: string, mod: number): number {
 
 /**
  * 取某株在包里的图片资源；物种未被包覆盖或该阶段缺图时返回 undefined
- * （场景层保留待配图入口）。闪光优先取 shinyStages，缺位使用普通图与品质标识。
+ * （缺图收藏不进场景）。闪光优先取 shinyStages，缺位使用普通图与品质标识。
  * 最高阶段按 instanceId 确定性挑选对应品质的姿态；同一包与快照得到相同结果。
  */
 export function resolveSpecimenImage(

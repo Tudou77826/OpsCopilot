@@ -643,8 +643,6 @@
 .garden-image-footer button { border: 1px solid var(--g-chip-border); background: var(--g-chip-bg); color: var(--g-chip-text); cursor: pointer; border-radius: 4px; }
 .garden-image-footer button:disabled { opacity: .4; cursor: default; }
 .garden-image-footer summary { cursor: pointer; }
-.garden-missing-list { position: absolute; bottom: 38px; right: 8px; display: grid; gap: 8px; padding: 12px; border-radius: 8px; background: var(--g-drawer-bg); border: 1px solid var(--g-chip-border); }
-.garden-missing-list button { padding: 8px 12px; text-align: left; }
 .garden-picture-panel .garden-chip-row { z-index: 120; }
 .garden-picture-panel .garden-chip { background: transparent; border: 0; padding: 3px 0; border-radius: 0; }
 .garden-picture-panel .garden-pity-summary { font-size: 10px; }

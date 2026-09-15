@@ -13,7 +13,6 @@ export default function ImageGardenScene({ pack, specimens, pending, onOpen, onD
   const scene = pack.images!.scene!
   const resolved = specimens.map(spec => ({ spec, image: resolveSpecimenImage(pack, spec.speciesId, spec.level, spec.shiny, spec.instanceId) }))
   const ready = resolved.filter(item => item.image)
-  const missing = resolved.filter(item => !item.image)
   const pages = Math.max(1, Math.ceil(ready.length / layout.slots.length))
   const active = Math.min(page, pages - 1)
   const slots = ready.slice(active * layout.slots.length, (active + 1) * layout.slots.length)
@@ -39,10 +38,9 @@ export default function ImageGardenScene({ pack, specimens, pending, onOpen, onD
       </div>
     </div>
     {failed && <p role="alert" className="garden-message" data-kind="error">场景素材加载失败，请检查呈现包。</p>}
-    <div className="garden-image-footer">
-      <span>左右游览 · 点击查看收藏</span>
-      {pages > 1 && <span><button aria-label="上一组收藏" disabled={active === 0} onClick={() => setPage(active - 1)}>‹</button> {active + 1}/{pages} <button aria-label="下一组收藏" disabled={active === pages - 1} onClick={() => setPage(active + 1)}>›</button></span>}
-      {missing.length > 0 && <details><summary>{missing.length} 项收藏待配图</summary><div className="garden-missing-list">{missing.map(({ spec }) => <button key={spec.instanceId} onClick={() => onOpen(spec.instanceId)}>{pack.species[spec.speciesId]?.name ?? spec.speciesId} · Lv.{spec.level}</button>)}</div></details>}
-    </div>
+      <div className="garden-image-footer">
+        <span>左右游览 · 点击查看收藏</span>
+        {pages > 1 && <span><button aria-label="上一组收藏" disabled={active === 0} onClick={() => setPage(active - 1)}>‹</button> {active + 1}/{pages} <button aria-label="下一组收藏" disabled={active === pages - 1} onClick={() => setPage(active + 1)}>›</button></span>}
+      </div>
   </div>
 }
