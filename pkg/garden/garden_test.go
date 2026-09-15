@@ -265,3 +265,36 @@ func TestSnapshotHasNoPresentationSemantics(t *testing.T) {
 		t.Fatal("空花园快照应非 nil 且无植株")
 	}
 }
+
+// 回归：异步结算与并发快照不得丢失 pending（桌面壳 recordGarden 协程 + Wails
+// 快照会真实并发；修复前每次快照的 refresh 都可能把刚产生的 pending 覆盖掉）。
+func TestConcurrentRecordAndSnapshotKeepsPending(t *testing.T) {
+	s, _ := newTestStore(t)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if _, err := s.Record(EventSessionEstablished, "race-1"); err != nil {
+			t.Error(err)
+		}
+	}()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		snap := s.Snapshot()
+		if len(snap.Specimens) == 1 {
+			if len(snap.Pending) == 0 {
+				t.Fatal("并发快照丢失了 pending 反馈（refresh 覆盖竞态）")
+			}
+			break
+		}
+		select {
+		case <-done:
+			if len(snap.Specimens) == 0 {
+				t.Fatal("结算已返回但快照看不到植株")
+			}
+		default:
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("等待结算超时")
+		}
+	}
+}

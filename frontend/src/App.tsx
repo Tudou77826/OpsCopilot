@@ -6,6 +6,8 @@ import { ProductFrame, ProductToolbar, ProductNavigation } from '../../frontend-
 import { TerminalRef } from './components/Terminal/Terminal';
 import FlexLayoutAdapter from './components/FlexLayout/FlexLayoutAdapter';
 import QuickCommandPanel from './components/QuickCommandPanel/QuickCommandPanel';
+import GardenPanel from '../../frontend-shell/src/ui/garden/GardenPanel';
+import { wailsGardenHost } from './shell-adapter/wailsGardenHost';
 import BottomBar from './components/BottomBar/BottomBar';
 import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal';
 import Sidebar from './components/Sidebar/Sidebar';
@@ -56,6 +58,8 @@ function App() {
     const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
     const { settingsOpen:isSettingsOpen, setSettingsOpen:setIsSettingsOpen, sidebarOpen:isSidebarOpen, setSidebarOpen:setIsSidebarOpen,
         tab:sidebarTab, setTab:setSidebarTab, quickOpen:isQuickCommandOpen, setQuickOpen:setIsQuickCommandOpen, toggleSidebar } = useProductNavigation({sidebarOpen:false,quickOpen:false});
+    // 花园与快捷命令共用停靠槽位：开启花园时暂时替换快捷命令（与 Teams 插件同一交互）。
+    const [gardenOpen, setGardenOpen] = useState(false);
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
     const [knowledgeTarget, setKnowledgeTarget] = useState<KnowledgeTarget | null>(null);
@@ -665,7 +669,7 @@ function App() {
 
     return (
         <ProductFrame id="app"
-            toolbar={<ProductToolbar status={status} theme={theme} onNewConnection={() => setIsSmartModalOpen(true)} onThemeToggle={handleThemeToggle} onSettings={() => setIsSettingsOpen(true)} updateAvailable={updateAvailable} highlightNeedsAttention={highlightNeedsAttention} parsedTimestamp={parsedTimestamp} />}
+            toolbar={<ProductToolbar status={status} theme={theme} onNewConnection={() => setIsSmartModalOpen(true)} onThemeToggle={handleThemeToggle} onSettings={() => setIsSettingsOpen(true)} updateAvailable={updateAvailable} highlightNeedsAttention={highlightNeedsAttention} parsedTimestamp={parsedTimestamp} onToggleGarden={() => setGardenOpen(!gardenOpen)} gardenActive={gardenOpen} />}
             terminal={<FlexLayoutAdapter
                             terminals={terminals}
                             onTerminalData={handleTerminalData}
@@ -687,7 +691,9 @@ function App() {
                             theme={theme}
                             onSelectionParsed={setParsedTimestamp}
                         />}
-            quickCommands={<QuickCommandPanel
+            quickCommands={gardenOpen
+                        ? <GardenPanel host={wailsGardenHost} isOpen={gardenOpen} height={320} />
+                        : <QuickCommandPanel
                         isOpen={isQuickCommandOpen}
                         onExecute={handleQuickCommand}
                     />}

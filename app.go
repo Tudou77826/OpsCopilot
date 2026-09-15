@@ -28,6 +28,7 @@ import (
 	"opscopilot/pkg/connectionstore"
 	"opscopilot/pkg/core/security"
 	"opscopilot/pkg/filetransfer"
+	"opscopilot/pkg/garden"
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/knowledge/patchstore"
 	"opscopilot/pkg/llm"
@@ -84,6 +85,7 @@ type App struct {
 	patchSyncing      atomic.Bool
 	sessionShareMu    sync.RWMutex         // protects sessionShare
 	sessionShare      *sessionShareRuntime // 会话共享运行时（nil = 未启用，逻辑见 app_sessionshare.go）
+	garden            *garden.Store        // 养成系统存储（nil = 未启用，绑定与钩子见 app_garden.go）
 }
 
 // NewApp creates a new App application struct
@@ -183,6 +185,9 @@ func NewApp() *App {
 	} else {
 		app.fileAccessMgr = fileAccessMgr
 	}
+
+	// 养成系统：与 Teams 插件共用同一份 pkg/garden；失败只降级（无花园入口）。
+	app.garden = openGarden()
 
 	// Set the CommandSender to app itself
 	scriptMgr.SetCommandSender(app)
@@ -739,6 +744,9 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 
 	// 会话共享：记录本次成功登录并异步推送（未启用时 nil 守卫直接返回）
 	a.recordSharedLogin(config)
+
+	// 花园：会话建立事件（与 sidecar 的连接成功钩子同源同键格式）
+	a.recordGarden(garden.EventSessionEstablished, "conn:"+sessionID)
 
 	// Read loop
 	go func() {
@@ -2466,6 +2474,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 				})
 				return
 			}
+			a.recordGarden(garden.EventTransferCompleted, "ft:"+taskID)
 			runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
 				"taskId":    taskID,
 				"sessionId": sessionID,
@@ -2536,6 +2545,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 			})
 			return
 		}
+		a.recordGarden(garden.EventTransferCompleted, "ft:"+taskID)
 		runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
 			"taskId":    taskID,
 			"sessionId": sessionID,
@@ -2981,12 +2991,21 @@ func (a *App) CreateScript(name, description string) (*script.Script, error) {
 
 // ReplayScript 回放脚本
 func (a *App) ReplayScript(scriptID, sessionID string) error {
-	return a.scriptMgr.ReplayScript(scriptID, sessionID)
+	if err := a.scriptMgr.ReplayScript(scriptID, sessionID); err != nil {
+		return err
+	}
+	// 花园：回放派发完成。桌面回放是同步调用，一次调用即一次运行，用随机键去重。
+	a.recordGarden(garden.EventScriptReplayDone, "replay:"+uuid.New().String())
+	return nil
 }
 
 // ReplayScriptWithVars 带变量值的回放脚本
 func (a *App) ReplayScriptWithVars(scriptID, sessionID string, varValues map[string]string) error {
-	return a.scriptMgr.ReplayScriptWithVars(scriptID, sessionID, varValues)
+	if err := a.scriptMgr.ReplayScriptWithVars(scriptID, sessionID, varValues); err != nil {
+		return err
+	}
+	a.recordGarden(garden.EventScriptReplayDone, "replay:"+uuid.New().String())
+	return nil
 }
 
 // ExportScript 导出脚本为Shell脚本（通过系统文件保存对话框）

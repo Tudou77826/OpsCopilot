@@ -15,6 +15,7 @@ import (
 	"math/rand"
 	"opscopilot/pkg/filetxn"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -155,6 +156,10 @@ type State struct {
 
 // Store 是挂接在数据目录上的花园存储。零值不可用；用 Open 打开。
 type Store struct {
+	// mu 串行化本进程内的状态访问。pending 只存活在内存（不持久化），而
+	// refresh 会整体替换 state——没有这把锁，并发的 Record 与 Snapshot 会在
+	// 替换间隙把刚产生的 pending 丢掉（桌面壳的异步结算与快照调用会真实并发）。
+	mu   sync.Mutex
 	path string
 	now  func() time.Time
 	// randf 返回 [0,1) 随机数；测试注入固定序列。
@@ -178,6 +183,12 @@ func Open(path string) (*Store, error) {
 
 // refresh 从磁盘装载状态；文件不存在时初始化为空花园。
 func (s *Store) refresh() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.refreshLocked()
+}
+
+func (s *Store) refreshLocked() error {
 	data, err := filetxn.Read(s.path)
 	if err != nil {
 		return fmt.Errorf("读取花园数据失败: %w", err)
@@ -185,7 +196,10 @@ func (s *Store) refresh() error {
 	if data == nil {
 		s.state = &State{
 			SchemaVersion: SchemaVersion, RuleVersion: RuleVersion,
-			Seen: map[string]int64{}, Daily: map[string]map[EventKind]int{},
+			// 等级下限与 recomputeGardenLevel 一致；这里显式置 1，
+			// 否则从未结算过的全新花园会显示等级 0。
+			GardenLevel: 1,
+			Seen:        map[string]int64{}, Daily: map[string]map[EventKind]int{},
 			eventCount: map[SpeciesID]int{}, StartedAt: s.now(),
 		}
 		return nil
@@ -217,14 +231,14 @@ func (s *Store) refresh() error {
 	return nil
 }
 
-// beginMutation 取得文件锁并回读最新状态，返回释放函数。
-// 调用方随后必须调用 Save 把结果写回，再释放锁。
+// beginMutation 取得文件锁并回读最新状态，返回释放函数（只释放文件锁）。
+// 调用方必须已持有 s.mu，随后必须调用 Save 把结果写回，再释放两把锁。
 func (s *Store) beginMutation() (func(), error) {
 	unlock, err := filetxn.Lock(s.path)
 	if err != nil {
 		return nil, fmt.Errorf("锁定花园数据失败: %w", err)
 	}
-	if err := s.refresh(); err != nil {
+	if err := s.refreshLocked(); err != nil {
 		unlock()
 		return nil, err
 	}
@@ -255,7 +269,9 @@ type Pending struct {
 // 每次调用都回读磁盘：桌面壳与插件可能共用数据目录，不回读就会显示另一进程写入前的旧状态。
 // 回读失败时退回内存缓存（快照是只读展示，不该因为一次读失败让整个面板不可用）。
 func (s *Store) Snapshot() *Snapshot {
-	if err := s.refresh(); err != nil {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.refreshLocked(); err != nil {
 		// 保留上次成功装载的状态；错误留给调用方的日志，不在这里打断渲染。
 	}
 	specs := make([]*Specimen, len(s.state.Specimens))
@@ -438,6 +454,8 @@ type Outcome struct {
 // Record 把一次合格业务事件交给花园结算。dedupeKey 必须来自业务结果本身
 // （如传输任务 id、回放批次 id），同一 key 只结算一次。
 func (s *Store) Record(kind EventKind, dedupeKey string) (Outcome, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	unlock, err := s.beginMutation()
 	if err != nil {
 		return Outcome{}, err
@@ -469,6 +487,8 @@ func defaultRand() float64 { return rand.Float64() }
 
 // DismissAt 按发生时间（UnixNano）移除一条反馈。
 func (s *Store) DismissAt(nano int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	unlock, err := s.beginMutation()
 	if err != nil {
 		return
