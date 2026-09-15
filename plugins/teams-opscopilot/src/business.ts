@@ -10,7 +10,7 @@ import { EventJournal } from './events.js'
 import { connectionDraft, sessionPassword } from './connections.js'
 import { workspacePath, remotePath, type Transfer } from './files.js'
 
-export const version = '0.1.11'
+export const version = '0.1.13'
 type ObjectValue = Record<string, unknown>
 function object(value: unknown): ObjectValue {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new OpsError('INVALID_ARGUMENT', '需要对象参数')
@@ -286,6 +286,10 @@ export class OpsBusiness {
       }
       case 'terminals.resize': return rpc('shell.resize', { terminalId: this.ownedTerminal(payload.terminalId), cols: integer(payload.cols, 80, 1000), rows: integer(payload.rows, 24, 1000) })
       case 'completion': return rpc('shell.completion', { input: typeof payload.input === 'string' ? payload.input.slice(0, 8192) : '', cursor: Math.max(0, Math.min(8192, Number(payload.cursor) || 0)) })
+      // 花园：只读快照 + 标记反馈已读。成长结算全在后端（连接/传输/回放的成功结果处），
+      // 前台不上报事件，因此这里没有写入方法。
+      case 'garden.snapshot': return rpc('shell.garden.snapshot')
+      case 'garden.dismiss': return rpc('shell.garden.dismiss', { at: text(payload.at, 64) })
       case 'settings.load': return rpc('shell.settings.get')
       case 'settings.save': {
         const settings = object(payload.settings), terminal = object(settings.terminal)

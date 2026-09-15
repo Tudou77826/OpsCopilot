@@ -23,10 +23,11 @@ type ReplayState struct {
 }
 
 type replayJob struct {
-	mu     sync.Mutex
-	status ReplayState
-	cancel context.CancelFunc
-	done   chan struct{}
+	mu           sync.Mutex
+	status       ReplayState
+	cancel       context.CancelFunc
+	done         chan struct{}
+	onDispatched func(string)
 }
 
 var replayID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
@@ -89,7 +90,7 @@ func (s *StructuredScriptService) StartReplay(runID, scriptID, terminalID string
 		s.jobs = make(map[string]*replayJob)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	job := &replayJob{status: ReplayState{ID: runID, ScriptID: scriptID, TerminalID: terminalID, State: "running", Total: len(commands)}, cancel: cancel, done: make(chan struct{})}
+	job := &replayJob{status: ReplayState{ID: runID, ScriptID: scriptID, TerminalID: terminalID, State: "running", Total: len(commands)}, cancel: cancel, done: make(chan struct{}), onDispatched: s.onReplayDispatched}
 	s.jobs[runID] = job
 	initial := job.snapshot()
 	go runReplay(ctx, job, commands, delays, s.svc.WriteInput)
@@ -187,6 +188,9 @@ func runReplay(ctx context.Context, job *replayJob, commands []string, delays []
 		job.mu.Unlock()
 	}
 	finish("dispatched")
+	if job.onDispatched != nil {
+		job.onDispatched(job.status.ID)
+	}
 }
 
 func (s *StructuredScriptService) ReplayStatus(runID string) (ReplayState, error) {

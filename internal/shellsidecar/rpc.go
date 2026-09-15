@@ -7,12 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"opscopilot/internal/plugincontract"
 	"strings"
 	"sync"
 
 	"opscopilot/pkg/completion"
 	"opscopilot/pkg/filetxn"
+	"opscopilot/pkg/garden"
 	"opscopilot/pkg/remote"
 	"opscopilot/pkg/script"
 )
@@ -41,6 +43,8 @@ type ControlAPI struct {
 	Configs *ConfigService
 	// QuickCmds：S5 能力；未初始化时报错。
 	QuickCmds *QuickCmdService
+	// Garden：养成系统（garden.json）；未初始化时报错。
+	Garden *GardenService
 	// Scripts：结构化脚本（pkg/script 引擎）；未初始化时报错。
 	Scripts *StructuredScriptService
 	// FT：文件传输（远端 SFTP 操作 + 数据目录沙箱本地面板 + 异步任务）；未初始化时报错。
@@ -175,6 +179,12 @@ func (a *ControlAPI) dispatch(ctx context.Context, req *rpcRequest) (any, *rpcEr
 		id, err := a.Service.Connect(params.Config)
 		if err != nil {
 			return nil, &rpcError{Code: -32000, Message: err.Error()}
+		}
+		// 养成事件源：连接已建立（这里已经是可验证的成功结果）。连接 id 即幂等键。
+		if a.Garden != nil {
+			if err := a.Garden.Record(garden.EventSessionEstablished, "conn:"+id); err != nil {
+				slog.Warn("养成事件未结算", "kind", "connect", "error", err)
+			}
 		}
 		return map[string]string{"connectionId": id}, nil
 	case "shell.disconnect":
@@ -449,6 +459,25 @@ func (a *ControlAPI) dispatch(ctx context.Context, req *rpcRequest) (any, *rpcEr
 			return nil, srvErr(err)
 		}
 		return map[string]any{"commands": commands}, nil
+	case "shell.garden.snapshot":
+		if a.Garden == nil {
+			return nil, notEnabled()
+		}
+		return map[string]any{"garden": a.Garden.Snapshot()}, nil
+	case "shell.garden.dismiss":
+		if a.Garden == nil {
+			return nil, notEnabled()
+		}
+		var p struct {
+			At string `json:"at"`
+		}
+		if err := json.Unmarshal(req.Params, &p); err != nil || p.At == "" {
+			return nil, badParams(fmt.Errorf("需要 at（与快照里 pending 的时间戳同格式）"))
+		}
+		if err := a.Garden.Dismiss(p.At); err != nil {
+			return nil, srvErr(err)
+		}
+		return map[string]any{}, nil
 	case "shell.quickcmds.save":
 		if a.QuickCmds == nil {
 			return nil, notEnabled()

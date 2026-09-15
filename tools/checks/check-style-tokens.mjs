@@ -49,9 +49,16 @@ const scanRoots = (rootArgs.length ? rootArgs : defaultRoots).map((root) => ({
   label: root.split(/[/\\]/).join('/'),
 }))
 
+// 这些文件是"自成体系的色板"，不引用工作台令牌，因此豁免裸色值扫描：
+// - shell-theme.css 定义令牌本体；
+// - terminalSchemes.ts 是终端配色方案（终端必须能表达任意 ANSI 色，与主题无关）；
+// - garden/palette.ts 是花园场景的固定色板（花园不随工作台主题变化，见
+//   docs/garden-design.md §4：三套皮肤下必须是同一座花园）。
+// 每次运行都会打印豁免项，避免它变成静默的例外。
 const tokenFiles = new Set([
   'frontend-shell/src/ui/styles/shell-theme.css',
   'frontend-shell/src/ui/terminalSchemes.ts',
+  'frontend-shell/src/ui/garden/palette.ts',
 ])
 const skinFilePattern = /(^|\/)skin-[^/]+\.css$/
 const testFilePattern = /\.test\.tsx?$/

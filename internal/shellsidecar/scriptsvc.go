@@ -25,6 +25,17 @@ type StructuredScriptService struct {
 	rec    *recorder.Recorder
 	jobs   map[string]*replayJob
 	closed bool
+	// onReplayDispatched 在一次回放把全部命令成功派发完毕时被调用
+	// （run id 作为幂等键）。养成系统事件源；nil 时零开销。
+	onReplayDispatched func(runID string)
+}
+
+// SetReplayDispatchedHook 注入"回放派发完毕"回调（养成系统事件源；见 pkg/garden）。
+// 只在一次回放把全部命令成功派发完毕时触发，失败/中止不触发。
+func (s *StructuredScriptService) SetReplayDispatchedHook(fn func(runID string)) {
+	s.mu.Lock()
+	s.onReplayDispatched = fn
+	s.mu.Unlock()
 }
 
 func NewStructuredScriptService(svc *TerminalService, dataDir string) (*StructuredScriptService, error) {

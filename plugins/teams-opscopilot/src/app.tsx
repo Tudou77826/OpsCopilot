@@ -19,7 +19,8 @@ import ScriptEditorModal from '../../../frontend-shell/src/ui/script/ScriptEdito
 import type { ScriptRuntime } from '../../../frontend-shell/src/ui/script/types'
 import QuickCommandPanel from '../../../frontend-shell/src/ui/quickcmd/QuickCommandPanel'
 import SessionManager from '../../../frontend-shell/src/ui/session/SessionManager'
-import type { SessionManagerRuntime, SessionNode } from '../../../frontend-shell/src/ui/ports'
+import GardenPanel from '../../../frontend-shell/src/ui/garden/GardenPanel'
+import type { SessionManagerRuntime, SessionNode, GardenSnapshotPort } from '../../../frontend-shell/src/ui/ports'
 import type { ConnectionConfig } from '../../../frontend-shell/src/ui/types'
 import type { QuickCommandHost } from '../../../frontend-shell/src/ui/ports'
 import { confirmDialog } from '../../../frontend-shell/src/ui/feedback/ConfirmDialog'
@@ -43,6 +44,8 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
   const [active, setActive] = useState<string | null>(null)
   const { sidebarOpen, setSidebarOpen, tab:section, quickOpen, setQuickOpen, settingsOpen:showSettings, setSettingsOpen:setShowSettings, toggleSidebar } = useProductNavigation({sidebarOpen:true,quickOpen:true})
   const [connectModal, setConnectModal] = useState(false), [connectSeed, setConnectSeed] = useState<ConnectionConfig[]>([])
+  // 花园与快捷命令共用同一处停靠槽位：两者切换显示，不叠加（garden-design.md §5.2）。
+  const [gardenOpen, setGardenOpen] = useState(false)
   const [connectingSavedId, setConnectingSavedId] = useState<string>()
   const terminalRefs = useRef(new Map<string, TerminalRef>())
   const toast = useToast()
@@ -192,6 +195,12 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
     }
     setSettings(next)
   };
+  // 花园宿主适配：只读快照 + 标记反馈已读。成长结算全在后端（连接/传输/回放的成功结果处），
+  // 前台不上报事件，所以这里没有写入方法。
+  const gardenHost = useMemo(() => ({
+    snapshot: () => client.call<{ garden: GardenSnapshotPort }>('garden.snapshot').then(result => result.garden),
+    dismiss: async (at: string) => { await client.call('garden.dismiss', { at }) },
+  }), [client])
   // 皮肤与明暗是两个轴，但**宿主映射型皮肤（teams）把明暗也映射了**：它的颜色取自宿主变量，
   // 而宿主是按自己的模式换那批变量的。所以选 teams 就等于"明暗跟随宿主"，
   // 否则会出现"映射过的令牌是宿主暗色、没映射的仍是插件亮色"的半暗半亮。
@@ -206,7 +215,9 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
     toolbar={<ProductToolbar status={connected ? '就绪' : '连接中…'} theme={settings.theme}
       onNewConnection={() => { setConnectingSavedId(undefined); setConnectSeed([]); setConnectModal(true) }}
       onThemeToggle={toggleTheme} onSettings={() => setShowSettings(true)}
-      hostThemeFollow={{ following: themeFollow === 'host', onResume: resumeHostTheme }} />}
+      hostThemeFollow={{ following: themeFollow === 'host', onResume: resumeHostTheme }}
+      onToggleGarden={() => { setGardenOpen(v => !v); if (!gardenOpen) setQuickOpen(false) }}
+      gardenActive={gardenOpen} />}
     terminal={<FlexLayoutAdapter
       terminals={snapshot.terminals.map(t => ({ id:t.terminalId, title:titles[t.terminalId] || `终端 ${t.terminalId.slice(0,8)}`, status:connected ? SessionStatus.CONNECTED : SessionStatus.DISCONNECTED }))}
       terminalRefs={terminalRefs} onTerminalData={(id,data) => senders.current.get(id)?.(data)}
@@ -216,7 +227,9 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
       terminalRuntime={{resize:() => {}}} theme={settings.theme} terminalConfig={settings.terminal} completionDelay={settings.completionDelay} highlightRules={settings.highlightRules}
       renderTerminal={(id,attachRef) => <TeamsTerminal client={client} id={id} settings={settings} attachRef={attachRef} register={register}/>}
       renderFileTransfer={(activeTerminalId,terminals) => <FilesPanel host={fileHost} activeTerminalId={activeTerminalId} terminals={terminals}/>} />}
-    quickCommands={<QuickCommandPanel host={quickHost} isOpen={quickOpen} onExecute={quickHost.execute}/>}
+    quickCommands={gardenOpen
+      ? <GardenPanel host={gardenHost} isOpen={gardenOpen} height={320}/>
+      : <QuickCommandPanel host={quickHost} isOpen={quickOpen} onExecute={quickHost.execute}/>}
     sidebar={<ProductSidebar isOpen={sidebarOpen} activeTab={section} onToggle={() => setSidebarOpen(v => !v)}>
       <div style={{display:section === 'sessions' ? 'flex':'none',flex:1,flexDirection:'column',height:'100%',overflow:'hidden'}}>
         <SessionManager runtime={sessionRuntime} onConnect={config => {

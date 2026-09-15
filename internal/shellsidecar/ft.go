@@ -32,6 +32,9 @@ type FTService struct {
 	notify   func(method string, params any)
 	tasks    map[string]*ftTask
 	limiters map[string]chan struct{}
+	// onTransferDone 在一次传输真正成功完成时被调用（任务 id 作为幂等键）。
+	// 养成系统经由 run.go 注入；nil 时零开销。
+	onTransferDone func(taskID string)
 }
 
 // ftTask 记录进行中的传输任务（取消入口）。
@@ -78,6 +81,9 @@ func NewFTService(svc *TerminalService, dataDir string) *FTService {
 }
 
 func (s *FTService) SetNotify(fn func(method string, params any)) { s.notify = fn }
+
+// SetTransferDoneHook 注入传输完成回调（养成系统事件源；见 pkg/garden）。
+func (s *FTService) SetTransferDoneHook(fn func(taskID string)) { s.onTransferDone = fn }
 
 // ---- 工具 ----
 
@@ -518,6 +524,9 @@ func (s *FTService) runTask(ctx context.Context, taskID, termID string, total in
 		return
 	}
 	s.finishTask(taskID)
+	if s.onTransferDone != nil {
+		s.onTransferDone(taskID)
+	}
 	s.notifyDone(taskID, termID, true, false, "完成 (sftp(login))", copied)
 }
 

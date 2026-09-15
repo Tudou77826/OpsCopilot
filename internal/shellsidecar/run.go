@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"opscopilot/pkg/config"
+	"opscopilot/pkg/garden"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -73,6 +74,12 @@ func Run(version string, args []string, desktopRoot string) error {
 		if err != nil {
 			return err
 		}
+		// 花园与设置/快捷命令/脚本同源：本地安装模式下用桌面那份数据根，
+		// 这样桌面里养的花园和 Teams 插件里看到的是同一座（共享配置语义）。
+		api.Garden, err = NewGardenService(paths.Root)
+		if err != nil {
+			return err
+		}
 		defer api.Scripts.Close()
 		api.FT, err = NewWorkspaceFT(service, filepath.Join(*dataDir, "files"))
 		if err != nil {
@@ -80,6 +87,7 @@ func Run(version string, args []string, desktopRoot string) error {
 		}
 		defer api.FT.Close()
 		api.FT.SetNotify(api.Notify)
+		wireGarden(api)
 		*workspaceFiles = true
 	} else if *dataDir != "" {
 		configs, err := NewConfigService(*dataDir)
@@ -94,6 +102,12 @@ func Run(version string, args []string, desktopRoot string) error {
 			return fmt.Errorf("初始化 Ops 服务失败")
 		}
 		api.QuickCmds = quickCmds
+		gardenSvc, err := NewGardenService(*dataDir)
+		if err != nil {
+			slog.Error("初始化养成系统失败", "error", err)
+			return fmt.Errorf("初始化 Ops 服务失败")
+		}
+		api.Garden = gardenSvc
 		scripts, err := NewStructuredScriptService(service, *dataDir)
 		if err != nil {
 			slog.Error("初始化脚本服务失败", "error", err)
@@ -112,6 +126,7 @@ func Run(version string, args []string, desktopRoot string) error {
 		defer ft.Close()
 		ft.SetNotify(api.Notify)
 		api.FT = ft
+		wireGarden(api)
 		settingsSvc, err := NewSettingsService(*dataDir)
 		if err != nil {
 			slog.Error("初始化设置存储失败", "error", err)
@@ -184,4 +199,27 @@ func Run(version string, args []string, desktopRoot string) error {
 	_ = server.Close()
 	slog.Info("shell-sidecar 退出")
 	return nil
+}
+
+// wireGarden 把养成系统接到三处可验证的业务结果上（docs/garden-presentation-architecture.md §5）：
+// 连接建立、传输完成、脚本回放派发完毕。事件只在后端已确认成功处产生，
+// 前台不上报；花园未启用时本函数零操作。
+func wireGarden(api *ControlAPI) {
+	if api.Garden == nil {
+		return
+	}
+	// 传输完成：任务 id 即幂等键，重复通知不会重复结算。
+	api.FT.SetTransferDoneHook(func(taskID string) {
+		if err := api.Garden.Record(garden.EventTransferCompleted, "ft:"+taskID); err != nil {
+			slog.Warn("养成事件未结算", "kind", "transfer", "error", err)
+		}
+	})
+	if api.Scripts != nil {
+		// 回放派发完毕：run id 即幂等键。
+		api.Scripts.SetReplayDispatchedHook(func(runID string) {
+			if err := api.Garden.Record(garden.EventScriptReplayDone, "replay:"+runID); err != nil {
+				slog.Warn("养成事件未结算", "kind", "replay", "error", err)
+			}
+		})
+	}
 }

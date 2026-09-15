@@ -249,6 +249,37 @@ export interface QuickCommandImportReport {
 }
 
 /** 快捷命令 UI 所需宿主能力。execute → 发送到激活终端。 */
+/**
+ * 花园能力端口。与 QuickCommandHost 同理：宿主未实现时花园入口隐藏，
+ * 不做能力猜测（桌面壳与 Teams 插件各自适配自己的 RPC 前缀）。
+ * 端口只暴露"取快照"与"标记已读"——成长结算完全在后端，前台不上报事件。
+ */
+export interface GardenSnapshotPort {
+  schemaVersion: number;
+  ruleVersion: number;
+  gardenLevel: number;
+  specimens: Array<{
+    speciesId: string;
+    instanceId: string;
+    level: number;
+    xp: number;
+    shiny: boolean;
+    acquiredAt: string;
+    lastGrewAt: string;
+    milestones?: string[];
+    slotId?: string;
+  }> | null;
+  pitySinceShiny: number;
+  pending: Array<{ kind: string; instanceId?: string; speciesId?: string; level?: number; at: string }> | null;
+}
+
+export interface GardenHost {
+  /** 只读快照；面板打开时拉一次。 */
+  snapshot(): Promise<GardenSnapshotPort>;
+  /** 把一条反馈标记为已读（at 为快照里 pending 的时间戳）。 */
+  dismiss(at: string): Promise<void>;
+}
+
 export interface QuickCommandHost {
   execute(content: string): void;
   storage: QuickCommandStorageAdapter;
