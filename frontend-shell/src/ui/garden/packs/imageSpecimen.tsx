@@ -1,28 +1,29 @@
-import React from 'react'
+import React, { useState } from 'react'
 
 /**
  * image 画法的通用渲染器：一张图 + 落地接触阴影，题材无关。
  * 植株/动物/建筑在渲染层没有区别——图片内容即语义，运行时只负责
  * 按 (锚点, 尺寸) 把它"种"在地面上。
  *
- * 锚点语义：anchor.y 是根/地基在图片高度内的纵向百分比。
- * 图片以 contain 放进方形容器、底部对齐基线后，向下平移 (100-y)%
- * 让锚点正好落在地面接触线上（y=100 表示图片底边就是根）。
+ * 图片保留原始宽高比，将图片内 (anchor.x, anchor.y) 百分比位置
+ * 对齐容器底边中心；非正方形图片也使用相同的落地语义。
  */
 export default function ImageSpecimen({ src, anchor, size, label }: {
   src: string
   anchor: { x: number; y: number }
-  size: number
+  size: number | string
   label?: string
 }) {
+  const [failedSrc, setFailedSrc] = useState<string>()
   return (
     <span className="garden-image-specimen" style={{ width: size, height: size }} data-anchor-x={anchor.x} data-anchor-y={anchor.y}>
-      <img
+      {failedSrc === src ? <span role="status" className="garden-art-unavailable">{label}：素材加载失败</span> : <img
         src={src}
         alt={label ?? ''}
+        onError={() => setFailedSrc(src)}
         draggable={false}
-        style={{ transform: `translateY(${100 - anchor.y}%)` }}
-      />
+        style={{ position: 'absolute', left: '50%', top: '100%', width: '100%', height: 'auto', transform: `translate(${-anchor.x}%, ${-anchor.y}%)` }}
+      />}
       <span className="garden-contact-shadow" aria-hidden="true" />
     </span>
   )

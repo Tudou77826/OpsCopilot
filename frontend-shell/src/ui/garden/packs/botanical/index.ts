@@ -14,7 +14,7 @@ import orchidShinyImage from './assets/orchid-shiny.webp'
  * 替换的是这里的资源与文案，运行时与状态层零改动。
  *
  * 现状：薄荷/蕨/兰三已有原画（各阶段暂用同一张成熟体占位，九宫格素材到位后按下标
- * 填充）；杉/藤/树未覆盖 → 场景层自动回退内置 SVG 画法（混合渲染是过渡态，可接受）。
+ * 填充）；杉/藤/树尚无素材，保留收藏详情入口，不在绘本场景中混用 SVG。
  */
 export const botanicalPack: GardenPack = {
   id: 'botanical-image',
@@ -49,8 +49,10 @@ export const botanicalPack: GardenPack = {
     },
   },
   stageLabels: ['发芽', '幼苗', '分枝', '繁茂', '开花', '成熟'],
+  presentation: { title: '花园', unit: '株', empty: '建立一次连接、完成一次传输或跑完一次脚本，让这里长出第一株绿意。', maxLevel: '常青' },
   images: {
     scene: { day: dayScene, night: nightScene },
+    layout: { aspectRatio: 3, slots: [{ x: 19, y: 86, size: .76 }, { x: 51, y: 73, size: .79 }, { x: 85, y: 91, size: .9 }], nightBrightness: .58, nightSaturation: .65, sway: true },
     species: {
       'cmd-mint': {
         stages: [mintImage, mintImage, mintImage, mintImage, mintImage, mintImage],

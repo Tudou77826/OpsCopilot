@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react'
 import FloraSpecimen from './packs/floraRenderer'
 import ImageSpecimen from './packs/imageSpecimen'
+import ImageGardenScene from './ImageGardenScene'
 import { getPack, stageOf, stageLabel, resolveSpecimenImage, MAX_LEVEL, DEFAULT_PACK_ID, type GardenPack, type GardenSpecimen, type GardenPending } from './pack'
 import { gardenScene as palette } from './palette'
 import './gardenScene.css'
@@ -327,7 +328,13 @@ export interface GardenSceneProps {
   onDismissPending(at: string): void
 }
 
-export default function GardenScene({ specimens, pending, packId = DEFAULT_PACK_ID, selectedId, onOpen, onDismissPending }: GardenSceneProps) {
+export default function GardenScene(props: GardenSceneProps) {
+  const pack = getPack(props.packId ?? DEFAULT_PACK_ID)
+  if (pack?.art === 'image') return <ImageGardenScene {...props} pack={pack} />
+  return <LegacyGardenScene {...props} />
+}
+
+function LegacyGardenScene({ specimens, pending, packId = DEFAULT_PACK_ID, selectedId, onOpen, onDismissPending }: GardenSceneProps) {
   const pack = getPack(packId)
   // 手绘场景的可种植区更贴底：有包背景时用 IMAGE_SCENE_ROWS。
   const rows = pack?.images?.scene ? IMAGE_SCENE_ROWS : ROWS

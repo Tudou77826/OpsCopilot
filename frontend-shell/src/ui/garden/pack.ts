@@ -56,12 +56,14 @@ export interface GardenPackSpecies {
  * 状态层与场景层不解读图片内容，只按 (speciesId, stage, shiny, 姿态序号) 取图。
  */
 export interface GardenImageSpecies {
-  /** 与 NUM_STAGES 等长的阶段图列表；空串表示该阶段缺图 → 回退内置 SVG 画法。 */
+  /** 与 NUM_STAGES 等长的阶段图列表；空串表示缺图，收藏保留在待配图列表。 */
   stages: string[]
   /** 闪光替代图（可选）：与 stages 按下标对齐；缺省用普通图。 */
   shinyStages?: string[]
   /** 最高阶段的姿态变体（可选，纯装饰不加等级）；按 instanceId 确定性挑选。 */
   matureVariants?: string[]
+  /** 闪光姿态单独声明，普通变体不能覆盖闪光图片。 */
+  shinyMatureVariants?: string[]
   /** 落地锚点：图片内的横向/纵向百分比（根/地基所在位置），默认 50% / 88%。 */
   anchor?: { x: number; y: number }
 }
@@ -77,12 +79,15 @@ export interface GardenPack {
   species: Record<string, GardenPackSpecies>
   /** 形态阶段标签（题材语言：发芽…成熟 / 地基…落成），缺省用内置词表。 */
   stageLabels?: string[]
+  presentation?: { title: string; unit: string; empty: string; maxLevel: string }
   /**
    * image 画法的资源清单（其余画法忽略）。scene 是题材自有的场景背景
-   * （花园/草原/城市天际线……）；species 未覆盖的物种回退内置 SVG 画法。
+   * （花园/草原/城市天际线……）；未覆盖的收藏显式列为待配图，不混入其他画法。
    */
   images?: {
-    scene?: { day?: string; night?: string }
+    scene?: { day: string; night: string }
+    /** 归一化场景锚点，size 为素材宽度/场景高度；布局属于美术包。 */
+    layout?: { aspectRatio: number; slots: { x: number; y: number; size: number }[]; nightBrightness: number; nightSaturation: number; sway: boolean }
     species: Record<string, GardenImageSpecies>
   }
 }
@@ -121,8 +126,8 @@ function hashMod(text: string, mod: number): number {
 
 /**
  * 取某株在包里的图片资源；物种未被包覆盖或该阶段缺图时返回 undefined
- * （场景层回退内置 SVG 画法）。闪光优先取 shinyStages，缺位回退普通图。
- * 最高阶段且有 matureVariants 时按 instanceId 确定性挑一张姿态（同一株永不变脸）。
+ * （场景层保留待配图入口）。闪光优先取 shinyStages，缺位使用普通图与品质标识。
+ * 最高阶段按 instanceId 确定性挑选对应品质的姿态；同一包与快照得到相同结果。
  */
 export function resolveSpecimenImage(
   pack: GardenPack | undefined,
@@ -138,8 +143,9 @@ export function resolveSpecimenImage(
   let src = shiny ? at(entry.shinyStages, stage) : ''
   if (!src) src = at(entry.stages, stage)
   if (!src) return undefined
-  if (stage === NUM_STAGES - 1 && entry.matureVariants && entry.matureVariants.length > 0) {
-    src = entry.matureVariants[hashMod(instanceId, entry.matureVariants.length)]
+  const variants = shiny ? entry.shinyMatureVariants : entry.matureVariants
+  if (stage === NUM_STAGES - 1 && variants && variants.length > 0) {
+    src = variants[hashMod(instanceId, variants.length)]
   }
   return { src, anchor: entry.anchor ?? { x: 50, y: 88 } }
 }
@@ -156,6 +162,17 @@ export function packSupportsSnapshot(pack: GardenPack, snapshot: GardenSnapshot)
 const packs = new Map<string, GardenPack>()
 
 export function registerPack(pack: GardenPack): void {
+  if (pack.art === 'image') {
+    const layout = pack.images?.layout
+    if (!pack.images?.scene?.day || !pack.images.scene.night || !layout || !Number.isFinite(layout.aspectRatio) || layout.aspectRatio <= 0 || !layout.slots.length) throw new Error(`图片呈现包 ${pack.id} 缺少有效的背景或布局`)
+    if (!pack.presentation || pack.stageLabels?.length !== NUM_STAGES) throw new Error(`图片呈现包 ${pack.id} 缺少题材文案`)
+    if (![layout.nightBrightness, layout.nightSaturation].every(value => Number.isFinite(value) && value >= 0 && value <= 2)) throw new Error('夜景参数无效')
+    for (const slot of layout.slots) if (![slot.x, slot.y, slot.size].every(Number.isFinite) || slot.x < 0 || slot.x > 100 || slot.y < 0 || slot.y > 100 || slot.size <= 0 || slot.size > 1) throw new Error('场景格位无效')
+    for (const entry of Object.values(pack.images.species)) {
+      if (entry.stages.length !== NUM_STAGES || (entry.shinyStages && entry.shinyStages.length !== NUM_STAGES)) throw new Error('阶段素材必须对应六个阶段')
+      if (entry.anchor && ![entry.anchor.x, entry.anchor.y].every(value => Number.isFinite(value) && value >= 0 && value <= 100)) throw new Error('素材锚点无效')
+    }
+  }
   packs.set(pack.id, pack)
 }
 

@@ -5,7 +5,7 @@ import type { GardenSnapshot } from '../ui/garden/pack';
 import '../ui/garden/gardenScene.css';
 
 // 花园视觉调参专用 harness：不走 sidecar，快照内联，昼夜用按钮切 data-theme。
-// 访问 /garden-dev.html?theme=light&pending=1 可预设。
+// 访问 /garden-dev.html?theme=light&pending=1&width=380 可复现窄停靠槽。
 
 const snapshot: GardenSnapshot = {
   schemaVersion: 1,
@@ -25,6 +25,8 @@ const snapshot: GardenSnapshot = {
 
 const params = new URLSearchParams(window.location.search)
 const initialTheme = params.get('theme') ?? 'dark'
+const requestedWidth = Number(params.get('width'))
+const previewWidth = Number.isFinite(requestedWidth) && requestedWidth >= 280 ? requestedWidth : undefined
 document.documentElement.setAttribute('data-theme', initialTheme)
 if (params.get('pending')) {
   snapshot.pending = [{ kind: 'shiny-discovered', instanceId: 'i5', speciesId: 'guard-orchid', at: '2026-09-10T10:00:00Z' }]
@@ -47,7 +49,9 @@ const Harness: React.FC = () => {
             <button key={value} onClick={() => setHeight(value)} style={{ padding: '6px 14px', fontWeight: height === value ? 700 : 400 }}>{value}px</button>
           ))}
         </div>
-        <GardenPanel host={{ snapshot: () => Promise.resolve(snapshot), dismiss: () => Promise.resolve() }} isOpen height={height} />
+        <div style={{ width: previewWidth, maxWidth: '100%' }}>
+          <GardenPanel host={{ snapshot: () => Promise.resolve(snapshot), dismiss: () => Promise.resolve() }} isOpen height={height} />
+        </div>
       </div>
     </div>
   )

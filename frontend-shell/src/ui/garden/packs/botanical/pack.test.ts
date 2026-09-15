@@ -55,5 +55,10 @@ describe('botanical-image pack', () => {
     // 非最高阶段不吃姿态变体
     const young = resolveSpecimenImage(withVariants, 'guard-orchid', 12, false, 'i_a')
     expect(young?.src).toBe(botanicalPack.images!.species['guard-orchid'].stages[2])
+    // 普通成熟姿态不能覆盖闪光主图；闪光变体单独选择。
+    expect(resolveSpecimenImage(withVariants, 'guard-orchid', 30, true, 'i_a')?.src)
+      .toBe(botanicalPack.images!.species['guard-orchid'].shinyStages![5])
+    withVariants.images!.species['guard-orchid'].shinyMatureVariants = ['shiny-a.webp', 'shiny-b.webp']
+    expect(resolveSpecimenImage(withVariants, 'guard-orchid', 30, true, 'i_a')?.src).toMatch(/^shiny-/)
   })
 })

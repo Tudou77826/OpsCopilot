@@ -64,7 +64,7 @@ describe('GardenScene', () => {
     at: '2026-09-03T10:00:00Z',
   }]
 
-  it('每株一个可点按钮，名称来自呈现包；画法按包内资源选择（图优先，缺图回退 SVG）', () => {
+  it('有图收藏使用图片，未配图收藏保留详情入口且不混入其他题材', () => {
     const specimens = [
       spec({ instanceId: 'i_1', level: 22 }),
       spec({ instanceId: 'i_shiny', speciesId: 'guard-orchid', level: 30, shiny: true }),
@@ -72,16 +72,16 @@ describe('GardenScene', () => {
     const onOpen = vi.fn()
     render(<GardenScene specimens={specimens} pending={pending} onOpen={onOpen} onDismissPending={() => {}} />)
     const shiny = screen.getByRole('button', { name: '守护兰 30 级 成熟 闪光' })
-    const normal = screen.getByRole('button', { name: '会话杉 22 级 开花' })
+    const normal = screen.getByRole('button', { name: '会话杉 · Lv.22' })
     // 守护兰在默认包（botanical-image）里有图：走 image 画法，光效收敛为闪星 + 光池（无大光晕）
     expect(shiny.querySelector('.garden-image-specimen img')).toBeTruthy()
     expect(shiny.querySelector('.garden-halo')).toBeNull()
-    expect(shiny.querySelectorAll('.garden-sparkle').length).toBeGreaterThan(0)
+    expect(shiny.querySelector('.garden-image-quality')).toBeTruthy()
     // 会话杉未在包内覆盖：回退 SVG 画法（带光晕）
     expect(normal.querySelector('.garden-image-specimen')).toBeNull()
-    expect(normal.querySelector('svg')).toBeTruthy()
+    expect(normal.querySelector('svg')).toBeNull()
 
-    const badge = screen.getByRole('button', { name: /新发现的闪光株 守护兰/ })
+    const badge = screen.getByRole('button', { name: /新发现的闪光 守护兰/ })
     expect(badge).toBeTruthy()
     fireEvent.click(normal)
     expect(onOpen).toHaveBeenCalledWith('i_1')
@@ -98,7 +98,7 @@ describe('GardenScene', () => {
         onDismissPending={onDismiss}
       />,
     )
-    fireEvent.click(screen.getByRole('button', { name: /新发现的闪光株/ }))
+    fireEvent.click(screen.getByRole('button', { name: /新发现的闪光/ }))
     expect(onDismiss).toHaveBeenCalledWith('2026-09-03T10:00:00Z')
     expect(onOpen).not.toHaveBeenCalled()
   })
