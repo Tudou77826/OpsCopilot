@@ -11,7 +11,7 @@ import '../../../frontend/src/style.css'
 import './workspace.css'
 
 declare const OPS_STYLES: string
-export const version = '0.1.13'
+export const version = '0.1.17'
 export const uiApi = '1'
 export const contributions = [
   { id: 'ops-nav', slot: 'navigation', title: 'OpsCopilot', href: '/plugins/opscopilot' },

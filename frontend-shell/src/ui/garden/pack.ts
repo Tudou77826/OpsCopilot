@@ -61,6 +61,8 @@ export interface GardenPack {
 export const MAX_LEVEL = 30
 export const STAGE_PER_LEVEL = 5
 export const NUM_STAGES = 6
+/** 闪光保底的合格事件计数，与 Go 侧 garden.PityAt 镜像（头部进度条用）。 */
+export const PITY_AT = 40
 
 /** 由等级推出形态阶段（0–5），与 pkg/garden.StageOf 保持一致。 */
 export function stageOf(level: number): number {

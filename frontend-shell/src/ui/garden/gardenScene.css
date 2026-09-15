@@ -1,0 +1,499 @@
+/*
+ * 花园场景样式：昼夜两套景 + 全部动画。
+ *
+ * 色板自成体系（门禁豁免项）：不引用工作台令牌，而是用 data-theme 切换
+ * "白天 / 夜晚"两套场景色——呈现层的美术决策，与皮肤无关（三套皮肤下
+ * 同一座花园，但亮色工作台里是白天、暗色工作台里是夜晚）。
+ *
+ * 选择器约定：暗色（夜晚）是默认值；亮色用 `:root[data-theme='light']`
+ * 前缀覆盖。Teams 插件构建会把该前缀改写为 `:host([data-theme='light'])`，
+ * 桌面壳直接匹配 html，两个宿主走同一份源码。
+ */
+
+.garden-root {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  /* —— 夜晚（默认）—— */
+  --g-sky-top: #060a1c;
+  --g-sky-mid: #101a3c;
+  --g-sky-horizon: #322c58;
+  --g-sun-core: #f2eeda;
+  --g-sun-halo: rgba(226, 228, 255, 0.18);
+  --g-cloud: #222c4e;
+  --g-cloud-shade: #1a2340;
+  --g-hill-far: #1e3050;
+  --g-hill-near: #182942;
+  --g-ground: #1d3a30;
+  --g-ground-mid: #173028;
+  --g-ground-deep: #11241d;
+  --g-ground-light: #2a4d3c;
+  --g-tuft: #3f6d55;
+  --g-chip-bg: rgba(8, 14, 26, 0.62);
+  --g-chip-border: rgba(214, 228, 255, 0.16);
+  --g-chip-text: #e6edf9;
+  --g-chip-muted: #9db0ca;
+  --g-glow: rgba(255, 226, 138, 0.66);
+  --g-glow-core: rgba(255, 255, 255, 0.85);
+  --g-sparkle: #ffe08a;
+  --g-firefly: #d9f07e;
+  --g-bird: #ffffff; /* 夜晚没有飞鸟，占位值不可见 */
+  --g-drawer-bg: rgba(10, 18, 16, 0.97);
+  --g-drawer-text: #e6edf9;
+  --g-drawer-muted: #9db0ca;
+  --g-drawer-frame: rgba(214, 228, 255, 0.14);
+  --g-error: #ff9d96;
+  --g-night-plant-filter: brightness(0.94) saturate(0.96);
+}
+
+:root[data-theme='light'] .garden-root {
+  /* —— 白天 —— */
+  --g-sky-top: #7fc3f5;
+  --g-sky-mid: #aedcf9;
+  --g-sky-horizon: #ffedcb;
+  --g-sun-core: #ffd75e;
+  --g-sun-halo: rgba(255, 213, 96, 0.5);
+  --g-cloud: #ffffff;
+  --g-cloud-shade: #ddebf4;
+  --g-hill-far: #a9d3a4;
+  --g-hill-near: #8fc489;
+  --g-ground: #7ab96f;
+  --g-ground-mid: #67a95f;
+  --g-ground-deep: #549750;
+  --g-ground-light: #94cb80;
+  --g-tuft: #5d9b52;
+  --g-chip-bg: rgba(255, 255, 255, 0.72);
+  --g-chip-border: rgba(47, 74, 45, 0.18);
+  --g-chip-text: #2e4029;
+  --g-chip-muted: #5d7255;
+  --g-glow: rgba(255, 176, 32, 0.72);
+  --g-glow-core: rgba(255, 255, 240, 0.9);
+  --g-sparkle: #ff9d0a;
+  --g-firefly: #d9f07e; /* 萤火虫只在夜晚出现，颜色不切换 */
+  --g-bird: #ffffff; /* 夜晚没有飞鸟，占位值不可见 */
+  --g-drawer-bg: rgba(252, 253, 248, 0.97);
+  --g-drawer-text: #2e3b29;
+  --g-drawer-muted: #5d7255;
+  --g-drawer-frame: rgba(47, 74, 45, 0.16);
+  --g-error: #a12622;
+  --g-night-plant-filter: none;
+}
+
+/* —— 昼夜显隐：星星/月亮/萤火虫只属于夜晚，太阳与白云只属于白天 —— */
+.garden-day-only { display: none; }
+:root[data-theme='light'] .garden-day-only { display: initial; }
+:root[data-theme='light'] .garden-night-only { display: none; }
+
+/* 植株在夜里整体压暗一点（同一个月光下） */
+.garden-specimen .garden-plant-sway { filter: var(--g-night-plant-filter); }
+
+/* —— 场景背景 —— */
+.garden-root {
+  /* 天空：昼夜渐变由变量驱动；地平线以下被地面 SVG 覆盖 */
+  background: linear-gradient(180deg, var(--g-sky-top) 0%, var(--g-sky-mid) 44%, var(--g-sky-horizon) 60%);
+}
+.garden-sky,
+.garden-planting { position: absolute; inset: 0; }
+.garden-sky { pointer-events: none; }
+.garden-planting { overflow: hidden; }
+.garden-planting-ground {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  width: 100%; height: 46%;
+}
+
+/* —— 动画 —— */
+@keyframes garden-sway {
+  from { transform: rotate(-1.4deg); }
+  to { transform: rotate(1.4deg); }
+}
+@keyframes garden-cloud-drift {
+  from { left: -170px; }
+  to { left: 105%; }
+}
+@keyframes garden-twinkle {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+@keyframes garden-halo {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.55; }
+  50% { transform: translate(-50%, -50%) scale(1.18); opacity: 0.95; }
+}
+@keyframes garden-sparkle {
+  0%, 100% { transform: scale(0.2) rotate(0deg); opacity: 0; }
+  40% { transform: scale(1) rotate(40deg); opacity: 1; }
+  70% { transform: scale(0.85) rotate(70deg); opacity: 0.9; }
+}
+@keyframes garden-firefly {
+  0% { transform: translate(0, 0); opacity: 0; }
+  15% { opacity: 0.9; }
+  45% { transform: translate(26px, -18px); opacity: 0.35; }
+  70% { opacity: 0.85; }
+  100% { transform: translate(-14px, -34px); opacity: 0; }
+}
+@keyframes garden-badge-float {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-5px); }
+}
+@keyframes garden-new-ring {
+  0% { transform: scale(0.9); opacity: 0.85; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
+@keyframes garden-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 植株摇曳：transform-origin 在根部，周期错开由内联 animation-delay 注入 */
+.garden-plant-sway {
+  transform-origin: 50% 100%;
+  animation: garden-sway 4.6s ease-in-out infinite alternate;
+}
+.garden-specimen:nth-child(2n) .garden-plant-sway { animation-duration: 5.3s; }
+.garden-specimen:nth-child(3n) .garden-plant-sway { animation-duration: 4.1s; animation-direction: alternate-reverse; }
+
+.garden-cloud { animation: garden-cloud-drift linear infinite; }
+.garden-bird { position: absolute; left: -170px; animation: garden-cloud-drift linear infinite; }
+.garden-star {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--g-chip-text);
+  animation: garden-twinkle ease-in-out infinite;
+  pointer-events: none;
+}
+.garden-star-star {
+  position: absolute;
+  color: var(--g-sun-core);
+  animation: garden-twinkle ease-in-out infinite;
+  pointer-events: none;
+  filter: drop-shadow(0 0 2px var(--g-sun-core));
+}
+.garden-firefly {
+  position: absolute;
+  width: 3px; height: 3px;
+  border-radius: 50%;
+  background: var(--g-firefly);
+  box-shadow: 0 0 6px 1px var(--g-firefly);
+  animation: garden-firefly ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* 太阳与月亮：HTML 圆形（不会被场景拉伸变椭圆） */
+.garden-sun {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--g-sun-core) 0 26%, var(--g-sun-halo) 46%, transparent 70%);
+  pointer-events: none;
+}
+.garden-moon {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--g-sun-halo) 0 55%, transparent 72%);
+  pointer-events: none;
+}
+.garden-moon::after {
+  content: '';
+  position: absolute;
+  left: 34%; top: 34%;
+  width: 44%; height: 44%;
+  border-radius: 50%;
+  background: var(--g-sun-core);
+  box-shadow: inset -5px 4px 0 0 rgba(90, 96, 130, 0.35);
+}
+
+/* 云：三段圆弧拼成，慢速横漂 */
+.garden-cloud {
+  position: absolute;
+  width: 110px; height: 26px;
+  border-radius: 999px;
+  background: var(--g-cloud);
+  pointer-events: none;
+}
+.garden-cloud::before {
+  content: '';
+  position: absolute;
+  left: 18%; top: -58%;
+  width: 44%; height: 150%;
+  border-radius: 50%;
+  background: var(--g-cloud);
+}
+.garden-cloud::after {
+  content: '';
+  position: absolute;
+  right: 14%; top: -34%;
+  width: 32%; height: 110%;
+  border-radius: 50%;
+  background: var(--g-cloud);
+}
+
+/* —— 单株 —— */
+.garden-specimen {
+  position: absolute;
+  transform: translateX(-50%);
+}
+.garden-plant-btn {
+  display: block;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.garden-plant-btn:focus-visible {
+  outline: 2px solid var(--g-sparkle);
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+.garden-specimen svg { display: block; }
+/* 远排的空气感：降透明度、去饱和，拉开纵深 */
+.garden-specimen[data-depth='0'] { opacity: 0.8; }
+.garden-specimen[data-depth='0'] .garden-plant-sway { filter: saturate(0.82); }
+.garden-specimen[data-depth='1'] { opacity: 0.92; }
+
+/* 前景压角：虚化的大草叶，制造"站在花园里看"的框景 */
+.garden-frame-grass {
+  position: absolute;
+  bottom: -12px;
+  width: 220px; height: 90px;
+  filter: blur(2.5px);
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: 15;
+}
+
+/* SVG 内部的闪光星：外层 g 负责定位，本类只在原位缩放旋转 */
+.garden-svg-sparkle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: garden-sparkle 2.1s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.garden-halo {
+  position: absolute;
+  left: 50%; top: 58%;
+  width: 200%; height: 200%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  /* 分层柔光：宽而淡的外圈为主，植株本体保持可见，不再过曝 */
+  background: radial-gradient(circle, var(--g-glow) 0%, var(--g-glow) 22%, transparent 62%);
+  opacity: 0.75;
+  animation: garden-halo 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+/* 地面反光池：光"洒"在地上的椭圆倒影 */
+.garden-glow-pool {
+  position: absolute;
+  left: 50%; bottom: -4%;
+  width: 150%; height: 30%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse, var(--g-glow) 0%, transparent 70%);
+  opacity: 0.55;
+  animation: garden-halo 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+.garden-shiny-plant { filter: drop-shadow(0 0 7px var(--g-glow)); }
+/* 盘旋光尘：容器旋转，光点在轨道上环绕植株 */
+.garden-mote-orbit {
+  position: absolute;
+  inset: 0;
+  animation: garden-spin 7s linear infinite;
+  pointer-events: none;
+}
+.garden-mote-orbit.reverse { animation-direction: reverse; animation-duration: 9s; }
+.garden-mote {
+  position: absolute;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--g-sparkle);
+  box-shadow: 0 0 6px 1px var(--g-sparkle);
+  pointer-events: none;
+}
+/* 选中株的地面标记（联动详情抽屉） */
+.garden-selected-ring {
+  position: absolute;
+  left: 50%; bottom: -2%;
+  width: 110%; height: 22%;
+  transform: translateX(-50%);
+  border: 1.5px solid var(--g-sparkle);
+  border-radius: 50%;
+  opacity: 0.65;
+  pointer-events: none;
+}
+.garden-sparkle {
+  position: absolute;
+  color: var(--g-sparkle);
+  animation: garden-sparkle 2.1s ease-in-out infinite;
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px var(--g-sparkle));
+}
+
+/* 新发现：地面扩散环 + 悬浮徽标 */
+.garden-new-ring {
+  position: absolute;
+  left: 50%; bottom: 2%;
+  width: 120%; height: 26%;
+  transform: translateX(-50%);
+  border: 2px solid var(--g-sparkle);
+  border-radius: 50%;
+  animation: garden-new-ring 1.8s ease-out infinite;
+  pointer-events: none;
+}
+.garden-new-badge {
+  position: absolute;
+  left: 50%; top: -10px;
+  transform: translateX(-50%);
+  animation: garden-badge-float 1.6s ease-in-out infinite;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--g-chip-bg);
+  border: 1px solid var(--g-sparkle);
+  color: var(--g-sparkle);
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+.garden-new-badge:focus-visible {
+  outline: 2px solid var(--g-sparkle);
+  outline-offset: 2px;
+}
+
+/* —— 顶部信息条：悬浮在场景上的玻璃片，不占布局 —— */
+.garden-chip-row {
+  position: absolute;
+  top: 8px; left: 10px; right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  z-index: 30;
+}
+.garden-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--g-chip-bg);
+  border: 1px solid var(--g-chip-border);
+  color: var(--g-chip-text);
+  font-size: 12px;
+  line-height: 1.4;
+  backdrop-filter: blur(6px);
+}
+.garden-chip-muted { color: var(--g-chip-muted); }
+.garden-pity-bar {
+  display: block;
+  width: 72px; height: 4px;
+  border-radius: 2px;
+  background: var(--g-chip-border);
+  overflow: hidden;
+}
+.garden-pity-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--g-sparkle);
+}
+
+/* —— 空花园的引导气泡 —— */
+.garden-empty {
+  position: absolute;
+  left: 50%; bottom: 18%;
+  transform: translateX(-50%);
+  max-width: 78%;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: var(--g-chip-bg);
+  border: 1px solid var(--g-chip-border);
+  color: var(--g-chip-text);
+  font-size: 12px;
+  text-align: center;
+  backdrop-filter: blur(6px);
+  z-index: 20;
+}
+
+/* —— 详情抽屉：场景上的不透明玻璃面板（透光会让光斑"渗"进文字区） —— */
+.garden-drawer {
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 264px;
+  padding: 12px 14px;
+  background: var(--g-drawer-bg);
+  border-left: 1px solid var(--g-drawer-frame);
+  color: var(--g-drawer-text);
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+  z-index: 40;
+}
+.garden-drawer dt { color: var(--g-drawer-muted); }
+.garden-drawer dd { margin: 0; color: var(--g-drawer-text); text-align: right; }
+.garden-drawer button { background: transparent; border: none; cursor: pointer; color: var(--g-drawer-muted); }
+/* 抽屉里的预览底座：圆形天空 + 地面，替代花盆，与场景隐喻一致 */
+.garden-drawer-stage {
+  position: relative;
+  width: 148px; height: 102px;
+  margin: 4px auto 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--g-sky-mid) 0%, var(--g-sky-horizon) 62%, var(--g-ground) 62%);
+}
+.garden-quality {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+.garden-quality[data-tier='shiny'] {
+  color: var(--g-sparkle);
+  border: 1px solid var(--g-sparkle);
+  background: var(--g-chip-bg);
+}
+.garden-quality[data-tier='normal'] {
+  color: var(--g-drawer-muted);
+  border: 1px solid var(--g-drawer-frame);
+}
+.garden-progress-row {
+  margin: 8px 0 2px;
+  font-size: 12px;
+  color: var(--g-drawer-muted);
+}
+.garden-progress-row .garden-pity-bar { width: 100%; margin-top: 4px; }
+
+/* 错误 / 未启用提示直接落在场景上，仍能看见昼夜 */
+.garden-message {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 80%;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: var(--g-chip-bg);
+  border: 1px solid var(--g-chip-border);
+  color: var(--g-chip-text);
+  font-size: 12px;
+  text-align: center;
+}
+.garden-message[data-kind='error'] { color: var(--g-error); }
+
+@media (prefers-reduced-motion: reduce) {
+  .garden-plant-sway,
+  .garden-cloud,
+  .garden-star,
+  .garden-firefly,
+  .garden-halo,
+  .garden-glow-pool,
+  .garden-mote-orbit,
+  .garden-sparkle,
+  .garden-new-ring,
+  .garden-new-badge {
+    animation: none;
+  }
+}
+
+/* —— 调参 harness（garden-dev.html）的画布底色，跟随它自己的 data-theme —— */
+.garden-dev-host { background: #141821; }
+.garden-dev-host[data-theme='light'] { background: #e8eaef; }
