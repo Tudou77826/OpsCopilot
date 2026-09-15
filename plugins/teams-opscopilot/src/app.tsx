@@ -215,9 +215,7 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
     toolbar={<ProductToolbar status={connected ? '就绪' : '连接中…'} theme={settings.theme}
       onNewConnection={() => { setConnectingSavedId(undefined); setConnectSeed([]); setConnectModal(true) }}
       onThemeToggle={toggleTheme} onSettings={() => setShowSettings(true)}
-      hostThemeFollow={{ following: themeFollow === 'host', onResume: resumeHostTheme }}
-      onToggleGarden={() => { setGardenOpen(v => !v); if (!gardenOpen) setQuickOpen(false) }}
-      gardenActive={gardenOpen} />}
+      hostThemeFollow={{ following: themeFollow === 'host', onResume: resumeHostTheme }} />}
     terminal={<FlexLayoutAdapter
       terminals={snapshot.terminals.map(t => ({ id:t.terminalId, title:titles[t.terminalId] || `终端 ${t.terminalId.slice(0,8)}`, status:connected ? SessionStatus.CONNECTED : SessionStatus.DISCONNECTED }))}
       terminalRefs={terminalRefs} onTerminalData={(id,data) => senders.current.get(id)?.(data)}
@@ -246,7 +244,8 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
       </div>
     </ProductSidebar>}
     navigation={<ProductNavigation isSidebarOpen={sidebarOpen} sidebarTab={section} toggleSidebar={toggleSidebar}
-      tabs={['sessions','script']} isQuickCommandOpen={quickOpen} onToggleQuickCommands={() => setQuickOpen(v => !v)} />}
+      tabs={['sessions','script']} isQuickCommandOpen={quickOpen} onToggleQuickCommands={() => setQuickOpen(v => !v)}
+      gardenActive={gardenOpen} onToggleGarden={() => { setGardenOpen(v => !v); if (!gardenOpen) setQuickOpen(false) }} />}
     footer={<BottomBar tips={BOTTOM_BAR_TIPS.filter(t => !/Telnet|广播/.test(t))}/>}
   >
     <SmartConnectModal isOpen={connectModal} initialConfigs={connectSeed} onClose={() => setConnectModal(false)} onConnect={connectBatch}

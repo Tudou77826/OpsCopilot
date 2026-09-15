@@ -1,19 +1,16 @@
 import React from 'react';
-import { TbClock, TbScreenShare, TbStethoscope, TbMessageChatbot, TbCode, TbBolt, TbBook } from 'react-icons/tb';
+import { TbClock, TbScreenShare, TbStethoscope, TbMessageChatbot, TbCode, TbBolt, TbBook, TbPlant } from 'react-icons/tb';
 import logo from '../assets/logo-universal.png';
 
 export type ProductTab = 'sessions' | 'troubleshoot' | 'chat' | 'knowledge' | 'script';
 const ATTENTION_DOT_COLOR = 'var(--danger)';
 
 /** Extracted from the desktop App. Both desktop and plugin mount this same toolbar. */
-export function ProductToolbar({ status = '就绪', theme, onNewConnection, onThemeToggle: handleThemeToggle, onSettings, updateAvailable = false, highlightNeedsAttention = false, parsedTimestamp, hostThemeFollow, onToggleGarden, gardenActive }: {
+export function ProductToolbar({ status = '就绪', theme, onNewConnection, onThemeToggle: handleThemeToggle, onSettings, updateAvailable = false, highlightNeedsAttention = false, parsedTimestamp, hostThemeFollow }: {
   status?: string; theme: 'dark' | 'light'; onNewConnection(): void; onThemeToggle(): void; onSettings(): void;
   updateAvailable?: boolean; highlightNeedsAttention?: boolean; parsedTimestamp?: { local: string } | null;
   /** 只在宿主内挂载时传：用户手动切过明暗之后，给一个回到"跟随宿主"的入口。 */
   hostThemeFollow?: { following: boolean; onResume(): void };
-  /** 花园入口：不传即不显示（桌面壳与未实现花园能力的宿主保持现状）。 */
-  onToggleGarden?(): void;
-  gardenActive?: boolean;
 }) {
   const setIsSmartModalOpen = (_value: boolean) => onNewConnection();
   const setIsSettingsOpen = (_value: boolean) => onSettings();
@@ -59,17 +56,6 @@ export function ProductToolbar({ status = '就绪', theme, onNewConnection, onTh
                             </svg>
                         )}
                     </button>
-                    {onToggleGarden && (
-                        <button onClick={onToggleGarden} style={styles.iconBtnUnified} title="花园" aria-pressed={gardenActive === true}
-                            data-active={gardenActive ? 'true' : 'false'}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M12 21V11" />
-                                <path d="M12 11c0-4 3-7 7-7 0 4-3 7-7 7z" />
-                                <path d="M12 13c0-3-2.5-5.5-5.5-5.5 0 3 2.5 5.5 5.5 5.5z" />
-                                <path d="M7 21h10" />
-                            </svg>
-                        </button>
-                    )}
                     {hostThemeFollow && !hostThemeFollow.following && (
                         <button onClick={hostThemeFollow.onResume} style={styles.textBtn} title="明暗改为跟随宿主">
                             跟随宿主明暗
@@ -111,9 +97,11 @@ export function ProductToolbar({ status = '就绪', theme, onNewConnection, onTh
             </div>);
 }
 
-export function ProductNavigation({ isSidebarOpen, sidebarTab, toggleSidebar, isQuickCommandOpen, onToggleQuickCommands, tabs = ['sessions','troubleshoot','chat','knowledge','script'] }: {
+export function ProductNavigation({ isSidebarOpen, sidebarTab, toggleSidebar, isQuickCommandOpen, onToggleQuickCommands, gardenActive, onToggleGarden, tabs = ['sessions','troubleshoot','chat','knowledge','script'] }: {
   isSidebarOpen: boolean; sidebarTab: ProductTab; toggleSidebar(tab: ProductTab): void;
   isQuickCommandOpen: boolean; onToggleQuickCommands(): void; tabs?: ProductTab[];
+  /** 花园入口：与快捷命令并列挂在右侧导航条底部；不传即不显示（能力边界纪律）。 */
+  gardenActive?: boolean; onToggleGarden?(): void;
 }) {
   const setIsQuickCommandOpen = (_value: boolean) => onToggleQuickCommands();
   return (<div style={styles.rightNav}>
@@ -183,6 +171,21 @@ export function ProductNavigation({ isSidebarOpen, sidebarTab, toggleSidebar, is
                     </div>
                     )}
                     <div style={{ flex: 1 }} />
+                    {onToggleGarden && (
+                    <div
+                        style={{
+                            ...styles.navIcon,
+                            backgroundColor: gardenActive ? 'var(--bg-elevated)' : 'transparent',
+                            borderRight: gardenActive ? '2px solid var(--accent)' : '2px solid transparent',
+                        }}
+                        onClick={onToggleGarden}
+                        title="花园"
+                        aria-pressed={gardenActive === true}
+                        data-testid="nav-icon-garden"
+                    >
+                        {TbPlant({ size: 20 })}
+                    </div>
+                    )}
                     <div
                         style={{
                             ...styles.navIcon,

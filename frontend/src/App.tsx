@@ -669,7 +669,7 @@ function App() {
 
     return (
         <ProductFrame id="app"
-            toolbar={<ProductToolbar status={status} theme={theme} onNewConnection={() => setIsSmartModalOpen(true)} onThemeToggle={handleThemeToggle} onSettings={() => setIsSettingsOpen(true)} updateAvailable={updateAvailable} highlightNeedsAttention={highlightNeedsAttention} parsedTimestamp={parsedTimestamp} onToggleGarden={() => setGardenOpen(!gardenOpen)} gardenActive={gardenOpen} />}
+            toolbar={<ProductToolbar status={status} theme={theme} onNewConnection={() => setIsSmartModalOpen(true)} onThemeToggle={handleThemeToggle} onSettings={() => setIsSettingsOpen(true)} updateAvailable={updateAvailable} highlightNeedsAttention={highlightNeedsAttention} parsedTimestamp={parsedTimestamp} />}
             terminal={<FlexLayoutAdapter
                             terminals={terminals}
                             onTerminalData={handleTerminalData}
@@ -708,7 +708,7 @@ function App() {
                     onOpenKnowledgeSource={handleOpenKnowledgeSource}
                     knowledgeTarget={knowledgeTarget}
                 />}
-            navigation={<ProductNavigation isSidebarOpen={isSidebarOpen} sidebarTab={sidebarTab} toggleSidebar={toggleSidebar} isQuickCommandOpen={isQuickCommandOpen} onToggleQuickCommands={() => setIsQuickCommandOpen(!isQuickCommandOpen)} />}
+            navigation={<ProductNavigation isSidebarOpen={isSidebarOpen} sidebarTab={sidebarTab} toggleSidebar={toggleSidebar} isQuickCommandOpen={isQuickCommandOpen} onToggleQuickCommands={() => setIsQuickCommandOpen(!isQuickCommandOpen)} gardenActive={gardenOpen} onToggleGarden={() => setGardenOpen(!gardenOpen)} />}
             footer={<BottomBar />}
         >
 
