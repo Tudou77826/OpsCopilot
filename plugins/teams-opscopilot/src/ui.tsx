@@ -11,7 +11,7 @@ import '../../../frontend/src/style.css'
 import './workspace.css'
 
 declare const OPS_STYLES: string
-export const version = '0.1.27'
+export const version = '0.1.41'
 export const uiApi = '1'
 export const contributions = [
   { id: 'ops-nav', slot: 'navigation', title: 'OpsCopilot', href: '/plugins/opscopilot' },
@@ -19,7 +19,10 @@ export const contributions = [
   { id: 'ops-settings', slot: 'settings', title: 'OpsCopilot 设置' },
   { id: 'ops-status', slot: 'command', title: 'OpsCopilot 状态', command: 'runtime.status' },
 ]
-export function mount(container: HTMLElement, context?: { bundleId: string; pageId: string }) {
+// 宿主挂载上下文（icode-teams extension-runtime UiMount）自 hostApi 6 框架化后携带
+// contributionId/teamId/projectId/device/preview，不再携带 bundleId；UI 包只会挂在本插件名下，
+// 所以 API 客户端固定使用本插件的 bundle id。
+export function mount(container: HTMLElement, context?: { contributionId: string; teamId?: string; projectId?: string; device: 'local'; preview: boolean }) {
   const host = document.createElement('div'); host.style.cssText = 'height:100%;min-height:0;display:flex;flex:1;min-width:0'
   // 首帧明暗取宿主的 data-theme：宿主没有明暗（旧构建）时才用 light，
   // 这样"宿主是暗色"不会先闪一帧亮色。运行期跟随在 app.tsx。
@@ -29,7 +32,7 @@ export function mount(container: HTMLElement, context?: { bundleId: string; page
   applySkin(readPersistedSkinChoice() ?? 'teams', host)
   const shadow = host.attachShadow({ mode: 'open' }), style = document.createElement('style'), main = document.createElement('div'), portals = document.createElement('div')
   style.textContent = OPS_STYLES; main.className = 'ops-root'; portals.className = 'ops-portals'; shadow.append(style, main, portals); container.append(host)
-  const client = new TeamsOpsClient(context?.bundleId || 'opscopilot'), root = createRoot(main)
+  const client = new TeamsOpsClient('opscopilot'), root = createRoot(main)
   root.render(<ShellSurface.Provider value={{ portalRoot: portals, styleRoot: shadow }}><ToastProvider><ConfirmDialogInternal/><OpsEntry client={client} surface={host}/></ToastProvider></ShellSurface.Provider>)
   return () => { root.unmount(); client.dispose(); host.remove() }
 }
