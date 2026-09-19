@@ -12,12 +12,24 @@ import (
 )
 
 func main() {
-	server, err := fakessh.Start("== fakessh ready ==\r\n", os.Getenv("FAKESSH_SFTP_ROOT"))
+	// FAKESSH_ADDR 可固定监听地址（断链/重连类验证需要两次启动同端口）。
+	addr := os.Getenv("FAKESSH_ADDR")
+	banner := os.Getenv("FAKESSH_BANNER")
+	if banner == "" {
+		banner = "== fakessh ready ==\r\n"
+	}
+	var server *fakessh.Server
+	var err error
+	if addr != "" {
+		server, err = fakessh.StartAddr(banner, os.Getenv("FAKESSH_SFTP_ROOT"), addr)
+	} else {
+		server, err = fakessh.Start(banner, os.Getenv("FAKESSH_SFTP_ROOT"))
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "启动失败:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("fakessh 监听 127.0.0.1:%d（账号 test/test，全量回显）\n", server.Port())
+	fmt.Printf("fakessh 监听 %s（账号 test/test，全量回显）\n", server.Host())
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	<-sig

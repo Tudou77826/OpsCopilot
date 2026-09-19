@@ -766,11 +766,18 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 					message = fmt.Sprintf("连接错误: %v", err)
 				}
 
-				// 发送错误消息到终端
+				// 发送错误消息到终端（经闸门统一出口：若仍有暂存段未冲刷，
+				// [断开] 必须排在它们之后，不能插队盖到旧输出上面）
+				disconnectMsg := "\r\n[断开] 连接已关闭\r\n"
 				if err != io.EOF {
-					runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, fmt.Sprintf("\r\n[断开] %s\r\n", message))
+					disconnectMsg = fmt.Sprintf("\r\n[断开] %s\r\n", message)
+				}
+				if gate != nil {
+					gate.deliver(disconnectMsg, func(s string) {
+						runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, s)
+					})
 				} else {
-					runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, "\r\n[断开] 连接已关闭\r\n")
+					runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, disconnectMsg)
 				}
 
 				// 发送断开事件（保留会话，不关闭tab）
@@ -819,9 +826,13 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 					}
 				}
 
-				// 首段输出闸门：监听未就绪时暂存（不丢首帧），等 TerminalOutputReady 冲刷。
+				// 首段输出闸门：监听未就绪时暂存（不丢首帧），就绪后经统一出口
+				// 锁内直通，与 TerminalOutputReady 的冲刷互斥、严格有序（#74）。
 				// 记录与命令提取不受影响（与用户可见顺序无关）。
-				if gate != nil && !gate.feed(dataStr) {
+				if gate != nil {
+					gate.deliver(dataStr, func(s string) {
+						runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, s)
+					})
 					continue
 				}
 				runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, dataStr)
@@ -3170,6 +3181,21 @@ func (g *terminalOutputGate) feed(data string) bool {
 	return false
 }
 
+// deliver 是生产路径的统一出口：未就绪暂存；就绪后在锁内经 emit 直通。
+// 与 markReadyAndEmit 共用同一把锁，保证「旧暂存段冲刷」与「新输出直通」
+// 绝不交错——否则重连冲刷期间新输出插队，带光标控制码的旧缓冲段会把
+// 新输出覆写掉（Issue #74 的乱序源）。
+func (g *terminalOutputGate) deliver(data string, emit func(string)) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if !g.ready && g.bufLen+len(data) <= terminalOutputGateMax {
+		g.buf = append(g.buf, data)
+		g.bufLen += len(data)
+		return
+	}
+	emit(data)
+}
+
 // markReady 标记前端监听已就绪，返回需冲刷的暂存输出（按到达顺序）。
 // 幂等：第二次调用返回 nil。
 func (g *terminalOutputGate) markReady() []string {
@@ -3185,6 +3211,22 @@ func (g *terminalOutputGate) markReady() []string {
 	return out
 }
 
+// markReadyAndEmit 标记就绪并在锁内逐段冲刷暂存输出。与 deliver 的锁内
+// 直通互斥，保证冲刷段与新输出严格按到达顺序到达前端。
+func (g *terminalOutputGate) markReadyAndEmit(emit func(string)) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.ready {
+		return
+	}
+	g.ready = true
+	for _, data := range g.buf {
+		emit(data)
+	}
+	g.buf = nil
+	g.bufLen = 0
+}
+
 // TerminalOutputReady 前端在创建终端并挂好数据监听后调用：冲刷会话建立初期
 // 暂存的输出（motd/banner 等），修复连接首包在监听就绪前丢失的问题。
 func (a *App) TerminalOutputReady(sessionID string) {
@@ -3194,9 +3236,9 @@ func (a *App) TerminalOutputReady(sessionID string) {
 	if state == nil || state.Output == nil {
 		return
 	}
-	for _, data := range state.Output.markReady() {
+	state.Output.markReadyAndEmit(func(data string) {
 		runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, data)
-	}
+	})
 }
 
 // initPatchStore 根据配置初始化补丁存储

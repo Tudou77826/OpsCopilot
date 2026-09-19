@@ -51,6 +51,11 @@ func (s *Server) Port() int {
 
 // Start 在 127.0.0.1 随机端口启动服务器。认证：user=test password=test。
 func Start(banner string, sftpRoot string) (*Server, error) {
+	return StartAddr(banner, sftpRoot, "127.0.0.1:0")
+}
+
+// StartAddr 在指定地址启动服务器（固定端口重连测试用）。
+func StartAddr(banner string, sftpRoot string, addr string) (*Server, error) {
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, err
@@ -69,7 +74,7 @@ func Start(banner string, sftpRoot string) (*Server, error) {
 	}
 	config.AddHostKey(signer)
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
