@@ -508,6 +508,10 @@ function FilePane({
             onContextMenu={(e) => {
                 if (!onBlankContextMenu) return;
                 e.preventDefault();
+                // 与行右键对称：在 React 根上截断本次事件，避免它冒泡到 window 级
+                // contextmenu 监听（含菜单自身的"在别处右键关闭"），否则开启事件的
+                // 尾流会把刚打开的菜单关掉（#73）。
+                e.stopPropagation();
                 onBlankContextMenu(e);
             }}
         >

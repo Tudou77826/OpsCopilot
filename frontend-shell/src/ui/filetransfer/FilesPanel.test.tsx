@@ -664,3 +664,39 @@ describe('FilesPanel session switching (#72)', () => {
     });
 });
 
+
+describe('FilesPanel blank-area context menu (#73)', () => {
+    it('opens the remote blank menu on right-click in empty space of the remote pane', async () => {
+        const backend = makeBackend();
+        render(
+            <FilesPanel activeTerminalId="session-1" terminals={[{ id: 'session-1', title: 'prod-01' }]} host={backend} />,
+        );
+        await screen.findByText('remote.log');
+        const pane = getPaneContainingText('remote.log');
+        fireEvent.contextMenu(pane);
+        expect(await screen.findByText('新建文件夹')).toBeTruthy();
+    });
+
+    it('opens the local blank menu on right-click in empty space of the local pane', async () => {
+        const backend = makeBackend();
+        render(
+            <FilesPanel activeTerminalId="session-1" terminals={[{ id: 'session-1', title: 'prod-01' }]} host={backend} />,
+        );
+        await screen.findByText('local.txt');
+        const pane = getPaneContainingText('local.txt');
+        fireEvent.contextMenu(pane);
+        expect(await screen.findByText('刷新')).toBeTruthy();
+    });
+
+    it('still opens the blank menu when the remote directory is empty', async () => {
+        const backend = makeBackend();
+        backend.FTList = vi.fn(() => json({ ok: true, entries: [] }));
+        render(
+            <FilesPanel activeTerminalId="session-1" terminals={[{ id: 'session-1', title: 'prod-01' }]} host={backend} />,
+        );
+        await waitFor(() => expect(backend.FTList).toHaveBeenCalled());
+        const pane = screen.getByTestId('file-pane-远端');
+        fireEvent.contextMenu(pane);
+        expect(await screen.findByText('新建文件夹')).toBeTruthy();
+    });
+});

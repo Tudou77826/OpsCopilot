@@ -32,9 +32,14 @@ const FileContextMenu: React.FC<FileContextMenuProps> = ({ x, y, items, onClose 
         const onContextMenuElsewhere = () => onClose();
         window.addEventListener('mousedown', onGlobalClick);
         window.addEventListener('keydown', onKeyDown);
-        window.addEventListener('contextmenu', onContextMenuElsewhere);
         window.addEventListener('blur', onGlobalClick);
+        // 打开菜单的那次 contextmenu 仍在向 window 冒泡途中（React 根监听先于 window
+        // 收到并同步渲染出菜单），若立即注册会把开启事件本身误判为"在别处右键"，
+        // 菜单刚挂载就被自己关掉——表现为空白区域右键无反应（#73）。推迟到当前
+        // 事件传播结束后再监听。
+        const defer = window.setTimeout(() => window.addEventListener('contextmenu', onContextMenuElsewhere), 0);
         return () => {
+            window.clearTimeout(defer);
             window.removeEventListener('mousedown', onGlobalClick);
             window.removeEventListener('keydown', onKeyDown);
             window.removeEventListener('contextmenu', onContextMenuElsewhere);
