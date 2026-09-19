@@ -6,10 +6,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "generate:garden-pixel": "node ../tools/garden/generate-pixel-habitat-assets.mjs",
+    "build": "npm run lint:garden-assets && vite build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint:style": "node ../tools/checks/check-style-tokens.mjs frontend-shell/src",
+    "lint:garden-assets": "node ../tools/checks/check-garden-assets.mjs",
+    "lint:garden-assets:self": "node --test ../tools/checks/check-garden-assets.test.mjs",
     "lint:style:self": "node --test ../tools/checks/check-style-tokens.test.mjs",
     "lint:style:all": "node ../tools/checks/check-style-tokens.mjs"
   },

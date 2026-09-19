@@ -88,6 +88,7 @@ type SessionShareConfig struct {
 
 // ExperimentalConfig 实验性功能配置（保留结构以便未来扩展）
 type ExperimentalConfig struct {
+	GardenEnabled bool `json:"garden_enabled"`
 }
 
 type TerminalConfig struct {

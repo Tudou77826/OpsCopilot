@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"time"
 
 	"opscopilot/pkg/garden"
 )
 
 // 桌面壳的花园接入：与 Teams 插件共用同一份 pkg/garden 存储与前端呈现组件，
-// 这里只补两件桌面特有的事——Wails 绑定（快照/已读）与三个业务结果处的事件钩子。
+// 这里只补桌面特有的 Wails 绑定与业务结果处的事件钩子。
 // 事件只由后端业务结果产生，前端永不上报（与 sidecar 的能力边界一致）。
 
 // openGarden 打开工作目录下的 garden.json（与 config.json / quick_commands.json 同目录）。
@@ -28,26 +27,42 @@ func (a *App) GardenSnapshot() (*garden.Snapshot, error) {
 	if a.garden == nil {
 		return nil, fmt.Errorf("花园能力未启用")
 	}
-	return a.garden.Snapshot(), nil
+	return a.garden.ReadSnapshot()
 }
 
-// GardenDismiss 把一条反馈标记为已读（at 为快照里 pending 的时间戳，RFC3339）。
-func (a *App) GardenDismiss(at string) error {
+// GardenSignal 返回入口轻提示所需的轻量 revision，不加载收藏清单或场景资源。
+func (a *App) GardenSignal() (*garden.ChangeSignal, error) {
 	if a.garden == nil {
-		return fmt.Errorf("花园能力未启用")
+		return nil, fmt.Errorf("花园能力未启用")
 	}
-	parsed, err := time.Parse(time.RFC3339Nano, at)
-	if err != nil {
-		return fmt.Errorf("时间戳格式无效: %w", err)
+	return a.garden.ReadSignal()
+}
+
+func (a *App) GardenPurchase(itemID string, price, initialLevel int) (*garden.PurchaseResult, error) {
+	if a.garden == nil {
+		return nil, fmt.Errorf("花园能力未启用")
 	}
-	a.garden.DismissAt(parsed.UnixNano())
-	return nil
+	return a.garden.Purchase(garden.ItemID(itemID), price, initialLevel)
+}
+
+func (a *App) GardenPlace(instanceID string, x, y, scale float64, flipX bool) (*garden.Snapshot, error) {
+	if a.garden == nil {
+		return nil, fmt.Errorf("花园能力未启用")
+	}
+	return a.garden.Place(instanceID, x, y, scale, flipX)
+}
+
+func (a *App) GardenStow(instanceID string) (*garden.Snapshot, error) {
+	if a.garden == nil {
+		return nil, fmt.Errorf("花园能力未启用")
+	}
+	return a.garden.Stow(instanceID)
 }
 
 // recordGarden 把一次合格业务事件交给花园结算。异步 + recover：花园是附属能力，
 // 任何故障都不能影响连接/传输/回放主流程（与 recordSharedLogin 同一纪律）。
 func (a *App) recordGarden(kind garden.EventKind, eventKey string) {
-	if a.garden == nil {
+	if a.garden == nil || !a.garden.Enabled() {
 		return
 	}
 	go func() {

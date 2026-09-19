@@ -1,6 +1,8 @@
 # OpsCopilot 花园系统设计
 
-> 状态：讨论中 · 负责角色：OpsCopilot 产品与插件维护者（人员待认领）
+> 后续演进的当前主设计见：[OpsCopilot 养成与收藏系统设计](cultivation-system-design.md)。本文保留现有花园实现的产品背景，不作为新功能迭代计划。
+
+> 状态：冻结，默认关闭，仅保留设置中的实验开关。恢复开发前须重新确认范围；负责角色：OpsCopilot 产品与插件维护者。
 > 关联文档：[OpsCopilot 主题与皮肤设计](theme-design.md)、[养成呈现架构](garden-presentation-architecture.md)（形象呈现的分层与呈现包格式）
 
 本文只覆盖花园系统。主题与宿主皮肤的内容见关联文档。

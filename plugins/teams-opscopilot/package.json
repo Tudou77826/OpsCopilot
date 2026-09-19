@@ -7,7 +7,7 @@
     "test": "node --import tsx --test tests/*.test.ts",
     "test:integration": "node --import tsx --test integration/*.test.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.ui.json",
-    "build": "tsx build.ts",
+    "build": "node ../../tools/checks/check-garden-assets.mjs && tsx build.ts",
     "package": "tsx pack.ts"
   },
   "dependencies": { "@deepseek-ai/cordis": "4.0.1", "react": "18.3.1", "react-dom": "18.3.1" },

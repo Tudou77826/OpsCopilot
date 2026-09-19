@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { lazy, Suspense, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { TbClock, TbScreenShare, TbStethoscope, TbMessageChatbot, TbCode, TbBolt, TbBook } from 'react-icons/tb';
 import { useToast } from './components/Toast/Toast';
 import './App.css';
@@ -6,8 +6,8 @@ import { ProductFrame, ProductToolbar, ProductNavigation } from '../../frontend-
 import { TerminalRef } from './components/Terminal/Terminal';
 import FlexLayoutAdapter from './components/FlexLayout/FlexLayoutAdapter';
 import QuickCommandPanel from './components/QuickCommandPanel/QuickCommandPanel';
-import GardenPanel from '../../frontend-shell/src/ui/garden/GardenPanel';
 import { wailsGardenHost } from './shell-adapter/wailsGardenHost';
+import { useGardenAttention } from '../../frontend-shell/src/ui/garden/useGardenAttention';
 import BottomBar from './components/BottomBar/BottomBar';
 import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal';
 import Sidebar from './components/Sidebar/Sidebar';
@@ -42,6 +42,7 @@ interface TerminalSession {
 
 const DAILY_UPDATE_CHECK_HOUR = 8;
 const ATTENTION_DOT_COLOR = 'var(--danger)';
+const GardenPanel = lazy(() => import('../../frontend-shell/src/ui/garden/GardenPanel'));
 
 const getDelayUntilNextDailyUpdateCheck = (now = new Date()) => {
     const next = new Date(now);
@@ -60,6 +61,9 @@ function App() {
         tab:sidebarTab, setTab:setSidebarTab, quickOpen:isQuickCommandOpen, setQuickOpen:setIsQuickCommandOpen, toggleSidebar } = useProductNavigation({sidebarOpen:false,quickOpen:false});
     // 花园与快捷命令共用停靠槽位：开启花园时暂时替换快捷命令（与 Teams 插件同一交互）。
     const [gardenOpen, setGardenOpen] = useState(false);
+    const [gardenEnabled, setGardenEnabled] = useState(false);
+    const gardenAttention = useGardenAttention(gardenEnabled ? wailsGardenHost : undefined, gardenOpen);
+    useEffect(() => { if (!gardenEnabled) setGardenOpen(false); }, [gardenEnabled]);
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
     const [knowledgeTarget, setKnowledgeTarget] = useState<KnowledgeTarget | null>(null);
@@ -282,6 +286,7 @@ function App() {
                 if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSettings) {
                     // @ts-ignore
                     const cfg = await window.go.main.App.GetSettings();
+                    setGardenEnabled(cfg?.experimental?.garden_enabled === true);
                     if (cfg && cfg.completion_delay !== undefined) {
                         setCompletionDelay(cfg.completion_delay);
                     }
@@ -691,8 +696,8 @@ function App() {
                             theme={theme}
                             onSelectionParsed={setParsedTimestamp}
                         />}
-            quickCommands={gardenOpen
-                        ? <GardenPanel host={wailsGardenHost} isOpen={gardenOpen} height={320} />
+            quickCommands={gardenEnabled && gardenOpen
+                        ? <Suspense fallback={null}><GardenPanel host={wailsGardenHost} isOpen={gardenOpen} height={320} /></Suspense>
                         : <QuickCommandPanel
                         isOpen={isQuickCommandOpen}
                         onExecute={handleQuickCommand}
@@ -708,7 +713,7 @@ function App() {
                     onOpenKnowledgeSource={handleOpenKnowledgeSource}
                     knowledgeTarget={knowledgeTarget}
                 />}
-            navigation={<ProductNavigation isSidebarOpen={isSidebarOpen} sidebarTab={sidebarTab} toggleSidebar={toggleSidebar} isQuickCommandOpen={isQuickCommandOpen} onToggleQuickCommands={() => setIsQuickCommandOpen(!isQuickCommandOpen)} gardenActive={gardenOpen} onToggleGarden={() => setGardenOpen(!gardenOpen)} />}
+            navigation={<ProductNavigation isSidebarOpen={isSidebarOpen} sidebarTab={sidebarTab} toggleSidebar={toggleSidebar} isQuickCommandOpen={isQuickCommandOpen} onToggleQuickCommands={() => setIsQuickCommandOpen(!isQuickCommandOpen)} gardenActive={gardenEnabled && gardenOpen} gardenAttention={gardenAttention} onToggleGarden={gardenEnabled ? () => setGardenOpen(!gardenOpen) : undefined} />}
             footer={<BottomBar />}
         >
 
@@ -729,6 +734,7 @@ function App() {
                 isBroadcastMode={isBroadcastMode}
                 onToggleBroadcast={handleToggleBroadcast}
                 onCompletionDelayChange={setCompletionDelay}
+                onGardenEnabledChange={setGardenEnabled}
                 onHighlightRulesChange={setHighlightRules}
                 onTerminalConfigChange={handleTerminalConfigChange}
                 theme={theme}

@@ -1,0 +1,11 @@
+{
+  "tool": "built-in imagegen",
+  "purpose": "Regeneration art direction for the woodland courtyard content pack",
+  "day.png": "Production pixel-art environment, panoramic 3:1, 32px base tiles and roughly 64px subjects. Intimate woodland conservatory courtyard: old tree framing left, weathered stone wall, pond and fountain upper middle, amber-glass greenhouse upper right, stepping stones toward foreground. Warm sage and golden afternoon palette. Six empty soil planting pockets arranged around the path, not in an evenly spaced row. Crisp pixel clusters, coherent depth and light. No collectible plants, UI, labels, text, borders, vector outlines, glossy 3D or blur.",
+  "night.png": "Edit day courtyard into matching night scene. Lock geometry, camera, planting pockets, pond, path and greenhouse exactly. Teal moonlight, deep blue-green foliage, warm amber windows and lanterns. Readable soil pockets, welcoming contrast, no giant glow. Same pixel language, no text or UI.",
+  "species.png": "True transparent RGBA sprite sheet, exactly 6 rows by 6 columns with equal cells and generous clear gutters. Rows: mint, fern, orchid, oak, clustered mushrooms, flowering climbing vine with small trellis. Columns: six growth forms from sprout to mature, naturally increasing from 40 to 80 percent cell height. Sage woodland pixel art, soft colored outlines, top-left lighting, compact foliage clusters, recognizable silhouettes, no thick black outline. Feet centered x50/y88 percent. No pots, soil, shadows, scenery, labels or grid. Design for 64x64 sprites.",
+  "rare.png": "Edit normal sheet preserving every cell, silhouette, stage and alpha. Rare palettes: silvery sage foliage, pink orchids, copper oak, lilac mushrooms, peach vine flowers. No gold outline, halo, particles or text. Identical geometry and anchors.",
+  "build": "node tools/garden/build-courtyard.mjs",
+  "output": "Scenes 768x256, subjects 64x64 RGBA, feet at pixel57. Review inside the actual Teams plugin, not only an art harness.",
+  "limitations": "Six stages per quality, one mature pose per quality in this artwork set. Runtime still supports matureVariants and shinyMatureVariants. Normalized AI pixel-style artwork is not a manually authored tile sheet."
+}

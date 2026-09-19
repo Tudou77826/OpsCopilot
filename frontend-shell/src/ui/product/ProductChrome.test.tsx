@@ -1,12 +1,16 @@
 import React from 'react';
 import { render, screen, fireEvent, within, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { ProductFrame, ProductToolbar } from './ProductChrome';
+import { ProductFrame, ProductNavigation, ProductToolbar } from './ProductChrome';
 import CommandGrid from '../quickcmd/CommandGrid';
 import QuickCommandPanel from '../quickcmd/QuickCommandPanel';
 
 afterEach(cleanup);
 describe('desktop product reuse', () => {
+ it('hides the garden entry when the experiment is not enabled', () => {
+   render(<ProductNavigation isSidebarOpen={false} sidebarTab="sessions" toggleSidebar={vi.fn()} isQuickCommandOpen={false} onToggleQuickCommands={vi.fn()}/>);
+   expect(screen.queryByTestId('nav-icon-garden')).toBeNull();
+ });
  it('uses theme border colors for the quick-command panel and group dividers', async () => {
    const host={execute:vi.fn(),storage:{load:vi.fn(async()=>[{id:'one',name:'测试命令',content:'pwd',group:'default'}]),add:vi.fn(),update:vi.fn(),remove:vi.fn(),reorder:vi.fn()}};
    render(<QuickCommandPanel host={host} isOpen onExecute={host.execute}/>);
@@ -42,5 +46,11 @@ describe('desktop product reuse', () => {
    expect(within(mount).getByText('编辑',{exact:true})).toBeTruthy();
    fireEvent.click(item); expect(edit).toHaveBeenCalledOnce();
    view.unmount();host.remove();
+ });
+ it('uses a transient class for garden attention without a badge or count', () => {
+   render(<ProductNavigation isSidebarOpen={false} sidebarTab="sessions" toggleSidebar={vi.fn()} isQuickCommandOpen={false} onToggleQuickCommands={vi.fn()} gardenActive={false} gardenAttention onToggleGarden={vi.fn()}/>);
+   const entry=screen.getByTestId('nav-icon-garden');
+   expect(entry).toHaveClass('product-garden-attention');
+   expect(entry.textContent).toBe('');
  });
 });

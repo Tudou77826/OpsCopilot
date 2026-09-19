@@ -18,6 +18,21 @@ function setup() {
   } as unknown as SidecarRuntime
   return { business: new OpsBusiness(runtime, 'owner'), calls }
 }
+
+test('garden opt-in survives the settings boundary and defaults off', async () => {
+  const payloads: any[] = []
+  const runtime = { subscribe: () => () => {}, status: () => ({state:'ready'}), request: async (_method: string, payload: unknown) => { payloads.push(payload); return {} } } as unknown as SidecarRuntime
+  const business = new OpsBusiness(runtime, 'owner')
+  const settings = {theme:'light',terminal:{scrollback:5000,font_size:14,font_family:'monospace'},completionDelay:150,highlightRules:[]}
+  try {
+    for (const [index, value] of [undefined, true, false].entries()) {
+      await business.call(request(`garden-setting-${index}`, 'settings.save', {settings:{...settings,gardenEnabled:value}}), 'owner')
+      assert.equal(payloads.at(-1).gardenEnabled, value === true)
+    }
+    await assert.rejects(business.call(request('invalid-garden-setting', 'settings.save', {settings:{...settings,gardenEnabled:'true'}}), 'owner'), {code:'INVALID_ARGUMENT'})
+    assert.equal(payloads.length, 3)
+  } finally { business.dispose() }
+})
 const request = (requestId: string, operation: string, payload = {}) => ({ schemaVersion: 1, requestId, operation, payload })
 
 test('native picker does not block business calls, cannot duplicate, and retains drain protection', async () => {
@@ -74,6 +89,32 @@ test('saved connections are allowlist-redacted, including nested jump credential
   assert(!JSON.stringify(value).includes('secret'))
   assert(!JSON.stringify(value).includes('password'))
   assert(JSON.stringify(value).includes('hasSecret'))
+  business.dispose()
+})
+test('garden keeps full snapshots separate from lightweight closed-panel signals', async () => {
+  const { business, calls } = setup()
+  await business.call(request('garden-snapshot', 'garden.snapshot'), 'owner')
+  await business.call(request('garden-signal', 'garden.signal'), 'owner')
+  assert.deepEqual(calls, ['shell.garden.snapshot', 'shell.garden.signal'])
+  business.dispose()
+})
+test('garden commerce and layout mutations are validated and forwarded to the sidecar', async () => {
+  const calls: Array<{ method: string; params: unknown }> = []
+  const runtime = {
+    subscribe: () => () => {}, status: () => ({ state: 'ready' }),
+    async request(method: string, params: unknown) { calls.push({ method, params }); return {} },
+  } as unknown as SidecarRuntime
+  const business = new OpsBusiness(runtime, 'owner')
+  await business.call(request('buy', 'garden.purchase', { itemId: 'cmd-mint', price: 35, initialLevel: 0 }), 'owner')
+  await business.call(request('place', 'garden.place', { instanceId: 'i_123', x: .42, y: .78, scale: 1.1, flipX: true }), 'owner')
+  await business.call(request('stow', 'garden.stow', { instanceId: 'i_123' }), 'owner')
+  assert.deepEqual(calls, [
+    { method: 'shell.garden.purchase', params: { itemId: 'cmd-mint', price: 35, initialLevel: 0 } },
+    { method: 'shell.garden.place', params: { instanceId: 'i_123', x: .42, y: .78, scale: 1.1, flipX: true } },
+    { method: 'shell.garden.stow', params: { instanceId: 'i_123' } },
+  ])
+  await assert.rejects(business.call(request('bad-price', 'garden.purchase', { itemId: 'cmd-mint', price: 0, initialLevel: 0 }), 'owner'), { code: 'INVALID_ARGUMENT' })
+  await assert.rejects(business.call(request('bad-coordinate', 'garden.place', { instanceId: 'i_123', x: 2, y: .5, scale: 1 }), 'owner'), { code: 'INVALID_ARGUMENT' })
   business.dispose()
 })
 test('rejects identity mismatch, invalid schema, resource traversal and arbitrary methods', async () => {

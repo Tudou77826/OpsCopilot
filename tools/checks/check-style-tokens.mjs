@@ -52,14 +52,12 @@ const scanRoots = (rootArgs.length ? rootArgs : defaultRoots).map((root) => ({
 // 这些文件是"自成体系的色板"，不引用工作台令牌，因此豁免裸色值扫描：
 // - shell-theme.css 定义令牌本体；
 // - terminalSchemes.ts 是终端配色方案（终端必须能表达任意 ANSI 色，与主题无关）；
-// - garden/palette.ts 是花园植株的固定美术色板（三套皮肤下必须是同一批植株）；
-// - garden/gardenScene.css 是花园场景的昼夜双色板（跟随 data-theme 切换白天/
-//   夜晚，是呈现层的美术决策，同样不引用工作台令牌）。
+// - garden/gardenScene.css 是内容场景的昼夜界面色板（实际场景颜色来自内容包素材，
+//   这里仅处理浮层与状态），同样不引用工作台令牌。
 // 每次运行都会打印豁免项，避免它变成静默的例外。
 const tokenFiles = new Set([
   'frontend-shell/src/ui/styles/shell-theme.css',
   'frontend-shell/src/ui/terminalSchemes.ts',
-  'frontend-shell/src/ui/garden/palette.ts',
   'frontend-shell/src/ui/garden/gardenScene.css',
 ])
 const skinFilePattern = /(^|\/)skin-[^/]+\.css$/

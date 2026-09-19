@@ -223,6 +223,26 @@
   --mode-shadow-dialog: 0 16px 40px rgba(0, 0, 0, 0.42);
 }
 
+@keyframes product-garden-attention {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(-7deg) scale(1.06); }
+  55% { transform: rotate(6deg) scale(1.08); }
+  80% { transform: rotate(-2deg) scale(1.03); }
+}
+
+.product-garden-attention svg {
+  animation: product-garden-attention 1.2s ease-in-out 1;
+  color: var(--accent);
+  transform-origin: 50% 85%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-garden-attention svg {
+    animation: none;
+    color: var(--accent);
+  }
+}
+
 /* —— 亮色主题：覆盖同名 token。色板取自 One Half Light / GitHub Light，
    yellow 等在白底不可读的色已调暗。data-theme="light" 由切换逻辑写入 <html>。 —— */
 :root[data-theme="light"] {

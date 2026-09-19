@@ -11,17 +11,29 @@
   "docs": {
     "dir": ""
   },
+  "scripts": {
+    "dir": ""
+  },
   "cli": {
     "exec_timeout_sec": 120
   },
   "completion_delay": 150,
   "command_query_shortcut": "Ctrl+K",
-  "experimental": {
-    "monitoring": false
-  },
+  "experimental": {},
   "terminal": {
     "scrollback": 5000,
     "search_enabled": true,
-    "highlight_enabled": true
+    "highlight_enabled": true,
+    "font_family": "JetBrains Mono",
+    "font_size": 14
+  },
+  "appearance": {
+    "theme": "dark"
+  },
+  "patch_store": {
+    "enabled": false,
+    "type": "",
+    "remote_url": "",
+    "branch": ""
   }
 }

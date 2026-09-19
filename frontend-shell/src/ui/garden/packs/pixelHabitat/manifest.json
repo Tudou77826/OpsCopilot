@@ -1,0 +1,1461 @@
+{
+  "contractVersion": 2,
+  "id": "ops-pixel-habitat",
+  "version": "1.0.0",
+  "name": "像素栖息地",
+  "author": "OpsCopilot",
+  "art": {
+    "style": "pixel",
+    "baseGrid": 32,
+    "subjectSize": 64
+  },
+  "runtime": {
+    "min": 2,
+    "max": 2
+  },
+  "stateSchema": {
+    "min": 2,
+    "max": 2
+  },
+  "presentation": {
+    "title": "栖息地",
+    "unit": "位伙伴",
+    "empty": "空栖息地 —— 完成一次可靠的工作，让第一位伙伴来到这里。",
+    "maxLevel": "相伴"
+  },
+  "stageLabels": [
+    "初生",
+    "成长",
+    "成形",
+    "进阶",
+    "焕新",
+    "相伴"
+  ],
+  "assets": {
+    "fern-0": {
+      "path": "assets/fern-0.png",
+      "kind": "image",
+      "bytes": 1222,
+      "width": 64,
+      "height": 64
+    },
+    "fern-0-shiny": {
+      "path": "assets/fern-0-shiny.png",
+      "kind": "image",
+      "bytes": 1358,
+      "width": 64,
+      "height": 64
+    },
+    "fern-1": {
+      "path": "assets/fern-1.png",
+      "kind": "image",
+      "bytes": 1315,
+      "width": 64,
+      "height": 64
+    },
+    "fern-1-shiny": {
+      "path": "assets/fern-1-shiny.png",
+      "kind": "image",
+      "bytes": 1738,
+      "width": 64,
+      "height": 64
+    },
+    "fern-2": {
+      "path": "assets/fern-2.png",
+      "kind": "image",
+      "bytes": 2117,
+      "width": 64,
+      "height": 64
+    },
+    "fern-2-shiny": {
+      "path": "assets/fern-2-shiny.png",
+      "kind": "image",
+      "bytes": 2502,
+      "width": 64,
+      "height": 64
+    },
+    "fern-3": {
+      "path": "assets/fern-3.png",
+      "kind": "image",
+      "bytes": 2345,
+      "width": 64,
+      "height": 64
+    },
+    "fern-3-shiny": {
+      "path": "assets/fern-3-shiny.png",
+      "kind": "image",
+      "bytes": 2725,
+      "width": 64,
+      "height": 64
+    },
+    "fern-4": {
+      "path": "assets/fern-4.png",
+      "kind": "image",
+      "bytes": 2137,
+      "width": 64,
+      "height": 64
+    },
+    "fern-4-shiny": {
+      "path": "assets/fern-4-shiny.png",
+      "kind": "image",
+      "bytes": 2908,
+      "width": 64,
+      "height": 64
+    },
+    "fern-5": {
+      "path": "assets/fern-5.png",
+      "kind": "image",
+      "bytes": 2349,
+      "width": 64,
+      "height": 64
+    },
+    "fern-5-shiny": {
+      "path": "assets/fern-5-shiny.png",
+      "kind": "image",
+      "bytes": 2940,
+      "width": 64,
+      "height": 64
+    },
+    "fern-mature-b": {
+      "path": "assets/fern-mature-b.png",
+      "kind": "image",
+      "bytes": 2230,
+      "width": 64,
+      "height": 64
+    },
+    "fern-mature-b-shiny": {
+      "path": "assets/fern-mature-b-shiny.png",
+      "kind": "image",
+      "bytes": 2823,
+      "width": 64,
+      "height": 64
+    },
+    "fern-mature-c": {
+      "path": "assets/fern-mature-c.png",
+      "kind": "image",
+      "bytes": 2179,
+      "width": 64,
+      "height": 64
+    },
+    "fern-mature-c-shiny": {
+      "path": "assets/fern-mature-c-shiny.png",
+      "kind": "image",
+      "bytes": 2924,
+      "width": 64,
+      "height": 64
+    },
+    "fern-mature-d": {
+      "path": "assets/fern-mature-d.png",
+      "kind": "image",
+      "bytes": 2195,
+      "width": 64,
+      "height": 64
+    },
+    "fern-mature-d-shiny": {
+      "path": "assets/fern-mature-d-shiny.png",
+      "kind": "image",
+      "bytes": 2918,
+      "width": 64,
+      "height": 64
+    },
+    "fungus-0": {
+      "path": "assets/fungus-0.png",
+      "kind": "image",
+      "bytes": 900,
+      "width": 64,
+      "height": 64
+    },
+    "fungus-0-shiny": {
+      "path": "assets/fungus-0-shiny.png",
+      "kind": "image",
+      "bytes": 1164,
+      "width": 64,
+      "height": 64
+    },
+    "fungus-1": {
+      "path": "assets/fungus-1.png",
+      "kind": "image",
+      "bytes": 1288,
+      "width": 64,
+      "height": 64
+    },
+    "fungus-1-shiny": {
+      "path": "assets/fungus-1-shiny.png",
+      "kind": "image",
+      "bytes": 1539,
+      "width": 64,
+      "height": 64
+    },
+    "fungus-2": {
+      "path": "assets/fungus-2.png",
+      "kind": "image",
+      "bytes": 1648,
+      "width": 64,
+      "height": 64
+    },
+    "fungus-2-shiny": {
+      "path": "assets/fungus-2-shiny.png",
+      "kind": "image",
+      "bytes": 1911,
+      "width": 64,
+      "height": 64
+    },
+    "fungus-3": {
+      "path": "assets/fungus-3.png",
+      "kind": "image",
+      "bytes": 2111,
+      "width": 64,
+      "height": 64
+    },
+    "fungus-3-shiny": {
+      "path": "assets/fungus-3-shiny.png",
+      "kind": "image",
+      "bytes": 2348,
+      "width": 64,
+      "height": 64
+    },
+    "fungus-4": {
+      "path": "assets/fungus-4.png",
+      "kind": "image",
+      "bytes": 2383,
+      "width": 64,
+      "height": 64
+    },
+    "fungus-4-shiny": {
+      "path": "assets/fungus-4-shiny.png",
+      "kind": "image",
+      "bytes": 2740,
+      "width": 64,
+      "height": 64
+    },
+    "fungus-5": {
+      "path": "assets/fungus-5.png",
+      "kind": "image",
+      "bytes": 2560,
+      "width": 64,
+      "height": 64
+    },
+    "fungus-5-shiny": {
+      "path": "assets/fungus-5-shiny.png",
+      "kind": "image",
+      "bytes": 3084,
+      "width": 64,
+      "height": 64
+    },
+    "fungus-mature-b": {
+      "path": "assets/fungus-mature-b.png",
+      "kind": "image",
+      "bytes": 2598,
+      "width": 64,
+      "height": 64
+    },
+    "fungus-mature-b-shiny": {
+      "path": "assets/fungus-mature-b-shiny.png",
+      "kind": "image",
+      "bytes": 3074,
+      "width": 64,
+      "height": 64
+    },
+    "fungus-mature-c": {
+      "path": "assets/fungus-mature-c.png",
+      "kind": "image",
+      "bytes": 2555,
+      "width": 64,
+      "height": 64
+    },
+    "fungus-mature-c-shiny": {
+      "path": "assets/fungus-mature-c-shiny.png",
+      "kind": "image",
+      "bytes": 2888,
+      "width": 64,
+      "height": 64
+    },
+    "fungus-mature-d": {
+      "path": "assets/fungus-mature-d.png",
+      "kind": "image",
+      "bytes": 2665,
+      "width": 64,
+      "height": 64
+    },
+    "fungus-mature-d-shiny": {
+      "path": "assets/fungus-mature-d-shiny.png",
+      "kind": "image",
+      "bytes": 2980,
+      "width": 64,
+      "height": 64
+    },
+    "mint-0": {
+      "path": "assets/mint-0.png",
+      "kind": "image",
+      "bytes": 914,
+      "width": 64,
+      "height": 64
+    },
+    "mint-0-shiny": {
+      "path": "assets/mint-0-shiny.png",
+      "kind": "image",
+      "bytes": 1029,
+      "width": 64,
+      "height": 64
+    },
+    "mint-1": {
+      "path": "assets/mint-1.png",
+      "kind": "image",
+      "bytes": 1445,
+      "width": 64,
+      "height": 64
+    },
+    "mint-1-shiny": {
+      "path": "assets/mint-1-shiny.png",
+      "kind": "image",
+      "bytes": 1633,
+      "width": 64,
+      "height": 64
+    },
+    "mint-2": {
+      "path": "assets/mint-2.png",
+      "kind": "image",
+      "bytes": 2064,
+      "width": 64,
+      "height": 64
+    },
+    "mint-2-shiny": {
+      "path": "assets/mint-2-shiny.png",
+      "kind": "image",
+      "bytes": 2140,
+      "width": 64,
+      "height": 64
+    },
+    "mint-3": {
+      "path": "assets/mint-3.png",
+      "kind": "image",
+      "bytes": 2474,
+      "width": 64,
+      "height": 64
+    },
+    "mint-3-shiny": {
+      "path": "assets/mint-3-shiny.png",
+      "kind": "image",
+      "bytes": 2340,
+      "width": 64,
+      "height": 64
+    },
+    "mint-4": {
+      "path": "assets/mint-4.png",
+      "kind": "image",
+      "bytes": 2456,
+      "width": 64,
+      "height": 64
+    },
+    "mint-4-shiny": {
+      "path": "assets/mint-4-shiny.png",
+      "kind": "image",
+      "bytes": 2516,
+      "width": 64,
+      "height": 64
+    },
+    "mint-5": {
+      "path": "assets/mint-5.png",
+      "kind": "image",
+      "bytes": 2411,
+      "width": 64,
+      "height": 64
+    },
+    "mint-5-shiny": {
+      "path": "assets/mint-5-shiny.png",
+      "kind": "image",
+      "bytes": 2621,
+      "width": 64,
+      "height": 64
+    },
+    "mint-mature-b": {
+      "path": "assets/mint-mature-b.png",
+      "kind": "image",
+      "bytes": 2363,
+      "width": 64,
+      "height": 64
+    },
+    "mint-mature-b-shiny": {
+      "path": "assets/mint-mature-b-shiny.png",
+      "kind": "image",
+      "bytes": 2578,
+      "width": 64,
+      "height": 64
+    },
+    "mint-mature-c": {
+      "path": "assets/mint-mature-c.png",
+      "kind": "image",
+      "bytes": 2410,
+      "width": 64,
+      "height": 64
+    },
+    "mint-mature-c-shiny": {
+      "path": "assets/mint-mature-c-shiny.png",
+      "kind": "image",
+      "bytes": 2549,
+      "width": 64,
+      "height": 64
+    },
+    "mint-mature-d": {
+      "path": "assets/mint-mature-d.png",
+      "kind": "image",
+      "bytes": 2323,
+      "width": 64,
+      "height": 64
+    },
+    "mint-mature-d-shiny": {
+      "path": "assets/mint-mature-d-shiny.png",
+      "kind": "image",
+      "bytes": 2635,
+      "width": 64,
+      "height": 64
+    },
+    "oak-0": {
+      "path": "assets/oak-0.png",
+      "kind": "image",
+      "bytes": 749,
+      "width": 64,
+      "height": 64
+    },
+    "oak-0-shiny": {
+      "path": "assets/oak-0-shiny.png",
+      "kind": "image",
+      "bytes": 835,
+      "width": 64,
+      "height": 64
+    },
+    "oak-1": {
+      "path": "assets/oak-1.png",
+      "kind": "image",
+      "bytes": 1047,
+      "width": 64,
+      "height": 64
+    },
+    "oak-1-shiny": {
+      "path": "assets/oak-1-shiny.png",
+      "kind": "image",
+      "bytes": 1316,
+      "width": 64,
+      "height": 64
+    },
+    "oak-2": {
+      "path": "assets/oak-2.png",
+      "kind": "image",
+      "bytes": 1416,
+      "width": 64,
+      "height": 64
+    },
+    "oak-2-shiny": {
+      "path": "assets/oak-2-shiny.png",
+      "kind": "image",
+      "bytes": 1717,
+      "width": 64,
+      "height": 64
+    },
+    "oak-3": {
+      "path": "assets/oak-3.png",
+      "kind": "image",
+      "bytes": 1898,
+      "width": 64,
+      "height": 64
+    },
+    "oak-3-shiny": {
+      "path": "assets/oak-3-shiny.png",
+      "kind": "image",
+      "bytes": 2051,
+      "width": 64,
+      "height": 64
+    },
+    "oak-4": {
+      "path": "assets/oak-4.png",
+      "kind": "image",
+      "bytes": 1996,
+      "width": 64,
+      "height": 64
+    },
+    "oak-4-shiny": {
+      "path": "assets/oak-4-shiny.png",
+      "kind": "image",
+      "bytes": 2026,
+      "width": 64,
+      "height": 64
+    },
+    "oak-5": {
+      "path": "assets/oak-5.png",
+      "kind": "image",
+      "bytes": 2106,
+      "width": 64,
+      "height": 64
+    },
+    "oak-5-shiny": {
+      "path": "assets/oak-5-shiny.png",
+      "kind": "image",
+      "bytes": 2603,
+      "width": 64,
+      "height": 64
+    },
+    "oak-mature-b": {
+      "path": "assets/oak-mature-b.png",
+      "kind": "image",
+      "bytes": 2164,
+      "width": 64,
+      "height": 64
+    },
+    "oak-mature-b-shiny": {
+      "path": "assets/oak-mature-b-shiny.png",
+      "kind": "image",
+      "bytes": 2538,
+      "width": 64,
+      "height": 64
+    },
+    "oak-mature-c": {
+      "path": "assets/oak-mature-c.png",
+      "kind": "image",
+      "bytes": 2103,
+      "width": 64,
+      "height": 64
+    },
+    "oak-mature-c-shiny": {
+      "path": "assets/oak-mature-c-shiny.png",
+      "kind": "image",
+      "bytes": 2616,
+      "width": 64,
+      "height": 64
+    },
+    "oak-mature-d": {
+      "path": "assets/oak-mature-d.png",
+      "kind": "image",
+      "bytes": 2117,
+      "width": 64,
+      "height": 64
+    },
+    "oak-mature-d-shiny": {
+      "path": "assets/oak-mature-d-shiny.png",
+      "kind": "image",
+      "bytes": 2645,
+      "width": 64,
+      "height": 64
+    },
+    "orchid-0": {
+      "path": "assets/orchid-0.png",
+      "kind": "image",
+      "bytes": 877,
+      "width": 64,
+      "height": 64
+    },
+    "orchid-0-shiny": {
+      "path": "assets/orchid-0-shiny.png",
+      "kind": "image",
+      "bytes": 937,
+      "width": 64,
+      "height": 64
+    },
+    "orchid-1": {
+      "path": "assets/orchid-1.png",
+      "kind": "image",
+      "bytes": 1331,
+      "width": 64,
+      "height": 64
+    },
+    "orchid-1-shiny": {
+      "path": "assets/orchid-1-shiny.png",
+      "kind": "image",
+      "bytes": 1449,
+      "width": 64,
+      "height": 64
+    },
+    "orchid-2": {
+      "path": "assets/orchid-2.png",
+      "kind": "image",
+      "bytes": 1677,
+      "width": 64,
+      "height": 64
+    },
+    "orchid-2-shiny": {
+      "path": "assets/orchid-2-shiny.png",
+      "kind": "image",
+      "bytes": 1878,
+      "width": 64,
+      "height": 64
+    },
+    "orchid-3": {
+      "path": "assets/orchid-3.png",
+      "kind": "image",
+      "bytes": 1760,
+      "width": 64,
+      "height": 64
+    },
+    "orchid-3-shiny": {
+      "path": "assets/orchid-3-shiny.png",
+      "kind": "image",
+      "bytes": 2082,
+      "width": 64,
+      "height": 64
+    },
+    "orchid-4": {
+      "path": "assets/orchid-4.png",
+      "kind": "image",
+      "bytes": 2063,
+      "width": 64,
+      "height": 64
+    },
+    "orchid-4-shiny": {
+      "path": "assets/orchid-4-shiny.png",
+      "kind": "image",
+      "bytes": 2310,
+      "width": 64,
+      "height": 64
+    },
+    "orchid-5": {
+      "path": "assets/orchid-5.png",
+      "kind": "image",
+      "bytes": 2203,
+      "width": 64,
+      "height": 64
+    },
+    "orchid-5-shiny": {
+      "path": "assets/orchid-5-shiny.png",
+      "kind": "image",
+      "bytes": 2447,
+      "width": 64,
+      "height": 64
+    },
+    "orchid-mature-b": {
+      "path": "assets/orchid-mature-b.png",
+      "kind": "image",
+      "bytes": 2307,
+      "width": 64,
+      "height": 64
+    },
+    "orchid-mature-b-shiny": {
+      "path": "assets/orchid-mature-b-shiny.png",
+      "kind": "image",
+      "bytes": 2465,
+      "width": 64,
+      "height": 64
+    },
+    "orchid-mature-c": {
+      "path": "assets/orchid-mature-c.png",
+      "kind": "image",
+      "bytes": 2330,
+      "width": 64,
+      "height": 64
+    },
+    "orchid-mature-c-shiny": {
+      "path": "assets/orchid-mature-c-shiny.png",
+      "kind": "image",
+      "bytes": 2449,
+      "width": 64,
+      "height": 64
+    },
+    "orchid-mature-d": {
+      "path": "assets/orchid-mature-d.png",
+      "kind": "image",
+      "bytes": 2250,
+      "width": 64,
+      "height": 64
+    },
+    "orchid-mature-d-shiny": {
+      "path": "assets/orchid-mature-d-shiny.png",
+      "kind": "image",
+      "bytes": 2475,
+      "width": 64,
+      "height": 64
+    },
+    "scene-day": {
+      "path": "assets/scene-day.png",
+      "kind": "image",
+      "bytes": 42804,
+      "width": 960,
+      "height": 320
+    },
+    "scene-night": {
+      "path": "assets/scene-night.png",
+      "kind": "image",
+      "bytes": 38716,
+      "width": 960,
+      "height": 320
+    },
+    "vine-0": {
+      "path": "assets/vine-0.png",
+      "kind": "image",
+      "bytes": 1492,
+      "width": 64,
+      "height": 64
+    },
+    "vine-0-shiny": {
+      "path": "assets/vine-0-shiny.png",
+      "kind": "image",
+      "bytes": 977,
+      "width": 64,
+      "height": 64
+    },
+    "vine-1": {
+      "path": "assets/vine-1.png",
+      "kind": "image",
+      "bytes": 1705,
+      "width": 64,
+      "height": 64
+    },
+    "vine-1-shiny": {
+      "path": "assets/vine-1-shiny.png",
+      "kind": "image",
+      "bytes": 1714,
+      "width": 64,
+      "height": 64
+    },
+    "vine-2": {
+      "path": "assets/vine-2.png",
+      "kind": "image",
+      "bytes": 1809,
+      "width": 64,
+      "height": 64
+    },
+    "vine-2-shiny": {
+      "path": "assets/vine-2-shiny.png",
+      "kind": "image",
+      "bytes": 2064,
+      "width": 64,
+      "height": 64
+    },
+    "vine-3": {
+      "path": "assets/vine-3.png",
+      "kind": "image",
+      "bytes": 2476,
+      "width": 64,
+      "height": 64
+    },
+    "vine-3-shiny": {
+      "path": "assets/vine-3-shiny.png",
+      "kind": "image",
+      "bytes": 2490,
+      "width": 64,
+      "height": 64
+    },
+    "vine-4": {
+      "path": "assets/vine-4.png",
+      "kind": "image",
+      "bytes": 2703,
+      "width": 64,
+      "height": 64
+    },
+    "vine-4-shiny": {
+      "path": "assets/vine-4-shiny.png",
+      "kind": "image",
+      "bytes": 2758,
+      "width": 64,
+      "height": 64
+    },
+    "vine-5": {
+      "path": "assets/vine-5.png",
+      "kind": "image",
+      "bytes": 2793,
+      "width": 64,
+      "height": 64
+    },
+    "vine-5-shiny": {
+      "path": "assets/vine-5-shiny.png",
+      "kind": "image",
+      "bytes": 2706,
+      "width": 64,
+      "height": 64
+    },
+    "vine-mature-b": {
+      "path": "assets/vine-mature-b.png",
+      "kind": "image",
+      "bytes": 2824,
+      "width": 64,
+      "height": 64
+    },
+    "vine-mature-b-shiny": {
+      "path": "assets/vine-mature-b-shiny.png",
+      "kind": "image",
+      "bytes": 2767,
+      "width": 64,
+      "height": 64
+    },
+    "vine-mature-c": {
+      "path": "assets/vine-mature-c.png",
+      "kind": "image",
+      "bytes": 2895,
+      "width": 64,
+      "height": 64
+    },
+    "vine-mature-c-shiny": {
+      "path": "assets/vine-mature-c-shiny.png",
+      "kind": "image",
+      "bytes": 2780,
+      "width": 64,
+      "height": 64
+    },
+    "vine-mature-d": {
+      "path": "assets/vine-mature-d.png",
+      "kind": "image",
+      "bytes": 2747,
+      "width": 64,
+      "height": 64
+    },
+    "vine-mature-d-shiny": {
+      "path": "assets/vine-mature-d-shiny.png",
+      "kind": "image",
+      "bytes": 2830,
+      "width": 64,
+      "height": 64
+    }
+  },
+  "scene": {
+    "dayAsset": "scene-day",
+    "nightAsset": "scene-night",
+    "aspectRatio": 2.6,
+    "fit": "stretch",
+    "safeArea": {
+      "x": 0.03,
+      "y": 0.05,
+      "width": 0.94,
+      "height": 0.92
+    },
+    "zones": {
+      "meadow": {
+        "kind": "ground",
+        "polygon": [
+          {
+            "x": 0.04,
+            "y": 0.58
+          },
+          {
+            "x": 0.96,
+            "y": 0.58
+          },
+          {
+            "x": 0.96,
+            "y": 0.96
+          },
+          {
+            "x": 0.04,
+            "y": 0.96
+          }
+        ]
+      },
+      "sky": {
+        "kind": "air",
+        "polygon": [
+          {
+            "x": 0.06,
+            "y": 0.12
+          },
+          {
+            "x": 0.94,
+            "y": 0.12
+          },
+          {
+            "x": 0.94,
+            "y": 0.5
+          },
+          {
+            "x": 0.06,
+            "y": 0.5
+          }
+        ]
+      }
+    },
+    "layers": [
+      "far",
+      "middle",
+      "near",
+      "foreground"
+    ],
+    "slots": [
+      {
+        "x": 0.14,
+        "y": 0.86,
+        "size": 0.72,
+        "zone": "meadow",
+        "layer": "middle"
+      },
+      {
+        "x": 0.28,
+        "y": 0.79,
+        "size": 0.66,
+        "zone": "meadow",
+        "layer": "far"
+      },
+      {
+        "x": 0.39,
+        "y": 0.9,
+        "size": 0.74,
+        "zone": "meadow",
+        "layer": "near"
+      },
+      {
+        "x": 0.64,
+        "y": 0.85,
+        "size": 0.8,
+        "zone": "meadow",
+        "layer": "middle"
+      },
+      {
+        "x": 0.75,
+        "y": 0.91,
+        "size": 0.86,
+        "zone": "meadow",
+        "layer": "foreground"
+      },
+      {
+        "x": 0.88,
+        "y": 0.81,
+        "size": 0.82,
+        "zone": "meadow",
+        "layer": "near"
+      },
+      {
+        "x": 0.28,
+        "y": 0.3,
+        "size": 0.42,
+        "zone": "sky",
+        "layer": "near"
+      },
+      {
+        "x": 0.76,
+        "y": 0.24,
+        "size": 0.38,
+        "zone": "sky",
+        "layer": "far"
+      }
+    ],
+    "decorations": [],
+    "lighting": {
+      "nightBrightness": 0.72,
+      "nightSaturation": 0.82
+    }
+  },
+  "elements": {
+    "cmd-mint": {
+      "name": "命令薄荷",
+      "latin": "Mentha pixelata",
+      "meaning": "把重复工作变得轻巧",
+      "description": "每一次可靠复用，都会添上一片清爽的新叶。",
+      "stageLabels": [
+        "嫩芽",
+        "幼株",
+        "展叶",
+        "繁茂",
+        "初花",
+        "盛放"
+      ],
+      "stages": [
+        "mint-0",
+        "mint-1",
+        "mint-2",
+        "mint-3",
+        "mint-4",
+        "mint-5"
+      ],
+      "shinyStages": [
+        "mint-0-shiny",
+        "mint-1-shiny",
+        "mint-2-shiny",
+        "mint-3-shiny",
+        "mint-4-shiny",
+        "mint-5-shiny"
+      ],
+      "anchor": {
+        "x": 0.5,
+        "y": 0.94
+      },
+      "hitArea": {
+        "x": 0.08,
+        "y": 0.02,
+        "width": 0.84,
+        "height": 0.96
+      },
+      "defaultSize": 0.52,
+      "placement": {
+        "type": "ambient",
+        "zone": "meadow",
+        "layer": "middle"
+      },
+      "actions": {
+        "idle": {
+          "format": "procedural",
+          "primitive": "sway",
+          "durationMs": 10000,
+          "loop": true
+        }
+      },
+      "behavior": {
+        "durations": {
+          "idle": {
+            "minMs": 10000,
+            "maxMs": 10000
+          }
+        },
+        "weights": {
+          "idle": 1
+        }
+      },
+      "reducedMotion": {
+        "asset": "mint-5"
+      },
+      "matureVariants": [
+        "mint-5",
+        "mint-mature-b",
+        "mint-mature-c",
+        "mint-mature-d"
+      ],
+      "shinyMatureVariants": [
+        "mint-5-shiny",
+        "mint-mature-b-shiny",
+        "mint-mature-c-shiny",
+        "mint-mature-d-shiny"
+      ],
+      "stageScales": [
+        0.46,
+        0.58,
+        0.7,
+        0.82,
+        0.92,
+        1
+      ]
+    },
+    "transfer-fern": {
+      "name": "传输蕨",
+      "latin": "Filix transitus",
+      "meaning": "信息在环境间安全流动",
+      "description": "舒展的羽叶，记录每一次完整抵达的传输。",
+      "stageLabels": [
+        "嫩芽",
+        "幼株",
+        "展叶",
+        "繁茂",
+        "初花",
+        "盛放"
+      ],
+      "stages": [
+        "fern-0",
+        "fern-1",
+        "fern-2",
+        "fern-3",
+        "fern-4",
+        "fern-5"
+      ],
+      "shinyStages": [
+        "fern-0-shiny",
+        "fern-1-shiny",
+        "fern-2-shiny",
+        "fern-3-shiny",
+        "fern-4-shiny",
+        "fern-5-shiny"
+      ],
+      "anchor": {
+        "x": 0.5,
+        "y": 0.94
+      },
+      "hitArea": {
+        "x": 0.08,
+        "y": 0.02,
+        "width": 0.84,
+        "height": 0.96
+      },
+      "defaultSize": 0.6,
+      "placement": {
+        "type": "ambient",
+        "zone": "meadow",
+        "layer": "near"
+      },
+      "actions": {
+        "idle": {
+          "format": "procedural",
+          "primitive": "sway",
+          "durationMs": 10000,
+          "loop": true
+        }
+      },
+      "behavior": {
+        "durations": {
+          "idle": {
+            "minMs": 10000,
+            "maxMs": 10000
+          }
+        },
+        "weights": {
+          "idle": 1
+        }
+      },
+      "reducedMotion": {
+        "asset": "fern-5"
+      },
+      "matureVariants": [
+        "fern-5",
+        "fern-mature-b",
+        "fern-mature-c",
+        "fern-mature-d"
+      ],
+      "shinyMatureVariants": [
+        "fern-5-shiny",
+        "fern-mature-b-shiny",
+        "fern-mature-c-shiny",
+        "fern-mature-d-shiny"
+      ],
+      "stageScales": [
+        0.46,
+        0.58,
+        0.7,
+        0.82,
+        0.92,
+        1
+      ]
+    },
+    "guard-orchid": {
+      "name": "守护兰",
+      "latin": "Orchis tutela",
+      "meaning": "克制、边界与安全操作",
+      "description": "在被认真守住的边界旁，花枝安静地亮起。",
+      "stageLabels": [
+        "嫩芽",
+        "幼株",
+        "展叶",
+        "繁茂",
+        "初花",
+        "盛放"
+      ],
+      "stages": [
+        "orchid-0",
+        "orchid-1",
+        "orchid-2",
+        "orchid-3",
+        "orchid-4",
+        "orchid-5"
+      ],
+      "shinyStages": [
+        "orchid-0-shiny",
+        "orchid-1-shiny",
+        "orchid-2-shiny",
+        "orchid-3-shiny",
+        "orchid-4-shiny",
+        "orchid-5-shiny"
+      ],
+      "anchor": {
+        "x": 0.5,
+        "y": 0.94
+      },
+      "hitArea": {
+        "x": 0.08,
+        "y": 0.02,
+        "width": 0.84,
+        "height": 0.96
+      },
+      "defaultSize": 0.45,
+      "placement": {
+        "type": "ambient",
+        "zone": "meadow",
+        "layer": "near"
+      },
+      "actions": {
+        "idle": {
+          "format": "procedural",
+          "primitive": "sway",
+          "durationMs": 10000,
+          "loop": true
+        }
+      },
+      "behavior": {
+        "durations": {
+          "idle": {
+            "minMs": 10000,
+            "maxMs": 10000
+          }
+        },
+        "weights": {
+          "idle": 1
+        }
+      },
+      "reducedMotion": {
+        "asset": "orchid-5"
+      },
+      "matureVariants": [
+        "orchid-5",
+        "orchid-mature-b",
+        "orchid-mature-c",
+        "orchid-mature-d"
+      ],
+      "shinyMatureVariants": [
+        "orchid-5-shiny",
+        "orchid-mature-b-shiny",
+        "orchid-mature-c-shiny",
+        "orchid-mature-d-shiny"
+      ],
+      "stageScales": [
+        0.58,
+        0.66,
+        0.76,
+        0.85,
+        0.94,
+        1
+      ]
+    },
+    "knowledge-tree": {
+      "name": "知识橡树",
+      "latin": "Quercus memoria",
+      "meaning": "让一次排障成为团队的长期记忆",
+      "description": "年轮收下答案，也收下寻找答案时走过的路。",
+      "stageLabels": [
+        "嫩芽",
+        "幼株",
+        "展叶",
+        "繁茂",
+        "初花",
+        "盛放"
+      ],
+      "stages": [
+        "oak-0",
+        "oak-1",
+        "oak-2",
+        "oak-3",
+        "oak-4",
+        "oak-5"
+      ],
+      "shinyStages": [
+        "oak-0-shiny",
+        "oak-1-shiny",
+        "oak-2-shiny",
+        "oak-3-shiny",
+        "oak-4-shiny",
+        "oak-5-shiny"
+      ],
+      "anchor": {
+        "x": 0.5,
+        "y": 0.94
+      },
+      "hitArea": {
+        "x": 0.08,
+        "y": 0.02,
+        "width": 0.84,
+        "height": 0.96
+      },
+      "defaultSize": 1,
+      "placement": {
+        "type": "ambient",
+        "zone": "meadow",
+        "layer": "far"
+      },
+      "actions": {
+        "idle": {
+          "format": "procedural",
+          "primitive": "sway",
+          "durationMs": 10000,
+          "loop": true
+        }
+      },
+      "behavior": {
+        "durations": {
+          "idle": {
+            "minMs": 10000,
+            "maxMs": 10000
+          }
+        },
+        "weights": {
+          "idle": 1
+        }
+      },
+      "reducedMotion": {
+        "asset": "oak-5"
+      },
+      "matureVariants": [
+        "oak-5",
+        "oak-mature-b",
+        "oak-mature-c",
+        "oak-mature-d"
+      ],
+      "shinyMatureVariants": [
+        "oak-5-shiny",
+        "oak-mature-b-shiny",
+        "oak-mature-c-shiny",
+        "oak-mature-d-shiny"
+      ],
+      "stageScales": [
+        0.55,
+        0.64,
+        0.74,
+        0.84,
+        0.94,
+        1
+      ]
+    },
+    "session-tree": {
+      "name": "会话菌",
+      "latin": "Fungus terminalis",
+      "meaning": "稳定建立连接，也懂得适时休息",
+      "description": "菌丝在地表织成网络，把相邻的根系连在一起，记得每一次可靠建立的会话。",
+      "stageLabels": [
+        "孢子",
+        "萌发",
+        "菌丝",
+        "成簇",
+        "开伞",
+        "成网"
+      ],
+      "stages": [
+        "fungus-0",
+        "fungus-1",
+        "fungus-2",
+        "fungus-3",
+        "fungus-4",
+        "fungus-5"
+      ],
+      "shinyStages": [
+        "fungus-0-shiny",
+        "fungus-1-shiny",
+        "fungus-2-shiny",
+        "fungus-3-shiny",
+        "fungus-4-shiny",
+        "fungus-5-shiny"
+      ],
+      "stageScales": [
+        0.45,
+        0.57,
+        0.7,
+        0.82,
+        0.92,
+        1
+      ],
+      "anchor": {
+        "x": 0.5,
+        "y": 0.94
+      },
+      "hitArea": {
+        "x": 0.04,
+        "y": 0.12,
+        "width": 0.92,
+        "height": 0.86
+      },
+      "defaultSize": 0.42,
+      "placement": {
+        "type": "ambient",
+        "zone": "meadow",
+        "layer": "foreground"
+      },
+      "actions": {
+        "idle": {
+          "format": "procedural",
+          "primitive": "sway",
+          "durationMs": 10000,
+          "loop": true
+        }
+      },
+      "behavior": {
+        "durations": {
+          "idle": {
+            "minMs": 10000,
+            "maxMs": 10000
+          }
+        },
+        "weights": {
+          "idle": 1
+        }
+      },
+      "reducedMotion": {
+        "asset": "fungus-5"
+      },
+      "matureVariants": [
+        "fungus-5",
+        "fungus-mature-b",
+        "fungus-mature-c",
+        "fungus-mature-d"
+      ],
+      "shinyMatureVariants": [
+        "fungus-5-shiny",
+        "fungus-mature-b-shiny",
+        "fungus-mature-c-shiny",
+        "fungus-mature-d-shiny"
+      ]
+    },
+    "script-vine": {
+      "name": "脚本藤",
+      "latin": "Hedera automata",
+      "meaning": "让自动化替你飞过重复的路",
+      "description": "它沿着固定的路径攀爬，把重复的路走成一条藤廊。",
+      "stageLabels": [
+        "发芽",
+        "缠附",
+        "攀爬",
+        "铺展",
+        "结苞",
+        "成廊"
+      ],
+      "stages": [
+        "vine-0",
+        "vine-1",
+        "vine-2",
+        "vine-3",
+        "vine-4",
+        "vine-5"
+      ],
+      "shinyStages": [
+        "vine-0-shiny",
+        "vine-1-shiny",
+        "vine-2-shiny",
+        "vine-3-shiny",
+        "vine-4-shiny",
+        "vine-5-shiny"
+      ],
+      "stageScales": [
+        0.42,
+        0.55,
+        0.68,
+        0.81,
+        0.92,
+        1
+      ],
+      "anchor": {
+        "x": 0.5,
+        "y": 0.94
+      },
+      "hitArea": {
+        "x": 0.05,
+        "y": 0.06,
+        "width": 0.9,
+        "height": 0.82
+      },
+      "defaultSize": 0.85,
+      "placement": {
+        "type": "ambient",
+        "zone": "meadow",
+        "layer": "near"
+      },
+      "actions": {
+        "idle": {
+          "format": "procedural",
+          "primitive": "sway",
+          "durationMs": 10000,
+          "loop": true
+        }
+      },
+      "behavior": {
+        "durations": {
+          "idle": {
+            "minMs": 10000,
+            "maxMs": 10000
+          }
+        },
+        "weights": {
+          "idle": 1
+        }
+      },
+      "reducedMotion": {
+        "asset": "vine-5"
+      },
+      "matureVariants": [
+        "vine-5",
+        "vine-mature-b",
+        "vine-mature-c",
+        "vine-mature-d"
+      ],
+      "shinyMatureVariants": [
+        "vine-5-shiny",
+        "vine-mature-b-shiny",
+        "vine-mature-c-shiny",
+        "vine-mature-d-shiny"
+      ]
+    }
+  }
+}

@@ -5,22 +5,24 @@ import type { GardenSnapshot } from '../ui/garden/pack';
 import '../ui/garden/gardenScene.css';
 
 // 花园视觉调参专用 harness：不走 sidecar，快照内联，昼夜用按钮切 data-theme。
-// 访问 /garden-dev.html?theme=light&pending=1&width=380 可复现窄停靠槽。
+// 访问 /garden-dev.html?theme=light&width=380 可复现窄停靠槽。
 
 const snapshot: GardenSnapshot = {
-  schemaVersion: 1,
-  ruleVersion: 1,
+  schemaVersion: 3,
+  ruleVersion: 3,
   gardenLevel: 9,
-  pitySinceShiny: 7,
+  balance: 186,
+  earned: 240,
+  spent: 174,
   specimens: [
-    { speciesId: 'session-tree', instanceId: 'i1', level: 22, xp: 140, shiny: false, acquiredAt: '2026-08-06T03:00:29Z', lastGrewAt: '2026-08-06T03:00:29Z', milestones: [] },
-    { speciesId: 'cmd-mint', instanceId: 'i2', level: 12, xp: 60, shiny: false, acquiredAt: '2026-08-16T03:00:29Z', lastGrewAt: '2026-08-16T03:00:29Z', milestones: [] },
-    { speciesId: 'script-vine', instanceId: 'i3', level: 27, xp: 300, shiny: false, acquiredAt: '2026-08-25T03:00:29Z', lastGrewAt: '2026-08-25T03:00:29Z', milestones: [] },
-    { speciesId: 'transfer-fern', instanceId: 'i4', level: 8, xp: 20, shiny: false, acquiredAt: '2026-09-01T03:00:29Z', lastGrewAt: '2026-09-01T03:00:29Z', milestones: [] },
-    { speciesId: 'guard-orchid', instanceId: 'i5', level: 30, xp: 0, shiny: true, acquiredAt: '2026-09-06T03:00:29Z', lastGrewAt: '2026-09-06T03:00:29Z', milestones: [] },
-    { speciesId: 'knowledge-tree', instanceId: 'i6', level: 18, xp: 90, shiny: false, acquiredAt: '2026-09-08T03:00:29Z', lastGrewAt: '2026-09-08T03:00:29Z', milestones: [] },
+    { itemId: 'session-tree', instanceId: 'i1', level: 50, xp: 0, shiny: false, acquiredAt: '2026-08-06T03:00:29Z', lastGrewAt: '2026-08-06T03:00:29Z', milestones: [], placement: { placed: true, x: .2, y: .51, scale: 1, flipX: false } },
+    { itemId: 'cmd-mint', instanceId: 'i2', level: 50, xp: 0, shiny: false, acquiredAt: '2026-08-16T03:00:29Z', lastGrewAt: '2026-08-16T03:00:29Z', milestones: [], placement: { placed: true, x: .32, y: .69, scale: 1, flipX: false } },
+    { itemId: 'script-vine', instanceId: 'i3', level: 50, xp: 0, shiny: false, acquiredAt: '2026-08-25T03:00:29Z', lastGrewAt: '2026-08-25T03:00:29Z', milestones: [], placement: { placed: true, x: .78, y: .54, scale: 1, flipX: false } },
+    { itemId: 'transfer-fern', instanceId: 'i4', level: 50, xp: 0, shiny: false, acquiredAt: '2026-09-01T03:00:29Z', lastGrewAt: '2026-09-01T03:00:29Z', milestones: [], placement: { placed: true, x: .68, y: .7, scale: 1, flipX: false } },
+    { itemId: 'guard-orchid', instanceId: 'i5', level: 50, xp: 0, shiny: true, acquiredAt: '2026-09-06T03:00:29Z', lastGrewAt: '2026-09-06T03:00:29Z', milestones: [], placement: { placed: true, x: .79, y: .85, scale: 1, flipX: false } },
+    { itemId: 'knowledge-tree', instanceId: 'i6', level: 50, xp: 0, shiny: false, acquiredAt: '2026-09-08T03:00:29Z', lastGrewAt: '2026-09-08T03:00:29Z', milestones: [], placement: { placed: false, x: 0, y: 0, scale: 1, flipX: false } },
   ],
-  pending: [],
+  changeSignal: null,
 }
 
 const params = new URLSearchParams(window.location.search)
@@ -28,9 +30,6 @@ const initialTheme = params.get('theme') ?? 'dark'
 const requestedWidth = Number(params.get('width'))
 const previewWidth = Number.isFinite(requestedWidth) && requestedWidth >= 280 ? requestedWidth : undefined
 document.documentElement.setAttribute('data-theme', initialTheme)
-if (params.get('pending')) {
-  snapshot.pending = [{ kind: 'shiny-discovered', instanceId: 'i5', speciesId: 'guard-orchid', at: '2026-09-10T10:00:00Z' }]
-}
 
 const Harness: React.FC = () => {
   const [theme, setTheme] = useState(initialTheme)
@@ -50,7 +49,11 @@ const Harness: React.FC = () => {
           ))}
         </div>
         <div style={{ width: previewWidth, maxWidth: '100%' }}>
-          <GardenPanel host={{ snapshot: () => Promise.resolve(snapshot), dismiss: () => Promise.resolve() }} isOpen height={height} />
+          <GardenPanel host={{
+            snapshot: () => Promise.resolve(snapshot), signal: () => Promise.resolve(snapshot.changeSignal),
+            purchase: () => Promise.reject(new Error('预览页不写入数据')),
+            place: () => Promise.resolve(snapshot), stow: () => Promise.resolve(snapshot),
+          }} isOpen height={height} />
         </div>
       </div>
     </div>

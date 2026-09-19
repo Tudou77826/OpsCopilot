@@ -19,31 +19,25 @@ func TestGardenReceivesBusinessEvents(t *testing.T) {
 	}
 	api := &ControlAPI{Garden: svc}
 
-	// 传输完成钩子：同一任务 id 调两次只结算一次。
+	// 传输完成钩子：同一任务 id 调两次只结算一次货币。
 	ft := NewFTService(nil, dir)
 	api.FT = ft
 	wireGarden(api)
 	ft.onTransferDone("task-1")
 	ft.onTransferDone("task-1")
 	snap := svc.Snapshot()
-	if len(snap.Specimens) != 1 {
-		t.Fatalf("一次传输应发现 1 株, 得到 %d", len(snap.Specimens))
-	}
-	if snap.Specimens[0].SpeciesID != garden.SpeciesTransfer {
-		t.Fatalf("传输事件应长在 transfer-fern 上: %s", snap.Specimens[0].SpeciesID)
-	}
-	if snap.Specimens[0].XP != 8 {
-		t.Fatalf("传输单次成长值应为 8: %d", snap.Specimens[0].XP)
+	if len(snap.Specimens) != 0 || snap.Balance != garden.StartingBalance+10 || snap.Earned != 10 {
+		t.Fatalf("一次传输应只奖励 10 灵感币: %+v", snap)
 	}
 
-	// 回放钩子：换一个业务 id 应结算到另一个物种。
+	// 回放钩子：换一个业务 id 应继续累计货币，不自动创造元素。
 	scripts := &StructuredScriptService{}
 	api.Scripts = scripts
 	wireGarden(api)
 	scripts.onReplayDispatched("run-1")
 	snap = svc.Snapshot()
-	if len(snap.Specimens) != 2 {
-		t.Fatalf("回放应再发现 1 株, 得到 %d", len(snap.Specimens))
+	if len(snap.Specimens) != 0 || snap.Balance != garden.StartingBalance+10+12 {
+		t.Fatalf("回放应再奖励 12 灵感币: %+v", snap)
 	}
 
 	// 未注入花园时 wireGarden 不得 panic（保持能力边界纪律）。
@@ -77,15 +71,12 @@ func TestGardenIgnoresNonSuccess(t *testing.T) {
 	if snap.Specimens == nil {
 		t.Fatal("空花园的 Specimens 不得为 nil")
 	}
-	if snap.Pending == nil {
-		t.Fatal("空花园的 Pending 不得为 nil（JSON 里会变成 null，前端会把空当成缺失）")
-	}
 	raw, err := json.Marshal(snap)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(raw), "null") {
-		t.Fatalf("快照里不得出现 null: %s", raw)
+	if strings.Contains(string(raw), `"specimens":null`) {
+		t.Fatalf("收藏集合不得出现 null: %s", raw)
 	}
 	if snap.SchemaVersion == 0 || snap.RuleVersion == 0 {
 		t.Fatalf("快照必须带版本: %+v", snap)
@@ -106,8 +97,8 @@ func TestGardenPersistsInDataDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(reopened.Snapshot().Specimens); got != 1 {
-		t.Fatalf("重开数据目录应恢复 1 株, 得到 %d", got)
+	if got := reopened.Snapshot().Balance; got != garden.StartingBalance+8 {
+		t.Fatalf("重开数据目录应恢复余额 %d, 得到 %d", garden.StartingBalance+8, got)
 	}
 	if _, err := filepath.Abs(dir); err != nil {
 		t.Fatal(err)

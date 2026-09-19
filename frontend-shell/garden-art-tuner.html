@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>养成素材像素化调优台</title>
+<style>
+  :root {
+    --bg: #14161a;
+    --panel: #1b1e24;
+    --panel-2: #22262e;
+    --line: #313640;
+    --text: #e6e8ec;
+    --muted: #9aa2af;
+    --accent: #7aa2f7;
+    --warn: #e0af68;
+    --good: #7bd88f;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex;
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  aside {
+    width: 336px;
+    flex: 0 0 336px;
+    height: 100%;
+    overflow-y: auto;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    padding: 14px 14px 40px;
+  }
+  main {
+    flex: 1 1 auto;
+    height: 100%;
+    overflow-y: auto;
+    padding: 16px 20px 60px;
+  }
+  h1 { font-size: 14px; margin: 0 0 4px; }
+  h2 {
+    font-size: 12px;
+    letter-spacing: .04em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin: 18px 0 8px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+  }
+  h2:first-of-type { border-top: 0; padding-top: 0; }
+  .hint { color: var(--muted); font-size: 12px; margin: 2px 0 8px; }
+  .row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+  .row label { flex: 0 0 118px; color: var(--muted); }
+  .row .val { flex: 0 0 46px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
+  input[type="range"] { flex: 1 1 auto; accent-color: var(--accent); min-width: 0; }
+  input[type="number"], select {
+    flex: 1 1 auto;
+    min-width: 0;
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 4px 6px;
+    font: inherit;
+  }
+  input[type="number"] { -moz-appearance: textfield; }
+  button {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 6px 10px;
+    font: inherit;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: #2b3b5e; border-color: #3d558a; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .checks { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
+  .checks label { display: flex; align-items: center; gap: 8px; color: var(--text); }
+  .drop {
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+    padding: 16px 12px;
+    text-align: center;
+    color: var(--muted);
+    background: var(--panel-2);
+  }
+  .drop.over { border-color: var(--accent); color: var(--text); }
+  .thumbs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .thumbs img {
+    width: 40px; height: 40px; object-fit: contain;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    cursor: pointer;
+    image-rendering: auto;
+  }
+  .thumbs img.on { border-color: var(--accent); }
+  section.card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+  }
+  section.card > header {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    margin-bottom: 10px;
+  }
+  section.card h3 { font-size: 13px; margin: 0; }
+  section.card .meta { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .stage {
+    background:
+      linear-gradient(45deg, #20242c 25%, transparent 25%) 0 0 / 16px 16px,
+      linear-gradient(-45deg, #20242c 25%, transparent 25%) 0 8px / 16px 16px,
+      linear-gradient(45deg, transparent 75%, #20242c 75%) 0 0 / 16px 16px,
+      linear-gradient(-45deg, transparent 75%, #20242c 75%) 0 8px / 16px 16px,
+      #191c22;
+    border-radius: 6px;
+    padding: 10px;
+    overflow: auto;
+  }
+  .scene {
+    border-radius: 6px;
+    padding: 10px;
+    min-height: 130px;
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    background: linear-gradient(#8fd0d9 0 40%, #7daa78 40% 100%);
+  }
+  .scene.night { background: linear-gradient(#16223d 0 40%, #263e4a 40% 100%); }
+  .scene img { display: block; }
+  .metric { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; }
+  .metric b { font-variant-numeric: tabular-nums; }
+  .flag { margin-left: 6px; }
+  .flag.low { color: var(--warn); }
+  .flag.ok { color: var(--good); }
+  .note {
+    background: var(--panel-2);
+    border-left: 2px solid var(--accent);
+    padding: 8px 10px;
+    border-radius: 0 6px 6px 0;
+    color: var(--muted);
+    font-size: 12px;
+    margin: 10px 0;
+  }
+  code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<aside>
+  <h1>养成素材像素化调优台</h1>
+  <p class="hint">拖入或粘贴一张绘制稿，实时看降采样与量化后的像素画。所有参数即时生效。</p>
+
+  <div class="drop" id="drop">
+    拖图片到这里 · 或
+    <div class="btns" style="justify-content:center">
+      <button id="pick">选择图片</button>
+      <button id="pasteHint">粘贴（Ctrl+V）</button>
+    </div>
+    <input id="file" type="file" accept="image/*" multiple hidden>
+  </div>
+  <div class="thumbs" id="thumbs"></div>
+
+  <h2>输出尺寸</h2>
+  <div class="row"><label>宽</label><input id="outW" type="number" min="8" max="4096" step="1" value="320"></div>
+  <div class="row"><label>高</label><input id="outH" type="number" min="8" max="4096" step="1" value="320"></div>
+  <div class="row">
+    <label>预设</label>
+    <select id="preset">
+      <option value="">—</option>
+      <option value="32x32">32×32</option>
+      <option value="64x64">64×64</option>
+      <option value="96x96">96×96</option>
+      <option value="128x128">128×128</option>
+      <option value="160x160">160×160</option>
+      <option value="256x256">256×256</option>
+      <option value="320x320" selected>320×320（主体）</option>
+      <option value="512x512">512×512</option>
+      <option value="1920x640">1920×640（场景）</option>
+      <option value="960x320">960×320（旧场景）</option>
+    </select>
+  </div>
+  <div class="checks">
+    <label><input id="lockAspect" type="checkbox"> 锁定源图比例（否则拉伸填满）</label>
+    <label><input id="fitContain" type="checkbox"> 适应画布（留透明边，不裁切）</label>
+  </div>
+
+  <h2>采样</h2>
+  <div class="row">
+    <label>方式</label>
+    <select id="method">
+      <option value="box" selected>面积平均（推荐）</option>
+      <option value="mode">众数（每格最多颜色）</option>
+      <option value="median">中位数</option>
+      <option value="nearest">最近邻（硬抽点）</option>
+    </select>
+  </div>
+  <div class="row"><label>先缩到源图的</label><input id="preScale" type="range" min="10" max="100" step="1" value="100"><span class="val" id="preScaleV">100%</span></div>
+  <p class="hint">先缩小源图再采样，可压掉细节噪声；100% 表示用原图。</p>
+  <div class="row"><label>源图预量化</label><input id="preColors" type="range" min="0" max="96" step="1" value="24"><span class="val" id="preColorsV">24 色</span></div>
+  <p class="hint">降采样之前先把源图颜色数压下来。6:1 缩减时每格只有十来个像素，不预量化的话“众数”只能在几十个近似色里乱挑，结果满是噪点；预量化到 24 色左右，格子里的颜色才有主次。</p>
+
+  <h2>透明与背景</h2>
+  <div class="row">
+    <label>去背景</label>
+    <select id="bgMode">
+      <option value="none" selected>不处理</option>
+      <option value="corners">四角取色抠图</option>
+      <option value="white">去白底</option>
+      <option value="luma">按亮度阈值</option>
+    </select>
+  </div>
+  <div class="row"><label>抠图容差</label><input id="bgTol" type="range" min="0" max="180" step="1" value="36"><span class="val" id="bgTolV">36</span></div>
+  <div class="row"><label>亮度阈值</label><input id="bgLuma" type="range" min="0" max="255" step="1" value="228"><span class="val" id="bgLumaV">228</span></div>
+  <div class="row"><label>Alpha 阈值</label><input id="alphaCut" type="range" min="0" max="255" step="1" value="128"><span class="val" id="alphaCutV">128</span></div>
+  <div class="checks">
+    <label><input id="alphaBinarize" type="checkbox" checked> Alpha 二值化（边缘不留半透明）</label>
+  </div>
+
+  <h2>调色板</h2>
+  <div class="checks">
+    <label><input id="quantize" type="checkbox" checked> 量化到共用调色板</label>
+  </div>
+  <div class="row"><label>颜色数</label><input id="colors" type="range" min="2" max="96" step="1" value="32"><span class="val" id="colorsV">32</span></div>
+  <div class="row">
+    <label>抖动</label>
+    <select id="dither">
+      <option value="none" selected>无</option>
+      <option value="b2">有序 2×2</option>
+      <option value="b4">有序 4×4</option>
+      <option value="b8">有序 8×8</option>
+      <option value="fs">Floyd–Steinberg</option>
+      <option value="atkinson">Atkinson</option>
+    </select>
+  </div>
+  <div class="row"><label>抖动强度</label><input id="ditherAmt" type="range" min="0" max="100" step="1" value="60"><span class="val" id="ditherAmtV">60%</span></div>
+
+  <h2>描边与轮廓</h2>
+  <div class="row">
+    <label>描边</label>
+    <select id="outline">
+      <option value="none" selected>无</option>
+      <option value="auto">自动加深（取自身色）</option>
+      <option value="fixed">固定颜色</option>
+    </select>
+  </div>
+  <div class="row"><label>宽度</label><input id="outlineW" type="range" min="1" max="3" step="1" value="1"><span class="val" id="outlineWV">1</span></div>
+  <div class="row"><label>加深系数</label><input id="outlineDark" type="range" min="10" max="90" step="1" value="45"><span class="val" id="outlineDarkV">45%</span></div>
+  <div class="row"><label>固定色</label><input id="outlineColor" type="color" value="#1a1420" style="flex:0 0 46px;padding:0;height:26px"></div>
+
+  <h2>观察条件</h2>
+  <div class="row"><label>产品显示尺寸</label><input id="displayPx" type="range" min="48" max="800" step="2" value="130"><span class="val" id="displayPxV">130</span></div>
+  <div class="row"><label>大窗口尺寸</label><input id="bigPx" type="range" min="200" max="900" step="10" value="420"><span class="val" id="bigPxV">420</span></div>
+  <div class="row"><label>1:1 放大</label><input id="zoom" type="range" min="2" max="16" step="1" value="6"><span class="val" id="zoomV">6×</span></div>
+  <div class="checks">
+    <label><input id="smoothAtDisplay" type="checkbox"> 显示时平滑缩放（不勾选=最近邻）</label>
+    <label><input id="sceneNight" type="checkbox"> 场景模拟用夜间背景</label>
+  </div>
+
+  <h2>导出</h2>
+  <div class="btns">
+    <button id="download" class="primary">下载处理结果 PNG</button>
+    <button id="copyParams">复制参数 JSON</button>
+    <button id="reset">重置参数</button>
+  </div>
+</aside>
+
+<main>
+  <div class="note">
+    判断标准是<b>超采样系数 = 输出像素宽 ÷ 产品显示宽</b>。系数低于 1 就是用低精度素材放大，必然粗颗粒。
+    现状参照：主体素材实际绘制量 <code>32px</code>、显示约 <code>130px</code>，系数 <code>0.25</code>。
+  </div>
+
+  <section class="card">
+    <header>
+      <h3>处理结果 · 1:1 像素</h3>
+      <span class="meta" id="pixelMeta">—</span>
+    </header>
+    <div class="stage"><img id="pixelView" alt="" style="image-rendering:pixelated;display:none"></div>
+  </section>
+
+  <section class="card">
+    <header>
+      <h3>产品里实际大小</h3>
+      <span class="meta" id="displayMeta">—</span>
+    </header>
+    <div class="stage" style="display:flex;align-items:flex-end;gap:24px" id="displayStage">
+      <div>
+        <div class="meta" style="margin-bottom:6px">面板内</div>
+        <img id="displayView" alt="" style="display:none">
+      </div>
+      <div>
+        <div class="meta" style="margin-bottom:6px">图鉴大窗口</div>
+        <img id="bigView" alt="" style="display:none">
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <header>
+      <h3>场景模拟</h3>
+      <span class="meta">按面板宽度铺满，主体按下方的显示尺寸放置</span>
+    </header>
+    <div class="scene" id="scene">
+      <img id="sceneView" alt="" style="display:none">
+    </div>
+  </section>
+
+  <section class="card">
+    <header>
+      <h3>源图</h3>
+      <span class="meta" id="srcMeta">—</span>
+    </header>
+    <div class="stage"><img id="srcView" alt="" style="max-width:100%;display:none"></div>
+  </section>
+
+  <div class="metric">
+    <span>输出 <b id="mOut">—</b></span>
+    <span>调色板 <b id="mPal">—</b></span>
+    <span>PNG <b id="mBytes">—</b></span>
+    <span>超采样系数 <b id="mCoef">—</b><span id="mCoefFlag" class="flag"></span></span>
+    <span>耗时 <b id="mMs">—</b></span>
+  </div>
+</main>
+
+<script type="module">
+import { fitPlacement, removeBackground, resample, nearestSource, applyAlpha, quantizeTo, quantizeImage, medianCut, widestChannel, nearestColor, ditherMatrix, bayer, diffuseQuantize, addOutline, hexToRgb } from './garden-recipe.mjs'
+
+// 供控制台调试：window.__recipe.resample(...) 等
+window.__tuner = {
+  readParams: () => readParams(),
+  writeParams: p => { writeParams(p); syncLabels(); },
+  get state() { return state },
+  process: (cellCanvas, params) => {
+    const p = params ?? readParams()
+    const srcData = cellCanvas.getContext('2d').getImageData(0, 0, cellCanvas.width, cellCanvas.height)
+    if (p.bgMode !== 'none') removeBackground(srcData, p)
+    if (p.preColors > 0) quantizeTo(srcData, p.preColors, 'none', 0)
+    const place = fitPlacement(cellCanvas.width, cellCanvas.height, p.outW, p.outH, p.fitContain)
+    const outData = resample(srcData, p.outW, p.outH, place, p.method)
+    applyAlpha(outData, p)
+    if (p.quantize) quantizeImage(outData, p)
+    const finalData = p.outline === 'none' ? outData : addOutline(outData, p)
+    const c = document.createElement('canvas'); c.width = p.outW; c.height = p.outH
+    c.getContext('2d').putImageData(finalData, 0, 0)
+    return c
+  },
+}
+window.__recipe = { fitPlacement, removeBackground, resample, nearestSource, applyAlpha, quantizeTo, quantizeImage, medianCut, widestChannel, nearestColor, ditherMatrix, bayer, diffuseQuantize, addOutline, hexToRgb }
+
+
+const $ = id => document.getElementById(id)
+
+// 默认值即已定稿的归一化配方（见 docs/garden-presentation-architecture.md 第 4.2 节），
+// 修改配方时同步更新这里与文档，保证工具与实际产出不会漂移。
+const DEFAULTS = {
+  outW: 64, outH: 64, lockAspect: false, fitContain: false,
+  method: 'mode', preScale: 50, preColors: 24,
+  bgMode: 'corners', bgTol: 36, bgLuma: 228, alphaCut: 128, alphaBinarize: true,
+  quantize: true, colors: 96, dither: 'none', ditherAmt: 60,
+  outline: 'auto', outlineW: 1, outlineDark: 60, outlineColor: '#1a1420',
+  displayPx: 120, bigPx: 200, zoom: 2, smoothAtDisplay: false, sceneNight: false,
+}
+
+let files = []
+let currentIndex = -1
+let sourceBitmap = null
+let lastUrl = ''
+let lastBytes = 0
+let renderToken = 0
+
+/* ---------- 参数读写 ---------- */
+
+function readParams() {
+  return {
+    outW: clampInt($('outW').value, 8, 4096, 320),
+    outH: clampInt($('outH').value, 8, 4096, 320),
+    lockAspect: $('lockAspect').checked,
+    fitContain: $('fitContain').checked,
+    method: $('method').value,
+    preScale: +$('preScale').value,
+    preColors: +$('preColors').value,
+    bgMode: $('bgMode').value,
+    bgTol: +$('bgTol').value,
+    bgLuma: +$('bgLuma').value,
+    alphaCut: +$('alphaCut').value,
+    alphaBinarize: $('alphaBinarize').checked,
+    quantize: $('quantize').checked,
+    colors: +$('colors').value,
+    dither: $('dither').value,
+    ditherAmt: +$('ditherAmt').value,
+    outline: $('outline').value,
+    outlineW: +$('outlineW').value,
+    outlineDark: +$('outlineDark').value,
+    outlineColor: $('outlineColor').value,
+    displayPx: +$('displayPx').value,
+    bigPx: +$('bigPx').value,
+    zoom: +$('zoom').value,
+    smoothAtDisplay: $('smoothAtDisplay').checked,
+    sceneNight: $('sceneNight').checked,
+  }
+}
+
+function writeParams(p) {
+  $('outW').value = p.outW
+  $('outH').value = p.outH
+  $('lockAspect').checked = p.lockAspect
+  $('fitContain').checked = p.fitContain
+  $('method').value = p.method
+  $('preScale').value = p.preScale
+  $('preColors').value = p.preColors
+  $('bgMode').value = p.bgMode
+  $('bgTol').value = p.bgTol
+  $('bgLuma').value = p.bgLuma
+  $('alphaCut').value = p.alphaCut
+  $('alphaBinarize').checked = p.alphaBinarize
+  $('quantize').checked = p.quantize
+  $('colors').value = p.colors
+  $('dither').value = p.dither
+  $('ditherAmt').value = p.ditherAmt
+  $('outline').value = p.outline
+  $('outlineW').value = p.outlineW
+  $('outlineDark').value = p.outlineDark
+  $('outlineColor').value = p.outlineColor
+  $('displayPx').value = p.displayPx
+  $('bigPx').value = p.bigPx
+  $('zoom').value = p.zoom
+  $('smoothAtDisplay').checked = p.smoothAtDisplay
+  $('sceneNight').checked = p.sceneNight
+}
+
+function clampInt(value, min, max, fallback) {
+  const n = Math.round(Number(value))
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(max, Math.max(min, n))
+}
+
+function syncLabels() {
+  const p = readParams()
+  $('preScaleV').textContent = p.preScale + '%'
+  $('preColorsV').textContent = p.preColors > 0 ? p.preColors + ' 色' : '关闭'
+  $('bgTolV').textContent = p.bgTol
+  $('bgLumaV').textContent = p.bgLuma
+  $('alphaCutV').textContent = p.alphaCut
+  $('colorsV').textContent = p.colors
+  $('ditherAmtV').textContent = p.ditherAmt + '%'
+  $('outlineWV').textContent = p.outlineW
+  $('outlineDarkV').textContent = p.outlineDark + '%'
+  $('displayPxV').textContent = p.displayPx
+  $('bigPxV').textContent = p.bigPx
+  $('zoomV').textContent = p.zoom + '×'
+  $('preset').value = p.outW + 'x' + p.outH
+}
+
+/* ---------- 图像载入 ---------- */
+
+$('pick').addEventListener('click', () => $('file').click())
+$('pasteHint').addEventListener('click', () => {
+  $('drop').classList.add('over')
+  setTimeout(() => $('drop').classList.remove('over'), 900)
+})
+
+$('file').addEventListener('change', event => {
+  addFiles([...event.target.files])
+  event.target.value = ''
+})
+
+const drop = $('drop')
+drop.addEventListener('dragover', event => {
+  event.preventDefault()
+  drop.classList.add('over')
+})
+drop.addEventListener('dragleave', () => drop.classList.remove('over'))
+drop.addEventListener('drop', event => {
+  event.preventDefault()
+  drop.classList.remove('over')
+  addFiles([...event.dataTransfer.files].filter(f => f.type.startsWith('image/')))
+})
+
+window.addEventListener('paste', event => {
+  const items = [...(event.clipboardData?.items ?? [])]
+  const picked = items.filter(i => i.type.startsWith('image/')).map(i => i.getAsFile()).filter(Boolean)
+  if (picked.length) addFiles(picked)
+})
+
+function addFiles(list) {
+  if (!list.length) return
+  files = files.concat(list)
+  renderThumbs()
+  selectFile(files.length - list.length)
+}
+
+function renderThumbs() {
+  const host = $('thumbs')
+  host.textContent = ''
+  files.forEach((file, index) => {
+    const img = document.createElement('img')
+    img.src = URL.createObjectURL(file)
+    img.title = file.name
+    if (index === currentIndex) img.className = 'on'
+    img.addEventListener('click', () => selectFile(index))
+    host.append(img)
+  })
+}
+
+async function selectFile(index) {
+  if (index < 0 || index >= files.length) return
+  currentIndex = index
+  sourceBitmap = await createImageBitmap(files[index])
+  $('srcView').src = URL.createObjectURL(files[index])
+  $('srcView').style.display = 'block'
+  $('srcMeta').textContent = sourceBitmap.width + '×' + sourceBitmap.height + ' · ' + files[index].name
+  renderThumbs()
+  scheduleRender()
+}
+
+/* ---------- 图像处理 ---------- */
+
+function scheduleRender() {
+  syncLabels()
+  const token = ++renderToken
+  requestAnimationFrame(() => render(token))
+}
+
+function render(token) {
+  if (token !== renderToken) return
+  if (!sourceBitmap) return
+  const started = performance.now()
+  const p = readParams()
+
+  // 1. 源图落到可编辑画布，先按 preScale 缩一次
+  const pre = p.preScale / 100
+  const sw = Math.max(1, Math.round(sourceBitmap.width * pre))
+  const sh = Math.max(1, Math.round(sourceBitmap.height * pre))
+  const srcCanvas = document.createElement('canvas')
+  srcCanvas.width = sw
+  srcCanvas.height = sh
+  const srcCtx = srcCanvas.getContext('2d', { willReadFrequently: true })
+  srcCtx.imageSmoothingEnabled = true
+  srcCtx.imageSmoothingQuality = 'high'
+  srcCtx.drawImage(sourceBitmap, 0, 0, sw, sh)
+  const srcData = srcCtx.getImageData(0, 0, sw, sh)
+
+  // 2. 去背景：在降采样之前做，避免边缘留晕
+  if (p.bgMode !== 'none') removeBackground(srcData, p)
+
+  // 2.5 源图预量化：把每个格子里的颜色数先降下来，
+  //     否则 6:1 缩减时"众数"只能在一二十个近似色里挑，结果全是噪点。
+  if (p.preColors > 0) quantizeTo(srcData, p.preColors, 'none', 0)
+
+  // 3. 计算目标矩形（比例锁定 / 适应画布）
+  let outW = p.outW
+  let outH = p.outH
+  if (p.lockAspect) outH = Math.max(1, Math.round(outW * (sh / sw)))
+  const place = fitPlacement(sw, sh, outW, outH, p.fitContain)
+
+  // 4. 降采样
+  const out = resample(srcData, outW, outH, place, p.method)
+
+  // 5. Alpha 处理
+  applyAlpha(out, p)
+
+  // 6. 调色板量化（含抖动）
+  let paletteSize = 0
+  if (p.quantize) paletteSize = quantizeImage(out, p)
+
+  // 7. 描边
+  const outlined = p.outline === 'none' ? out : addOutline(out, p)
+
+  // 8. 画布输出
+  const outCanvas = document.createElement('canvas')
+  outCanvas.width = outW
+  outCanvas.height = outH
+  const outCtx = outCanvas.getContext('2d')
+  outCtx.putImageData(outlined, 0, 0)
+
+  if (lastUrl) URL.revokeObjectURL(lastUrl)
+  lastUrl = ''
+
+  const url = outCanvas.toDataURL('image/png')
+  paint(url, outW, outH, p)
+
+  const ms = Math.round(performance.now() - started)
+  outCanvas.toBlob(blob => {
+    if (token !== renderToken || !blob) return
+    lastBytes = blob.size
+    $('mBytes').textContent = formatBytes(blob.size)
+  }, 'image/png')
+
+  $('mOut').textContent = outW + '×' + outH
+  $('mPal').textContent = p.quantize ? paletteSize + ' 色' : '不量化'
+  $('mMs').textContent = ms + ' ms'
+
+  const coef = outW / p.displayPx
+  $('mCoef').textContent = coef.toFixed(2) + '×'
+  const flag = $('mCoefFlag')
+  if (coef < 1) {
+    flag.className = 'flag low'
+    flag.textContent = '放大，会粗'
+  } else if (coef < 1.6) {
+    flag.className = 'flag'
+    flag.textContent = '接近 1:1'
+  } else {
+    flag.className = 'flag ok'
+    flag.textContent = '超采样'
+  }
+}
+
+function paint(url, outW, outH, p) {
+  const rendering = p.smoothAtDisplay ? 'auto' : 'pixelated'
+  const pixel = $('pixelView')
+  pixel.src = url
+  pixel.style.display = 'block'
+  pixel.style.width = (outW * p.zoom) + 'px'
+  pixel.style.imageRendering = 'pixelated'
+
+  const display = $('displayView')
+  display.src = url
+  display.style.display = 'block'
+  display.style.width = p.displayPx + 'px'
+  display.style.imageRendering = rendering
+
+  const big = $('bigView')
+  big.src = url
+  big.style.display = 'block'
+  big.style.width = p.bigPx + 'px'
+  big.style.imageRendering = rendering
+
+  const scene = $('sceneView')
+  scene.src = url
+  scene.style.display = 'block'
+  scene.style.width = p.displayPx + 'px'
+  scene.style.imageRendering = rendering
+
+  $('scene').className = 'scene' + (p.sceneNight ? ' night' : '')
+  $('displayMeta').textContent = p.displayPx + 'px · ' + (p.smoothAtDisplay ? '平滑' : '最近邻')
+  $('pixelMeta').textContent = outW + '×' + outH + ' · ' + p.zoom + '× 放大'
+}
+
+/* ---------- 导出与交互 ---------- */
+
+$('download').addEventListener('click', () => {
+  const canvas = $('pixelView')
+  if (!canvas.src) return
+  const a = document.createElement('a')
+  a.href = canvas.src
+  const base = files[currentIndex]?.name?.replace(/\.[^.]+$/, '') ?? 'pixel-art'
+  a.download = base + '-' + $('outW').value + 'x' + $('outH').value + '.png'
+  a.click()
+})
+
+$('copyParams').addEventListener('click', async () => {
+  const p = readParams()
+  const text = JSON.stringify(p, null, 2)
+  try {
+    await navigator.clipboard.writeText(text)
+    $('copyParams').textContent = '已复制'
+  } catch {
+    window.prompt('复制以下参数', text)
+  }
+  setTimeout(() => { $('copyParams').textContent = '复制参数 JSON' }, 1200)
+})
+
+$('reset').addEventListener('click', () => {
+  writeParams(DEFAULTS)
+  scheduleRender()
+})
+
+$('preset').addEventListener('change', () => {
+  const value = $('preset').value
+  if (!value) return
+  const [w, h] = value.split('x').map(Number)
+  $('outW').value = w
+  $('outH').value = h
+  $('lockAspect').checked = false
+  scheduleRender()
+})
+
+document.addEventListener('input', event => {
+  if (event.target.closest('aside')) {
+    if (event.target.id === 'outW' && $('lockAspect').checked) {
+      // 锁比例时由宽度带动高度，在 render 内统一处理
+    }
+    scheduleRender()
+  }
+})
+
+function formatBytes(n) {
+  if (n < 1024) return n + ' B'
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB'
+  return (n / 1024 / 1024).toFixed(2) + ' MB'
+}
+
+writeParams(DEFAULTS)
+syncLabels()
+</script>
+</body>
+</html>

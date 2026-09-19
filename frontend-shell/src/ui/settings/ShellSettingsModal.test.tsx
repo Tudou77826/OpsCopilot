@@ -13,6 +13,20 @@ function setup() {
  return {runtime,onClose,onApply};
 }
 describe('shared desktop settings UX', () => {
+ it('keeps garden off until explicitly saved from the collapsed experimental section', async()=>{
+   const {runtime,onApply}=setup(); await screen.findByText('终端外观',{exact:true});
+   fireEvent.click(screen.getByText('高级选项',{exact:true}));
+   const details = screen.getByText('实验功能').closest('details')!;
+   expect(details.open).toBe(false);
+   fireEvent.click(screen.getByText('实验功能'));
+   const toggle = screen.getByRole('checkbox');
+   expect((toggle as HTMLInputElement).checked).toBe(false);
+   fireEvent.click(toggle);
+   expect(onApply).not.toHaveBeenCalled();
+   fireEvent.click(screen.getByText('保存更改'));
+   await waitFor(()=>expect(runtime.save).toHaveBeenCalledWith(expect.objectContaining({gardenEnabled:true})));
+   await waitFor(()=>expect(onApply).toHaveBeenCalledWith(expect.objectContaining({gardenEnabled:true})));
+ });
  it('opens the desktop settings frame with original appearance page and navigation', async()=>{
    setup();
    expect(await screen.findByText('终端外观',{exact:true})).toBeTruthy();

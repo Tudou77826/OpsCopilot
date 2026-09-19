@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { TbRobot, TbPalette, TbKeyboard, TbLayoutGrid, TbBooks, TbShieldCheck, TbLock, TbSettings, TbInfoCircle, TbSearch, TbPlugConnected, TbMinus, TbPlus, TbRefresh, TbCheck, TbSun, TbMoon, TbUsers } from 'react-icons/tb';
 import KeysMap from './KeysMap';
+import GardenExperimentCard from '../../../../frontend-shell/src/ui/settings/GardenExperimentCard';
 import HighlightRulesModal from './HighlightRulesModal';
 import CommandWhitelistPanel from './CommandWhitelist/CommandWhitelistPanel';
 import FileAccessPanel from './FileAccess/FileAccessPanel';
@@ -39,7 +40,7 @@ interface AppConfig {
         exec_timeout_sec: number;
     };
     experimental?: {
-        // 保留结构以便未来扩展
+        garden_enabled?: boolean;
     };
     terminal?: TerminalConfig;
     highlight_rules?: HighlightRule[];
@@ -65,6 +66,7 @@ interface SettingsModalProps {
     isBroadcastMode?: boolean;
     onToggleBroadcast?: (enabled: boolean) => void;
     onCompletionDelayChange?: (delay: number) => void;
+    onGardenEnabledChange?: (enabled: boolean) => void;
     onHighlightRulesChange?: (rules: HighlightRule[]) => void;
     onTerminalConfigChange?: (config: TerminalConfig) => void;
     theme?: Theme;
@@ -265,6 +267,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     isBroadcastMode,
     onToggleBroadcast,
     onCompletionDelayChange,
+    onGardenEnabledChange,
     onHighlightRulesChange,
     onTerminalConfigChange,
     theme = 'dark',
@@ -561,6 +564,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             // 落盘成功后更新快照，避免 isDirty 仍判定为「有未保存改动」
             setSavedConfigJson(JSON.stringify(nextConfig));
             setMsg('设置已保存！');
+            onGardenEnabledChange?.(nextConfig.experimental?.garden_enabled === true);
             await loadPatchSyncStatus();
             await loadSessionShareStatus();
             if (onCompletionDelayChange && nextConfig.completion_delay !== undefined) {
@@ -1635,6 +1639,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             case 'experimental':
                 return (
                     <div style={styles.settingsGroup}>
+                        <GardenExperimentCard enabled={config.experimental?.garden_enabled === true} onChange={garden_enabled => setConfig({ ...config, experimental: { ...config.experimental, garden_enabled } })} />
                         <div style={styles.card}>
                             <div style={styles.cardTitle}>目录设置</div>
                             <div style={styles.row}>

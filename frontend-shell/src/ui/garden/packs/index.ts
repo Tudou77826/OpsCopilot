@@ -1,12 +1,12 @@
 import { registerPack } from '../pack'
-import { floraPack } from './flora'
-import { botanicalPack } from './botanical'
+import { woodlandCourtyardPack } from './woodlandCourtyard'
 
 /**
- * 内置呈现包登记。运行时通过 registerPack 认识它们；阶段三再加"用户数据目录里的本地包"，
- * 那条路径要过校验（清单可解析、画法内建、资源齐全、schemaVersion 匹配）后再登记。
+ * 内置内容包登记。所有包都先经过 createGardenPack 的契约、资源与预算校验；
+ * registerPack 不允许同 id 静默覆盖。
  */
-registerPack(floraPack)
-registerPack(botanicalPack)
+const disposeCourtyard = registerPack(woodlandCourtyardPack)
+const hot = (import.meta as ImportMeta & { hot?: { dispose(callback: () => void): void } }).hot
+hot?.dispose(disposeCourtyard)
 
-export { floraPack, botanicalPack }
+export { woodlandCourtyardPack }

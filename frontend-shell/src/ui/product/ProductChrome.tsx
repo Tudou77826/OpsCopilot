@@ -97,11 +97,11 @@ export function ProductToolbar({ status = '就绪', theme, onNewConnection, onTh
             </div>);
 }
 
-export function ProductNavigation({ isSidebarOpen, sidebarTab, toggleSidebar, isQuickCommandOpen, onToggleQuickCommands, gardenActive, onToggleGarden, tabs = ['sessions','troubleshoot','chat','knowledge','script'] }: {
+export function ProductNavigation({ isSidebarOpen, sidebarTab, toggleSidebar, isQuickCommandOpen, onToggleQuickCommands, gardenActive, gardenAttention, onToggleGarden, tabs = ['sessions','troubleshoot','chat','knowledge','script'] }: {
   isSidebarOpen: boolean; sidebarTab: ProductTab; toggleSidebar(tab: ProductTab): void;
   isQuickCommandOpen: boolean; onToggleQuickCommands(): void; tabs?: ProductTab[];
   /** 花园入口：与快捷命令并列挂在右侧导航条底部；不传即不显示（能力边界纪律）。 */
-  gardenActive?: boolean; onToggleGarden?(): void;
+  gardenActive?: boolean; gardenAttention?: boolean; onToggleGarden?(): void;
 }) {
   const setIsQuickCommandOpen = (_value: boolean) => onToggleQuickCommands();
   return (<div style={styles.rightNav}>
@@ -173,6 +173,7 @@ export function ProductNavigation({ isSidebarOpen, sidebarTab, toggleSidebar, is
                     <div style={{ flex: 1 }} />
                     {onToggleGarden && (
                     <div
+                        className={gardenAttention ? 'product-garden-attention' : undefined}
                         style={{
                             ...styles.navIcon,
                             backgroundColor: gardenActive ? 'var(--bg-elevated)' : 'transparent',

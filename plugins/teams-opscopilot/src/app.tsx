@@ -19,8 +19,8 @@ import ScriptEditorModal from '../../../frontend-shell/src/ui/script/ScriptEdito
 import type { ScriptRuntime } from '../../../frontend-shell/src/ui/script/types'
 import QuickCommandPanel from '../../../frontend-shell/src/ui/quickcmd/QuickCommandPanel'
 import SessionManager from '../../../frontend-shell/src/ui/session/SessionManager'
-import GardenPanel from '../../../frontend-shell/src/ui/garden/GardenPanel'
 import type { SessionManagerRuntime, SessionNode, GardenSnapshotPort } from '../../../frontend-shell/src/ui/ports'
+import { useGardenAttention } from '../../../frontend-shell/src/ui/garden/useGardenAttention'
 import type { ConnectionConfig } from '../../../frontend-shell/src/ui/types'
 import type { QuickCommandHost } from '../../../frontend-shell/src/ui/ports'
 import { confirmDialog } from '../../../frontend-shell/src/ui/feedback/ConfirmDialog'
@@ -38,6 +38,7 @@ type Snapshot = { state: string; terminals: Terminal[]; recording: { is_recordin
 const flatten = (nodes: Saved[]): Saved[] => nodes.flatMap(node => [node, ...flatten(node.children ?? [])])
 const initialSettings: ShellSettings = { theme: 'light', terminal: normalizeTerminalConfig(), completionDelay: 150, highlightRules: [], commandQueryShortcut: 'Ctrl+K' }
 const runLabels: Record<string, string> = { running: '发送中', stopping: '正在停止', dispatched: '已发送（不代表执行成功）', stopped: '已停止发送', failed: '发送失败', unknown: '结果不明，仍保护终端', interrupted: '运行时中断' }
+const GardenPanel = React.lazy(() => import('../../../frontend-shell/src/ui/garden/GardenPanel'))
 
 export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClient; surface: HTMLElement; hostSettings?: React.ReactNode }) {
   const [sessions, setSessions] = useState<Saved[]>([]), [snapshot, setSnapshot] = useState<Snapshot>({ state: 'starting', terminals: [], recording: { is_recording: false }, replays: [] })
@@ -195,12 +196,17 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
     }
     setSettings(next)
   };
-  // 花园宿主适配：只读快照 + 标记反馈已读。成长结算全在后端（连接/传输/回放的成功结果处），
-  // 前台不上报事件，所以这里没有写入方法。
+  // 养成宿主适配：展开时取快照，关闭时只取轻量变化 revision。
   const gardenHost = useMemo(() => ({
     snapshot: () => client.call<{ garden: GardenSnapshotPort }>('garden.snapshot').then(result => result.garden),
-    dismiss: async (at: string) => { await client.call('garden.dismiss', { at }) },
+    signal: () => client.call<{ signal: GardenSnapshotPort['changeSignal'] }>('garden.signal').then(result => result.signal),
+    purchase: (itemId: string, price: number, initialLevel: number) => client.call<{ balance: number; specimen: NonNullable<GardenSnapshotPort['specimens']>[number] }>('garden.purchase', { itemId, price, initialLevel }),
+    place: (instanceId: string, x: number, y: number, scale: number, flipX: boolean) => client.call<{ garden: GardenSnapshotPort }>('garden.place', { instanceId, x, y, scale, flipX }).then(result => result.garden),
+    stow: (instanceId: string) => client.call<{ garden: GardenSnapshotPort }>('garden.stow', { instanceId }).then(result => result.garden),
   }), [client])
+  const gardenEnabled = settings.gardenEnabled === true
+  const gardenAttention = useGardenAttention(gardenEnabled ? gardenHost : undefined, gardenOpen)
+  useEffect(() => { if (!gardenEnabled) setGardenOpen(false) }, [gardenEnabled])
   // 皮肤与明暗是两个轴，但**宿主映射型皮肤（teams）把明暗也映射了**：它的颜色取自宿主变量，
   // 而宿主是按自己的模式换那批变量的。所以选 teams 就等于"明暗跟随宿主"，
   // 否则会出现"映射过的令牌是宿主暗色、没映射的仍是插件亮色"的半暗半亮。
@@ -225,8 +231,8 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
       terminalRuntime={{resize:() => {}}} theme={settings.theme} terminalConfig={settings.terminal} completionDelay={settings.completionDelay} highlightRules={settings.highlightRules}
       renderTerminal={(id,attachRef) => <TeamsTerminal client={client} id={id} settings={settings} attachRef={attachRef} register={register}/>}
       renderFileTransfer={(activeTerminalId,terminals) => <FilesPanel host={fileHost} activeTerminalId={activeTerminalId} terminals={terminals}/>} />}
-    quickCommands={gardenOpen
-      ? <GardenPanel host={gardenHost} isOpen={gardenOpen} height={320}/>
+    quickCommands={gardenEnabled && gardenOpen
+      ? <React.Suspense fallback={null}><GardenPanel host={gardenHost} isOpen={gardenOpen} height={320}/></React.Suspense>
       : <QuickCommandPanel host={quickHost} isOpen={quickOpen} onExecute={quickHost.execute}/>}
     sidebar={<ProductSidebar isOpen={sidebarOpen} activeTab={section} onToggle={() => setSidebarOpen(v => !v)}>
       <div style={{display:section === 'sessions' ? 'flex':'none',flex:1,flexDirection:'column',height:'100%',overflow:'hidden'}}>
@@ -245,7 +251,7 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
     </ProductSidebar>}
     navigation={<ProductNavigation isSidebarOpen={sidebarOpen} sidebarTab={section} toggleSidebar={toggleSidebar}
       tabs={['sessions','script']} isQuickCommandOpen={quickOpen} onToggleQuickCommands={() => setQuickOpen(v => !v)}
-      gardenActive={gardenOpen} onToggleGarden={() => { setGardenOpen(v => !v); if (!gardenOpen) setQuickOpen(false) }} />}
+      gardenActive={gardenEnabled && gardenOpen} gardenAttention={gardenAttention} onToggleGarden={gardenEnabled ? () => { setGardenOpen(v => !v); if (!gardenOpen) setQuickOpen(false) } : undefined} />}
     footer={<BottomBar tips={BOTTOM_BAR_TIPS.filter(t => !/Telnet|广播/.test(t))}/>}
   >
     <SmartConnectModal isOpen={connectModal} initialConfigs={connectSeed} onClose={() => setConnectModal(false)} onConnect={connectBatch}

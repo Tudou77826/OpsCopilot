@@ -10,7 +10,7 @@ import { EventJournal } from './events.js'
 import { connectionDraft, sessionPassword } from './connections.js'
 import { workspacePath, remotePath, type Transfer } from './files.js'
 
-export const version = '0.1.41'
+export const version = '0.1.43'
 type ObjectValue = Record<string, unknown>
 function object(value: unknown): ObjectValue {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new OpsError('INVALID_ARGUMENT', '需要对象参数')
@@ -307,7 +307,8 @@ export class OpsBusiness {
       case 'settings.save': {
         const settings = object(payload.settings), terminal = object(settings.terminal)
         if (!['light', 'dark'].includes(String(settings.theme)) || !Array.isArray(settings.highlightRules) || settings.highlightRules.length > 128) throw new OpsError('INVALID_ARGUMENT', '设置无效')
-        return rpc('shell.settings.save', { theme: settings.theme, terminal: {
+        if (settings.gardenEnabled !== undefined && typeof settings.gardenEnabled !== 'boolean') throw new OpsError('INVALID_ARGUMENT', '养成开关无效')
+        return rpc('shell.settings.save', { gardenEnabled: settings.gardenEnabled === true, theme: settings.theme, terminal: {
           scrollback: integer(terminal.scrollback, 5000, 100000), search_enabled: terminal.search_enabled === true,
           highlight_enabled: terminal.highlight_enabled === true, font_family: text(terminal.font_family, 64), font_size: integer(terminal.font_size, 14, 32),
         }, completionDelay: Math.min(2000, Math.max(0, Number(settings.completionDelay) || 0)), highlightRules: settings.highlightRules,

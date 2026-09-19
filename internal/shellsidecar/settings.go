@@ -11,6 +11,7 @@ import (
 // 字段形状与共享 TS 类型对齐（TerminalConfig/HighlightRule 见
 // frontend-shell/src/ui/Terminal/highlightTypes.ts），重启后保持。
 type SettingsService struct {
+	onSaved func(ShellSettingsJSON)
 	path    string
 	desktop *desktopSettings
 }
@@ -45,6 +46,7 @@ type HighlightRuleJSON struct {
 
 // ShellSettingsJSON 与共享 ShellSettings 同构。
 type ShellSettingsJSON struct {
+	GardenEnabled   bool                `json:"gardenEnabled"`
 	Revision        string              `json:"revision,omitempty"`
 	Theme           string              `json:"theme"`
 	Terminal        TerminalConfigJSON  `json:"terminal"`
@@ -137,7 +139,12 @@ func (s *SettingsService) Get() (ShellSettingsJSON, error) {
 }
 
 // Save 全量保存。
-func (s *SettingsService) Save(next ShellSettingsJSON) error {
+func (s *SettingsService) Save(next ShellSettingsJSON) (err error) {
+	defer func() {
+		if err == nil && s.onSaved != nil {
+			s.onSaved(next)
+		}
+	}()
 	if s.desktop != nil {
 		return s.desktop.save(next)
 	}

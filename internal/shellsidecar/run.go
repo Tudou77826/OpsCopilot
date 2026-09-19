@@ -76,10 +76,7 @@ func Run(version string, args []string, desktopRoot string) error {
 		}
 		// 花园与设置/快捷命令/脚本同源：本地安装模式下用桌面那份数据根，
 		// 这样桌面里养的花园和 Teams 插件里看到的是同一座（共享配置语义）。
-		api.Garden, err = NewGardenService(paths.Root)
-		if err != nil {
-			return err
-		}
+		api.Garden = &GardenService{inner: garden.NewDormant(filepath.Join(paths.Root, "garden.json"))}
 		defer api.Scripts.Close()
 		api.FT, err = NewWorkspaceFT(service, filepath.Join(*dataDir, "files"))
 		if err != nil {
@@ -102,12 +99,7 @@ func Run(version string, args []string, desktopRoot string) error {
 			return fmt.Errorf("初始化 Ops 服务失败")
 		}
 		api.QuickCmds = quickCmds
-		gardenSvc, err := NewGardenService(*dataDir)
-		if err != nil {
-			slog.Error("初始化养成系统失败", "error", err)
-			return fmt.Errorf("初始化 Ops 服务失败")
-		}
-		api.Garden = gardenSvc
+		api.Garden = &GardenService{inner: garden.NewDormant(filepath.Join(*dataDir, "garden.json"))}
 		scripts, err := NewStructuredScriptService(service, *dataDir)
 		if err != nil {
 			slog.Error("初始化脚本服务失败", "error", err)
@@ -147,6 +139,14 @@ func Run(version string, args []string, desktopRoot string) error {
 		}
 		diagnose.SetNotify(api.Notify)
 		api.Diagnose = diagnose
+	}
+	if api.Garden != nil && api.Settings != nil {
+		settings, err := api.Settings.Get()
+		if err != nil {
+			return fmt.Errorf("读取养成功能开关: %w", err)
+		}
+		api.Garden.inner.SetEnabled(settings.GardenEnabled)
+		api.Settings.onSaved = func(next ShellSettingsJSON) { api.Garden.inner.SetEnabled(next.GardenEnabled) }
 	}
 	// 补全服务：静态命令库（内嵌），无持久化依赖，始终可用；失败仅降级。
 	if compDB, err := completion.NewDatabase(); err != nil {

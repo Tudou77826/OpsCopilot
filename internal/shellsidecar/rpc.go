@@ -463,21 +463,71 @@ func (a *ControlAPI) dispatch(ctx context.Context, req *rpcRequest) (any, *rpcEr
 		if a.Garden == nil {
 			return nil, notEnabled()
 		}
-		return map[string]any{"garden": a.Garden.Snapshot()}, nil
-	case "shell.garden.dismiss":
+		snapshot, err := a.Garden.inner.ReadSnapshot()
+		if err != nil {
+			return nil, srvErr(err)
+		}
+		return map[string]any{"garden": snapshot}, nil
+	case "shell.garden.signal":
+		if a.Garden == nil {
+			return nil, notEnabled()
+		}
+		signal, err := a.Garden.inner.ReadSignal()
+		if err != nil {
+			return nil, srvErr(err)
+		}
+		return map[string]any{"signal": signal}, nil
+	case "shell.garden.purchase":
 		if a.Garden == nil {
 			return nil, notEnabled()
 		}
 		var p struct {
-			At string `json:"at"`
+			ItemID       garden.ItemID `json:"itemId"`
+			Price        int           `json:"price"`
+			InitialLevel int           `json:"initialLevel"`
 		}
-		if err := json.Unmarshal(req.Params, &p); err != nil || p.At == "" {
-			return nil, badParams(fmt.Errorf("需要 at（与快照里 pending 的时间戳同格式）"))
+		if err := json.Unmarshal(req.Params, &p); err != nil {
+			return nil, badParams(err)
 		}
-		if err := a.Garden.Dismiss(p.At); err != nil {
+		result, err := a.Garden.Purchase(p.ItemID, p.Price, p.InitialLevel)
+		if err != nil {
 			return nil, srvErr(err)
 		}
-		return map[string]any{}, nil
+		return result, nil
+	case "shell.garden.place":
+		if a.Garden == nil {
+			return nil, notEnabled()
+		}
+		var p struct {
+			InstanceID string  `json:"instanceId"`
+			X          float64 `json:"x"`
+			Y          float64 `json:"y"`
+			Scale      float64 `json:"scale"`
+			FlipX      bool    `json:"flipX"`
+		}
+		if err := json.Unmarshal(req.Params, &p); err != nil {
+			return nil, badParams(err)
+		}
+		result, err := a.Garden.Place(p.InstanceID, p.X, p.Y, p.Scale, p.FlipX)
+		if err != nil {
+			return nil, srvErr(err)
+		}
+		return map[string]any{"garden": result}, nil
+	case "shell.garden.stow":
+		if a.Garden == nil {
+			return nil, notEnabled()
+		}
+		var p struct {
+			InstanceID string `json:"instanceId"`
+		}
+		if err := json.Unmarshal(req.Params, &p); err != nil {
+			return nil, badParams(err)
+		}
+		result, err := a.Garden.Stow(p.InstanceID)
+		if err != nil {
+			return nil, srvErr(err)
+		}
+		return map[string]any{"garden": result}, nil
 	case "shell.quickcmds.save":
 		if a.QuickCmds == nil {
 			return nil, notEnabled()

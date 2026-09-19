@@ -1,0 +1,1154 @@
+{
+  "contractVersion": 2,
+  "id": "ops-woodland-courtyard",
+  "version": "1.0.0",
+  "name": "林间小庭",
+  "author": "OpsCopilot",
+  "art": {
+    "style": "pixel",
+    "baseGrid": 32,
+    "subjectSize": 64
+  },
+  "runtime": {
+    "min": 2,
+    "max": 2
+  },
+  "stateSchema": {
+    "min": 3,
+    "max": 3
+  },
+  "presentation": {
+    "title": "林间小庭",
+    "unit": "位伙伴",
+    "empty": "空栖息地 —— 完成一次可靠的工作，让第一位伙伴来到这里。",
+    "maxLevel": "相伴"
+  },
+  "stageLabels": [
+    "初生",
+    "成长",
+    "成形",
+    "进阶",
+    "焕新",
+    "相伴"
+  ],
+  "assets": {
+    "day": {
+      "path": "assets/day.png",
+      "kind": "image",
+      "bytes": 161223,
+      "width": 768,
+      "height": 256
+    },
+    "night": {
+      "path": "assets/night.png",
+      "kind": "image",
+      "bytes": 139118,
+      "width": 768,
+      "height": 256
+    },
+    "cmd-mint-0-species": {
+      "path": "assets/cmd-mint-0-species.png",
+      "kind": "image",
+      "bytes": 870,
+      "width": 64,
+      "height": 64
+    },
+    "cmd-mint-1-species": {
+      "path": "assets/cmd-mint-1-species.png",
+      "kind": "image",
+      "bytes": 1210,
+      "width": 64,
+      "height": 64
+    },
+    "cmd-mint-2-species": {
+      "path": "assets/cmd-mint-2-species.png",
+      "kind": "image",
+      "bytes": 2138,
+      "width": 64,
+      "height": 64
+    },
+    "cmd-mint-3-species": {
+      "path": "assets/cmd-mint-3-species.png",
+      "kind": "image",
+      "bytes": 2632,
+      "width": 64,
+      "height": 64
+    },
+    "cmd-mint-4-species": {
+      "path": "assets/cmd-mint-4-species.png",
+      "kind": "image",
+      "bytes": 3388,
+      "width": 64,
+      "height": 64
+    },
+    "cmd-mint-5-species": {
+      "path": "assets/cmd-mint-5-species.png",
+      "kind": "image",
+      "bytes": 3870,
+      "width": 64,
+      "height": 64
+    },
+    "transfer-fern-0-species": {
+      "path": "assets/transfer-fern-0-species.png",
+      "kind": "image",
+      "bytes": 870,
+      "width": 64,
+      "height": 64
+    },
+    "transfer-fern-1-species": {
+      "path": "assets/transfer-fern-1-species.png",
+      "kind": "image",
+      "bytes": 1199,
+      "width": 64,
+      "height": 64
+    },
+    "transfer-fern-2-species": {
+      "path": "assets/transfer-fern-2-species.png",
+      "kind": "image",
+      "bytes": 1884,
+      "width": 64,
+      "height": 64
+    },
+    "transfer-fern-3-species": {
+      "path": "assets/transfer-fern-3-species.png",
+      "kind": "image",
+      "bytes": 2911,
+      "width": 64,
+      "height": 64
+    },
+    "transfer-fern-4-species": {
+      "path": "assets/transfer-fern-4-species.png",
+      "kind": "image",
+      "bytes": 3909,
+      "width": 64,
+      "height": 64
+    },
+    "transfer-fern-5-species": {
+      "path": "assets/transfer-fern-5-species.png",
+      "kind": "image",
+      "bytes": 4511,
+      "width": 64,
+      "height": 64
+    },
+    "guard-orchid-0-species": {
+      "path": "assets/guard-orchid-0-species.png",
+      "kind": "image",
+      "bytes": 1044,
+      "width": 64,
+      "height": 64
+    },
+    "guard-orchid-1-species": {
+      "path": "assets/guard-orchid-1-species.png",
+      "kind": "image",
+      "bytes": 1386,
+      "width": 64,
+      "height": 64
+    },
+    "guard-orchid-2-species": {
+      "path": "assets/guard-orchid-2-species.png",
+      "kind": "image",
+      "bytes": 1806,
+      "width": 64,
+      "height": 64
+    },
+    "guard-orchid-3-species": {
+      "path": "assets/guard-orchid-3-species.png",
+      "kind": "image",
+      "bytes": 2408,
+      "width": 64,
+      "height": 64
+    },
+    "guard-orchid-4-species": {
+      "path": "assets/guard-orchid-4-species.png",
+      "kind": "image",
+      "bytes": 3670,
+      "width": 64,
+      "height": 64
+    },
+    "guard-orchid-5-species": {
+      "path": "assets/guard-orchid-5-species.png",
+      "kind": "image",
+      "bytes": 4422,
+      "width": 64,
+      "height": 64
+    },
+    "knowledge-tree-0-species": {
+      "path": "assets/knowledge-tree-0-species.png",
+      "kind": "image",
+      "bytes": 1107,
+      "width": 64,
+      "height": 64
+    },
+    "knowledge-tree-1-species": {
+      "path": "assets/knowledge-tree-1-species.png",
+      "kind": "image",
+      "bytes": 1542,
+      "width": 64,
+      "height": 64
+    },
+    "knowledge-tree-2-species": {
+      "path": "assets/knowledge-tree-2-species.png",
+      "kind": "image",
+      "bytes": 2197,
+      "width": 64,
+      "height": 64
+    },
+    "knowledge-tree-3-species": {
+      "path": "assets/knowledge-tree-3-species.png",
+      "kind": "image",
+      "bytes": 3365,
+      "width": 64,
+      "height": 64
+    },
+    "knowledge-tree-4-species": {
+      "path": "assets/knowledge-tree-4-species.png",
+      "kind": "image",
+      "bytes": 3556,
+      "width": 64,
+      "height": 64
+    },
+    "knowledge-tree-5-species": {
+      "path": "assets/knowledge-tree-5-species.png",
+      "kind": "image",
+      "bytes": 3839,
+      "width": 64,
+      "height": 64
+    },
+    "session-tree-0-species": {
+      "path": "assets/session-tree-0-species.png",
+      "kind": "image",
+      "bytes": 766,
+      "width": 64,
+      "height": 64
+    },
+    "session-tree-1-species": {
+      "path": "assets/session-tree-1-species.png",
+      "kind": "image",
+      "bytes": 1076,
+      "width": 64,
+      "height": 64
+    },
+    "session-tree-2-species": {
+      "path": "assets/session-tree-2-species.png",
+      "kind": "image",
+      "bytes": 1279,
+      "width": 64,
+      "height": 64
+    },
+    "session-tree-3-species": {
+      "path": "assets/session-tree-3-species.png",
+      "kind": "image",
+      "bytes": 2153,
+      "width": 64,
+      "height": 64
+    },
+    "session-tree-4-species": {
+      "path": "assets/session-tree-4-species.png",
+      "kind": "image",
+      "bytes": 2593,
+      "width": 64,
+      "height": 64
+    },
+    "session-tree-5-species": {
+      "path": "assets/session-tree-5-species.png",
+      "kind": "image",
+      "bytes": 3219,
+      "width": 64,
+      "height": 64
+    },
+    "script-vine-0-species": {
+      "path": "assets/script-vine-0-species.png",
+      "kind": "image",
+      "bytes": 1180,
+      "width": 64,
+      "height": 64
+    },
+    "script-vine-1-species": {
+      "path": "assets/script-vine-1-species.png",
+      "kind": "image",
+      "bytes": 1514,
+      "width": 64,
+      "height": 64
+    },
+    "script-vine-2-species": {
+      "path": "assets/script-vine-2-species.png",
+      "kind": "image",
+      "bytes": 2090,
+      "width": 64,
+      "height": 64
+    },
+    "script-vine-3-species": {
+      "path": "assets/script-vine-3-species.png",
+      "kind": "image",
+      "bytes": 2715,
+      "width": 64,
+      "height": 64
+    },
+    "script-vine-4-species": {
+      "path": "assets/script-vine-4-species.png",
+      "kind": "image",
+      "bytes": 3359,
+      "width": 64,
+      "height": 64
+    },
+    "script-vine-5-species": {
+      "path": "assets/script-vine-5-species.png",
+      "kind": "image",
+      "bytes": 3991,
+      "width": 64,
+      "height": 64
+    },
+    "cmd-mint-0-rare": {
+      "path": "assets/cmd-mint-0-rare.png",
+      "kind": "image",
+      "bytes": 928,
+      "width": 64,
+      "height": 64
+    },
+    "cmd-mint-1-rare": {
+      "path": "assets/cmd-mint-1-rare.png",
+      "kind": "image",
+      "bytes": 1218,
+      "width": 64,
+      "height": 64
+    },
+    "cmd-mint-2-rare": {
+      "path": "assets/cmd-mint-2-rare.png",
+      "kind": "image",
+      "bytes": 2056,
+      "width": 64,
+      "height": 64
+    },
+    "cmd-mint-3-rare": {
+      "path": "assets/cmd-mint-3-rare.png",
+      "kind": "image",
+      "bytes": 2462,
+      "width": 64,
+      "height": 64
+    },
+    "cmd-mint-4-rare": {
+      "path": "assets/cmd-mint-4-rare.png",
+      "kind": "image",
+      "bytes": 3213,
+      "width": 64,
+      "height": 64
+    },
+    "cmd-mint-5-rare": {
+      "path": "assets/cmd-mint-5-rare.png",
+      "kind": "image",
+      "bytes": 3558,
+      "width": 64,
+      "height": 64
+    },
+    "transfer-fern-0-rare": {
+      "path": "assets/transfer-fern-0-rare.png",
+      "kind": "image",
+      "bytes": 877,
+      "width": 64,
+      "height": 64
+    },
+    "transfer-fern-1-rare": {
+      "path": "assets/transfer-fern-1-rare.png",
+      "kind": "image",
+      "bytes": 1138,
+      "width": 64,
+      "height": 64
+    },
+    "transfer-fern-2-rare": {
+      "path": "assets/transfer-fern-2-rare.png",
+      "kind": "image",
+      "bytes": 1740,
+      "width": 64,
+      "height": 64
+    },
+    "transfer-fern-3-rare": {
+      "path": "assets/transfer-fern-3-rare.png",
+      "kind": "image",
+      "bytes": 2548,
+      "width": 64,
+      "height": 64
+    },
+    "transfer-fern-4-rare": {
+      "path": "assets/transfer-fern-4-rare.png",
+      "kind": "image",
+      "bytes": 3653,
+      "width": 64,
+      "height": 64
+    },
+    "transfer-fern-5-rare": {
+      "path": "assets/transfer-fern-5-rare.png",
+      "kind": "image",
+      "bytes": 4047,
+      "width": 64,
+      "height": 64
+    },
+    "guard-orchid-0-rare": {
+      "path": "assets/guard-orchid-0-rare.png",
+      "kind": "image",
+      "bytes": 1057,
+      "width": 64,
+      "height": 64
+    },
+    "guard-orchid-1-rare": {
+      "path": "assets/guard-orchid-1-rare.png",
+      "kind": "image",
+      "bytes": 1453,
+      "width": 64,
+      "height": 64
+    },
+    "guard-orchid-2-rare": {
+      "path": "assets/guard-orchid-2-rare.png",
+      "kind": "image",
+      "bytes": 1866,
+      "width": 64,
+      "height": 64
+    },
+    "guard-orchid-3-rare": {
+      "path": "assets/guard-orchid-3-rare.png",
+      "kind": "image",
+      "bytes": 2516,
+      "width": 64,
+      "height": 64
+    },
+    "guard-orchid-4-rare": {
+      "path": "assets/guard-orchid-4-rare.png",
+      "kind": "image",
+      "bytes": 3516,
+      "width": 64,
+      "height": 64
+    },
+    "guard-orchid-5-rare": {
+      "path": "assets/guard-orchid-5-rare.png",
+      "kind": "image",
+      "bytes": 4105,
+      "width": 64,
+      "height": 64
+    },
+    "knowledge-tree-0-rare": {
+      "path": "assets/knowledge-tree-0-rare.png",
+      "kind": "image",
+      "bytes": 1092,
+      "width": 64,
+      "height": 64
+    },
+    "knowledge-tree-1-rare": {
+      "path": "assets/knowledge-tree-1-rare.png",
+      "kind": "image",
+      "bytes": 1569,
+      "width": 64,
+      "height": 64
+    },
+    "knowledge-tree-2-rare": {
+      "path": "assets/knowledge-tree-2-rare.png",
+      "kind": "image",
+      "bytes": 2227,
+      "width": 64,
+      "height": 64
+    },
+    "knowledge-tree-3-rare": {
+      "path": "assets/knowledge-tree-3-rare.png",
+      "kind": "image",
+      "bytes": 3133,
+      "width": 64,
+      "height": 64
+    },
+    "knowledge-tree-4-rare": {
+      "path": "assets/knowledge-tree-4-rare.png",
+      "kind": "image",
+      "bytes": 3386,
+      "width": 64,
+      "height": 64
+    },
+    "knowledge-tree-5-rare": {
+      "path": "assets/knowledge-tree-5-rare.png",
+      "kind": "image",
+      "bytes": 3737,
+      "width": 64,
+      "height": 64
+    },
+    "session-tree-0-rare": {
+      "path": "assets/session-tree-0-rare.png",
+      "kind": "image",
+      "bytes": 795,
+      "width": 64,
+      "height": 64
+    },
+    "session-tree-1-rare": {
+      "path": "assets/session-tree-1-rare.png",
+      "kind": "image",
+      "bytes": 1072,
+      "width": 64,
+      "height": 64
+    },
+    "session-tree-2-rare": {
+      "path": "assets/session-tree-2-rare.png",
+      "kind": "image",
+      "bytes": 1376,
+      "width": 64,
+      "height": 64
+    },
+    "session-tree-3-rare": {
+      "path": "assets/session-tree-3-rare.png",
+      "kind": "image",
+      "bytes": 2003,
+      "width": 64,
+      "height": 64
+    },
+    "session-tree-4-rare": {
+      "path": "assets/session-tree-4-rare.png",
+      "kind": "image",
+      "bytes": 2659,
+      "width": 64,
+      "height": 64
+    },
+    "session-tree-5-rare": {
+      "path": "assets/session-tree-5-rare.png",
+      "kind": "image",
+      "bytes": 3132,
+      "width": 64,
+      "height": 64
+    },
+    "script-vine-0-rare": {
+      "path": "assets/script-vine-0-rare.png",
+      "kind": "image",
+      "bytes": 1101,
+      "width": 64,
+      "height": 64
+    },
+    "script-vine-1-rare": {
+      "path": "assets/script-vine-1-rare.png",
+      "kind": "image",
+      "bytes": 1426,
+      "width": 64,
+      "height": 64
+    },
+    "script-vine-2-rare": {
+      "path": "assets/script-vine-2-rare.png",
+      "kind": "image",
+      "bytes": 1934,
+      "width": 64,
+      "height": 64
+    },
+    "script-vine-3-rare": {
+      "path": "assets/script-vine-3-rare.png",
+      "kind": "image",
+      "bytes": 2463,
+      "width": 64,
+      "height": 64
+    },
+    "script-vine-4-rare": {
+      "path": "assets/script-vine-4-rare.png",
+      "kind": "image",
+      "bytes": 3015,
+      "width": 64,
+      "height": 64
+    },
+    "script-vine-5-rare": {
+      "path": "assets/script-vine-5-rare.png",
+      "kind": "image",
+      "bytes": 3667,
+      "width": 64,
+      "height": 64
+    }
+  },
+  "scene": {
+    "dayAsset": "day",
+    "nightAsset": "night",
+    "aspectRatio": 3,
+    "fit": "contain",
+    "framing": "fit",
+    "safeArea": {
+      "x": 0.03,
+      "y": 0.04,
+      "width": 0.94,
+      "height": 0.92
+    },
+    "zones": {
+      "ground": {
+        "kind": "ground",
+        "polygon": [
+          {
+            "x": 0.04,
+            "y": 0.42
+          },
+          {
+            "x": 0.96,
+            "y": 0.42
+          },
+          {
+            "x": 0.96,
+            "y": 0.94
+          },
+          {
+            "x": 0.04,
+            "y": 0.94
+          }
+        ]
+      }
+    },
+    "layers": [
+      "garden"
+    ],
+    "slots": [
+      {
+        "x": 0.32,
+        "y": 0.69,
+        "size": 1,
+        "zone": "ground",
+        "layer": "garden"
+      },
+      {
+        "x": 0.68,
+        "y": 0.7,
+        "size": 1,
+        "zone": "ground",
+        "layer": "garden"
+      },
+      {
+        "x": 0.79,
+        "y": 0.85,
+        "size": 1,
+        "zone": "ground",
+        "layer": "garden"
+      },
+      {
+        "x": 0.2,
+        "y": 0.51,
+        "size": 1,
+        "zone": "ground",
+        "layer": "garden"
+      },
+      {
+        "x": 0.2,
+        "y": 0.84,
+        "size": 1,
+        "zone": "ground",
+        "layer": "garden"
+      },
+      {
+        "x": 0.78,
+        "y": 0.54,
+        "size": 1,
+        "zone": "ground",
+        "layer": "garden"
+      }
+    ],
+    "decorations": [],
+    "backdrop": {
+      "day": {
+        "brightness": 0.94,
+        "saturation": 0.66,
+        "contrast": 0.86,
+        "opacity": 0.84
+      },
+      "night": {
+        "brightness": 0.78,
+        "saturation": 0.68,
+        "contrast": 0.88,
+        "opacity": 0.88
+      }
+    },
+    "lighting": {
+      "nightBrightness": 0.98,
+      "nightSaturation": 0.94
+    },
+    "ambience": [
+      {
+        "kind": "ripple",
+        "x": 0.45,
+        "y": 0.375,
+        "size": 0.06,
+        "durationMs": 7200,
+        "delayMs": 0
+      },
+      {
+        "kind": "ripple",
+        "x": 0.5,
+        "y": 0.4,
+        "size": 0.035,
+        "durationMs": 9000,
+        "delayMs": 4100
+      },
+      {
+        "kind": "mote",
+        "x": 0.14,
+        "y": 0.55,
+        "size": 0.005,
+        "durationMs": 11000,
+        "delayMs": 0
+      },
+      {
+        "kind": "mote",
+        "x": 0.35,
+        "y": 0.7,
+        "size": 0.005,
+        "durationMs": 12700,
+        "delayMs": 2700
+      },
+      {
+        "kind": "mote",
+        "x": 0.62,
+        "y": 0.62,
+        "size": 0.005,
+        "durationMs": 14400,
+        "delayMs": 5400
+      },
+      {
+        "kind": "mote",
+        "x": 0.83,
+        "y": 0.76,
+        "size": 0.005,
+        "durationMs": 16100,
+        "delayMs": 8100
+      },
+      {
+        "kind": "mote",
+        "x": 0.56,
+        "y": 0.48,
+        "size": 0.005,
+        "durationMs": 17800,
+        "delayMs": 10800
+      }
+    ]
+  },
+  "elements": {
+    "cmd-mint": {
+      "name": "命令薄荷",
+      "latin": "Mentha pixelata",
+      "meaning": "把重复工作变得轻巧",
+      "description": "每一次可靠复用，都会添上一片清爽的新叶。",
+      "stageLabels": [
+        "嫩芽",
+        "幼株",
+        "展叶",
+        "繁茂",
+        "初花",
+        "盛放"
+      ],
+      "stages": [
+        "cmd-mint-0-species",
+        "cmd-mint-1-species",
+        "cmd-mint-2-species",
+        "cmd-mint-3-species",
+        "cmd-mint-4-species",
+        "cmd-mint-5-species"
+      ],
+      "shinyStages": [
+        "cmd-mint-0-rare",
+        "cmd-mint-1-rare",
+        "cmd-mint-2-rare",
+        "cmd-mint-3-rare",
+        "cmd-mint-4-rare",
+        "cmd-mint-5-rare"
+      ],
+      "anchor": {
+        "x": 0.5,
+        "y": 0.9
+      },
+      "hitArea": {
+        "x": 0.08,
+        "y": 0.02,
+        "width": 0.84,
+        "height": 0.96
+      },
+      "defaultSize": 0.36,
+      "placement": {
+        "type": "ambient",
+        "zone": "ground",
+        "layer": "garden"
+      },
+      "actions": {
+        "idle": {
+          "format": "procedural",
+          "primitive": "sway",
+          "durationMs": 9000,
+          "loop": true
+        }
+      },
+      "behavior": {
+        "durations": {
+          "idle": {
+            "minMs": 12000,
+            "maxMs": 18000
+          }
+        },
+        "weights": {
+          "idle": 1
+        }
+      },
+      "reducedMotion": {
+        "asset": "cmd-mint-5-species"
+      },
+      "commerce": {
+        "price": 35,
+        "category": "香草",
+        "initialLevel": 50
+      }
+    },
+    "transfer-fern": {
+      "name": "传输蕨",
+      "latin": "Filix transitus",
+      "meaning": "信息在环境间安全流动",
+      "description": "舒展的羽叶，记录每一次完整抵达的传输。",
+      "stageLabels": [
+        "嫩芽",
+        "幼株",
+        "展叶",
+        "繁茂",
+        "初花",
+        "盛放"
+      ],
+      "stages": [
+        "transfer-fern-0-species",
+        "transfer-fern-1-species",
+        "transfer-fern-2-species",
+        "transfer-fern-3-species",
+        "transfer-fern-4-species",
+        "transfer-fern-5-species"
+      ],
+      "shinyStages": [
+        "transfer-fern-0-rare",
+        "transfer-fern-1-rare",
+        "transfer-fern-2-rare",
+        "transfer-fern-3-rare",
+        "transfer-fern-4-rare",
+        "transfer-fern-5-rare"
+      ],
+      "anchor": {
+        "x": 0.5,
+        "y": 0.9
+      },
+      "hitArea": {
+        "x": 0.08,
+        "y": 0.02,
+        "width": 0.84,
+        "height": 0.96
+      },
+      "defaultSize": 0.4,
+      "placement": {
+        "type": "ambient",
+        "zone": "ground",
+        "layer": "garden"
+      },
+      "actions": {
+        "idle": {
+          "format": "procedural",
+          "primitive": "sway",
+          "durationMs": 10300,
+          "loop": true
+        }
+      },
+      "behavior": {
+        "durations": {
+          "idle": {
+            "minMs": 12000,
+            "maxMs": 18000
+          }
+        },
+        "weights": {
+          "idle": 1
+        }
+      },
+      "reducedMotion": {
+        "asset": "transfer-fern-5-species"
+      },
+      "commerce": {
+        "price": 45,
+        "category": "蕨类",
+        "initialLevel": 50
+      }
+    },
+    "guard-orchid": {
+      "name": "守护兰",
+      "latin": "Orchis tutela",
+      "meaning": "克制、边界与安全操作",
+      "description": "在被认真守住的边界旁，花枝安静地亮起。",
+      "stageLabels": [
+        "嫩芽",
+        "幼株",
+        "展叶",
+        "繁茂",
+        "初花",
+        "盛放"
+      ],
+      "stages": [
+        "guard-orchid-0-species",
+        "guard-orchid-1-species",
+        "guard-orchid-2-species",
+        "guard-orchid-3-species",
+        "guard-orchid-4-species",
+        "guard-orchid-5-species"
+      ],
+      "shinyStages": [
+        "guard-orchid-0-rare",
+        "guard-orchid-1-rare",
+        "guard-orchid-2-rare",
+        "guard-orchid-3-rare",
+        "guard-orchid-4-rare",
+        "guard-orchid-5-rare"
+      ],
+      "anchor": {
+        "x": 0.5,
+        "y": 0.9
+      },
+      "hitArea": {
+        "x": 0.08,
+        "y": 0.02,
+        "width": 0.84,
+        "height": 0.96
+      },
+      "defaultSize": 0.39,
+      "placement": {
+        "type": "ambient",
+        "zone": "ground",
+        "layer": "garden"
+      },
+      "actions": {
+        "idle": {
+          "format": "procedural",
+          "primitive": "sway",
+          "durationMs": 11600,
+          "loop": true
+        }
+      },
+      "behavior": {
+        "durations": {
+          "idle": {
+            "minMs": 12000,
+            "maxMs": 18000
+          }
+        },
+        "weights": {
+          "idle": 1
+        }
+      },
+      "reducedMotion": {
+        "asset": "guard-orchid-5-species"
+      },
+      "commerce": {
+        "price": 70,
+        "category": "花卉",
+        "initialLevel": 50
+      }
+    },
+    "knowledge-tree": {
+      "name": "知识橡树",
+      "latin": "Quercus memoria",
+      "meaning": "让一次排障成为团队的长期记忆",
+      "description": "年轮收下答案，也收下寻找答案时走过的路。",
+      "stageLabels": [
+        "嫩芽",
+        "幼株",
+        "展叶",
+        "繁茂",
+        "初花",
+        "盛放"
+      ],
+      "stages": [
+        "knowledge-tree-0-species",
+        "knowledge-tree-1-species",
+        "knowledge-tree-2-species",
+        "knowledge-tree-3-species",
+        "knowledge-tree-4-species",
+        "knowledge-tree-5-species"
+      ],
+      "shinyStages": [
+        "knowledge-tree-0-rare",
+        "knowledge-tree-1-rare",
+        "knowledge-tree-2-rare",
+        "knowledge-tree-3-rare",
+        "knowledge-tree-4-rare",
+        "knowledge-tree-5-rare"
+      ],
+      "anchor": {
+        "x": 0.5,
+        "y": 0.9
+      },
+      "hitArea": {
+        "x": 0.08,
+        "y": 0.02,
+        "width": 0.84,
+        "height": 0.96
+      },
+      "defaultSize": 0.56,
+      "placement": {
+        "type": "ambient",
+        "zone": "ground",
+        "layer": "garden"
+      },
+      "actions": {
+        "idle": {
+          "format": "procedural",
+          "primitive": "sway",
+          "durationMs": 12900,
+          "loop": true
+        }
+      },
+      "behavior": {
+        "durations": {
+          "idle": {
+            "minMs": 12000,
+            "maxMs": 18000
+          }
+        },
+        "weights": {
+          "idle": 1
+        }
+      },
+      "reducedMotion": {
+        "asset": "knowledge-tree-5-species"
+      },
+      "commerce": {
+        "price": 90,
+        "category": "乔木",
+        "initialLevel": 50
+      }
+    },
+    "session-tree": {
+      "name": "会话菌",
+      "latin": "Fungus terminalis",
+      "meaning": "稳定建立连接，也懂得适时休息",
+      "description": "菌丝在地表织成网络，把相邻的根系连在一起，记得每一次可靠建立的会话。",
+      "stageLabels": [
+        "孢子",
+        "萌发",
+        "菌丝",
+        "成簇",
+        "开伞",
+        "成网"
+      ],
+      "stages": [
+        "session-tree-0-species",
+        "session-tree-1-species",
+        "session-tree-2-species",
+        "session-tree-3-species",
+        "session-tree-4-species",
+        "session-tree-5-species"
+      ],
+      "shinyStages": [
+        "session-tree-0-rare",
+        "session-tree-1-rare",
+        "session-tree-2-rare",
+        "session-tree-3-rare",
+        "session-tree-4-rare",
+        "session-tree-5-rare"
+      ],
+      "anchor": {
+        "x": 0.5,
+        "y": 0.9
+      },
+      "hitArea": {
+        "x": 0.04,
+        "y": 0.12,
+        "width": 0.92,
+        "height": 0.86
+      },
+      "defaultSize": 0.33,
+      "placement": {
+        "type": "ambient",
+        "zone": "ground",
+        "layer": "garden"
+      },
+      "actions": {
+        "idle": {
+          "format": "procedural",
+          "primitive": "still",
+          "durationMs": 14200,
+          "loop": true
+        }
+      },
+      "behavior": {
+        "durations": {
+          "idle": {
+            "minMs": 12000,
+            "maxMs": 18000
+          }
+        },
+        "weights": {
+          "idle": 1
+        }
+      },
+      "reducedMotion": {
+        "asset": "session-tree-5-species"
+      },
+      "commerce": {
+        "price": 55,
+        "category": "菌类",
+        "initialLevel": 50
+      }
+    },
+    "script-vine": {
+      "name": "脚本藤",
+      "latin": "Hedera automata",
+      "meaning": "让自动化替你飞过重复的路",
+      "description": "它沿着固定的路径攀爬，把重复的路走成一条藤廊。",
+      "stageLabels": [
+        "发芽",
+        "缠附",
+        "攀爬",
+        "铺展",
+        "结苞",
+        "成廊"
+      ],
+      "stages": [
+        "script-vine-0-species",
+        "script-vine-1-species",
+        "script-vine-2-species",
+        "script-vine-3-species",
+        "script-vine-4-species",
+        "script-vine-5-species"
+      ],
+      "shinyStages": [
+        "script-vine-0-rare",
+        "script-vine-1-rare",
+        "script-vine-2-rare",
+        "script-vine-3-rare",
+        "script-vine-4-rare",
+        "script-vine-5-rare"
+      ],
+      "anchor": {
+        "x": 0.5,
+        "y": 0.9
+      },
+      "hitArea": {
+        "x": 0.05,
+        "y": 0.06,
+        "width": 0.9,
+        "height": 0.82
+      },
+      "defaultSize": 0.52,
+      "placement": {
+        "type": "ambient",
+        "zone": "ground",
+        "layer": "garden"
+      },
+      "actions": {
+        "idle": {
+          "format": "procedural",
+          "primitive": "sway",
+          "durationMs": 15500,
+          "loop": true
+        }
+      },
+      "behavior": {
+        "durations": {
+          "idle": {
+            "minMs": 12000,
+            "maxMs": 18000
+          }
+        },
+        "weights": {
+          "idle": 1
+        }
+      },
+      "reducedMotion": {
+        "asset": "script-vine-5-species"
+      },
+      "commerce": {
+        "price": 80,
+        "category": "藤本",
+        "initialLevel": 50
+      }
+    }
+  }
+}

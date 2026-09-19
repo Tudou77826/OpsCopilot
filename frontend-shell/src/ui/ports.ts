@@ -258,8 +258,11 @@ export interface GardenSnapshotPort {
   schemaVersion: number;
   ruleVersion: number;
   gardenLevel: number;
+  balance: number;
+  earned: number;
+  spent: number;
   specimens: Array<{
-    speciesId: string;
+    itemId: string;
     instanceId: string;
     level: number;
     xp: number;
@@ -267,17 +270,28 @@ export interface GardenSnapshotPort {
     acquiredAt: string;
     lastGrewAt: string;
     milestones?: string[];
-    slotId?: string;
+    placement: { placed: boolean; x: number; y: number; scale: number; flipX: boolean };
   }> | null;
-  pitySinceShiny: number;
-  pending: Array<{ kind: string; instanceId?: string; speciesId?: string; level?: number; at: string }> | null;
+  changeSignal: GardenChangeSignalPort | null;
+}
+
+export interface GardenChangeSignalPort {
+  revision: number;
+  kind: 'currency-earned';
+  amount?: number;
+  instanceId?: string;
+  itemId?: string;
+  at: string;
 }
 
 export interface GardenHost {
   /** 只读快照；面板打开时拉一次。 */
   snapshot(): Promise<GardenSnapshotPort>;
-  /** 把一条反馈标记为已读（at 为快照里 pending 的时间戳）。 */
-  dismiss(at: string): Promise<void>;
+  /** 关闭状态只读取轻量 revision，不取收藏清单。 */
+  signal(): Promise<GardenChangeSignalPort | null>;
+  purchase(itemId: string, price: number, initialLevel: number): Promise<{ balance: number; specimen: NonNullable<GardenSnapshotPort['specimens']>[number] }>;
+  place(instanceId: string, x: number, y: number, scale: number, flipX: boolean): Promise<GardenSnapshotPort>;
+  stow(instanceId: string): Promise<GardenSnapshotPort>;
 }
 
 export interface QuickCommandHost {

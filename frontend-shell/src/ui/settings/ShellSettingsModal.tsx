@@ -9,8 +9,10 @@ import { ProductShellSettingsPage } from './ProductShellSettingsPage';
 import type { SkinChoice } from './SkinChoiceCard';
 import { ProductLLMSettings, type ProductLLMConfig } from './ProductLLMSettings';
 import { CompletionDelayCard } from './CompletionDelayCard';
+import GardenExperimentCard from './GardenExperimentCard';
 
 export interface ShellSettings {
+    gardenEnabled?: boolean;
     revision?: string;
     theme: Theme;
     terminal: TerminalConfig;
@@ -120,7 +122,7 @@ export default function ShellSettingsModal({ hostSettings, isOpen, embedded, onC
    const last = groups[groups.length-1];
    if (last?.category===item.category) last.items.push(next); else groups.push({category:item.category,items:[next]});
  }
- const update = (next: ShellSettings) => {setSettings(next);onApply(next);};
+ const update = (next: ShellSettings) => {setSettings(next);onApply({...next,gardenEnabled:saved?.gardenEnabled});};
  return <ProductSettingsFrame<Tab> embedded={embedded} showSaveAction={activeTab !== 'host'} handleClose={handleClose} searchInputRef={searchInputRef}
    searchQuery={searchQuery} setSearchQuery={setSearchQuery} groupedNavItems={groups} activeTab={activeTab} setActiveTab={setActiveTab}
    msg={msg} handleSave={()=>void persistConfig(false)} loading={loading || !settings || loadError}
@@ -129,7 +131,7 @@ export default function ShellSettingsModal({ hostSettings, isOpen, embedded, onC
      activeTab === 'llm' ? <ProductLLMSettings value={llm} onChange={setLLM} keyDescription={aiRuntime?.persistence==='session'
        ? '仅用于本次运行时，不写入配置文件；留空保留现有密钥。仅发送你主动提交给 AI 的内容。'
        : '密钥保存在本地后台，读取不回明文；留空保留现有密钥。'}/> :
-     activeTab === 'experimental' ? <CompletionDelayCard value={settings.completionDelay} onChange={completionDelay=>update({...settings,completionDelay})}/> :
+     activeTab === 'experimental' ? <><CompletionDelayCard value={settings.completionDelay} onChange={completionDelay=>update({...settings,completionDelay})}/><GardenExperimentCard enabled={settings.gardenEnabled === true} onChange={gardenEnabled=>setSettings({...settings,gardenEnabled})}/></> :
      <ProductShellSettingsPage activeTab={activeTab} config={{terminal:settings.terminal,highlight_rules:settings.highlightRules,command_query_shortcut:settings.commandQueryShortcut || 'Ctrl+K'}}
        setConfig={next=>update({...settings,terminal:next.terminal!,highlightRules:next.highlight_rules!,commandQueryShortcut:next.command_query_shortcut})}
        theme={settings.theme} onThemeChange={theme=>update({...settings,theme})} highlightIssues={highlightIssues} skin={skin}/>}

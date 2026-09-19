@@ -187,7 +187,8 @@ func NewApp() *App {
 	}
 
 	// 养成系统：与 Teams 插件共用同一份 pkg/garden；失败只降级（无花园入口）。
-	app.garden = openGarden()
+	app.garden = garden.NewDormant("garden.json")
+	app.garden.SetEnabled(configMgr.Config.Experimental.GardenEnabled)
 
 	// Set the CommandSender to app itself
 	scriptMgr.SetCommandSender(app)
@@ -1573,6 +1574,9 @@ func (a *App) SaveSettings(cfg config.AppConfig) string {
 	// Save to disk
 	if err := a.configMgr.Save(); err != nil {
 		return fmt.Sprintf("Failed to save settings: %v", err)
+	}
+	if a.garden != nil {
+		a.garden.SetEnabled(cfg.Experimental.GardenEnabled)
 	}
 
 	// 高亮规则独立存储于 highlight_rules.json，主配置 Save() 不覆盖它，

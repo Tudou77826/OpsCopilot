@@ -1,10 +1,6 @@
 package shellsidecar
 
-import (
-	"fmt"
-	"opscopilot/pkg/garden"
-	"time"
-)
+import "opscopilot/pkg/garden"
 
 // GardenService 是养成系统在 sidecar 里的薄外壳：状态与规则都在 pkg/garden，
 // 这里只做数据目录挂接、事件入口和 RPC 形状。未初始化（无 --data-dir）时方法报错，
@@ -25,14 +21,19 @@ func NewGardenService(dataDir string) (*GardenService, error) {
 // Snapshot 返回只读快照（无呈现语义）。
 func (s *GardenService) Snapshot() *garden.Snapshot { return s.inner.Snapshot() }
 
-// Dismiss 把一条反馈标记为已读。at 与快照里 pending 的时间戳同格式（RFC3339）。
-func (s *GardenService) Dismiss(at string) error {
-	parsed, err := time.Parse(time.RFC3339Nano, at)
-	if err != nil {
-		return fmt.Errorf("时间戳格式无效: %w", err)
-	}
-	s.inner.DismissAt(parsed.UnixNano())
-	return nil
+// Signal 返回入口轻提示所需的轻量 revision。
+func (s *GardenService) Signal() *garden.ChangeSignal { return s.inner.Signal() }
+
+func (s *GardenService) Purchase(itemID garden.ItemID, price, initialLevel int) (*garden.PurchaseResult, error) {
+	return s.inner.Purchase(itemID, price, initialLevel)
+}
+
+func (s *GardenService) Place(instanceID string, x, y, scale float64, flipX bool) (*garden.Snapshot, error) {
+	return s.inner.Place(instanceID, x, y, scale, flipX)
+}
+
+func (s *GardenService) Stow(instanceID string) (*garden.Snapshot, error) {
+	return s.inner.Stow(instanceID)
 }
 
 // RecordWithResult 供其他服务在业务结果处调用；错误只记日志不上抛——
