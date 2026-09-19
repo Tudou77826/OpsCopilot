@@ -149,11 +149,18 @@ func (t *RootRelayTransport) getSession(ctx context.Context) (*rootShellSession,
 			return nil, &TransferError{Code: ErrorCodeAuthFailed, Message: fmt.Sprintf("发送密码失败: %s", err)}
 		}
 
-		// Wait for root shell prompt (# or $)
+		// Wait for root shell prompt (# or $) — 提示符只表示"shell 就绪"：
+		// su 失败（密码错/PAM 拒绝）回落后同样是登录用户的 "$ " 提示符，
+		// 不能据此认定提权成功，必须再用 id -u 严格验证（#75）。
 		if err := waitForOutput(stdout, []string{"# ", "$ "}, 10*time.Second); err != nil {
 			slog.Error("rootRelay su auth failed", "error", err)
 			session.Close()
 			return nil, &TransferError{Code: ErrorCodeAuthFailed, Message: "su 认证失败或超时"}
+		}
+		if err := verifyRootUID(ctx, stdin, stdout); err != nil {
+			slog.Error("rootRelay su verification failed", "error", err)
+			session.Close()
+			return nil, err
 		}
 		slog.Debug("rootRelay su auth succeeded")
 	}
@@ -166,6 +173,38 @@ func (t *RootRelayTransport) getSession(ctx context.Context) (*rootShellSession,
 	t.shell = shell
 	slog.Debug("rootRelay session created")
 	return shell, nil
+}
+
+// verifyRootUID 在 su 会话上执行 id -u 并要求结果为 0（root）。
+// 仅凭提示符（"# "/"$ "）判断提权会把 su 失败回落到登录用户的 "$ " 误判为
+// 成功，整个 relay 静默以登录用户身份运行——文件面板呈现登录用户权限，
+// 会话重建后又变回 root，出现"列表与上传权限不一致"（#75）。
+func verifyRootUID(ctx context.Context, stdin io.Writer, stdout io.Reader) error {
+	if _, err := io.WriteString(stdin, "id -u && echo "+rootRelayOK+" || echo "+rootRelayFail+"\n"); err != nil {
+		return &TransferError{Code: ErrorCodeAuthFailed, Message: fmt.Sprintf("发送提权验证命令失败: %s", err)}
+	}
+	out, err := readUntilMarker(ctx, stdout, rootRelayOK, rootRelayFail, 10*time.Second)
+	if err != nil {
+		return &TransferError{Code: ErrorCodeAuthFailed, Message: "su 提权验证读取失败: " + err.Error()}
+	}
+	if out.failed {
+		return &TransferError{Code: ErrorCodeAuthFailed, Message: "su 提权验证命令执行失败"}
+	}
+	if !containsUIDZero(out.raw) {
+		return &TransferError{Code: ErrorCodeAuthFailed, Message: "su 提权未生效：会话仍是登录用户（请检查 root 密码）"}
+	}
+	return nil
+}
+
+// containsUIDZero 判断 id -u 输出中是否存在独立一行的 0。PTY 输出可能带
+// 提示符前缀或命令回显，逐行 trim 后比较整行。
+func containsUIDZero(raw string) bool {
+	for _, line := range strings.Split(raw, "\n") {
+		if strings.TrimSpace(line) == "0" {
+			return true
+		}
+	}
+	return false
 }
 
 // invalidateSession closes and discards the current root shell session.
