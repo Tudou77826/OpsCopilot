@@ -10,6 +10,8 @@ interface CommandGridProps {
     onAdd: () => void;
     /** 传入时在「+ 添加」后多出一个「导入」块。宿主未提供导入能力时不传（入口自动消失）。 */
     onImport?: () => void;
+    /** 广播执行：右键菜单出现「发送广播」项。宿主未提供广播能力时不传（菜单项自动消失）。 */
+    onBroadcast?: (content: string) => void;
     /** 当前搜索关键字（在当前分组内进一步过滤） */
     searchQuery: string;
     onSearchChange: (query: string) => void;
@@ -18,7 +20,7 @@ interface CommandGridProps {
 }
 
 const CommandGrid: React.FC<CommandGridProps> = ({
-    commands, onExecute, onEdit, onDelete, onAdd, onImport, searchQuery, onSearchChange, onReorder,
+    commands, onExecute, onEdit, onDelete, onAdd, onImport, onBroadcast, searchQuery, onSearchChange, onReorder,
 }) => {
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; cmdId: string } | null>(null);
     const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -161,14 +163,31 @@ const CommandGrid: React.FC<CommandGridProps> = ({
                         // 边界感知定位：菜单出现在指针处，但整体限制在视口内，
                         // 靠近屏幕底部/右缘时向上/向左收，避免弹出可视区外。
                         const MENU_W = 100;
-                        const MENU_H = 70;
+                        const MENU_H = onBroadcast ? 100 : 70;
                         const top = Math.max(8, Math.min(contextMenu.y, window.innerHeight - MENU_H - 8));
                         const left = Math.max(8, Math.min(contextMenu.x, window.innerWidth - MENU_W - 8));
+                        // 有广播能力时菜单项整体下移一位：发送广播、编辑、删除
+                        const editIdx = onBroadcast ? 1 : 0;
+                        const deleteIdx = editIdx + 1;
                         return (
                             <div style={{ ...styles.menu, top, left }} data-testid="command-context-menu">
+                                {onBroadcast && (
+                                    <div
+                                        style={hoveredMenuItem === 0 ? { ...styles.menuItem, ...styles.menuItemHover } : styles.menuItem}
+                                        onMouseEnter={() => setHoveredMenuItem(0)}
+                                        onMouseLeave={() => setHoveredMenuItem(null)}
+                                        onClick={() => {
+                                            const cmd = commands.find(c => c.id === contextMenu.cmdId);
+                                            if (cmd) onBroadcast(cmd.content);
+                                            setContextMenu(null);
+                                        }}
+                                    >
+                                        发送广播
+                                    </div>
+                                )}
                                 <div
-                                    style={hoveredMenuItem === 0 ? { ...styles.menuItem, ...styles.menuItemHover } : styles.menuItem}
-                                    onMouseEnter={() => setHoveredMenuItem(0)}
+                                    style={hoveredMenuItem === editIdx ? { ...styles.menuItem, ...styles.menuItemHover } : styles.menuItem}
+                                    onMouseEnter={() => setHoveredMenuItem(editIdx)}
                                     onMouseLeave={() => setHoveredMenuItem(null)}
                                     onClick={() => {
                                         const cmd = commands.find(c => c.id === contextMenu.cmdId);
@@ -180,10 +199,10 @@ const CommandGrid: React.FC<CommandGridProps> = ({
                                 </div>
                                 <div
                                     style={{
-                                        ...(hoveredMenuItem === 1 ? { ...styles.menuItem, ...styles.menuItemHover } : styles.menuItem),
+                                        ...(hoveredMenuItem === deleteIdx ? { ...styles.menuItem, ...styles.menuItemHover } : styles.menuItem),
                                         color: 'var(--severity-danger)',
                                     }}
-                                    onMouseEnter={() => setHoveredMenuItem(1)}
+                                    onMouseEnter={() => setHoveredMenuItem(deleteIdx)}
                                     onMouseLeave={() => setHoveredMenuItem(null)}
                                     onClick={async () => {
                                         const cmd = commands.find(c => c.id === contextMenu.cmdId);

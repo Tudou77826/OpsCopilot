@@ -589,6 +589,26 @@ function App() {
         }, 0);
     };
 
+    // 快捷命令广播执行（右键菜单「发送广播」）：广播模式开启时发到广播组，
+    // 否则发到全部终端——免去先切广播模式再点命令的两步操作（issue #76）。
+    const handleQuickCommandBroadcast = (command: string) => {
+        const targets = isBroadcastModeRef.current && broadcastIdsRef.current.length > 0
+            ? Array.from(broadcastIdsRef.current)
+            : terminals.map(t => t.id);
+        if (targets.length === 0) {
+            toast.warning("没有可发送的终端");
+            return;
+        }
+        targets.forEach(id => terminalRefs.current.get(id)?.prepareForExternalInput());
+        // @ts-ignore
+        if (window.go && window.go.main && window.go.main.App && window.go.main.App.Broadcast) {
+            const payload = command.replace(/[\r\n]+$/g, '');
+            // @ts-ignore
+            window.go.main.App.Broadcast(targets, payload);
+        }
+        toast.success(`已广播发送到 ${targets.length} 个终端`);
+    };
+
     const handleOpenKnowledgeSource = useCallback((target: Omit<KnowledgeTarget, 'requestId'>) => {
         setKnowledgeTarget({ ...target, requestId: Date.now() });
         setSidebarTab('knowledge');
@@ -701,6 +721,7 @@ function App() {
                         : <QuickCommandPanel
                         isOpen={isQuickCommandOpen}
                         onExecute={handleQuickCommand}
+                        onBroadcast={handleQuickCommandBroadcast}
                     />}
             sidebar={<Sidebar
                     isOpen={isSidebarOpen}
