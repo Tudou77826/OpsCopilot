@@ -693,6 +693,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
     const defaultSessionId = useMemo(() => activeTerminalId || (terminals[0]?.id ?? ''), [activeTerminalId, terminals]);
 
     const [sessionId, setSessionId] = useState(defaultSessionId);
+    const prevDefaultSessionIdRef = useRef(defaultSessionId);
     const [protocol, setProtocol] = useState<string>('');
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
@@ -940,13 +941,18 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
         remoteEntriesRef.current = remoteEntries;
     }, [remoteEntries]);
 
+    // 会话跟随：面板默认跟着激活终端走（切换标签即切机器）；用户在下拉框里的
+    // 显式选择优先于跟随，所以只跟随 defaultSessionId 自身的变化（标签切换），
+    // 不跟随 sessionId 的变化（下拉选择），否则下拉会被立即打回原值（#72）。
     useEffect(() => {
         const ids = new Set(terminals.map(t => t.id));
+        const defaultChanged = prevDefaultSessionIdRef.current !== defaultSessionId;
+        prevDefaultSessionIdRef.current = defaultSessionId;
         if (!sessionId) {
             if (defaultSessionId) setSessionId(defaultSessionId);
             return;
         }
-        if (ids.size > 0 && !ids.has(sessionId)) {
+        if ((ids.size > 0 && !ids.has(sessionId)) || (defaultChanged && !!defaultSessionId)) {
             setSessionId(defaultSessionId);
         }
     }, [defaultSessionId, sessionId, terminals]);

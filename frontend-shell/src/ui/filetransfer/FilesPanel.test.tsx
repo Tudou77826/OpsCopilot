@@ -621,3 +621,46 @@ describe('FilesPanel responsive layout', () => {
         expect(within(summary).getByText('✗ 1')).toBeInTheDocument();
     });
 });
+
+describe('FilesPanel session switching (#72)', () => {
+    it('follows the active terminal switch and lists the new machine', async () => {
+        const backend = makeBackend();
+        const terminals = [
+            { id: 'session-1', title: 'prod-01' },
+            { id: 'session-2', title: 'prod-02' },
+        ];
+        const view = render(
+            <FilesPanel activeTerminalId="session-1" terminals={terminals} host={backend} />,
+        );
+        await screen.findByText('remote.log');
+        expect(backend.FTList).toHaveBeenCalledWith('session-1', expect.any(String));
+
+        view.rerender(
+            <FilesPanel activeTerminalId="session-2" terminals={terminals} host={backend} />,
+        );
+        await waitFor(() => {
+            expect(backend.FTList).toHaveBeenCalledWith('session-2', expect.any(String));
+        });
+        expect((screen.getByLabelText('当前会话') as HTMLSelectElement).value).toBe('session-2');
+        view.unmount();
+    });
+
+    it('keeps an explicit dropdown selection while the active terminal stays put', async () => {
+        const backend = makeBackend();
+        const terminals = [
+            { id: 'session-1', title: 'prod-01' },
+            { id: 'session-2', title: 'prod-02' },
+        ];
+        const view = render(
+            <FilesPanel activeTerminalId="session-1" terminals={terminals} host={backend} />,
+        );
+        await screen.findByText('remote.log');
+        fireEvent.change(screen.getByLabelText('当前会话'), { target: { value: 'session-2' } });
+        await waitFor(() => {
+            expect(backend.FTList).toHaveBeenCalledWith('session-2', expect.any(String));
+        });
+        expect((screen.getByLabelText('当前会话') as HTMLSelectElement).value).toBe('session-2');
+        view.unmount();
+    });
+});
+
