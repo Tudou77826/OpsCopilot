@@ -56,4 +56,7 @@ type Progress struct {
 
 type TransferResult struct {
 	Bytes int64 `json:"bytes"`
+	// Transport 本次传输实际使用的方式（用户可读标签，如 "Base64 直传"）。
+	// 空表示由调用方按自己的语义命名。
+	Transport string `json:"transport,omitempty"`
 }

@@ -527,7 +527,7 @@ func (s *FTService) runTask(ctx context.Context, taskID, termID string, total in
 	if s.onTransferDone != nil {
 		s.onTransferDone(taskID)
 	}
-	s.notifyDone(taskID, termID, true, false, "完成 (sftp(login))", copied)
+	s.notifyDone(taskID, termID, true, false, "完成（SFTP · 密码登录）", copied)
 }
 
 func (s *FTService) finishTask(taskID string) {

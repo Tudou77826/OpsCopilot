@@ -368,7 +368,7 @@ func TestComputeLocalMD5_Nonexistent(t *testing.T) {
 }
 
 func TestMaxBase64DirectBytes(t *testing.T) {
-	if maxBase64DirectBytes != 300*1024 {
-		t.Errorf("maxBase64DirectBytes = %d, want %d", maxBase64DirectBytes, 300*1024)
+	if maxBase64DirectBytes != 10*1024*1024 {
+		t.Errorf("maxBase64DirectBytes = %d, want %d", maxBase64DirectBytes, 10*1024*1024)
 	}
 }

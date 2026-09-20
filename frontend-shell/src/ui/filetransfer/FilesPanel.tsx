@@ -973,7 +973,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
     const formatError = (resp: FTResponse): string => {
         if (resp.error) {
             const code = resp.error.code;
-            if (code === 'FILE_SIZE_EXCEEDED') return '文件过大，Base64 直传模式最大支持 300 KB';
+            if (code === 'FILE_SIZE_EXCEEDED') return '文件过大，Base64 直传模式最大支持 10 MB';
             if (code === 'CHECKSUM_MISMATCH') return '文件校验失败，传输数据可能不完整。请重试';
             return `${resp.error.message} (${code})`;
         }
@@ -998,23 +998,25 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
     };
 
     const getProtocolLabel = (p: string): string => {
+        // 面向用户的传输方式说明：点明"用什么协议 + 以什么身份"，
+        // 内部代号（root-relay 等）不直接露给用户。
         const map: Record<string, string> = {
-            'sftp(login)': 'SFTP（密码登录）',
+            'sftp(login)': 'SFTP（登录用户身份）',
             'sftp(key)': 'SFTP（密钥登录）',
-            'sftp(root)': 'SFTP（Root 直连）',
-            'sftp(root-relay)': 'SFTP（Root 中转模式）',
-            'scp(root-relay)': 'SCP 中转（Root 中转模式）',
-            'su-relay(root-relay)': 'Base64 直传（Root 中转模式）',
+            'sftp(root)': 'SFTP（Root 身份）',
+            'sftp(root-relay)': 'SFTP 中转（Root 提权）',
+            'scp(root-relay)': 'SCP 中转（Root 提权）',
+            'su-relay(root-relay)': 'Base64 直传（Root 提权）',
             'scp(login)': 'SCP（兼容模式）',
             'scp(fallback)': 'SCP（兼容模式）',
-            'scp(root)': 'SCP（Root 兼容模式）',
+            'scp(root)': 'SCP（Root 身份）',
         };
         return map[p] || (p ? p : '连接方式未探测');
     };
 
     const getWorkModeLabel = (p: string): string => {
         if (p === 'su-relay(root-relay)') return 'Base64 直传';
-        if (p.includes('root-relay')) return 'Root 中转';
+        if (p.includes('root-relay')) return 'Root 提权中转';
         if (p.startsWith('sftp') || p.startsWith('scp')) return '常规直连';
         return '—';
     };
@@ -2242,7 +2244,9 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
 
             {isRootRelay() ? (
                 <div style={styles.relayBanner}>
-                    当前无法 Root 直连，已切换为 Root 中转模式。通过 Base64 直传传输文件，单文件上限 300 KB，传输后自动校验文件完整性。
+                    {protocol === 'su-relay(root-relay)'
+                        ? 'Root 提权模式：文件以 Root 身份经终端逐块写入（Base64 直传），单文件上限 10 MB，完成后自动校验完整性。'
+                        : 'Root 提权模式：文件先经 SFTP/SCP 传到远端临时目录，再由 Root 复制到目标位置，完成后自动校验完整性。'}
                 </div>
             ) : null}
 

@@ -22,7 +22,7 @@ import (
 
 const defaultRelayBaseDir = "/tmp/opscopilot"
 
-const maxBase64DirectBytes = 300 * 1024 // 300 KB — max file size for base64 direct transfer
+const maxBase64DirectBytes = 10 * 1024 * 1024 // 10 MB — base64 直传单文件上限
 
 const (
 	rootRelayOK   = "__RELAY_OK__"
@@ -431,6 +431,9 @@ func (t *RootRelayTransport) Upload(ctx context.Context, localPath, remotePath s
 		return TransferResult{}, err
 	}
 
+	if res.Transport == "" {
+		res.Transport = "Root 中转（SFTP/SCP）"
+	}
 	slog.Info("rootRelay upload done", "src", localPath, "dst", remotePath, "bytes", res.Bytes)
 	return res, nil
 }
@@ -452,7 +455,7 @@ func (t *RootRelayTransport) uploadViaBase64(ctx context.Context, lp string, rem
 	if total > maxBase64DirectBytes {
 		return TransferResult{}, &TransferError{
 			Code:    ErrorCodeFileSizeExceeded,
-			Message: fmt.Sprintf("文件过大，Base64 直传最大支持 %d KB（当前 %d KB）", maxBase64DirectBytes/1024, total/1024),
+			Message: fmt.Sprintf("文件过大，Base64 直传最大支持 %d MB（当前 %d MB）", maxBase64DirectBytes/1024/1024, total/1024/1024),
 		}
 	}
 
@@ -480,6 +483,10 @@ func (t *RootRelayTransport) uploadViaBase64(ctx context.Context, lp string, rem
 		// For larger files, write in chunks using >> append
 		// First chunk: truncate (>)
 		// Subsequent chunks: append (>>)
+		// 进度节流：10MB 上限 ≈ 3500 块，逐块推送进度事件会淹没 UI，
+		// 每 256KB 或最后一块才上报一次。
+		const progressInterval = 256 * 1024
+		lastReported := 0
 		first := true
 		offset := 0
 		for offset < len(data) {
@@ -509,8 +516,9 @@ func (t *RootRelayTransport) uploadViaBase64(ctx context.Context, lp string, rem
 			}
 
 			offset = end
-			if progress != nil {
+			if progress != nil && (offset-lastReported >= progressInterval || int64(offset) >= total) {
 				progress(Progress{BytesDone: int64(offset), BytesTotal: total})
+				lastReported = offset
 			}
 		}
 
@@ -534,7 +542,7 @@ func (t *RootRelayTransport) uploadViaBase64(ctx context.Context, lp string, rem
 		slog.Debug("rootRelay MD5 verification passed", "md5", localMD5)
 	}
 
-	return TransferResult{Bytes: total}, nil
+	return TransferResult{Bytes: total, Transport: "Base64 直传"}, nil
 }
 
 // downloadViaBase64 downloads a remote file by reading its base64-encoded content
@@ -606,7 +614,7 @@ func (t *RootRelayTransport) downloadViaBase64(ctx context.Context, remotePath s
 	}
 
 	slog.Info("rootRelay download done", "src", remotePath, "dst", localPath, "bytes", len(decoded), "mode", "base64-direct")
-	return TransferResult{Bytes: int64(len(decoded))}, nil
+	return TransferResult{Bytes: int64(len(decoded)), Transport: "Base64 直传"}, nil
 }
 
 // Download downloads a remote file to a local path via root relay.

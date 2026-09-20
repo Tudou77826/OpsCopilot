@@ -2346,6 +2346,28 @@ func (a *App) releaseFTLimiter(sessionID string, lim *ftLimiter, acquired bool) 
 	a.ftMu.Unlock()
 }
 
+// friendlyTransportLabel 把内部传输方式代码翻译成用户可读标签，
+// 用于传输完成消息（队列里直接展示）。内部代码仅保留给日志。
+func friendlyTransportLabel(code string) string {
+	switch code {
+	case "sftp", "sftp(login)", "sftp(key)":
+		if code == "sftp(key)" {
+			return "SFTP · 密钥登录"
+		}
+		return "SFTP · 密码登录"
+	case "sftp(root)":
+		return "SFTP · Root 直连"
+	case "sftp(root-relay)":
+		return "SFTP · Root 中转"
+	case "scp(login)", "scp(fallback)":
+		return "SCP · 兼容模式"
+	case "scp(root)":
+		return "SCP · Root 直连"
+	default:
+		return code
+	}
+}
+
 func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string) string {
 	slog.Info("ft transfer started", "op", op, "session", sessionID[:8], "local", localPath, "remote", remotePath)
 	info, err := a.getTransferClientWithRelay(sessionID)
@@ -2472,7 +2494,12 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 				res, opErr = relay.Download(ctx, remotePath, localPath, progressFn)
 			}
 
-			usedTransport := "sftp(root-relay)"
+			// 中转模式的实际传输方式由 relay 自报（Base64 直传 / Root 中转），
+			// 跳板机与非跳板机路径不同，不再用一个笼统标签覆盖。
+			usedTransport := res.Transport
+			if usedTransport == "" {
+				usedTransport = "Root 中转"
+			}
 			if a.ctx == nil {
 				return
 			}
@@ -2495,7 +2522,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 				"sessionId": sessionID,
 				"ok":        true,
 				"bytes":     res.Bytes,
-				"message":   "完成 (" + usedTransport + ")",
+				"message":   "完成（" + usedTransport + "）",
 			})
 			return
 		}
@@ -2566,7 +2593,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 			"sessionId": sessionID,
 			"ok":        true,
 			"bytes":     res.Bytes,
-			"message":   "完成 (" + usedTransport + ")",
+			"message":   "完成（" + friendlyTransportLabel(usedTransport) + "）",
 		})
 		slog.Info("ft task transfer completed", "task", taskID[:8], "transport", usedTransport, "bytes", res.Bytes)
 	}()
