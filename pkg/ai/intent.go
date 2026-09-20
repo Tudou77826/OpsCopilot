@@ -131,7 +131,9 @@ func (s *AIService) ParseConnectIntent(input string) ([]sshclient.ConnectConfig,
 	}
 
 	// 校验配置完整性
-	for i, c := range configs {
+	for i := range configs {
+		configs[i].Protocol = normalizeProtocol(configs[i].Protocol)
+		c := configs[i]
 		if c.Host == "" {
 			return nil, fmt.Errorf("config #%d missing 'host'. AI response incomplete", i+1)
 		}
@@ -141,6 +143,21 @@ func (s *AIService) ParseConnectIntent(input string) ([]sshclient.ConnectConfig,
 	}
 
 	return configs, nil
+}
+
+// normalizeProtocol 归一化 AI 输出的协议字段：大小写不敏感，仅接受
+// ssh/telnet 两个合法值，其余（含空值）一律回退为空——空值由
+// remote.NormalizedProtocol 按 SSH 处理，与持久化层的语义保持一致。
+// AI 偶尔会输出 "SSH"、"Telnet" 这类变体，直接透传会在连接时被当作未知协议。
+func normalizeProtocol(p string) string {
+	switch strings.ToLower(strings.TrimSpace(p)) {
+	case "ssh":
+		return "ssh"
+	case "telnet":
+		return "telnet"
+	default:
+		return ""
+	}
 }
 
 // CleanJSONResponse 移除可能存在的 Markdown 代码块标记

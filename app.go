@@ -1164,6 +1164,7 @@ func (a *App) ParseIntent(input string) ([]ConnectConfig, error) {
 	for _, c := range configs {
 		appConfig := ConnectConfig{
 			Name:         c.Name,
+			Protocol:     c.Protocol,
 			Host:         c.Host,
 			Port:         c.Port,
 			User:         c.User,
@@ -1174,6 +1175,7 @@ func (a *App) ParseIntent(input string) ([]ConnectConfig, error) {
 		if c.Bastion != nil {
 			appConfig.Bastion = &ConnectConfig{
 				Name:     c.Bastion.Name,
+				Protocol: c.Bastion.Protocol,
 				Host:     c.Bastion.Host,
 				Port:     c.Bastion.Port,
 				User:     c.Bastion.User,

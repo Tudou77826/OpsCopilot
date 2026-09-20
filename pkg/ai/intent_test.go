@@ -81,6 +81,35 @@ func TestParseConnectIntent(t *testing.T) {
 	}
 }
 
+func TestParseConnectIntent_ProtocolPassthrough(t *testing.T) {
+	// AI 返回的协议可能是大写、带空格，也可能输出未知协议或缺失。
+	// 期望：合法值归一化透传（telnet 才能真正落库），其余回退空值（按 SSH 处理）。
+	expectedJSON := `[
+		{"host": "60.60.33.44", "port": 23, "user": "admin", "protocol": "telnet", "password": "x"},
+		{"host": "10.0.0.5", "port": 22, "user": "root", "protocol": "SSH", "password": "y"},
+		{"host": "10.0.0.6", "port": 22, "user": "root", "protocol": "sftp", "password": "z"},
+		{"host": "10.0.0.7", "port": 22, "user": "root"}
+	]`
+
+	mockProvider := &llm.MockProvider{Response: expectedJSON}
+	service := NewAIService(mockProvider, mockProvider, config.NewManager())
+
+	configs, err := service.ParseConnectIntent("任意输入，桩模型不看内容")
+	if err != nil {
+		t.Fatalf("ParseConnectIntent failed: %v", err)
+	}
+	if len(configs) != 4 {
+		t.Fatalf("Expected 4 configs, got %d", len(configs))
+	}
+
+	want := []string{"telnet", "ssh", "", ""}
+	for i, w := range want {
+		if configs[i].Protocol != w {
+			t.Errorf("config #%d protocol = %q, want %q", i+1, configs[i].Protocol, w)
+		}
+	}
+}
+
 func TestAskWithContext(t *testing.T) {
 	// Mock response that follows the new format
 	expectedResponse := `## 排查思路

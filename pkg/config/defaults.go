@@ -32,6 +32,19 @@ Rules:
 6. If the user mentions "switch to root" or "sudo" and provides a password, put it in "root_password". If the password is the same as the login password, copy it. (ssh only; telnet has no standard sudo, omit root_password.)
 7. For bastion configuration: if user/password is not explicitly specified for the bastion but is provided for the main connection, assume the bastion uses the SAME credentials (user/password) as the target host, unless clearly stated otherwise. (ssh only; telnet does not support bastion.)
 8. "protocol" may be omitted and defaults to "ssh".
+9. Credentials may contain special characters (@, _, #, ...). Keep "user" and "password" values verbatim — do NOT split or transform them. Only treat a token as "user@host" when the part after "@" is itself the target host or IP.
+
+Examples:
+User input: "60.60.33.44 accon@123 passww_123"
+Output: [{"host":"60.60.33.44","port":22,"user":"accon@123","password":"passww_123"}]
+(Key fields are delimited by spaces, and the password is the token that follows. So "accon@123" occupies the username slot as a whole — keep it verbatim, never split it.)
+
+User input: "root@192.168.1.5 密码 P@ssw0rd"
+Output: [{"host":"192.168.1.5","port":22,"user":"root","password":"P@ssw0rd"}]
+(Here "root@192.168.1.5" is a login identity whose "@" is followed by the host itself; the password is given separately after "密码", so the token stays the user@host form.)
+
+User input: "telnet 连接交换机 10.10.10.2，账号 admin 密码 abc123"
+Output: [{"host":"10.10.10.2","protocol":"telnet","port":23,"user":"admin","password":"abc123"}]
 `
 
 	DefaultQAPrompt = `
