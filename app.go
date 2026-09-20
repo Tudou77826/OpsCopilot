@@ -2231,6 +2231,19 @@ func (a *App) FTDownload(sessionID, remotePath, localPath string) string {
 	return a.startFileTransferTask(sessionID, "download", localPath, remotePath)
 }
 
+// FTUploadDir 目录上传（合并语义）：localPath 必须是本地目录。
+func (a *App) FTUploadDir(sessionID, localPath, remotePath string) string {
+	return a.startFileTransferTask(sessionID, "uploadDir", localPath, remotePath)
+}
+
+// FTDownloadDir 目录下载（合并语义）：remotePath 必须是远端目录。
+//
+// 注意实参次序：startFileTransferTask 的后两个形参是 (localPath, remotePath)，
+// 与 FTDownload 入参 (remotePath, localPath) 相反，这里必须显式换位。
+func (a *App) FTDownloadDir(sessionID, remotePath, localPath string) string {
+	return a.startFileTransferTask(sessionID, "downloadDir", localPath, remotePath)
+}
+
 func (a *App) FTCancel(taskID string) string {
 	a.ftMu.Lock()
 	cancel, ok := a.ftCancels[taskID]
@@ -2473,6 +2486,26 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 		}
 		defer a.releaseFTLimiter(sessionID, lim, true)
 
+		// 目录级传输（FTUploadDir/FTDownloadDir）：走编排层，单任务单进度。
+		if op == "uploadDir" || op == "downloadDir" {
+			ok, msg, bytes := a.runTreeTransferTask(ctx, sessionID, op, localPath, remotePath, taskInfo, progressFn)
+			if a.ctx == nil {
+				return
+			}
+			if ok {
+				a.recordGarden(garden.EventTransferCompleted, "ft:"+taskID)
+			}
+			runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
+				"taskId":    taskID,
+				"sessionId": sessionID,
+				"ok":        ok,
+				"bytes":     bytes,
+				"message":   msg,
+				"cancelled": errors.Is(ctx.Err(), context.Canceled),
+			})
+			return
+		}
+
 		var (
 			res   filetransfer.TransferResult
 			opErr error
@@ -2607,6 +2640,86 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 	}()
 
 	return mustJSON(ftResponse{OK: true, TaskID: taskID})
+}
+
+// runTreeTransferTask 执行目录级传输（FTUploadDir/FTDownloadDir 的任务体），
+// 返回 (是否全部成功, 用户可读完成消息, 传输字节)。
+//
+// 失败语义：
+//   - 整体失败（预检、SFTP 不可用、中转失败、取消）→ ok=false，message 为错误文案；
+//   - 部分文件失败（Base64 逐文件模式）→ ok=false，message 附失败清单；
+//     已成功的文件保留在目标侧（与单文件批量传输的行为一致）。
+//   - SCP 降级模式没有 Mkdir/List 能力，目录传输明确不支持。
+func (a *App) runTreeTransferTask(ctx context.Context, sessionID, op, localPath, remotePath string, taskInfo transferClientInfo, progressFn func(filetransfer.Progress)) (bool, string, int64) {
+	var (
+		res          filetransfer.TreeResult
+		err          error
+		usedTransport string
+	)
+	if taskInfo.identity == "root-relay" {
+		relay := a.getRelayTransport(sessionID)
+		if relay == nil {
+			return false, "root-relay 传输未就绪", 0
+		}
+		if op == "uploadDir" {
+			res, err = relay.UploadTree(ctx, localPath, remotePath, progressFn)
+		} else {
+			res, err = relay.DownloadTree(ctx, remotePath, localPath, progressFn)
+		}
+		usedTransport = res.Transport
+		if usedTransport == "" {
+			usedTransport = "Root 中转"
+		}
+	} else {
+		sftpTr := filetransfer.NewSFTPTransport(taskInfo.client)
+		usedTransport = "sftp(login)"
+		if taskInfo.identity == "root" {
+			usedTransport = "sftp(root)"
+		}
+		if op == "uploadDir" {
+			res, err = filetransfer.UploadTree(ctx, localPath, remotePath, progressFn, filetransfer.UploadTreeOps{
+				Mkdir:      sftpTr.Mkdir,
+				UploadFile: sftpTr.Upload,
+			})
+		} else {
+			res, err = filetransfer.DownloadTree(ctx, remotePath, localPath, progressFn, filetransfer.DownloadTreeOps{
+				List:         sftpTr.List,
+				DownloadFile: sftpTr.Download,
+			})
+		}
+	}
+
+	if err != nil {
+		te := toTransferErr(err)
+		msg := te.Message
+		if te.Code == filetransfer.ErrorCodeSFTPNotSupported {
+			msg = "当前连接为 SCP 降级模式，不支持文件夹传输，请使用单文件传输"
+		}
+		if len(res.Failures) > 0 {
+			msg += "\n失败清单：\n" + treeFailuresText(res.Failures)
+		}
+		return false, msg, res.Bytes
+	}
+	if len(res.Failures) > 0 {
+		return false, fmt.Sprintf("部分完成（%s）：成功 %d 个文件 / %d 个目录，失败 %d 个：\n%s",
+			friendlyTransportLabel(usedTransport), res.Files, res.Dirs, len(res.Failures), treeFailuresText(res.Failures)), res.Bytes
+	}
+	return true, fmt.Sprintf("完成（%s：%d 个文件 / %d 个目录，%s）",
+		friendlyTransportLabel(usedTransport), res.Files, res.Dirs, filetransfer.HumanBytes(res.Bytes)), res.Bytes
+}
+
+// treeFailuresText 目录传输失败清单的可读形式（最多列 10 项，其余汇总）。
+func treeFailuresText(failures []filetransfer.TreeFileFailure) string {
+	const maxShown = 10
+	lines := make([]string, 0, len(failures))
+	for i, f := range failures {
+		if i == maxShown {
+			lines = append(lines, fmt.Sprintf("…等共 %d 项失败", len(failures)))
+			break
+		}
+		lines = append(lines, fmt.Sprintf("%s：%s", f.Path, f.Err))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func mustJSON(v any) string {

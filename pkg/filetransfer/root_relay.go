@@ -694,6 +694,146 @@ func (t *RootRelayTransport) Download(ctx context.Context, remotePath, localPath
 	return res, nil
 }
 
+// UploadTree 目录上传（合并语义：目标目录并入、同名文件覆盖）。
+//
+// 跳板机（skipRelay）走 base64 逐文件直传：先预扫描并整体拒绝超限文件
+// （单文件 10MB 上限，一次列全，避免传到一半才失败），再逐目录 mkdir、
+// 逐文件传输；单文件失败收集进 Failures 后继续。
+//
+// 非跳板机走"整树一次中转"：本地整树先经 SFTP 传到中转目录（整个任务只
+// prepareRelayDir 一次，避免逐文件建/删中转目录的开销），root 一次
+// cp -r 落位（staging 目录名与目标同名，cp 进父目录天然形成"存在即合并"）。
+// 中转阶段任一文件失败即中止且不落位——把半棵树 cp 到目标会让用户误以为
+// 传输完成，宁可整体失败重试。
+func (t *RootRelayTransport) UploadTree(ctx context.Context, localDir, remoteDir string, progress func(Progress)) (TreeResult, error) {
+	lp := filepath.Clean(localDir)
+	if st, err := os.Stat(lp); err != nil {
+		return TreeResult{}, toTransferError(err)
+	} else if !st.IsDir() {
+		return TreeResult{}, &TransferError{Code: ErrorCodeUnknown, Message: "仅支持上传目录: " + localDir}
+	}
+	rp := normalizeRemotePath(remoteDir)
+
+	if t.skipRelay {
+		res, err := UploadTree(ctx, lp, rp, progress, UploadTreeOps{
+			Mkdir:      t.Mkdir,
+			UploadFile: t.Upload,
+			OnPlan:     RejectOversizedLocal,
+		})
+		if err == nil {
+			res.Transport = "Base64 直传"
+		}
+		return res, err
+	}
+
+	plan, err := WalkLocalTree(lp)
+	if err != nil {
+		return TreeResult{}, err
+	}
+	var total int64
+	for _, f := range plan.Files {
+		total += f.Size
+	}
+	emitStep(progress, "正在检查中转空间...")
+	if err := t.checkTmpSpace(ctx, total); err != nil {
+		return TreeResult{}, err
+	}
+
+	relayDir, cleanup, err := t.prepareRelayDir(ctx)
+	if err != nil {
+		return TreeResult{}, err
+	}
+	defer cleanup()
+
+	staging := relayDir + path.Base(rp)
+	sftpTr := NewSFTPTransport(t.sshClient)
+	res, err := UploadTree(ctx, lp, staging, progress, UploadTreeOps{
+		Mkdir:      sftpTr.Mkdir,
+		UploadFile: sftpTr.Upload,
+	})
+	if err != nil {
+		return res, err
+	}
+	if res.Files != len(plan.Files) {
+		return res, &TransferError{
+			Code:    ErrorCodeRelayFailed,
+			Message: fmt.Sprintf("%d 个文件上传到中转目录失败，已中止（目标未做任何改动）", len(plan.Files)-res.Files),
+		}
+	}
+
+	emitStep(progress, "正在提权复制到目标路径...")
+	parent := path.Dir(rp)
+	cmd := fmt.Sprintf("mkdir -p %s && cp -r -- %s %s",
+		shellSingleQuote(parent), shellSingleQuote(staging), shellSingleQuote(parent+"/"))
+	if _, err := t.runAsRoot(ctx, cmd); err != nil {
+		return res, err
+	}
+	slog.Info("rootRelay tree upload done", "src", lp, "dst", rp, "files", res.Files, "bytes", res.Bytes)
+	res.Transport = "Root 中转（SFTP/SCP）"
+	return res, nil
+}
+
+// DownloadTree 目录下载（合并语义，语义与单文件下载一致：本地同名文件覆盖）。
+//
+// 跳板机走 base64 逐文件下载（同样预扫描单文件上限）；非跳板机整树一次中转：
+// root 一次 cp -r 到中转目录（chmod 保证登录身份可读），再经 SFTP 整树拉回
+// 本地（本地目录由编排层 MkdirAll，存在即合并）。
+func (t *RootRelayTransport) DownloadTree(ctx context.Context, remoteDir, localDir string, progress func(Progress)) (TreeResult, error) {
+	rp := normalizeRemotePath(remoteDir)
+	lp := filepath.Clean(localDir)
+
+	if t.skipRelay {
+		res, err := DownloadTree(ctx, rp, lp, progress, DownloadTreeOps{
+			List:         t.List,
+			DownloadFile: t.Download,
+			OnPlan:       RejectOversizedRemote,
+		})
+		if err == nil {
+			res.Transport = "Base64 直传"
+		}
+		return res, err
+	}
+
+	emitStep(progress, "正在枚举远端目录...")
+	plan, err := WalkRemoteTree(ctx, rp, t.List)
+	if err != nil {
+		return TreeResult{}, err
+	}
+	var total int64
+	for _, f := range plan.Files {
+		total += f.Size
+	}
+	emitStep(progress, "正在检查中转空间...")
+	if err := t.checkTmpSpace(ctx, total); err != nil {
+		return TreeResult{}, err
+	}
+
+	relayDir, cleanup, err := t.prepareRelayDir(ctx)
+	if err != nil {
+		return TreeResult{}, err
+	}
+	defer cleanup()
+
+	staging := relayDir + path.Base(rp)
+	emitStep(progress, "正在提权复制到中转目录...")
+	cmd := fmt.Sprintf("cp -r -- %s %s && chmod -R a+rX %s",
+		shellSingleQuote(rp), shellSingleQuote(staging), shellSingleQuote(staging))
+	if _, err := t.runAsRoot(ctx, cmd); err != nil {
+		return TreeResult{}, err
+	}
+
+	sftpTr := NewSFTPTransport(t.sshClient)
+	res, err := DownloadTree(ctx, staging, lp, progress, DownloadTreeOps{
+		List:         sftpTr.List,
+		DownloadFile: sftpTr.Download,
+	})
+	if err == nil {
+		res.Transport = "Root 中转（SFTP/SCP）"
+	}
+	slog.Info("rootRelay tree download done", "src", rp, "dst", lp, "files", res.Files, "bytes", res.Bytes, "error", err)
+	return res, err
+}
+
 // List lists directory contents via su.
 func (t *RootRelayTransport) List(ctx context.Context, remotePath string) ([]Entry, error) {
 	p := normalizeRemotePath(remotePath)

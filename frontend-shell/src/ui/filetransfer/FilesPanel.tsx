@@ -76,6 +76,9 @@ export interface FileTransferHost {
     FTStat: (sessionId: string, remotePath: string) => Promise<string>;
     FTUpload: (sessionId: string, localPath: string, remotePath: string) => Promise<string>;
     FTDownload: (sessionId: string, remotePath: string, localPath: string) => Promise<string>;
+    /** 目录传输（合并语义：目标目录并入、同名文件覆盖）。 */
+    FTUploadDir?: (sessionId: string, localPath: string, remotePath: string) => Promise<string>;
+    FTDownloadDir?: (sessionId: string, remotePath: string, localPath: string) => Promise<string>;
     FTCancel: (taskId: string) => Promise<string>;
     FTRemoteMkdir: (sessionId: string, remotePath: string) => Promise<string>;
     FTRemoteRemove: (sessionId: string, remotePath: string) => Promise<string>;
@@ -594,7 +597,7 @@ function FilePane({
                                         ev.stopPropagation();
                                         onRowContextMenu(e, ev);
                                     }}
-                                    draggable={!!draggableEntries && !e.isDir && !disabled}
+                                    draggable={!!draggableEntries && !disabled}
                                     onDragStart={(event) => onEntryDragStart?.(e, event)}
                                     title={e.name}
                                 >
@@ -661,7 +664,7 @@ function FilePane({
                                         ev.stopPropagation();
                                         onRowContextMenu(e, ev);
                                     }}
-                                    draggable={!!draggableEntries && !e.isDir && !disabled}
+                                    draggable={!!draggableEntries && !disabled}
                                     onDragStart={(event) => onEntryDragStart?.(e, event)}
                                 >
                                     {onToggleCheck ? (
@@ -1389,8 +1392,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
             setMsg('对端不支持文件传输');
             return;
         }
-        if (!entry || entry.isDir) {
+        if (!entry) {
             setMsg('仅支持上传文件');
+            return;
+        }
+        if (entry.isDir) {
+            await startUploadDir(entry);
             return;
         }
         // 单文件入口清空批量覆盖决定，避免上一批的"全部覆盖"泄漏到本次
@@ -1463,8 +1470,60 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
     };
     startUploadFileRef.current = startUploadFile;
 
+    // 目录上传（合并语义）：远端已存在同名目录时一次确认"合并并覆盖同名文件"，
+    // 之后整树一个任务完成（进度按全树字节聚合）。
+    const startUploadDir = async (entry: FileEntry) => {
+        if (!api.FTUploadDir) {
+            setMsg('当前宿主不支持文件夹上传');
+            return;
+        }
+        if (isSCPMode()) {
+            setMsg('SCP 降级模式不支持文件夹传输，请使用单文件上传');
+            return;
+        }
+        const baseDir = isSCPMode() ? (remotePathInput.trim() || remotePath) : remotePath;
+        const dst = remoteJoin(baseDir, entry.name);
+
+        if (protocolRef.current.startsWith('sftp') || protocolRef.current.includes('root-relay')) {
+            try {
+                const raw = await api.FTStat(sessionIdRef.current, dst);
+                const resp = parseResp(raw);
+                if (resp && resp.ok) {
+                    const ok = await confirmDialog.show({
+                        message: `远端已存在同名目录：\n${dst}\n\n将合并目录并覆盖其中的同名文件。是否继续？`,
+                        confirmText: '合并',
+                        danger: true,
+                    });
+                    if (!ok) return;
+                }
+            } catch {
+            }
+        }
+
+        setLoading(true);
+        setMsg('');
+        try {
+            const raw = await api.FTUploadDir(sessionId, entry.path, dst);
+            const resp = parseResp(raw);
+            if (!resp) {
+                setMsg('返回格式错误');
+                return;
+            }
+            if (!resp.ok) {
+                setMsg(formatError(resp));
+                return;
+            }
+            if (resp.taskId) {
+                registerTask(resp.taskId, (resp as any).message, `${entry.name}/`);
+            }
+        } catch (e: any) {
+            setMsg('失败: ' + e.toString());
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleLocalEntryDragStart = (entry: FileEntry, event: React.DragEvent) => {
-        if (entry.isDir) return;
         draggedLocalEntryRef.current = entry;
         event.dataTransfer.effectAllowed = 'copy';
         event.dataTransfer.setData('application/x-opscopilot-local-file', JSON.stringify(entry));
@@ -1641,14 +1700,14 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
             return;
         }
         const entry = remoteEntries.find(e => e.path === src);
-        if (!entry || entry.isDir) {
+        if (!entry) {
             setMsg('仅支持下载文件');
             return;
         }
         await startDownloadFile(entry);
     };
 
-    // 批量上传：遍历所有选中的本地文件逐个上传（跳过目录）。
+    // 批量上传：遍历所有选中的本地条目逐个上传（目录走目录传输，合并语义）。
     const startUploadSelectedAll = async () => {
         if (!sessionId) {
             setMsg('请先选择会话');
@@ -1658,7 +1717,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
             setMsg('对端不支持文件传输');
             return;
         }
-        const targets = localEntries.filter(e => localSelected.has(e.path) && !e.isDir);
+        const targets = localEntries.filter(e => localSelected.has(e.path));
         if (targets.length === 0) {
             setMsg('请先选择本地文件');
             return;
@@ -1671,7 +1730,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
         }
     };
 
-    // 批量下载：遍历所有选中的远端文件逐个下载（跳过目录）。
+    // 批量下载：遍历所有选中的远端条目逐个下载（目录走目录传输，合并语义）。
     const startDownloadSelectedAll = async () => {
         if (!sessionId) {
             setMsg('请先选择会话');
@@ -1685,7 +1744,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
             setMsg('SCP 模式请使用右侧“下载”表单');
             return;
         }
-        const targets = remoteEntries.filter(e => remoteSelected.has(e.path) && !e.isDir);
+        const targets = remoteEntries.filter(e => remoteSelected.has(e.path));
         if (targets.length === 0) {
             setMsg('请先选择远端文件');
             return;
@@ -1833,8 +1892,14 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
             setMsg('SCP 模式请使用右侧“下载”表单');
             return;
         }
-        if (!entry || entry.isDir) {
-            setMsg('仅支持下载文件');
+        if (!entry) {
+            const m = '仅支持下载文件';
+            if (onError) onError(m); else setMsg(m);
+            return;
+        }
+        if (entry.isDir) {
+            const m = await startDownloadDir(entry);
+            if (m && onError) onError(m);
             return;
         }
         if (!opts?.batch) overwriteAllRef.current = false;
@@ -1862,6 +1927,66 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
         } catch (e: any) {
             const m = '失败: ' + e.toString();
             if (onError) onError(m); else setMsg(m);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // 目录下载（合并语义）：本地已存在同名目录时一次确认，之后整树一个任务。
+    // 返回错误文案（已 setMsg），供批量入口收集；成功返回空串。
+    const startDownloadDir = async (entry: FileEntry): Promise<string> => {
+        if (!api.FTDownloadDir) {
+            const m = '当前宿主不支持文件夹下载';
+            setMsg(m);
+            return m;
+        }
+        if (isSCPMode()) {
+            const m = 'SCP 降级模式不支持文件夹传输，请使用右侧“下载”表单';
+            setMsg(m);
+            return m;
+        }
+        const sep = localPath.endsWith('\\') || localPath.endsWith('/') ? '' : '\\';
+        const dstDir = localPath ? `${localPath}${sep}${entry.name}` : entry.name;
+
+        try {
+            const raw = await api.LocalStat(dstDir);
+            const resp = parseResp(raw);
+            if (resp && resp.ok) {
+                const ok = await confirmDialog.show({
+                    title: '本地目录已存在',
+                    message: `本地已存在同名目录：\n${dstDir}\n\n将合并目录并覆盖其中的同名文件。是否继续？`,
+                    confirmText: '合并',
+                    danger: true,
+                });
+                if (!ok) return '';
+            }
+        } catch {
+            // 无法查询视为不存在，直接下载
+        }
+
+        setLoading(true);
+        setMsg('');
+        try {
+            const raw = await api.FTDownloadDir(sessionId, entry.path, dstDir);
+            const resp = parseResp(raw);
+            if (!resp) {
+                const m = '返回格式错误';
+                setMsg(m);
+                return m;
+            }
+            if (!resp.ok) {
+                const m = formatError(resp);
+                setMsg(m);
+                return m;
+            }
+            if (resp.taskId) {
+                registerTask(resp.taskId, (resp as any).message, `${entry.name}/`);
+            }
+            return '';
+        } catch (e: any) {
+            const m = '失败: ' + e.toString();
+            setMsg(m);
+            return m;
         } finally {
             setLoading(false);
         }
