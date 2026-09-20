@@ -2,6 +2,7 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import FilesPanel, { getFileTransferLayoutMode, getStableFileTransferLayoutMode } from './FilesPanel';
+import { ConfirmDialogInternal } from '../feedback/ConfirmDialog';
 
 const json = (value: unknown) => Promise.resolve(JSON.stringify(value));
 
@@ -698,5 +699,116 @@ describe('FilesPanel blank-area context menu (#73)', () => {
         const pane = screen.getByTestId('file-pane-远端');
         fireEvent.contextMenu(pane);
         expect(await screen.findByText('新建文件夹')).toBeTruthy();
+    });
+});
+
+describe('批量传输的"全部覆盖"勾选', () => {
+    const renderWithDialog = (backend: ReturnType<typeof makeBackend>) => {
+        render(
+            <>
+                <ConfirmDialogInternal />
+                <FilesPanel activeTerminalId="session-1" terminals={[{ id: 'session-1', title: 'prod-01' }]} host={backend} />
+            </>,
+        );
+    };
+
+    it('批量上传勾选全部覆盖后，剩余冲突不再逐个弹窗', async () => {
+        const backend = makeBackend();
+        backend.LocalList = vi.fn(() => json({
+            ok: true,
+            entries: [
+                { path: 'C:\t\a.txt', name: 'a.txt', isDir: false, size: 1, modTime: '2026-06-08T00:00:00Z', mode: 0 },
+                { path: 'C:\t\b.txt', name: 'b.txt', isDir: false, size: 1, modTime: '2026-06-08T00:00:00Z', mode: 0 },
+            ],
+        }));
+        renderWithDialog(backend);
+        fireEvent.click(await screen.findByLabelText('勾选-a.txt'));
+        fireEvent.click(screen.getByLabelText('勾选-b.txt'));
+        fireEvent.contextMenu(screen.getByRole('row', { name: /a\.txt/ }));
+        fireEvent.click(await screen.findByText('上传所选 2 项'));
+
+        const dialog = await screen.findByText(/远端已存在同名文件/);
+        expect(dialog).toBeTruthy();
+        fireEvent.click(screen.getByLabelText('全部覆盖（本次剩余文件不再询问）'));
+        fireEvent.click(screen.getByRole('button', { name: '覆盖' }));
+
+        await waitFor(() => expect(backend.FTUpload).toHaveBeenCalledTimes(2));
+        await waitFor(() => expect(screen.queryByText(/远端已存在同名文件/)).toBeNull());
+    });
+
+    it('不勾选全部覆盖时，每个冲突仍然单独确认', async () => {
+        const backend = makeBackend();
+        backend.LocalList = vi.fn(() => json({
+            ok: true,
+            entries: [
+                { path: 'C:\t\a.txt', name: 'a.txt', isDir: false, size: 1, modTime: '2026-06-08T00:00:00Z', mode: 0 },
+                { path: 'C:\t\b.txt', name: 'b.txt', isDir: false, size: 1, modTime: '2026-06-08T00:00:00Z', mode: 0 },
+            ],
+        }));
+        renderWithDialog(backend);
+        fireEvent.click(await screen.findByLabelText('勾选-a.txt'));
+        fireEvent.click(screen.getByLabelText('勾选-b.txt'));
+        fireEvent.contextMenu(screen.getByRole('row', { name: /a\.txt/ }));
+        fireEvent.click(await screen.findByText('上传所选 2 项'));
+
+        await screen.findByText(/远端已存在同名文件/);
+        fireEvent.click(screen.getByRole('button', { name: '覆盖' }));
+        // 第二个文件必须再次弹出确认（未勾选全部覆盖）
+        await screen.findByText(/远端已存在同名文件/);
+        expect(backend.FTUpload).toHaveBeenCalledTimes(1);
+        fireEvent.click(screen.getByRole('button', { name: '覆盖' }));
+        await waitFor(() => expect(backend.FTUpload).toHaveBeenCalledTimes(2));
+    });
+
+    it('批量下载勾选全部覆盖后同样跳过剩余弹窗', async () => {
+        const backend = makeBackend();
+        backend.FTList = vi.fn((_s: string, p: string) => json({
+            ok: true,
+            entries: [
+                { path: `${p}/c.log`, name: 'c.log', isDir: false, size: 2, modTime: '2026-06-08T00:00:00Z', mode: 0, owner: 'root', group: 'root' },
+                { path: `${p}/d.log`, name: 'd.log', isDir: false, size: 2, modTime: '2026-06-08T00:00:00Z', mode: 0, owner: 'root', group: 'root' },
+            ],
+        }));
+        backend.LocalStat = vi.fn(() => json({ ok: true }));
+        renderWithDialog(backend);
+        fireEvent.click(await screen.findByLabelText('勾选-c.log'));
+        fireEvent.click(screen.getByLabelText('勾选-d.log'));
+        fireEvent.contextMenu(screen.getByRole('row', { name: /c\.log/ }));
+        fireEvent.click(await screen.findByText('下载所选 2 项'));
+
+        await screen.findByText(/本地文件已存在/);
+        fireEvent.click(screen.getByLabelText('全部覆盖（本次剩余文件不再询问）'));
+        fireEvent.click(screen.getByRole('button', { name: '覆盖' }));
+
+        await waitFor(() => expect(backend.FTDownload).toHaveBeenCalledTimes(2));
+        await waitFor(() => expect(screen.queryByText(/本地文件已存在/)).toBeNull());
+    });
+
+    it('上一批的"全部覆盖"不会泄漏到后续单文件操作', async () => {
+        const backend = makeBackend();
+        backend.LocalList = vi.fn(() => json({
+            ok: true,
+            entries: [
+                { path: 'C:\t\a.txt', name: 'a.txt', isDir: false, size: 1, modTime: '2026-06-08T00:00:00Z', mode: 0 },
+                { path: 'C:\t\b.txt', name: 'b.txt', isDir: false, size: 1, modTime: '2026-06-08T00:00:00Z', mode: 0 },
+            ],
+        }));
+        renderWithDialog(backend);
+        // 批量勾选全部覆盖完成一轮
+        fireEvent.click(await screen.findByLabelText('勾选-a.txt'));
+        fireEvent.click(screen.getByLabelText('勾选-b.txt'));
+        fireEvent.contextMenu(screen.getByRole('row', { name: /a\.txt/ }));
+        fireEvent.click(await screen.findByText('上传所选 2 项'));
+        await screen.findByText(/远端已存在同名文件/);
+        fireEvent.click(screen.getByLabelText('全部覆盖（本次剩余文件不再询问）'));
+        fireEvent.click(screen.getByRole('button', { name: '覆盖' }));
+        await waitFor(() => expect(backend.FTUpload).toHaveBeenCalledTimes(2));
+
+        // 随后的单文件上传必须重新询问，而不是沿用批量决定
+        // （先取消多选，让右键菜单进入单文件模式）
+        fireEvent.click(screen.getByLabelText('勾选-a.txt'));
+        fireEvent.contextMenu(screen.getByRole('row', { name: /b\.txt/ }));
+        fireEvent.click(await screen.findByText('上传', { selector: 'button, div' }));
+        expect(await screen.findByText(/远端已存在同名文件/)).toBeTruthy();
     });
 });

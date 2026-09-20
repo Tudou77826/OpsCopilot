@@ -9,6 +9,17 @@ export interface ConfirmChoice {
     primary?: boolean;
 }
 
+/** 复选框配置：确认类弹窗可附带一个勾选项（如"全部覆盖"）。 */
+export interface ConfirmCheckbox {
+    label: string;
+}
+
+/** 带复选框弹窗的返回：用户选择的动作 + 复选框最终勾选状态。 */
+export interface ConfirmResult {
+    value: boolean | string | null;
+    checked: boolean;
+}
+
 export interface ConfirmOptions {
     title?: string;
     message: string;
@@ -17,11 +28,14 @@ export interface ConfirmOptions {
     danger?: boolean;
     /** 多按钮模式：提供后取代默认"确定/取消"按钮组，点击返回对应 value，取消返回 null */
     choices?: ConfirmChoice[];
+    /** 附带复选框（配合 showWithCheckbox 使用；show 忽略该字段） */
+    checkbox?: ConfirmCheckbox;
 }
 
 interface ConfirmState extends ConfirmOptions {
     visible: boolean;
-    resolve: ((value: boolean | string | null) => void) | null;
+    checked: boolean;
+    resolve: ((value: boolean | string | null, checked: boolean) => void) | null;
 }
 
 const INITIAL_STATE: ConfirmState = {
@@ -32,10 +46,30 @@ const INITIAL_STATE: ConfirmState = {
     cancelText: '取消',
     danger: false,
     choices: undefined,
+    checkbox: undefined,
+    checked: false,
     resolve: null,
 };
 
 let _setState: React.Dispatch<React.SetStateAction<ConfirmState>> | null = null;
+
+function open(options: ConfirmOptions): void {
+    if (!_setState) {
+        throw new Error('confirmDialog: 无 React 宿主');
+    }
+    _setState({
+        visible: true,
+        title: options.title || '确认操作',
+        message: options.message,
+        confirmText: options.confirmText || '确定',
+        cancelText: options.cancelText || '取消',
+        danger: options.danger ?? false,
+        choices: options.choices,
+        checkbox: options.checkbox,
+        checked: false,
+        resolve: null,
+    });
+}
 
 export const confirmDialog = {
     show: (options: ConfirmOptions): Promise<boolean | string | null> => {
@@ -50,16 +84,20 @@ export const confirmDialog = {
                 }
                 return;
             }
-            _setState({
-                visible: true,
-                title: options.title || '确认操作',
-                message: options.message,
-                confirmText: options.confirmText || '确定',
-                cancelText: options.cancelText || '取消',
-                danger: options.danger ?? false,
-                choices: options.choices,
-                resolve,
-            });
+            open(options);
+            _setState(prev => ({ ...prev, resolve: (value) => resolve(value) }));
+        });
+    },
+    /** 带复选框版本：返回用户选择的动作与复选框勾选状态。 */
+    showWithCheckbox: (options: ConfirmOptions & { checkbox: ConfirmCheckbox }): Promise<ConfirmResult> => {
+        return new Promise(resolve => {
+            if (!_setState) {
+                const confirmed = window.confirm(`${options.message}\n\n[${options.checkbox.label}]`);
+                resolve({ value: confirmed ? true : null, checked: false });
+                return;
+            }
+            open(options);
+            _setState(prev => ({ ...prev, resolve: (value, checked) => resolve({ value, checked }) }));
         });
     },
 };
@@ -74,24 +112,21 @@ export const ConfirmDialogInternal: React.FC = () => {
         _setState = setState;
         return () => {
             if (_setState === setState) _setState = null;
-            stateRef.current.resolve?.(false);
+            stateRef.current.resolve?.(false, stateRef.current.checked);
         };
     }, []);
 
-    const handleConfirm = useCallback(() => {
-        state.resolve?.(true);
+    const close = (value: boolean | string | null) => {
+        state.resolve?.(value, state.checked);
         setState(prev => ({ ...prev, visible: false, resolve: null }));
-    }, [state.resolve]);
+    };
 
-    const handleCancel = useCallback(() => {
-        state.resolve?.(false);
-        setState(prev => ({ ...prev, visible: false, resolve: null }));
-    }, [state.resolve]);
-
-    const handleChoice = useCallback((value: string) => {
-        state.resolve?.(value);
-        setState(prev => ({ ...prev, visible: false, resolve: null }));
-    }, [state.resolve]);
+    const handleConfirm = useCallback(() => close(true), [state.resolve, state.checked]);
+    const handleCancel = useCallback(() => close(false), [state.resolve, state.checked]);
+    const handleChoice = useCallback((value: string) => close(value), [state.resolve, state.checked]);
+    const toggleChecked = useCallback((checked: boolean) => {
+        setState(prev => ({ ...prev, checked }));
+    }, []);
 
     if (!state.visible) return null;
 
@@ -104,6 +139,18 @@ export const ConfirmDialogInternal: React.FC = () => {
                 <div style={styles.body}>
                     <p style={styles.message}>{state.message}</p>
                 </div>
+                {state.checkbox ? (
+                    <div style={styles.checkboxRow}>
+                        <label style={styles.checkboxLabel}>
+                            <input
+                                type="checkbox"
+                                checked={state.checked}
+                                onChange={e => toggleChecked(e.target.checked)}
+                            />
+                            <span>{state.checkbox.label}</span>
+                        </label>
+                    </div>
+                ) : null}
                 <div style={styles.footer}>
                     {state.choices && state.choices.length > 0 ? (
                         <>
@@ -174,6 +221,18 @@ const styles: Record<string, React.CSSProperties> = {
     },
     body: {
         padding: '0 24px 20px',
+    },
+    checkboxRow: {
+        padding: '0 24px 12px',
+    },
+    checkboxLabel: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        color: 'var(--text-secondary)',
+        fontSize: 13,
+        cursor: 'pointer',
+        userSelect: 'none',
     },
     message: {
         color: 'var(--text-secondary)',

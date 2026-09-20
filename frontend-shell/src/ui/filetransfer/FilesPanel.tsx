@@ -703,6 +703,9 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
     const [msg, setMsg] = useState('');
     const browserPicker = useRef<HTMLInputElement>(null);
     const browserImport = useRef<AbortController>();
+    // 批量传输的"全部覆盖"决定：批量开始时重置；用户在首个冲突弹窗勾选后置真，
+    // 本批剩余冲突直接覆盖不再询问。单文件操作不读取该标记（每次进来都会清掉）。
+    const overwriteAllRef = useRef(false);
     const [importing, setImporting] = useState(false);
     useEffect(() => () => browserImport.current?.abort(), []);
     const importBrowserFile = async (file?: File) => {
@@ -1377,7 +1380,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
         await startUploadFile(entry);
     };
 
-    const startUploadFile = async (entry: FileEntry) => {
+    const startUploadFile = async (entry: FileEntry, opts?: { batch?: boolean }) => {
         if (!sessionId) {
             setMsg('请先选择会话');
             return;
@@ -1390,6 +1393,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
             setMsg('仅支持上传文件');
             return;
         }
+        // 单文件入口清空批量覆盖决定，避免上一批的"全部覆盖"泄漏到本次
+        if (!opts?.batch) overwriteAllRef.current = false;
         const baseDir = isSCPMode() ? (remotePathInput.trim() || remotePath) : remotePath;
         const dst = remoteJoin(baseDir, entry.name);
 
@@ -1398,14 +1403,40 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
                 const raw = await api.FTStat(sessionIdRef.current, dst);
                 const resp = parseResp(raw);
                 if (resp && resp.ok) {
-                    const ok = await confirmDialog.show({ message: `远端已存在同名文件：\n${dst}\n\n是否覆盖？`, confirmText: '覆盖', danger: true });
-                    if (!ok) return;
+                    if (overwriteAllRef.current) {
+                        // 本批已勾选"全部覆盖"，直接覆盖不再询问
+                    } else if (opts?.batch) {
+                        const r = await confirmDialog.showWithCheckbox({
+                            message: `远端已存在同名文件：\n${dst}\n\n是否覆盖？`,
+                            confirmText: '覆盖',
+                            danger: true,
+                            checkbox: { label: '全部覆盖（本次剩余文件不再询问）' },
+                        });
+                        if (r.value === true && r.checked) overwriteAllRef.current = true;
+                        if (!r.value) return;
+                    } else {
+                        const ok = await confirmDialog.show({ message: `远端已存在同名文件：\n${dst}\n\n是否覆盖？`, confirmText: '覆盖', danger: true });
+                        if (!ok) return;
+                    }
                 }
             } catch {
             }
         } else if (protocolRef.current.startsWith('scp')) {
-            const ok = await confirmDialog.show({ message: `SCP 模式无法检测远端是否存在同名文件：\n${dst}\n\n是否继续上传（可能覆盖）？`, confirmText: '继续上传', danger: true });
-            if (!ok) return;
+            if (overwriteAllRef.current) {
+                // 本批已勾选"全部覆盖"，跳过 SCP 盲覆盖提示
+            } else if (opts?.batch) {
+                const r = await confirmDialog.showWithCheckbox({
+                    message: `SCP 模式无法检测远端是否存在同名文件：\n${dst}\n\n是否继续上传（可能覆盖）？`,
+                    confirmText: '继续上传',
+                    danger: true,
+                    checkbox: { label: '全部覆盖（本次剩余文件不再询问）' },
+                });
+                if (r.value === true && r.checked) overwriteAllRef.current = true;
+                if (!r.value) return;
+            } else {
+                const ok = await confirmDialog.show({ message: `SCP 模式无法检测远端是否存在同名文件：\n${dst}\n\n是否继续上传（可能覆盖）？`, confirmText: '继续上传', danger: true });
+                if (!ok) return;
+            }
         }
 
         setLoading(true);
@@ -1632,8 +1663,11 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
             setMsg('请先选择本地文件');
             return;
         }
+        // 批量作用域：覆盖决定只在本批内生效
+        overwriteAllRef.current = false;
+        const batch = targets.length > 1;
         for (const entry of targets) {
-            await startUploadFile(entry);
+            await startUploadFile(entry, { batch });
         }
     };
 
@@ -1659,8 +1693,11 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
         // 后端按会话限流排队，这里逐个启动；启动失败的文件汇总提示，
         // 传输进度与成败在任务列表中逐项展示。
         const failures: string[] = [];
+        // 批量作用域：覆盖决定只在本批内生效
+        overwriteAllRef.current = false;
+        const batch = targets.length > 1;
         for (const entry of targets) {
-            await startDownloadFile(entry, (m) => failures.push(`${entry.name}: ${m}`));
+            await startDownloadFile(entry, (m) => failures.push(`${entry.name}: ${m}`), { batch });
         }
         if (failures.length > 0) {
             setMsg(`批量下载：${targets.length - failures.length} 个任务已开始，${failures.length} 个启动失败\n` + failures.join('\n'));
@@ -1728,11 +1765,36 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
     // 下载前冲突处理：本地已存在同名文件时，让用户选择覆盖/另存为/取消。
     // 返回最终保存路径；null 表示用户取消本次下载。
     // 另存为依赖宿主的保存对话框能力（SelectSavePath），缺失时不提供该选项。
-    const resolveLocalConflict = async (name: string, dst: string): Promise<string | null> => {
+    // 批量模式附带"全部覆盖"勾选：勾选后本批剩余冲突直接覆盖不再询问。
+    const resolveLocalConflict = async (name: string, dst: string, opts?: { batch?: boolean }): Promise<string | null> => {
         try {
             const raw = await api.LocalStat(dst);
             const resp = parseResp(raw);
             if (resp && resp.ok) {
+                if (overwriteAllRef.current) return dst; // 本批已勾选"全部覆盖"
+                if (opts?.batch) {
+                    const choices: ConfirmChoice[] = [
+                        { label: '覆盖', value: 'overwrite', danger: true, primary: true },
+                    ];
+                    if (api.SelectSavePath) {
+                        choices.push({ label: '另存为…', value: 'save-as' });
+                    }
+                    const r = await confirmDialog.showWithCheckbox({
+                        title: '本地文件已存在',
+                        message: `本地已存在同名文件：\n${dst}\n\n请选择处理方式：`,
+                        cancelText: '取消',
+                        choices,
+                        checkbox: { label: '全部覆盖（本次剩余文件不再询问）' },
+                    });
+                    if (r.value === 'overwrite' && r.checked) overwriteAllRef.current = true;
+                    if (r.value === 'save-as' && api.SelectSavePath) {
+                        const saved = await api.SelectSavePath(name);
+                        if (!saved) return null;
+                        return saved;
+                    }
+                    if (r.value !== 'overwrite') return null;
+                    return dst;
+                }
                 const choices: ConfirmChoice[] = [
                     { label: '覆盖', value: 'overwrite', danger: true, primary: true },
                 ];
@@ -1758,7 +1820,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
         return dst;
     };
 
-    const startDownloadFile = async (entry: FileEntry, onError?: (msg: string) => void) => {
+    const startDownloadFile = async (entry: FileEntry, onError?: (msg: string) => void, opts?: { batch?: boolean }) => {
         if (!sessionId) {
             setMsg('请先选择会话');
             return;
@@ -1775,8 +1837,9 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
             setMsg('仅支持下载文件');
             return;
         }
+        if (!opts?.batch) overwriteAllRef.current = false;
         const defaultDst = localPath ? `${localPath}${localPath.endsWith('\\') || localPath.endsWith('/') ? '' : '\\'}${entry.name}` : entry.name;
-        const dst = await resolveLocalConflict(entry.name, defaultDst);
+        const dst = await resolveLocalConflict(entry.name, defaultDst, opts);
         if (!dst) return; // 用户取消
         setLoading(true);
         setMsg('');
