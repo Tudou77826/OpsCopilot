@@ -49,7 +49,7 @@ func TestUpdateSavedConnection_PreservesRootPassword(t *testing.T) {
 	app, savedMgr := newSavedSessionTestApp(t, workDir)
 
 	// 初始状态：用户之前连接时保存了 root 密码。
-	if _, err := savedMgr.UpsertByEndpoint(sshclient.ConnectConfig{
+	if _, err := savedMgr.CreateConnection(sshclient.ConnectConfig{
 		Name:         "db-1",
 		Host:         "10.0.0.1",
 		Port:         22,
@@ -57,7 +57,7 @@ func TestUpdateSavedConnection_PreservesRootPassword(t *testing.T) {
 		Password:     "login-pw",
 		RootPassword: "root-secret",
 	}, ""); err != nil {
-		t.Fatalf("seed upsert: %v", err)
+		t.Fatalf("seed create: %v", err)
 	}
 	id := savedMgr.Snapshot()[0].ID
 
@@ -105,10 +105,10 @@ func TestUpdateSavedConnection_BastionRoundTrip(t *testing.T) {
 	workDir := t.TempDir()
 	app, savedMgr := newSavedSessionTestApp(t, workDir)
 
-	if _, err := savedMgr.UpsertByEndpoint(sshclient.ConnectConfig{
+	if _, err := savedMgr.CreateConnection(sshclient.ConnectConfig{
 		Name: "core-1", Host: "10.1.0.1", Port: 22, User: "ops", Password: "pw",
 	}, ""); err != nil {
-		t.Fatalf("seed upsert: %v", err)
+		t.Fatalf("seed create: %v", err)
 	}
 	id := savedMgr.Snapshot()[0].ID
 

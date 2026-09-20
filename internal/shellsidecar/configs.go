@@ -113,10 +113,12 @@ func (s *ConfigService) List() ([]SavedNode, error) {
 	return convertTree(s.mgr.Snapshot()), nil
 }
 
-// Save 是"连接时自动落库"的入口：按端点 upsert，返回节点 ID。
+// Save 是"连接时自动落库"的入口：按端点 ensure，返回节点 ID。
 //
-// in.Group 是便于输入的分组路径（支持 "A/B" 多层），会解析为文件夹 ID；
-// 留空则落在根。这是唯一按名字定位文件夹的入口，仅供该便捷场景使用。
+// 语义与桌面端连接钩子一致（connectionstore.EnsureConnectionByEndpoint）：
+// 端点已存在时只合入凭据，不改动显示名与位置——连接重放携带的旧名字/旧分组
+// 不得覆盖用户在树里的改名与调整；不存在时才按 in.Group（支持 "A/B" 多层）
+// 名字路径解析落位文件夹。留空落在根。
 func (s *ConfigService) Save(in ConnectionInput) (string, error) {
 	if in.Host == "" || in.User == "" {
 		return "", fmt.Errorf("host 和 user 不能为空")
@@ -128,11 +130,7 @@ func (s *ConfigService) Save(in ConnectionInput) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	parentID, err := s.mgr.EnsureFolderByNamePath(in.Group)
-	if err != nil {
-		return "", err
-	}
-	node, err := s.mgr.UpsertByEndpoint(in.toRemote(), parentID)
+	node, err := s.mgr.EnsureConnectionByEndpoint(in.toRemote(), in.Group)
 	if err != nil {
 		return "", err
 	}

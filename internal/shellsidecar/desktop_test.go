@@ -71,7 +71,7 @@ func TestDesktopPathsAndSettingsShareExistingFiles(t *testing.T) {
 func TestSharedSessionMutationPreservesCredentialsAndExternalEdits(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "sessions.json")
 	desktop := connectionstore.NewStoreWithPath(path)
-	if _, e := desktop.UpsertByEndpoint(remote.ConnectConfig{Host: "fixture", Port: 22, User: "test", Password: "private", RootPassword: "root"}, ""); e != nil {
+	if _, e := desktop.CreateConnection(remote.ConnectConfig{Host: "fixture", Port: 22, User: "test", Password: "private", RootPassword: "root"}, ""); e != nil {
 		t.Fatal(e)
 	}
 	plugin, e := NewConfigServiceWithPath(path)

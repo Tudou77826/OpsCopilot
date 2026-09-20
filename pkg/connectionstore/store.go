@@ -207,6 +207,10 @@ func (s *Store) CreateFolder(name, parentID string) (*Node, error) {
 //
 // 同名文件夹在同一层只会有一个，因此该操作天然幂等。路径段以 "/" 分隔，
 // 对应 UI 上"保存到分组"输入框的便捷语义（NameDialog 禁止名称含 "/"）。
+//
+// 注意：按名字寻址文件夹只服务"新建连接时选择落位分组"这一场景。已存在
+// 节点的归属只能由树操作（MoveNode）改变，用连接配置里的分组名去挪动已有
+// 节点会让任何携带旧分组名的配置重放（重连、复制标签）复活旧文件夹。
 func (s *Store) EnsureFolderByNamePath(path string) (string, error) {
 	segments := splitGroupPath(path)
 	if len(segments) == 0 {
@@ -223,6 +227,16 @@ func (s *Store) EnsureFolderByNamePath(path string) (string, error) {
 	}
 	defer release()
 
+	folder := s.ensureFolderByNamePathLocked(segments)
+	if folder == nil {
+		return "", nil
+	}
+	return folder.ID, s.saveLocked()
+}
+
+// ensureFolderByNamePathLocked 在已持锁的前提下逐层查找或创建文件夹。
+// 返回 nil 表示根（segments 为空）。
+func (s *Store) ensureFolderByNamePathLocked(segments []string) *Node {
 	siblings := &s.nodes
 	var current *Node
 	for _, seg := range segments {
@@ -234,7 +248,7 @@ func (s *Store) EnsureFolderByNamePath(path string) (string, error) {
 		current = found
 		siblings = &found.Children
 	}
-	return current.ID, s.saveLocked()
+	return current
 }
 
 // CreateConnection 新建一条连接而不建立实际会话（"新建会话"入口）。
@@ -278,12 +292,20 @@ func (s *Store) CreateConnection(cfg remote.ConnectConfig, parentID string) (*No
 	return cloneNode(node), s.saveLocked()
 }
 
-// UpsertByEndpoint 是全树范围内的"按端点插入或更新"，供连接时自动落库使用。
+// EnsureConnectionByEndpoint 是"连接时自动落库"的唯一入口：按 (协议, 主机, 端口)
+// 确保连接存在于树中。
 //
-// 与 CreateConnection 的差别：命中同端点旧节点时不报错，而是复用其 ID 与
-// 已改过的显示名，把节点摘下来重新放到 parentID 下（因此连接时指定新分组
-// 等价于移动）。
-func (s *Store) UpsertByEndpoint(cfg remote.ConnectConfig, parentID string) (*Node, error) {
+// 契约（回归背景：用户改名/移动反复被连接动作还原，见 TestConnectAutosaveRepro）：
+//   - 已存在同端点节点：只合入本次拨号成功所验证的凭据（密码轮转要能学进树里），
+//     显示名与位置一律不动。连接重放（重连、复制标签、共享会话连接）携带的名字
+//     与分组可能是陈旧的，采纳它们等于用旧快照覆盖用户刚做的改名、拖拽与分组
+//     重命名。账号（user）不同时连凭据也不合入：同端点多账号时密码归属无法判断。
+//   - 不存在：按 groupPath 名字路径解析（必要时逐层创建）文件夹后插入。
+//     分组的名字寻址只服务这一新建场景。
+//
+// 该方法取代了历史的 UpsertByEndpoint（按端点插入或更新，且"连接时指定分组
+// 等价于移动"）——正是那两个语义让任何配置重放都能改写树结构。
+func (s *Store) EnsureConnectionByEndpoint(cfg remote.ConnectConfig, groupPath string) (*Node, error) {
 	cfg.Protocol = normalizedProtocol(cfg.Protocol)
 	if strings.TrimSpace(cfg.Host) == "" {
 		return nil, errors.New("主机地址不能为空")
@@ -299,44 +321,60 @@ func (s *Store) UpsertByEndpoint(cfg remote.ConnectConfig, parentID string) (*No
 	}
 	defer release()
 
-	siblings, err := s.childrenOfLocked(parentID)
-	if err != nil {
-		return nil, err
-	}
-
-	var removed *Node
-	removeByEndpoint(&s.nodes, &cfg, &removed)
-
-	if s.PreserveCredentials && removed != nil {
-		preserveCredentials(&cfg, removed.Config)
-	}
-
-	// 用户若在会话树里改过显示名，而本次连接携带的配置名仍为空或还是旧配置名，
-	// 则保留改过的显示名，否则用户的改名会在每次连接后被覆盖。
-	targetName := strings.TrimSpace(cfg.Name)
-	if removed != nil && removed.Name != "" {
-		oldConfigName := ""
-		if removed.Config != nil {
-			oldConfigName = removed.Config.Name
+	if existing := findEndpoint(s.nodes, &cfg, ""); existing != nil {
+		if existing.Config != nil {
+			mergeFreshCredentials(existing.Config, &cfg)
 		}
-		if targetName == "" || targetName == oldConfigName {
-			targetName = removed.Name
-		}
+		return cloneNode(existing), s.saveLocked()
 	}
-	if targetName == "" {
-		targetName = cfg.Host
+
+	var siblings *[]*Node
+	if folder := s.ensureFolderByNamePathLocked(splitGroupPath(groupPath)); folder != nil {
+		siblings = &folder.Children
+	} else {
+		siblings = &s.nodes
 	}
-	cfg.Name = targetName
+
+	name := strings.TrimSpace(cfg.Name)
+	if name == "" {
+		name = cfg.Host
+	}
+	cfg.Name = name
 	cfg.Group = ""
 
-	id := uuid.New().String()
-	if removed != nil {
-		id = removed.ID
-	}
-
-	node := &Node{ID: id, Name: targetName, Type: KindConnection, Config: &cfg}
+	node := &Node{ID: uuid.New().String(), Name: name, Type: KindConnection, Config: &cfg}
 	*siblings = append(*siblings, node)
 	return cloneNode(node), s.saveLocked()
+}
+
+// mergeFreshCredentials 把一份"刚刚拨号成功"的配置里的凭据合入已存配置，
+// 其余字段一概不动：能通过自动落库走到这里的配置必然刚完成拨号，凭据视为
+// 当前有效；而名字、账号、分组可能来自陈旧快照，不采纳（树是唯一真相，
+// 身份类字段的修改只走显式入口 RenameNode / UpdateConnection / MoveNode）。
+//
+// 合入范围：登录密码、root 密码、主机密钥、跳板机（整棵替换，密码为空时按
+// preserveCredentials 规则保留已存值）。账号不一致时整体放弃：无法判断
+// 密码属于哪个账号，宁可不学也不错写。
+func mergeFreshCredentials(stored, fresh *remote.ConnectConfig) {
+	if stored.User != "" && fresh.User != "" && stored.User != fresh.User {
+		return
+	}
+	if fresh.Password != "" {
+		stored.Password = fresh.Password
+	}
+	if fresh.RootPassword != "" {
+		stored.RootPassword = fresh.RootPassword
+	}
+	if fresh.HostKey != "" {
+		stored.HostKey = fresh.HostKey
+	}
+	if fresh.Bastion != nil {
+		bastion := *fresh.Bastion
+		if stored.Bastion != nil {
+			preserveCredentials(&bastion, stored.Bastion)
+		}
+		stored.Bastion = &bastion
+	}
 }
 
 // RenameNode 改显示名。重命名连接时同步 Config.Name 以保持一致。
@@ -685,22 +723,6 @@ func findEndpoint(nodes []*Node, target *remote.ConnectConfig, excludeID string)
 		}
 	}
 	return nil
-}
-
-func removeByEndpoint(nodes *[]*Node, target *remote.ConnectConfig, removed **Node) {
-	list := *nodes
-	out := make([]*Node, 0, len(list))
-	for _, n := range list {
-		if n.Type == KindConnection && sameEndpoint(n.Config, target) {
-			*removed = n
-			continue
-		}
-		if n.Type == KindFolder && len(n.Children) > 0 {
-			removeByEndpoint(&n.Children, target, removed)
-		}
-		out = append(out, n)
-	}
-	*nodes = out
 }
 
 func uniqueSiblingName(siblings []*Node, base string) string {

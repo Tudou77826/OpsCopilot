@@ -607,7 +607,8 @@ func (a *App) SaveSharedSessionToLocal(entryKey string) string {
 		}
 	}
 
-	if _, err := a.savedSessionMgr.UpsertByEndpoint(cfg, ""); err != nil {
+	// ensure 语义：端点已存在时保留用户树里的名字与位置，不把它拽到根下。
+	if _, err := a.savedSessionMgr.EnsureConnectionByEndpoint(cfg, ""); err != nil {
 		return fmt.Sprintf("保存失败: %v", err)
 	}
 	return ""

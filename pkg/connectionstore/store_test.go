@@ -22,58 +22,46 @@ func TestNewStoreDefaults(t *testing.T) {
 
 // ── 基础增删改 ──────────────────────────────────────────────
 
-func TestUpsertByEndpoint_AddUpdateMove(t *testing.T) {
+func TestEnsureConnectionByEndpoint_CreateThenReplay(t *testing.T) {
 	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
 
-	cfg := remote.ConnectConfig{Host: "192.168.1.1", User: "root", Port: 22}
-	if _, err := s.UpsertByEndpoint(cfg, ""); err != nil {
+	// 首次连接：名字为空回退主机地址，按分组路径落位（必要时逐层建文件夹）。
+	cfg := remote.ConnectConfig{Host: "192.168.1.1", User: "root", Port: 22, Group: "Prod/Web"}
+	if _, err := s.EnsureConnectionByEndpoint(cfg, cfg.Group); err != nil {
 		t.Fatalf("首次写入失败: %v", err)
 	}
-	if len(s.nodes) != 1 {
-		t.Fatalf("期望 1 个根节点，实际 %d", len(s.nodes))
+	if len(s.nodes) != 1 || s.nodes[0].Type != KindFolder || s.nodes[0].Name != "Prod" {
+		t.Fatalf("期望根下建出 Prod 分组，实际 %s(%s)", s.nodes[0].Name, s.nodes[0].Type)
 	}
-	if s.nodes[0].Name != "192.168.1.1" {
-		t.Errorf("显示名应回退为主机地址，实际 %q", s.nodes[0].Name)
-	}
-	if s.nodes[0].Type != KindConnection {
-		t.Errorf("类型应为连接，实际 %q", s.nodes[0].Type)
-	}
-
-	// 同端点再次写入 = 更新，不新增节点。
-	cfg.User = "admin"
-	if _, err := s.UpsertByEndpoint(cfg, ""); err != nil {
-		t.Fatalf("更新失败: %v", err)
-	}
-	if len(s.nodes) != 1 {
-		t.Fatalf("更新后仍应只有 1 个节点，实际 %d", len(s.nodes))
-	}
-	if s.nodes[0].Config.User != "admin" {
-		t.Errorf("配置未更新，user=%q", s.nodes[0].Config.User)
+	web := s.nodes[0].Children[0]
+	conn := web.Children[0]
+	if conn.Name != "192.168.1.1" || conn.Type != KindConnection {
+		t.Fatalf("期望连接 192.168.1.1 落在 Prod/Web 下，实际 %s(%s)", conn.Name, conn.Type)
 	}
 
-	// 指定分组写入 = 移动。
-	folderID, err := s.EnsureFolderByNamePath("Prod")
-	if err != nil {
-		t.Fatalf("建分组失败: %v", err)
+	// 同端点再次连接（重放旧配置）：不新增节点、不移动、不改名，只合入新凭据。
+	cfg.Password = "rotated"
+	if _, err := s.EnsureConnectionByEndpoint(cfg, ""); err != nil {
+		t.Fatalf("重放写入失败: %v", err)
 	}
-	if _, err := s.UpsertByEndpoint(cfg, folderID); err != nil {
-		t.Fatalf("移入分组失败: %v", err)
+	if len(s.nodes) != 1 || len(s.nodes[0].Children) != 1 {
+		t.Fatalf("重放后树结构被改动: %+v", s.nodes)
 	}
-	if len(s.nodes) != 1 {
-		t.Fatalf("根下应只剩分组节点，实际 %d", len(s.nodes))
+	got := s.nodes[0].Children[0].Children[0]
+	if got.ID != conn.ID {
+		t.Errorf("应复用原节点 %q，实际 %q", conn.ID, got.ID)
 	}
-	folder := s.nodes[0]
-	if folder.Type != KindFolder || folder.Name != "Prod" {
-		t.Fatalf("期望分组 Prod，实际 %s(%s)", folder.Name, folder.Type)
+	if got.Config.Password != "rotated" {
+		t.Errorf("拨号成功的新密码未合入: %q", got.Config.Password)
 	}
-	if len(folder.Children) != 1 || folder.Children[0].Config.Host != "192.168.1.1" {
-		t.Fatalf("连接未落入分组")
+	if got.Config.User != "root" {
+		t.Errorf("账号不应被重放改写: %q", got.Config.User)
 	}
 }
 
 func TestDeleteNode(t *testing.T) {
 	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
-	node, err := s.UpsertByEndpoint(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, "")
+	node, err := s.CreateConnection(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, "")
 	if err != nil {
 		t.Fatalf("写入失败: %v", err)
 	}
@@ -92,7 +80,7 @@ func TestDeleteNode(t *testing.T) {
 
 func TestRenameNode_SyncsConnectionConfigName(t *testing.T) {
 	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
-	node, _ := s.UpsertByEndpoint(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, "")
+	node, _ := s.CreateConnection(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, "")
 
 	if err := s.RenameNode(node.ID, "NewName"); err != nil {
 		t.Fatalf("重命名失败: %v", err)
@@ -109,11 +97,11 @@ func TestRenameNode_SyncsConnectionConfigName(t *testing.T) {
 	}
 }
 
-func TestUpsertPreservesRenamedSessionName(t *testing.T) {
+func TestEnsureConnectionByEndpoint_ReplayKeepsRenamedSessionName(t *testing.T) {
 	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
 
 	cfg := remote.ConnectConfig{Host: "10.0.0.1", Port: 22, User: "root"}
-	if _, err := s.UpsertByEndpoint(cfg, ""); err != nil {
+	if _, err := s.EnsureConnectionByEndpoint(cfg, ""); err != nil {
 		t.Fatalf("首次写入失败: %v", err)
 	}
 	id := s.nodes[0].ID
@@ -122,13 +110,13 @@ func TestUpsertPreservesRenamedSessionName(t *testing.T) {
 		t.Fatalf("重命名失败: %v", err)
 	}
 
-	// 模拟用"名字仍为空"的旧配置重新连接。
-	if _, err := s.UpsertByEndpoint(cfg, ""); err != nil {
+	// 用旧配置重连：名字与分组都是连接当时捕获的陈旧值，不得采纳。
+	if _, err := s.EnsureConnectionByEndpoint(cfg, "旧分组"); err != nil {
 		t.Fatalf("重连写入失败: %v", err)
 	}
 
 	if len(s.nodes) != 1 {
-		t.Fatalf("期望 1 个节点，实际 %d", len(s.nodes))
+		t.Fatalf("期望 1 个根节点（不得按名字重建分组），实际 %d", len(s.nodes))
 	}
 	if s.nodes[0].ID != id {
 		t.Errorf("应复用原 ID %q，实际 %q", id, s.nodes[0].ID)
@@ -141,11 +129,11 @@ func TestUpsertPreservesRenamedSessionName(t *testing.T) {
 	}
 }
 
-func TestUpsertUsesConfiguredDisplayName(t *testing.T) {
+func TestEnsureConnectionByEndpoint_UsesConfiguredDisplayNameOnCreate(t *testing.T) {
 	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
 
 	cfg := remote.ConnectConfig{Name: "database-primary", Host: "10.0.0.2", Port: 22, User: "root"}
-	if _, err := s.UpsertByEndpoint(cfg, ""); err != nil {
+	if _, err := s.EnsureConnectionByEndpoint(cfg, ""); err != nil {
 		t.Fatalf("写入失败: %v", err)
 	}
 	if s.nodes[0].Name != "database-primary" || s.nodes[0].Config.Name != "database-primary" {
@@ -162,7 +150,7 @@ func TestPersistenceRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("建分组失败: %v", err)
 	}
-	if _, err := s1.UpsertByEndpoint(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, folderID); err != nil {
+	if _, err := s1.CreateConnection(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, folderID); err != nil {
 		t.Fatalf("写入失败: %v", err)
 	}
 
@@ -183,7 +171,7 @@ func TestDeleteFolderRemovesWholeSubtree(t *testing.T) {
 
 	outerID, _ := s.EnsureFolderByNamePath("生产")
 	innerID, _ := s.EnsureFolderByNamePath("生产/华东")
-	if _, err := s.UpsertByEndpoint(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, innerID); err != nil {
+	if _, err := s.CreateConnection(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, innerID); err != nil {
 		t.Fatalf("写入失败: %v", err)
 	}
 
@@ -233,7 +221,7 @@ func TestCreateFolder_NestedAndSiblingDuplicateRejected(t *testing.T) {
 
 func TestCreateFolder_RejectsMissingOrNonFolderParent(t *testing.T) {
 	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
-	node, _ := s.UpsertByEndpoint(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, "")
+	node, _ := s.CreateConnection(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, "")
 
 	if _, err := s.CreateFolder("X", "no-such-id"); !errors.Is(err, ErrParentNotFound) {
 		t.Errorf("父不存在应返回 ErrParentNotFound，实际 %v", err)
@@ -276,7 +264,7 @@ func TestRenameFolder_KeepsChildrenAndRejectsSiblingDuplicate(t *testing.T) {
 	if _, err := s.EnsureFolderByNamePath("测试"); err != nil {
 		t.Fatalf("建测试分组失败: %v", err)
 	}
-	node, _ := s.UpsertByEndpoint(remote.ConnectConfig{Host: "10.0.0.1", Port: 22}, prodID)
+	node, _ := s.CreateConnection(remote.ConnectConfig{Host: "10.0.0.1", Port: 22}, prodID)
 
 	if err := s.RenameNode(prodID, "生产环境"); err != nil {
 		t.Fatalf("重命名失败: %v", err)
@@ -618,7 +606,7 @@ func TestSnapshotIsDeepCopy(t *testing.T) {
 
 func TestFindByEndpoint_NormalizesProtocol(t *testing.T) {
 	s := NewStoreWithPath(filepath.Join(t.TempDir(), "sessions.json"))
-	if _, err := s.UpsertByEndpoint(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, ""); err != nil {
+	if _, err := s.EnsureConnectionByEndpoint(remote.ConnectConfig{Host: "1.1.1.1", Port: 22}, ""); err != nil {
 		t.Fatalf("写入失败: %v", err)
 	}
 	// 存储里 Protocol 已被归一化为 ssh，用空协议查询也应命中。

@@ -654,6 +654,20 @@ func (a *App) Connect(config ConnectConfig) ConnectResult {
 	return a.ConnectWithID(config, "")
 }
 
+// autoSaveConnection 连接成功后把端点 ensure 进会话树。
+//
+// 语义见 connectionstore.EnsureConnectionByEndpoint：端点不存在时按 config.Group
+// （"保存到分组"输入）落位新建；已存在则只合入本次拨号验证过的凭据，显示名与
+// 位置不动。这里绝不能按端点整节点重写——重连（ReconnectSession）、复制标签
+// （DuplicateTerminalSession）重放的是连接时捕获的旧配置，若据此改写树，用户
+// 随后的改名/拖拽/分组重命名都会被旧快照还原（旧分组名还会按名字重建文件夹）。
+func (a *App) autoSaveConnection(config ConnectConfig) {
+	cfg := toRemoteConfig(config)
+	if _, err := a.savedSessionMgr.EnsureConnectionByEndpoint(cfg, config.Group); err != nil {
+		fmt.Fprintf(os.Stderr, "[WARN] 自动保存会话失败: %v\n", err)
+	}
+}
+
 // ConnectWithID connects with a specific sessionID (for reconnection)
 func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) ConnectResult {
 	// 尝试从 SecretStore 保存密码（如果提供了）
@@ -734,14 +748,8 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) Con
 	a.commandExtractors[sessionID] = terminal.NewCommandExtractor()
 	a.extractorMu.Unlock()
 
-	// 自动落库到会话树。config.Group 是"保存到分组"的便捷输入（支持 A/B 形式
-	// 的多层路径），在此解析为文件夹 ID——结构才是归属的唯一真相。
-	groupID, groupErr := a.savedSessionMgr.EnsureFolderByNamePath(config.Group)
-	if groupErr != nil {
-		fmt.Fprintf(os.Stderr, "[WARN] 解析保存分组失败: %v\n", groupErr)
-	} else if _, saveErr := a.savedSessionMgr.UpsertByEndpoint(clientConfig, groupID); saveErr != nil {
-		fmt.Fprintf(os.Stderr, "[WARN] 自动保存会话失败: %v\n", saveErr)
-	}
+	// 自动落库到会话树（ensure 语义，详见 autoSaveConnection）
+	a.autoSaveConnection(config)
 
 	// 会话共享：记录本次成功登录并异步推送（未启用时 nil 守卫直接返回）
 	a.recordSharedLogin(config)
