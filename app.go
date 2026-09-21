@@ -604,6 +604,7 @@ type ConnectConfig struct {
 	User         string         `json:"user"`
 	Password     string         `json:"password"`
 	RootPassword string         `json:"rootPassword"`
+	HostKey      string         `json:"hostKey,omitempty"` // OpenSSH authorized-key form；树连接透传以恢复固定主机密钥校验
 	Bastion      *ConnectConfig `json:"bastion"`
 	Group        string         `json:"group"`
 }
@@ -2971,6 +2972,7 @@ func toRemoteConfig(in ConnectConfig) remote.ConnectConfig {
 		User:         in.User,
 		Password:     in.Password,
 		RootPassword: in.RootPassword,
+		HostKey:      in.HostKey,
 		Group:        in.Group,
 	}
 	if in.Bastion != nil {
@@ -2980,19 +2982,81 @@ func toRemoteConfig(in ConnectConfig) remote.ConnectConfig {
 	return out
 }
 
+// toAppConfig 是 toRemoteConfig 的逆向：把持久化的 remote.ConnectConfig 转回
+// Wails 边界的驼峰形态。会话树的出参（GetConnectionTree 等）若直接返回
+// remote.ConnectConfig，多词字段（root_password / host_key）会按下划线 tag
+// 序列化，前端按驼峰读取永远拿不到——编辑框显示空、树连接丢凭据，随后整节点
+// 保存还会把磁盘上已存的值抹掉。
+func toAppConfig(in remote.ConnectConfig) ConnectConfig {
+	out := ConnectConfig{
+		Name:         in.Name,
+		Protocol:     in.Protocol,
+		Host:         in.Host,
+		Port:         in.Port,
+		User:         in.User,
+		Password:     in.Password,
+		RootPassword: in.RootPassword,
+		HostKey:      in.HostKey,
+		Bastion:      nil,
+		Group:        in.Group,
+	}
+	if in.Bastion != nil {
+		bastion := toAppConfig(*in.Bastion)
+		out.Bastion = &bastion
+	}
+	return out
+}
+
+// SessionTreeNode 是 Wails 边界的会话树节点，结构与 connectionstore.Node 一致，
+// 唯一差异是 Config 用驼峰的 ConnectConfig（见 toAppConfig）。
+type SessionTreeNode struct {
+	ID       string               `json:"id"`
+	Name     string               `json:"name"`
+	Type     connectionstore.Kind `json:"type"`
+	Children []*SessionTreeNode   `json:"children,omitempty"`
+	Config   *ConnectConfig       `json:"config,omitempty"`
+}
+
+// toAppTree 把持久化树快照转为 Wails 出参形态，递归到任意层级文件夹。
+func toAppTree(nodes []*connectionstore.Node) []*SessionTreeNode {
+	out := make([]*SessionTreeNode, 0, len(nodes))
+	for _, n := range nodes {
+		node := &SessionTreeNode{ID: n.ID, Name: n.Name, Type: n.Type}
+		if n.Config != nil {
+			cfg := toAppConfig(*n.Config)
+			node.Config = &cfg
+		}
+		if len(n.Children) > 0 {
+			node.Children = toAppTree(n.Children)
+		}
+		out = append(out, node)
+	}
+	return out
+}
+
 // GetConnectionTree 返回已保存连接树的深拷贝快照（含任意层级的文件夹）。
-func (a *App) GetConnectionTree() ([]*connectionstore.Node, error) {
-	return a.savedSessionMgr.Snapshot(), nil
+// 出参的 Config 是驼峰形态（见 toAppConfig），保证 rootPassword/hostKey 等
+// 多词字段在前端可读。
+func (a *App) GetConnectionTree() ([]*SessionTreeNode, error) {
+	return toAppTree(a.savedSessionMgr.Snapshot()), nil
 }
 
 // CreateSavedFolder 在 parentID 指定的文件夹下新建文件夹；parentID 为空表示根。
-func (a *App) CreateSavedFolder(name, parentID string) (*connectionstore.Node, error) {
-	return a.savedSessionMgr.CreateFolder(name, parentID)
+func (a *App) CreateSavedFolder(name, parentID string) (*SessionTreeNode, error) {
+	node, err := a.savedSessionMgr.CreateFolder(name, parentID)
+	if err != nil {
+		return nil, err
+	}
+	return toAppTree([]*connectionstore.Node{node})[0], nil
 }
 
 // CreateSavedConnection 保存一条新连接而不建立实际会话（"新建会话"入口）。
-func (a *App) CreateSavedConnection(config ConnectConfig, parentID string) (*connectionstore.Node, error) {
-	return a.savedSessionMgr.CreateConnection(toRemoteConfig(config), parentID)
+func (a *App) CreateSavedConnection(config ConnectConfig, parentID string) (*SessionTreeNode, error) {
+	node, err := a.savedSessionMgr.CreateConnection(toRemoteConfig(config), parentID)
+	if err != nil {
+		return nil, err
+	}
+	return toAppTree([]*connectionstore.Node{node})[0], nil
 }
 
 // RenameTreeNode 改显示名，文件夹与连接通用。
@@ -3023,8 +3087,12 @@ func (a *App) DeleteTreeNode(id string) error {
 
 // DuplicateSavedConnection 复制一条已保存连接为新的连接条目（完整配置副本，
 // 落在同一文件夹）。副本与源同端点是预期中间态（用户随后编辑副本），不走端点去重。
-func (a *App) DuplicateSavedConnection(id string) (*connectionstore.Node, error) {
-	return a.savedSessionMgr.DuplicateConnection(id)
+func (a *App) DuplicateSavedConnection(id string) (*SessionTreeNode, error) {
+	node, err := a.savedSessionMgr.DuplicateConnection(id)
+	if err != nil {
+		return nil, err
+	}
+	return toAppTree([]*connectionstore.Node{node})[0], nil
 }
 
 // DuplicateTerminalSession 以同配置再开一个终端会话（标签页"复制标签"）。
