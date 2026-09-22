@@ -352,9 +352,27 @@ func (a *App) closeRelayTransport(sessionID string) {
 	}
 }
 
-// getShellTransport returns a cached RootRelayTransport for root-identity sessions
-// where SFTP is not available. It uses the root SSH client directly (no su needed).
-func (a *App) getShellTransport(sessionID string, client *ssh.Client) *filetransfer.RootRelayTransport {
+// getShellTransportForIdentity picks the shell fallback for a transfer
+// identity. root runs commands as-is on the (already root) client. login
+// users run commands as themselves — the same permission view as scp, so
+// the file panel never claims privileges the transfer itself lacks.
+func (a *App) getShellTransportForIdentity(sessionID string, client *ssh.Client, identity string) *filetransfer.RootRelayTransport {
+	// login 身份：以登录用户身份执行，权限与 scp 传输一致。
+	loginUser := ""
+	if cfg, ok := a.getConfig(sessionID); ok && identity != "root" {
+		loginUser = cfg.User
+	}
+	if loginUser == "" {
+		loginUser = "login"
+	}
+	return a.getShellTransportAs(sessionID, client, loginUser)
+}
+
+// getShellTransportAs returns a cached RootRelayTransport that executes shell
+// commands on the given SSH client. The transport's su escalation is keyed
+// off loginUser: "" runs commands as the connection user; a non-empty
+// loginUser su-escalates to that user's session.
+func (a *App) getShellTransportAs(sessionID string, client *ssh.Client, loginUser string) *filetransfer.RootRelayTransport {
 	a.relayMu.Lock()
 	defer a.relayMu.Unlock()
 
@@ -365,9 +383,12 @@ func (a *App) getShellTransport(sessionID string, client *ssh.Client) *filetrans
 		return t
 	}
 
-	// loginUser="" means we are already root, RootRelayTransport will skip su
-	slog.Info("ft getShellTransport created new ShellTransport (root direct, skip su)", "session", sessionID[:8])
-	t := filetransfer.NewRootRelayTransport(client, "", "")
+	if loginUser == "" {
+		slog.Info("ft getShellTransport created new ShellTransport (direct, no su)", "session", sessionID[:8])
+	} else {
+		slog.Info("ft getShellTransport created new ShellTransport (su to login user)", "session", sessionID[:8], "loginUser", loginUser)
+	}
+	t := filetransfer.NewRootRelayTransport(client, "", loginUser)
 	a.shellTransports[sessionID] = t
 	return t
 }
@@ -1897,15 +1918,13 @@ func (a *App) FTRemoteMkdir(sessionID, remotePath string) string {
 
 	tr := filetransfer.NewSFTPTransport(info.client)
 	if err := tr.Mkdir(context.Background(), remotePath); err != nil {
-		// SFTP failed, try shell for root
-		if info.identity == "root" {
-			shell := a.getShellTransport(sessionID, info.client)
-			if shell != nil {
-				if shellErr := shell.Mkdir(context.Background(), remotePath); shellErr != nil {
-					return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(shellErr)})
-				}
-				return mustJSON(remoteFSResponse{OK: true})
+		// SFTP unavailable — fall back to shell commands on the same client.
+		shell := a.getShellTransportForIdentity(sessionID, info.client, info.identity)
+		if shell != nil {
+			if shellErr := shell.Mkdir(context.Background(), remotePath); shellErr != nil {
+				return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(shellErr)})
 			}
+			return mustJSON(remoteFSResponse{OK: true})
 		}
 		return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(err)})
 	}
@@ -1932,14 +1951,13 @@ func (a *App) FTRemoteRename(sessionID, oldPath, newPath string) string {
 
 	tr := filetransfer.NewSFTPTransport(info.client)
 	if err := tr.Rename(context.Background(), oldPath, newPath); err != nil {
-		if info.identity == "root" {
-			shell := a.getShellTransport(sessionID, info.client)
-			if shell != nil {
-				if shellErr := shell.Rename(context.Background(), oldPath, newPath); shellErr != nil {
-					return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(shellErr)})
-				}
-				return mustJSON(remoteFSResponse{OK: true})
+		// SFTP unavailable — fall back to shell commands on the same client.
+		shell := a.getShellTransportForIdentity(sessionID, info.client, info.identity)
+		if shell != nil {
+			if shellErr := shell.Rename(context.Background(), oldPath, newPath); shellErr != nil {
+				return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(shellErr)})
 			}
+			return mustJSON(remoteFSResponse{OK: true})
 		}
 		return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(err)})
 	}
@@ -1966,14 +1984,13 @@ func (a *App) FTRemoteRemove(sessionID, remotePath string) string {
 
 	tr := filetransfer.NewSFTPTransport(info.client)
 	if err := tr.Remove(context.Background(), remotePath, true); err != nil {
-		if info.identity == "root" {
-			shell := a.getShellTransport(sessionID, info.client)
-			if shell != nil {
-				if shellErr := shell.Remove(context.Background(), remotePath, true); shellErr != nil {
-					return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(shellErr)})
-				}
-				return mustJSON(remoteFSResponse{OK: true})
+		// SFTP unavailable — fall back to shell commands on the same client.
+		shell := a.getShellTransportForIdentity(sessionID, info.client, info.identity)
+		if shell != nil {
+			if shellErr := shell.Remove(context.Background(), remotePath, true); shellErr != nil {
+				return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(shellErr)})
 			}
+			return mustJSON(remoteFSResponse{OK: true})
 		}
 		return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(err)})
 	}
@@ -1999,13 +2016,18 @@ func (a *App) FTRemoteReadFile(sessionID, remotePath string, maxBytes int64) str
 		return mustJSON(remoteFSResponse{OK: true, Content: string(b)})
 	}
 
-	if strings.HasPrefix(a.getTransferMode(sessionID), "scp") {
-		return mustJSON(remoteFSResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotSupported, Message: "SCP 模式不支持远端文件直读"}})
-	}
-
 	tr := filetransfer.NewSFTPTransport(info.client)
 	b, err := tr.ReadFile(context.Background(), remotePath, maxBytes)
 	if err != nil {
+		// SFTP unavailable — fall back to shell commands on the same client.
+		shell := a.getShellTransportForIdentity(sessionID, info.client, info.identity)
+		if shell != nil {
+			content, shellErr := shell.ReadFile(context.Background(), remotePath, maxBytes)
+			if shellErr != nil {
+				return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(shellErr)})
+			}
+			return mustJSON(remoteFSResponse{OK: true, Content: string(content)})
+		}
 		return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(err)})
 	}
 	return mustJSON(remoteFSResponse{OK: true, Content: string(b)})
@@ -2029,12 +2051,16 @@ func (a *App) FTRemoteWriteFile(sessionID, remotePath string, content string) st
 		return mustJSON(remoteFSResponse{OK: true})
 	}
 
-	if strings.HasPrefix(a.getTransferMode(sessionID), "scp") {
-		return mustJSON(remoteFSResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotSupported, Message: "SCP 模式不支持远端文件直写"}})
-	}
-
 	tr := filetransfer.NewSFTPTransport(info.client)
 	if err := tr.WriteFile(context.Background(), remotePath, []byte(content)); err != nil {
+		// SFTP unavailable — fall back to shell commands on the same client.
+		shell := a.getShellTransportForIdentity(sessionID, info.client, info.identity)
+		if shell != nil {
+			if shellErr := shell.WriteFile(context.Background(), remotePath, []byte(content)); shellErr != nil {
+				return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(shellErr)})
+			}
+			return mustJSON(remoteFSResponse{OK: true})
+		}
 		return mustJSON(remoteFSResponse{OK: false, Error: toTransferErr(err)})
 	}
 	return mustJSON(remoteFSResponse{OK: true})
@@ -2137,29 +2163,6 @@ func (a *App) getTransferClientWithRelay(sessionID string) (transferClientInfo, 
 	}, nil
 }
 
-func (a *App) getTransferMode(sessionID string) string {
-	c, closeFn, _, err := a.getPreferredTransferSSHClient(sessionID)
-	if err != nil {
-		return ""
-	}
-	defer closeFn()
-
-	sftpTr := filetransfer.NewSFTPTransport(c)
-	_, _, sftpErr := sftpTr.Check(context.Background())
-	if sftpErr == nil {
-		return "sftp"
-	}
-	te := toTransferErr(sftpErr)
-	if te != nil && te.Code == filetransfer.ErrorCodeSFTPNotSupported {
-		scpTr := filetransfer.NewSCPTransport(c)
-		ok, _, err := scpTr.Check(context.Background())
-		if err == nil && ok {
-			return "scp"
-		}
-	}
-	return ""
-}
-
 func (a *App) FTList(sessionID, remotePath string) string {
 	info, err := a.getTransferClientWithRelay(sessionID)
 	if err != nil {
@@ -2180,11 +2183,15 @@ func (a *App) FTList(sessionID, remotePath string) string {
 	} else {
 		tr := filetransfer.NewSFTPTransport(info.client)
 		entries, err = tr.List(context.Background(), remotePath)
-		// SFTP failed but we have root access — fall back to shell commands
-		if err != nil && info.identity == "root" {
+		// SFTP unavailable — fall back to shell commands on the same client.
+		// root direct runs as-is; login users (SCP 降级) run as themselves,
+		// matching the permission view of scp itself.
+		if err != nil {
 			slog.Debug("ftList session SFTP list failed, falling back to shell", "session", sessionID[:8], "error", err)
-			shell := a.getShellTransport(sessionID, info.client)
-			entries, err = shell.List(context.Background(), remotePath)
+			shell := a.getShellTransportForIdentity(sessionID, info.client, info.identity)
+			if shell != nil {
+				entries, err = shell.List(context.Background(), remotePath)
+			}
 		}
 	}
 	if err != nil {
@@ -2213,10 +2220,12 @@ func (a *App) FTStat(sessionID, remotePath string) string {
 	} else {
 		tr := filetransfer.NewSFTPTransport(info.client)
 		entry, err = tr.Stat(context.Background(), remotePath)
-		// SFTP failed but we have root access — fall back to shell commands
-		if err != nil && info.identity == "root" {
-			shell := a.getShellTransport(sessionID, info.client)
-			entry, err = shell.Stat(context.Background(), remotePath)
+		// SFTP unavailable — fall back to shell commands on the same client.
+		if err != nil {
+			shell := a.getShellTransportForIdentity(sessionID, info.client, info.identity)
+			if shell != nil {
+				entry, err = shell.Stat(context.Background(), remotePath)
+			}
 		}
 	}
 	if err != nil {

@@ -201,9 +201,63 @@ func (s *testSSHServer) handleSession(ch ssh.Channel, requests <-chan *ssh.Reque
 			_ = req.Reply(true, nil)
 			_, _ = ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{Status: 127}))
 			return
+		case "pty-req", "shell":
+			// RootRelayTransport 的 shell 会话（PTY + Shell 请求）。
+			// 对所有写进 stdin 的命令统一回 OK 标记；特定命令输出可控
+			// 的内容（见 shellExec），供 List/Stat 的 find/ls 解析测试用。
+			_ = req.Reply(true, nil)
+			if req.Type == "shell" {
+				s.shellSession(ch)
+				return
+			}
 		default:
 			_ = req.Reply(false, nil)
 		}
+	}
+}
+
+// shellExec 模拟一个极简 shell：逐行读命令，按命令内容给出可控输出。
+func shellExec(line string) string {
+	switch {
+	case strings.Contains(line, "find ") && strings.Contains(line, "-printf"):
+		// find %F %s %T@ %u %g %f 格式的目录列表
+		return "directory\t0\t1700000000.000000000\tu\tu\t.\nfile\t12\t1700000001.000000000\tu\tu\thello.txt\n"
+	case strings.HasPrefix(line, "ls "):
+		return "total 4\ndrwxr-xr-x 2 u u 4096 Jan  1 00:00 .\n-rw-r--r-- 1 u u 12 Jan  1 00:00 hello.txt\n"
+	case strings.HasPrefix(line, "stat "):
+		// stat -c '%F\t%s\t%Y\t%U\t%G' 的输出：type\tsize\tmtime\towner\tgroup
+		return "regular file\t12\t1700000001\tu\tu\n"
+	default:
+		return ""
+	}
+}
+
+func (s *testSSHServer) shellSession(ch ssh.Channel) {
+	defer ch.Close()
+	// 先回一个提示符：客户端 getSession 建连后会同步读一次"初始提示"，
+	// 不写它会永久阻塞。
+	_, _ = ch.Write([]byte("$ "))
+	br := bufio.NewReader(ch)
+	for {
+		line, err := br.ReadString('\n')
+		if err != nil {
+			return
+		}
+		cmd := strings.TrimSpace(line)
+		// 命令形如 "xxx && echo __RELAY_OK__ || echo __RELAY_FAIL__"，
+		// 去掉成功/失败标记后交给模拟执行器，再回显成功标记。
+		body := cmd
+		if idx := strings.Index(cmd, " && echo "); idx >= 0 {
+			body = cmd[:idx]
+		}
+		out := shellExec(body)
+		if out != "" {
+			// extractBeforeMarker 会丢掉标记前的第一行（假定它是命令回显），
+			// 所以输出前补一个空行，避免单行命令输出（如 stat）被一起丢掉。
+			_, _ = ch.Write([]byte("\r\n" + out))
+		}
+		// PTY 输出以 \r\n 换行；echo 已在客户端关闭（ECHO=0）。
+		_, _ = ch.Write([]byte("__RELAY_OK__\r\n"))
 	}
 }
 

@@ -1,9 +1,12 @@
 package filetransfer
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
+
+	"golang.org/x/crypto/ssh"
 )
 
 func TestParseFindOutput(t *testing.T) {
@@ -370,5 +373,45 @@ func TestComputeLocalMD5_Nonexistent(t *testing.T) {
 func TestMaxBase64DirectBytes(t *testing.T) {
 	if maxBase64DirectBytes != 10*1024*1024 {
 		t.Errorf("maxBase64DirectBytes = %d, want %d", maxBase64DirectBytes, 10*1024*1024)
+	}
+}
+
+// TestShellTransport_ListStatAsLoginUser 覆盖 SCP 降级场景的 shell 回退：
+// loginUser 为空（登录用户身份，无 su）时，List/Stat 走 find/stat 的
+// 解析路径。此前这些能力只有 root-relay 消费，登录用户 SCP 会话
+// 在 UI 层被迫使用表单；现在面板统一走 FilePane，本测试守住解析链路。
+func TestShellTransport_ListStatAsLoginUser(t *testing.T) {
+	root := t.TempDir()
+	srv := newTestSSHServer(t, testSSHServerOptions{RootDir: root})
+	defer srv.Close()
+
+	client, err := ssh.Dial("tcp", srv.Addr(), srv.ClientConfig())
+	if err != nil {
+		t.Fatalf("ssh dial: %v", err)
+	}
+	defer client.Close()
+
+	// loginUser == "" ⇒ 不 su，直接用当前 shell（SCP 降级的登录用户路径）。
+	tr := NewRootRelayTransport(client, "", "")
+	defer tr.Close()
+
+	ctx := context.Background()
+	entries, err := tr.List(ctx, "/data")
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("List 条目数: got %d, want 1 (hello.txt)", len(entries))
+	}
+	if entries[0].Name != "hello.txt" || entries[0].IsDir {
+		t.Fatalf("List 结果: %+v", entries[0])
+	}
+
+	entry, err := tr.Stat(ctx, "/data/hello.txt")
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	if entry.Name != "hello.txt" || entry.Size != 12 {
+		t.Fatalf("Stat 结果: %+v", entry)
 	}
 }

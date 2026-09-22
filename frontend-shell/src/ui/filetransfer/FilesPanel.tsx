@@ -744,8 +744,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
     const [editPath, setEditPath] = useState('');
     const [editContent, setEditContent] = useState('');
     const [editSaving, setEditSaving] = useState(false);
-    const [scpDownloadRemote, setScpDownloadRemote] = useState('');
-    const [scpDownloadLocal, setScpDownloadLocal] = useState('');
 
     const [tasks, setTasks] = useState<Record<string, TaskState>>({});
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -987,8 +985,9 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
     };
 
     const isSFTPSupported = () => {
-        // root-relay has full file management capabilities via su + shell commands
-        return protocol.startsWith('sftp') || protocol.includes('root-relay');
+        // root-relay 与 SCP 降级都经 shell 回退提供完整远端管理
+        // （后端 FTList 等在 SFTP 不可用时回退 shell 命令执行）。
+        return protocol.startsWith('sftp') || protocol.includes('root-relay') || protocol.startsWith('scp');
     };
 
     const isTransferSupported = () => {
@@ -1166,7 +1165,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
     const refreshRemote = async (path: string) => {
         const targetSessionId = sessionIdRef.current;
         if (!targetSessionId) return;
-        if (!protocolRef.current.startsWith('sftp') && !protocolRef.current.includes('root-relay')) {
+        // SCP 降级会话远端管理走 shell 回退（FTList 后端已支持），与 sftp 一致。
+        if (!protocolRef.current.startsWith('sftp') && !protocolRef.current.includes('root-relay') && !protocolRef.current.startsWith('scp')) {
             setRemoteEntries([]);
             return;
         }
@@ -1402,8 +1402,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
         }
         // 单文件入口清空批量覆盖决定，避免上一批的"全部覆盖"泄漏到本次
         if (!opts?.batch) overwriteAllRef.current = false;
-        const baseDir = isSCPMode() ? (remotePathInput.trim() || remotePath) : remotePath;
-        const dst = remoteJoin(baseDir, entry.name);
+        const dst = remoteJoin(remotePath, entry.name);
 
         if (protocolRef.current.startsWith('sftp') || protocolRef.current.includes('root-relay')) {
             try {
@@ -1481,8 +1480,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
             setMsg('SCP 降级模式不支持文件夹传输，请使用单文件上传');
             return;
         }
-        const baseDir = isSCPMode() ? (remotePathInput.trim() || remotePath) : remotePath;
-        const dst = remoteJoin(baseDir, entry.name);
+        const dst = remoteJoin(remotePath, entry.name);
 
         if (protocolRef.current.startsWith('sftp') || protocolRef.current.includes('root-relay')) {
             try {
@@ -1690,10 +1688,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
             setMsg('对端不支持文件传输');
             return;
         }
-        if (isSCPMode()) {
-            setMsg('SCP 模式请使用右侧“下载”表单');
-            return;
-        }
         const src = [...remoteSelected][0];
         if (!src) {
             setMsg('请先选择远端文件');
@@ -1738,10 +1732,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
         }
         if (!isTransferSupported()) {
             setMsg('对端不支持文件传输');
-            return;
-        }
-        if (isSCPMode()) {
-            setMsg('SCP 模式请使用右侧“下载”表单');
             return;
         }
         const targets = remoteEntries.filter(e => remoteSelected.has(e.path));
@@ -1888,10 +1878,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
             setMsg('对端不支持文件传输');
             return;
         }
-        if (isSCPMode()) {
-            setMsg('SCP 模式请使用右侧“下载”表单');
-            return;
-        }
         if (!entry) {
             const m = '仅支持下载文件';
             if (onError) onError(m); else setMsg(m);
@@ -1941,7 +1927,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
             return m;
         }
         if (isSCPMode()) {
-            const m = 'SCP 降级模式不支持文件夹传输，请使用右侧“下载”表单';
+            const m = 'SCP 降级模式不支持文件夹传输，请选择单文件下载';
             setMsg(m);
             return m;
         }
@@ -1992,7 +1978,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
         }
     };
 
-    const startDownloadByPath = async () => {
+    const startDownloadByPath = async (rp0: string, lp0: string) => {
         if (!sessionId) {
             setMsg('请先选择会话');
             return;
@@ -2001,8 +1987,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
             setMsg('对端不支持文件传输');
             return;
         }
-        const rp = scpDownloadRemote.trim();
-        const lp0 = scpDownloadLocal.trim();
+        const rp = rp0.trim();
         if (!rp || !lp0) {
             setMsg('请填写远端路径与本地保存路径');
             return;
@@ -2438,9 +2423,9 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
                 </div>
             ) : null}
 
-            {!isSFTPSupported() && protocol.startsWith('scp') && !isRootRelay() ? (
+            {isSCPMode() ? (
                 <div style={{ color: 'var(--text-tertiary)', fontSize: '12px' }}>
-                    当前为 SCP 降级模式，仅支持上传/下载，不支持远端浏览与管理。
+                    当前为 SCP 降级模式：远端浏览与管理经 shell 回退提供；文件夹传输暂不支持，请使用单文件。
                 </div>
             ) : null}
 
@@ -2492,48 +2477,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
                     />
                 ) : null}
 
-                {(!isNarrow || narrowPane === 'remote') ? (isSCPMode() ? (
-                    <div
-                        style={styles.scpPane}
-                        ref={remotePaneRef}
-                        onDragOver={handleRemoteDragOver}
-                        onDragLeave={handleRemoteDragLeave}
-                        onDrop={handleRemoteDrop}
-                    >
-                        {remoteDropOverlay?.visible ? (
-                            <div
-                                style={{
-                                    ...styles.dropOverlay,
-                                    ...(remoteDropOverlay.blocked ? styles.dropOverlayBlocked : styles.dropOverlayReady),
-                                }}
-                                data-testid="file-drop-overlay"
-                            >
-                                <div style={styles.dropOverlayTitle}>{remoteDropOverlay.title}</div>
-                                <div style={styles.dropOverlayDetail}>{remoteDropOverlay.detail}</div>
-                            </div>
-                        ) : null}
-                        <div style={styles.paneHeader}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <div style={{ color: 'var(--text-primary)', fontSize: '12px', fontWeight: 600 }}>远端（SCP）</div>
-                                <div style={styles.badge}>{protocol}</div>
-                            </div>
-                        </div>
-                        <div style={styles.scpBody}>
-                            <div style={styles.scpGroup}>
-                                <div style={styles.scpLabel}>上传目标目录</div>
-                                <input style={styles.pathInput} value={remotePathInput} onChange={(e) => setRemotePathInput(e.target.value)} />
-                                <div style={styles.scpHint}>双击左侧本地文件将上传到该目录。</div>
-                            </div>
-                            <div style={styles.scpGroup}>
-                                <div style={styles.scpLabel}>下载远端文件</div>
-                                <input style={styles.pathInput} value={scpDownloadRemote} onChange={(e) => setScpDownloadRemote(e.target.value)} placeholder="/path/to/file" />
-                                <div style={styles.scpLabel}>本地保存路径</div>
-                                <input style={styles.pathInput} value={scpDownloadLocal} onChange={(e) => setScpDownloadLocal(e.target.value)} placeholder="C:\\path\\to\\file" />
-                                <button style={styles.btn} onClick={startDownloadByPath} disabled={loading || !scpDownloadRemote || !scpDownloadLocal}>开始下载</button>
-                            </div>
-                        </div>
-                    </div>
-                ) : (
+                {(!isNarrow || narrowPane === 'remote') ? (
                     <FilePane
                         title="远端"
                         owner="-"
@@ -2574,7 +2518,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
                         onToggleCheck={(p) => toggleCheck(setRemoteSelected, p)}
                         onToggleCheckAll={(paths, checked) => toggleCheckAll(setRemoteSelected, paths, checked)}
                     />
-                )) : null}
+                ) : null}
             </div>
             ) : null}
 
@@ -2780,26 +2724,6 @@ const styles: Record<string, React.CSSProperties> = {
         minWidth: '180px',
         maxWidth: '100%',
         height: '28px',
-        fontSize: '12px'
-    },
-    badge: {
-        padding: '2px 7px',
-        borderRadius: '999px',
-        border: '1px solid var(--border-subtle)',
-        backgroundColor: 'var(--bg-secondary)',
-        color: 'var(--text-secondary)',
-        fontSize: '11px',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
-        maxWidth: '260px'
-    },
-    badgeMuted: {
-        padding: '4px 8px',
-        borderRadius: '999px',
-        border: '1px solid var(--border)',
-        backgroundColor: 'var(--bg-primary)',
-        color: 'var(--text-muted)',
         fontSize: '12px'
     },
     btn: {
@@ -3166,41 +3090,6 @@ const styles: Record<string, React.CSSProperties> = {
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap'
-    },
-    scpPane: {
-        flex: 1,
-        border: '1px solid var(--border)',
-        borderRadius: '8px',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column' as const,
-        minHeight: 0,
-        position: 'relative' as const
-    },
-    scpBody: {
-        flex: 1,
-        padding: '12px 12px',
-        display: 'flex',
-        flexDirection: 'column' as const,
-        gap: '14px',
-        overflow: 'auto'
-    },
-    scpGroup: {
-        border: '1px solid var(--border)',
-        borderRadius: '8px',
-        padding: '12px 12px',
-        backgroundColor: 'var(--bg-primary)',
-        display: 'flex',
-        flexDirection: 'column' as const,
-        gap: '10px'
-    },
-    scpLabel: {
-        color: 'var(--text-tertiary)',
-        fontSize: '12px'
-    },
-    scpHint: {
-        color: 'var(--text-muted)',
-        fontSize: '12px'
     },
     drawer: {
         border: '1px solid var(--border)',
