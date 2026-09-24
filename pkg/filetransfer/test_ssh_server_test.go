@@ -216,49 +216,71 @@ func (s *testSSHServer) handleSession(ch ssh.Channel, requests <-chan *ssh.Reque
 	}
 }
 
-// shellExec 模拟一个极简 shell：逐行读命令，按命令内容给出可控输出。
+// shellExec 模拟一个极简 shell：按命令内容给出可控输出（不带尾部换行）。
 func shellExec(line string) string {
 	switch {
+	case strings.Contains(line, "id -u"):
+		// 非零 UID：模拟 su 提权失败回落登录用户（verifyRootUID 必须拒绝）
+		return "1000"
 	case strings.Contains(line, "find ") && strings.Contains(line, "-printf"):
 		// find %F %s %T@ %u %g %f 格式的目录列表
-		return "directory\t0\t1700000000.000000000\tu\tu\t.\nfile\t12\t1700000001.000000000\tu\tu\thello.txt\n"
+		return "directory\t0\t1700000000.000000000\tu\tu\t.\nfile\t12\t1700000001.000000000\tu\tu\thello.txt"
 	case strings.HasPrefix(line, "ls "):
-		return "total 4\ndrwxr-xr-x 2 u u 4096 Jan  1 00:00 .\n-rw-r--r-- 1 u u 12 Jan  1 00:00 hello.txt\n"
+		return "total 4\ndrwxr-xr-x 2 u u 4096 Jan  1 00:00 .\n-rw-r--r-- 1 u u 12 Jan  1 00:00 hello.txt"
 	case strings.HasPrefix(line, "stat "):
 		// stat -c '%F\t%s\t%Y\t%U\t%G' 的输出：type\tsize\tmtime\towner\tgroup
-		return "regular file\t12\t1700000001\tu\tu\n"
+		return "regular file\t12\t1700000001\tu\tu"
 	default:
 		return ""
 	}
 }
 
+// writeMarked 按标记协议回写：START 行 + 命令输出 + 终止标记行。
+// 与 extractMarked 的定界约定一致：提示符等杂散字节挡在 START 之前。
+func writeMarked(ch ssh.Channel, out string, ok bool) {
+	end := "__RELAY_OK__"
+	if !ok {
+		end = "__RELAY_FAIL__"
+	}
+	_, _ = ch.Write([]byte("\r\n__RELAY_START__\r\n" + out + "\r\n" + end + "\r\n"))
+}
+
 func (s *testSSHServer) shellSession(ch ssh.Channel) {
 	defer ch.Close()
-	// 先回一个提示符：客户端 getSession 建连后会同步读一次"初始提示"，
-	// 不写它会永久阻塞。
-	_, _ = ch.Write([]byte("$ "))
+	// 注意：客户端不再读初始提示符（START 标记定界），这里也不写。
 	br := bufio.NewReader(ch)
+	expectPassword := false // "su -" 之后的一行是密码（此处为空密码）
 	for {
 		line, err := br.ReadString('\n')
 		if err != nil {
 			return
 		}
 		cmd := strings.TrimSpace(line)
-		// 命令形如 "xxx && echo __RELAY_OK__ || echo __RELAY_FAIL__"，
-		// 去掉成功/失败标记后交给模拟执行器，再回显成功标记。
-		body := cmd
-		if idx := strings.Index(cmd, " && echo "); idx >= 0 {
-			body = cmd[:idx]
+		switch {
+		case cmd == "su -":
+			expectPassword = true
+			// 客户端等待 "Password:" 提示（不带换行）
+			_, _ = ch.Write([]byte("Password: "))
+		case expectPassword:
+			// 收到密码行：模拟认证失败，回落到登录用户提示符
+			expectPassword = false
+			_, _ = ch.Write([]byte("\r\nsu: Authentication failure\r\n$ "))
+		default:
+			writeMarked(ch, shellExec(shellExecBody(cmd)), true)
 		}
-		out := shellExec(body)
-		if out != "" {
-			// extractBeforeMarker 会丢掉标记前的第一行（假定它是命令回显），
-			// 所以输出前补一个空行，避免单行命令输出（如 stat）被一起丢掉。
-			_, _ = ch.Write([]byte("\r\n" + out))
-		}
-		// PTY 输出以 \r\n 换行；echo 已在客户端关闭（ECHO=0）。
-		_, _ = ch.Write([]byte("__RELAY_OK__\r\n"))
 	}
+}
+
+// shellExecBody 从标记化命令中剥离 START 前缀与 OK/FAIL 后缀，留下真实命令体。
+func shellExecBody(cmd string) string {
+	body := cmd
+	if idx := strings.Index(body, `__RELAY""_START__; `); idx >= 0 {
+		body = body[idx+len(`__RELAY""_START__; `):]
+	}
+	if idx := strings.Index(body, " && echo "); idx >= 0 {
+		body = body[:idx]
+	}
+	return body
 }
 
 func scpSink(ch ssh.Channel, rootDir, target string) {

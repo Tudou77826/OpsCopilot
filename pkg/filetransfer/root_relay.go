@@ -27,6 +27,10 @@ const maxBase64DirectBytes = 10 * 1024 * 1024 // 10 MB — base64 直传单文�
 const (
 	rootRelayOK   = "__RELAY_OK__"
 	rootRelayFail = "__RELAY_FAIL__"
+	// rootRelayStart 标记命令输出的起点。命令里以 __RELAY""_START__ 的
+	// 引号拼接形式发送，shell 求值后输出本常量——这样即使 PTY 回显了
+	// 整条命令，回显文本里也不含任何标记的字面形态，不会误触发判定。
+	rootRelayStart = "__RELAY_START__"
 )
 
 // rootShellSession holds a persistent su session on an SSH channel.
@@ -122,9 +126,9 @@ func (t *RootRelayTransport) getSession(ctx context.Context) (*rootShellSession,
 		return nil, &TransferError{Code: ErrorCodeNetwork, Message: fmt.Sprintf("启动 shell 失败: %s", err)}
 	}
 
-	// Read initial prompt
-	buf := make([]byte, 4096)
-	_, _ = stdout.Read(buf)
+	// 不读初始提示符：静默设备（受限 CLI 不回显任何内容）会让这里的读
+	// 永久阻塞。命令输出靠 START/OK 标记定界，提示符等杂散字节会被
+	// extractMarked 连同回显一起丢弃。
 
 	// If loginUser is empty, we are already the target user (e.g., connected as root).
 	// Skip su entirely and use the shell directly.
@@ -176,11 +180,12 @@ func (t *RootRelayTransport) getSession(ctx context.Context) (*rootShellSession,
 }
 
 // verifyRootUID 在 su 会话上执行 id -u 并要求结果为 0（root）。
-// 仅凭提示符（"# "/"$ "）判断提权会把 su 失败回落到登录用户的 "$ " 误判为
+// 仅凭提示符（"# "/"$ "）判断提权成功会把 su 失败回落到登录用户的 "$ " 误判为
 // 成功，整个 relay 静默以登录用户身份运行——文件面板呈现登录用户权限，
 // 会话重建后又变回 root，出现"列表与上传权限不一致"（#75）。
+// 标记以引号拼接形式发送，回显文本里不含字面标记，不会提前命中。
 func verifyRootUID(ctx context.Context, stdin io.Writer, stdout io.Reader) error {
-	if _, err := io.WriteString(stdin, "id -u && echo "+rootRelayOK+" || echo "+rootRelayFail+"\n"); err != nil {
+	if _, err := io.WriteString(stdin, `echo __RELAY""_START__; id -u && echo __RELAY""_OK__ || echo __RELAY""_FAIL__`+"\n"); err != nil {
 		return &TransferError{Code: ErrorCodeAuthFailed, Message: fmt.Sprintf("发送提权验证命令失败: %s", err)}
 	}
 	out, err := readUntilMarker(ctx, stdout, rootRelayOK, rootRelayFail, 10*time.Second)
@@ -235,8 +240,10 @@ func (t *RootRelayTransport) runAsRoot(ctx context.Context, cmd string) (string,
 	shell.cmdMu.Lock()
 	defer shell.cmdMu.Unlock()
 
-	// Send the actual command with marker
-	fullCmd := cmd + " && echo " + rootRelayOK + " || echo " + rootRelayFail
+	// 发送实际命令。前置 echo START 定界输出起点（把登录提示符、命令回显
+	// 等杂散字节挡在标记之前）；三个标记都以引号拼接形式写入命令，回显
+	// 文本不含字面标记，ECHO 开启的设备也不会提前命中。
+	fullCmd := `echo __RELAY""_START__; ` + cmd + ` && echo __RELAY""_OK__ || echo __RELAY""_FAIL__`
 	if _, err := io.WriteString(shell.stdin, fullCmd+"\n"); err != nil {
 		t.invalidateSession()
 		return "", &TransferError{Code: ErrorCodeNetwork, Message: fmt.Sprintf("发送命令失败: %s", err)}
@@ -959,24 +966,44 @@ func (t *RootRelayTransport) WriteFile(ctx context.Context, remotePath string, c
 
 // --- Internal helper functions ---
 
-// waitForOutput reads from stdout until one of the expected strings is found or timeout.
+// waitForOutput reads from stdout until one of the expected strings is found
+// or timeout. 单次 Read 必须可被打断：对端沉默（受限 CLI 认证失败后不再
+// 回显）时，同步 Read 会无视 deadline 永久挂起——超时后放弃本次读取，
+// 挂着的 Read 随调用方的 session.Close() 一起消亡（所有错误路径都会关会话）。
 func waitForOutput(stdout io.Reader, expected []string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	buf := make([]byte, 4096)
 	accumulated := ""
 
 	for time.Now().Before(deadline) {
-		n, err := stdout.Read(buf)
-		if n > 0 {
-			accumulated += string(buf[:n])
-			for _, exp := range expected {
-				if strings.Contains(accumulated, exp) {
-					return nil
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			break
+		}
+		readCh := make(chan struct{})
+		var (
+			n   int
+			err error
+		)
+		go func() {
+			n, err = stdout.Read(buf)
+			close(readCh)
+		}()
+		select {
+		case <-readCh:
+			if n > 0 {
+				accumulated += string(buf[:n])
+				for _, exp := range expected {
+					if strings.Contains(accumulated, exp) {
+						return nil
+					}
 				}
 			}
-		}
-		if err != nil && err != io.EOF {
-			continue
+			if err != nil {
+				return fmt.Errorf("read error: %v, got: %q", err, accumulated)
+			}
+		case <-time.After(remaining):
+			return fmt.Errorf("timeout waiting for %v, got: %q", expected, accumulated)
 		}
 	}
 
@@ -1024,11 +1051,11 @@ func readUntilMarker(ctx context.Context, stdout io.Reader, okMarker, failMarker
 			}
 
 			if strings.Contains(accumulated, okMarker) {
-				raw := extractBeforeMarker(accumulated, okMarker)
+				raw := extractMarked(accumulated, okMarker)
 				return &relayOutput{raw: raw, failed: false}, nil
 			}
 			if strings.Contains(accumulated, failMarker) {
-				raw := extractBeforeMarker(accumulated, failMarker)
+				raw := extractMarked(accumulated, failMarker)
 				return &relayOutput{raw: raw, failed: true}, nil
 			}
 		}
@@ -1037,19 +1064,22 @@ func readUntilMarker(ctx context.Context, stdout io.Reader, okMarker, failMarker
 	return nil, &TransferError{Code: ErrorCodeNetwork, Message: "等待命令执行结果超时"}
 }
 
-// extractBeforeMarker extracts the command output before the marker line.
-func extractBeforeMarker(output, marker string) string {
-	idx := strings.Index(output, marker)
-	if idx < 0 {
-		return strings.TrimSpace(output)
+// extractMarked 截取 START 标记之后、endMarker 之前的命令输出。
+//
+// 旧实现"丢弃标记前的第一行（假定是命令回显）"有两个缺陷：ECHO 关闭时
+// 丢掉的是真实输出的第一行（单行命令如 stat/base64 直接丢空）；提示符
+// 残留（如 "# "）无换行地与输出首行粘连，同样污染解析。改为以 START
+// 标记定界：登录提示符、su 报错、命令回显全部挡在标记之前，标记之后
+// 即为纯净输出。未见 START 时退化为截取 endMarker 之前的内容。
+func extractMarked(output, endMarker string) string {
+	body := output
+	if startIdx := strings.Index(output, rootRelayStart); startIdx >= 0 {
+		body = output[startIdx+len(rootRelayStart):]
 	}
-	raw := output[:idx]
-	// Remove the echoed command line (first line is usually the command echo)
-	lines := strings.Split(raw, "\n")
-	if len(lines) > 1 {
-		return strings.TrimSpace(strings.Join(lines[1:], "\n"))
+	if endIdx := strings.Index(body, endMarker); endIdx >= 0 {
+		body = body[:endIdx]
 	}
-	return strings.TrimSpace(raw)
+	return strings.TrimSpace(strings.ReplaceAll(body, "\r", ""))
 }
 
 // parseFindOutput parses find -printf output: type\tsize\tmodtime\tname

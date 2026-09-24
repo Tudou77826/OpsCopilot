@@ -2,6 +2,7 @@ package filetransfer
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -245,7 +246,7 @@ func TestParseStatOutput_ModTime(t *testing.T) {
 	}
 }
 
-func TestExtractBeforeMarker(t *testing.T) {
+func TestExtractMarked(t *testing.T) {
 	tests := []struct {
 		name   string
 		output string
@@ -253,26 +254,36 @@ func TestExtractBeforeMarker(t *testing.T) {
 		expect string
 	}{
 		{
-			name:   "simple output",
-			output: "cmd arg\nline1\nline2\n__RELAY_OK__\n",
+			// 常态：提示符残留 + 回显行在 START 之前，全部丢弃
+			name:   "prompt junk and echo before start",
+			output: "$ echo __RELAY\"\"_START__; stat 'x' && echo __RELAY\"\"_OK__\r\n__RELAY_START__\r\nregular file\t12\t1700000001\tu\tu\r\n__RELAY_OK__\r\n",
 			marker: "__RELAY_OK__",
-			expect: "line1\nline2",
+			expect: "regular file\t12\t1700000001\tu\tu",
 		},
 		{
-			name:   "single line output",
-			output: "cmd arg\nresult\n__RELAY_OK__\n",
+			// 单行输出：不再被"丢第一行"的旧逻辑误伤
+			name:   "single line output survives",
+			output: "junk\r\n__RELAY_START__\r\nresult\r\n__RELAY_OK__\r\n",
 			marker: "__RELAY_OK__",
 			expect: "result",
 		},
 		{
-			name:   "fail marker",
-			output: "cmd arg\nerro msg\n__RELAY_FAIL__\n",
-			marker: "__RELAY_FAIL__",
-			expect: "erro msg",
+			// su 失败后的报错与提示符粘连在输出前
+			name:   "su failure junk",
+			output: "su: Authentication failure\r\n$ __RELAY_START__\r\n0\r\n__RELAY_OK__\r\n",
+			marker: "__RELAY_OK__",
+			expect: "0",
 		},
 		{
-			name:   "no newline before marker",
-			output: "data__RELAY_OK__",
+			name:   "fail marker",
+			output: "$ cmd\r\n__RELAY_START__\r\nsome error\r\n__RELAY_FAIL__\r\n",
+			marker: "__RELAY_FAIL__",
+			expect: "some error",
+		},
+		{
+			// 兜底：未见 START 时退化为截取终止标记之前的内容
+			name:   "no start marker falls back",
+			output: "data\r\n__RELAY_OK__",
 			marker: "__RELAY_OK__",
 			expect: "data",
 		},
@@ -280,7 +291,7 @@ func TestExtractBeforeMarker(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := extractBeforeMarker(tt.output, tt.marker)
+			result := extractMarked(tt.output, tt.marker)
 			if result != tt.expect {
 				t.Errorf("got %q, want %q", result, tt.expect)
 			}
@@ -413,5 +424,41 @@ func TestShellTransport_ListStatAsLoginUser(t *testing.T) {
 	}
 	if entry.Name != "hello.txt" || entry.Size != 12 {
 		t.Fatalf("Stat 结果: %+v", entry)
+	}
+}
+
+// TestShellTransport_SuWithEmptyPasswordFailsFast 守护 v1.10.4 修复：
+// 登录用户会话（没有 root 密码）绝不能进入 su 流程——loginUser 非空 +
+// 空 rootPassword 的组合必然认证失败，且提示符等待会把每次操作拖住
+// 十几秒（v1.10.3 上传前同名检查误触发此路径，表现为"点了上传没反应"）。
+// 修复后这类传输以 loginUser="" 直连执行；本测试锁定"su + 空密码"
+// 组合必须快速得到明确的认证错误，而不是长时间挂起。
+func TestShellTransport_SuWithEmptyPasswordFailsFast(t *testing.T) {
+	root := t.TempDir()
+	srv := newTestSSHServer(t, testSSHServerOptions{RootDir: root})
+	defer srv.Close()
+
+	client, err := ssh.Dial("tcp", srv.Addr(), srv.ClientConfig())
+	if err != nil {
+		t.Fatalf("ssh dial: %v", err)
+	}
+	defer client.Close()
+
+	// loginUser 非空 + rootPassword 为空：v1.10.3 回归的准确形态。
+	tr := NewRootRelayTransport(client, "", "u")
+	defer tr.Close()
+
+	start := time.Now()
+	_, err = tr.List(context.Background(), "/data")
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatalf("su + 空密码应当失败，却成功了")
+	}
+	var te *TransferError
+	if !errors.As(err, &te) || te.Code != ErrorCodeAuthFailed {
+		t.Fatalf("应为认证类错误，实际: %v", err)
+	}
+	if elapsed > 3*time.Second {
+		t.Fatalf("失败耗时 %v，存在提示符等待挂起的嫌疑", elapsed)
 	}
 }
