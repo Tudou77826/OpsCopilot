@@ -16,7 +16,16 @@ export function ProductSidebar({ isOpen, activeTab, onToggle, children }: {
  }}>
    {isOpen && <div role="separator" aria-label="调整侧栏宽度" style={styles.resizeHandle}
      onPointerDown={e => { drag.current={x:e.clientX,width}; e.currentTarget.setPointerCapture(e.pointerId); }}
-     onPointerMove={e => { if (!drag.current) return; const max = Math.min(800, (container.current?.parentElement?.clientWidth ?? 920) - 120); setWidths(v => ({...v,[activeTab]:Math.max(250, Math.min(max, drag.current!.width + drag.current!.x - e.clientX))})); }}
+     onPointerMove={e => {
+       if (!drag.current) return;
+       // 数值必须在事件处理器内算好：updater 是渲染期才执行的，若在其中读
+       // drag.current，松手（onPointerUp 清空 ref）与最后一次 move 的
+       // updater 渲染竞态时会抛 undefined.width，整树崩溃白屏。
+       const d = drag.current;
+       const max = Math.min(800, (container.current?.parentElement?.clientWidth ?? 920) - 120);
+       const next = Math.max(250, Math.min(max, d.width + d.x - e.clientX));
+       setWidths(v => ({...v,[activeTab]:next}));
+     }}
      onPointerUp={() => {drag.current=undefined;}} onPointerCancel={() => {drag.current=undefined;}} />}
    <div style={{ display: isOpen ? 'flex' : 'none', flexDirection: 'column', height: '100%', flex: 1, minHeight: 0 }}>
      <div className="sidebar-header" style={styles.header}>
