@@ -784,6 +784,14 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
     const protocolRef = useRef<string>(protocol);
     const localPathRef = useRef<string>(localPath);
     const remotePathRef = useRef<string>(remotePath);
+    // 导航意图：最近一次 refreshLocal/refreshRemote 被请求的路径（未必已提交）。
+    // 任务完成事件的自动刷新必须跟随"用户当前意图"，跟随"最后提交路径"会把
+    // 用户正在切换中的目录拽回旧目录，后续下载落错位置。
+    const localPathIntentRef = useRef<string>(localPath);
+    const remotePathIntentRef = useRef<string>(remotePath);
+    // 导航序号：列表是异步的，返回时若用户/任务已发起更新的导航，本次结果让位。
+    const localNavSeqRef = useRef(0);
+    const remoteNavSeqRef = useRef(0);
     const localEntriesRef = useRef<FileEntry[]>(localEntries);
     const remoteEntriesRef = useRef<FileEntry[]>(remoteEntries);
     const [layoutMode, setLayoutMode] = useState<LayoutMode>('wide');
@@ -1135,6 +1143,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
     };
 
     const refreshLocal = async (path: string) => {
+        localPathIntentRef.current = path;
+        const seq = ++localNavSeqRef.current;
         setLoading(true);
         setMsg('');
         try {
@@ -1148,6 +1158,9 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
                 setMsg(formatError(resp));
                 return;
             }
+            // 列表返回期间若已发起更新的导航（用户切目录/新任务事件），本次让位，
+            // 不得用旧目录覆盖 path 与输入框
+            if (seq !== localNavSeqRef.current) return;
             const next = sortEntries(resp.entries || []);
             setLocalEntries(next);
             const nextDir = (path || '').trim() || localParent(resp.entries?.[0]?.path || '');
@@ -1170,6 +1183,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
             setRemoteEntries([]);
             return;
         }
+        remotePathIntentRef.current = path;
+        const seq = ++remoteNavSeqRef.current;
         setLoading(true);
         setMsg('');
         try {
@@ -1183,6 +1198,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
                 setMsg(formatError(resp));
                 return;
             }
+            // 列表返回期间若已发起更新的导航，本次让位（同 refreshLocal 的守卫）
+            if (seq !== remoteNavSeqRef.current) return;
             const next = sortEntries(resp.entries || []);
             setRemoteEntries(next);
             setRemotePath(path);
@@ -1196,12 +1213,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
 
     const refreshLocalAuto = async () => {
         const before = localEntriesRef.current.length;
-        await refreshLocal(localPathRef.current);
+        await refreshLocal(localPathIntentRef.current);
         const after = localEntriesRef.current.length;
         if (before > 0 && after === 0) {
             if (refreshRetryTimerRef.current) window.clearTimeout(refreshRetryTimerRef.current);
             refreshRetryTimerRef.current = window.setTimeout(() => {
-                refreshLocal(localPathRef.current);
+                refreshLocal(localPathIntentRef.current);
             }, 600);
         }
     };
@@ -1209,12 +1226,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
     const refreshRemoteAuto = async () => {
         if (!protocolRef.current.startsWith('sftp') && !protocolRef.current.includes('root-relay')) return;
         const before = remoteEntriesRef.current.length;
-        await refreshRemote(remotePathRef.current);
+        await refreshRemote(remotePathIntentRef.current);
         const after = remoteEntriesRef.current.length;
         if (before > 0 && after === 0) {
             if (refreshRetryTimerRef.current) window.clearTimeout(refreshRetryTimerRef.current);
             refreshRetryTimerRef.current = window.setTimeout(() => {
-                refreshRemote(remotePathRef.current);
+                refreshRemote(remotePathIntentRef.current);
             }, 600);
         }
     };
