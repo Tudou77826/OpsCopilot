@@ -50,7 +50,11 @@ const ConnectionPropertiesModal: React.FC<Props> = ({
         if (!isOpen) return;
         setConfig(initialConfig);
         setSaving(false);
-    }, [isOpen, initialConfig]);
+        // 依赖里绝不能放 initialConfig：父组件每次渲染都用 emptyConnectionConfig()
+        // 造新引用，任何后台刷新（轮询、多窗口热加载检查）都会让本 effect 重跑，
+        // 把用户正在填写的表单整体清空。只在打开/切换编辑目标时重置。
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, sessionId, mode]);
 
     if (!isOpen) return null;
 

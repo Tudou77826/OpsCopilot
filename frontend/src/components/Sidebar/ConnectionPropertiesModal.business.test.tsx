@@ -213,3 +213,40 @@ describe('新建连接业务流程', () => {
         expect(CreateSavedConnection).not.toHaveBeenCalled();
     });
 });
+
+describe('编辑期间的后台重渲染（表单被清空回归）', () => {
+    // 回归背景：SessionManager 每次渲染都用 emptyConnectionConfig() 造新引用传入
+    // initialConfig；弹窗曾把 initialConfig 放进重置 effect 的依赖，后台轮询
+    // （共享会话加载失败重试、多窗口热加载检查）触发的任何一次父级重渲染，
+    // 都会把用户正在填写的表单整体清空——E2E 全量跑时轮询落进填写窗口复现过。
+    it('父级重渲染（initialConfig 换新引用但内容不变）不得清空正在编辑的表单', () => {
+        const fresh = { host: '10.0.0.9', port: 22, user: 'root' };
+        const props = {
+            isOpen: true as const,
+            mode: 'create' as const,
+            parentId: '',
+            onClose: vi.fn(),
+            onSaved: vi.fn(),
+        };
+        const { rerender } = render(
+            <ToastProvider>
+                <ConnectionPropertiesModal {...props} initialConfig={{ ...fresh } as any} />
+            </ToastProvider>
+        );
+
+        fireEvent.change(screen.getByLabelText('连接名称'), { target: { value: 'bg-refresh-keep' } });
+        fireEvent.change(screen.getByLabelText('主机地址'), { target: { value: '10.1.2.3' } });
+        fireEvent.change(screen.getByLabelText('Root 密码'), { target: { value: 'rp-typed' } });
+
+        // 模拟后台刷新：同内容、新引用 —— 旧实现在此把表单清空
+        rerender(
+            <ToastProvider>
+                <ConnectionPropertiesModal {...props} initialConfig={{ ...fresh } as any} />
+            </ToastProvider>
+        );
+
+        expect(screen.getByLabelText('连接名称')).toHaveValue('bg-refresh-keep');
+        expect(screen.getByLabelText('主机地址')).toHaveValue('10.1.2.3');
+        expect(screen.getByLabelText('Root 密码')).toHaveValue('rp-typed');
+    });
+});
