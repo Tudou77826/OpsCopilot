@@ -107,3 +107,7 @@ frontend-shell/dist/
 frontend-shell/data/
 shellsidecar.exe
 plugins/teams-opscopilot/dist/
+
+# E2E runtime state (isolated app instance, ssh sandbox, playwright report)
+e2e/.runtime/
+e2e/playwright-report/
