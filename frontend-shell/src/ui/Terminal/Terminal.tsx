@@ -1051,7 +1051,11 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
     }, [highlightRules, terminalConfig?.highlight_enabled]);
 
     return (
-        <div ref={rootRef} style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative', backgroundColor: 'var(--bg-primary)' }}>
+        // 视觉留白放在这层外包裹上，而不是 .terminal-host（fit 父元素）：
+        // FitAddon 读父元素 computed height 且只减 xterm 自身 padding，
+        // host 带 padding 时（border-box）fit 会多看到 padding 的尺寸，
+        // 偶发多排一行/列，行底侵入留白区——"最后一行贴住底栏"的根因。
+        <div ref={rootRef} style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative', padding: '4px 4px 8px', boxSizing: 'border-box', backgroundColor: 'var(--bg-primary)' }}>
             <div
                 id={`terminal-${id}`}
                 data-testid={`terminal-container-${id}`}

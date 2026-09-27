@@ -55,14 +55,15 @@ body {
   background-color: var(--bg-primary);
 }
 
+/* 视觉留白（4px 边 + 8px 底）必须放在 Terminal 根包裹层（见 Terminal.tsx），
+   绝不能放在 .terminal-host 上：FitAddon 用父元素 computed height 计算可用
+   空间且只减 xterm 自身 padding；host 带 padding 时（border-box 下 computed
+   height 含 padding），fit 账面比真实内容区多出 padding 尺寸，在特定
+   视口/字号/DPI 相位下多排一行或一列——行底侵入底部留白（表现为最后一行
+   贴住底栏）甚至被裁出显示范围。历史上两次在 host 上加 padding 的"缓冲
+   补丁"正是这个偶现裁剪的来源。 */
 .terminal-host {
-  /* 左右对称留白，避免单侧 padding（原 8px ≈ 半个字符宽）被 fit 计入可用宽度
-     而在右边缘裁掉约半个字符；4px 仍保留视觉间距。 */
-  padding: 4px;
-  /* 底部额外留白：部分分辨率下行高取整的亚像素误差会让最后一行字形下伸部
-     （g/y/p 等）被视口裁掉一小截，fit 按剩余高度计算行数，加 padding 后
-     最后一行整体上移、下方留出缓冲。 */
-  padding-bottom: 8px;
+  padding: 0;
 }
 
 .terminal-host > .xterm {
