@@ -2,6 +2,7 @@ package security
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -51,9 +52,9 @@ func TestWhitelistManager_CheckCommand(t *testing.T) {
 		{"ls -la", "192.168.1.100", true},
 		{"cat /etc/passwd", "10.0.0.1", true},
 		{"ps aux", "172.16.0.1", true},
-		{"rm -rf /", "192.168.1.100", false},                  // 危险命令不允许
-		{"systemctl restart nginx", "10.0.0.1", false},        // 写入命令默认不允许
-		{"", "192.168.1.100", false},                          // 空命令
+		{"rm -rf /", "192.168.1.100", false},           // 危险命令不允许
+		{"systemctl restart nginx", "10.0.0.1", false}, // 写入命令默认不允许
+		{"", "192.168.1.100", false},                   // 空命令
 	}
 
 	for _, tt := range tests {
@@ -62,6 +63,53 @@ func TestWhitelistManager_CheckCommand(t *testing.T) {
 			t.Errorf("Check(%q, %q) = %v, expected %v, reason: %s",
 				tt.command, tt.ip, result.Allowed, tt.expected, result.Reason)
 		}
+	}
+}
+
+func TestWhitelistManager_DeniedMessageContainsPatterns(t *testing.T) {
+	// 拒绝信息必须同时列出 Description 和 Pattern（真实放行规则）。
+	// 只列人写标签会误导调用方按标签字面范围构造命令后再次被拒。
+	tmpFile := "test_whitelist_denied.json"
+	defer os.Remove(tmpFile)
+
+	mgr, err := NewWhitelistManager(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to create manager: %v", err)
+	}
+
+	// docker compose ps 不在默认策略的 docker 子命令枚举内，应被拒
+	result := mgr.Check("docker compose ps", "192.168.1.100")
+	if result.Allowed {
+		t.Fatal("docker compose ps should be denied by the default policy")
+	}
+	if !strings.Contains(result.Reason, "Docker 查询") {
+		t.Errorf("denied message should keep the description label, got:\n%s", result.Reason)
+	}
+	if !strings.Contains(result.Reason, `^docker\s+(ps|images|logs|inspect|stats)`) {
+		t.Errorf("denied message should list the actual pattern, got:\n%s", result.Reason)
+	}
+
+	// Description 为空的命令只列 Pattern，不应出现空括号
+	err = mgr.AddPolicy(Policy{
+		ID:       "empty-desc",
+		Name:     "空描述策略",
+		IPRanges: []string{"*"},
+		Commands: []Command{
+			{Pattern: `^mytool\s`, Category: CategoryReadOnly, Enabled: true},
+		},
+	})
+	if err != nil {
+		t.Fatalf("AddPolicy failed: %v", err)
+	}
+	result = mgr.Check("not-a-command", "192.168.1.100")
+	if result.Allowed {
+		t.Fatal("not-a-command should be denied")
+	}
+	if !strings.Contains(result.Reason, `^mytool\s`) {
+		t.Errorf("empty-description command should still list its pattern, got:\n%s", result.Reason)
+	}
+	if strings.Contains(result.Reason, "()") {
+		t.Errorf("empty description should not render an empty parenthesized pair, got:\n%s", result.Reason)
 	}
 }
 

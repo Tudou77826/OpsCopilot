@@ -242,7 +242,13 @@ func formatDeniedMessage(command string, serverIP string, matchedPolicies []Poli
 				sb.WriteString("  允许的命令:\n")
 				for _, cmd := range policy.Commands {
 					if cmd.Enabled {
-						sb.WriteString(fmt.Sprintf("  - %s\n", cmd.Description))
+						// 必须把 Pattern（真实放行规则）一并给出：Description 是人写标签，
+						// 与正则的实际放行范围可能脱节，只列标签会误导调用方反复试错。
+						if cmd.Description != "" {
+							sb.WriteString(fmt.Sprintf("  - %s (%s)\n", cmd.Description, cmd.Pattern))
+						} else {
+							sb.WriteString(fmt.Sprintf("  - %s\n", cmd.Pattern))
+						}
 					}
 				}
 			}
