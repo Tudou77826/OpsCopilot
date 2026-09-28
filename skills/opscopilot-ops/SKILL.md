@@ -16,7 +16,6 @@ description: 通过 OpsCopilot CLI 使用用户预先配置的远程 Linux 服�
 
 - `knowledge` 子命令：无需任何配置，开箱可用。
 - `exec` / `file` 子命令：用户必须已在 OpsCopilot GUI 中登记目标服务器（sessions.json，以 IP 标识，含连接信息和凭据）并输入过服务器密码（已存入系统凭据库）。
-- `diagnose` 子命令：还需配置好 LLM。
 
 如未配置，命令会返回明确的错误提示，引导用户先在 GUI 中完成配置。
 
@@ -135,16 +134,6 @@ description: 通过 OpsCopilot CLI 使用用户预先配置的远程 Linux 服�
 ```
 
 受文件访问控制约束：远程可读/可写路径和大小上限均需在 GUI 配置中放行。默认写入路径为空（禁止上传），需用户显式配置。
-
-### 4. diagnose —— 知识库 AI 诊断（仅无人代办场景）
-
-`knowledge` 子命令已覆盖 agent 场景下的知识库检索。`diagnose` 内部会跑多轮 LLM 推理循环，**单次需要三到五分钟且无客户端超时**，只适合没有 agent 代办的场景（如用户在终端直接调用、脚本集成）；有 agent 时不要用它，用 `knowledge search/read` 自己完成检索与推理。
-
-```
-"{{OPSCOPILOT_BIN}}" diagnose --problem "<故障现象描述>"
-```
-
-输出 JSON 的 `diagnosis` 字段是 JSON 字符串，解析后含 `summary`（诊断结论）、`steps`（排查步骤）、`commands`（建议命令，每条带 `source` 出处）。
 
 ## 工作流程建议
 
