@@ -77,11 +77,17 @@ func main() {
 	}
 	defer desktopInstallationLease.Close()
 	// CLI 模式：带子命令时进入命令行入口，不启动 GUI
-	// 子命令包括 exec / diagnose / file；不带子命令则正常启动图形界面
+	// 子命令包括 exec / diagnose / file / knowledge；不带子命令则正常启动图形界面
 	if len(os.Args) >= 2 {
 		switch os.Args[1] {
-		case "exec", "diagnose", "file", "-h", "--help", "help":
+		case "exec", "diagnose", "file", "knowledge", "-h", "--help", "help":
 			os.Exit(runCLI(os.Args[1:]))
+		default:
+			// 未识别参数不能落入 GUI 启动：脚本/agent 调用写错子命令时会表现为
+			// 无输出且永不退出（调用方只能等超时）。打印用法并报错退出。
+			fmt.Fprintf(os.Stderr, "未知参数或子命令: %s\n\n", os.Args[1])
+			printCLIUsage()
+			os.Exit(1)
 		}
 	}
 
