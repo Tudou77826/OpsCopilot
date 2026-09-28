@@ -54,6 +54,10 @@ func BuildCatalog(dir string) (*Catalog, error) {
 	existing.Version = 1
 	existing.BuildAt = time.Now()
 
+	if err := existing.EnsureScenarioIDs(); err != nil {
+		return nil, err
+	}
+
 	// 持久化
 	if err := saveCatalog(dir, existing); err != nil {
 		return nil, fmt.Errorf("save catalog: %w", err)
@@ -337,7 +341,7 @@ func extractSOPScenarios(content string, relPath string) []ScenarioEntry {
 			Title:      r.title,
 			File:       relPath,
 			LineStart:  r.titleLine + 1, // 1-based
-			LineEnd:    endLine,          // 1-based, exclusive
+			LineEnd:    endLine,         // 1-based, exclusive
 			Phenomena:  phenomena,
 			Keywords:   keywords,
 			Components: components,

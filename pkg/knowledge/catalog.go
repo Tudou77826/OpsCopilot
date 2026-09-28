@@ -1,6 +1,8 @@
 package knowledge
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -29,6 +31,7 @@ type ModuleEntry struct {
 // ScenarioEntry 场景层
 type ScenarioEntry struct {
 	Title      string   `json:"title"`
+	ID         string   `json:"id,omitempty"` // 场景短 ID：由 服务+模块+标题 哈希生成，对外寻址用
 	File       string   `json:"file"`
 	LineStart  int      `json:"lineStart"`
 	LineEnd    int      `json:"lineEnd"`
@@ -36,6 +39,13 @@ type ScenarioEntry struct {
 	Keywords   []string `json:"keywords"`
 	Components []string `json:"components"`
 	Type       string   `json:"type"` // "sop" | "archive"
+}
+
+// ScenarioID 生成场景短 ID：sha256(服务+\x00+模块+\x00+标题) 前 10 位十六进制。
+// 确定性来源是语义三元组：Catalog 重建后 ID 不变，标题/服务/模块被编辑才会改变。
+func ScenarioID(service, module, title string) string {
+	sum := sha256.Sum256([]byte(service + "\x00" + module + "\x00" + title))
+	return hex.EncodeToString(sum[:])[:10]
 }
 
 // TotalScenarios 统计目录中的场景总数
@@ -256,8 +266,58 @@ func (c *Catalog) ReplaceEntries(filePath string, serviceName string, moduleName
 		mod = &svc.Modules[len(svc.Modules)-1]
 	}
 
-	// 追加新条目
+	// 追加新条目（ID 在此统一赋值：此处是树重建的唯一插入口）
+	for i := range entries {
+		entries[i].ID = ScenarioID(serviceName, moduleName, entries[i].Title)
+	}
 	mod.Scenarios = append(mod.Scenarios, entries...)
+}
+
+// ScenarioLocation 场景在目录树中的定位
+type ScenarioLocation struct {
+	Service string
+	Module  string
+	Entry   *ScenarioEntry
+}
+
+// FindByID 按短 ID 查找场景
+func (c *Catalog) FindByID(id string) *ScenarioLocation {
+	for i := range c.Services {
+		svc := &c.Services[i]
+		for j := range svc.Modules {
+			mod := &svc.Modules[j]
+			for k := range mod.Scenarios {
+				if mod.Scenarios[k].ID == id {
+					return &ScenarioLocation{Service: svc.Name, Module: mod.Name, Entry: &mod.Scenarios[k]}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// EnsureScenarioIDs 为历史无 ID 条目补算 ID，并检测 ID 冲突。
+// 旧版 .catalog.json 没有该字段，构建时统一补齐。
+func (c *Catalog) EnsureScenarioIDs() error {
+	seen := make(map[string]string) // id -> "服务/模块/标题"，用于冲突定位
+	for i := range c.Services {
+		svc := &c.Services[i]
+		for j := range svc.Modules {
+			mod := &svc.Modules[j]
+			for k := range mod.Scenarios {
+				if mod.Scenarios[k].ID == "" {
+					mod.Scenarios[k].ID = ScenarioID(svc.Name, mod.Name, mod.Scenarios[k].Title)
+				}
+				id := mod.Scenarios[k].ID
+				owner := svc.Name + "/" + mod.Name + "/" + mod.Scenarios[k].Title
+				if prev, dup := seen[id]; dup {
+					return fmt.Errorf("场景 ID 冲突: %s 与 %s 同为 %s", prev, owner, id)
+				}
+				seen[id] = owner
+			}
+		}
+	}
+	return nil
 }
 
 // RemoveDeletedFiles 清理已删除文件的条目和空的 Service/Module

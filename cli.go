@@ -125,6 +125,8 @@ func runCLI(args []string) int {
 		return cmdDiagnose(args[1:])
 	case "file":
 		return cmdFile(args[1:])
+	case "knowledge":
+		return cmdKnowledge(args[1:])
 	case "-h", "--help", "help":
 		printCLIUsage()
 		return 0
@@ -145,6 +147,7 @@ func printCLIUsage() {
   exec       在远程服务器上执行命令（受白名单约束）
   diagnose   基于知识库的 AI 故障诊断（输出建议命令和排查步骤，不碰服务器）
   file       文件传输（上传/下载，受文件访问控制约束）
+  knowledge  知识库查询（list/search/read，agent 定位问题的轻量入口）
 
 不带子命令启动时进入图形界面。
 
