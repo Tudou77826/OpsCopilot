@@ -108,12 +108,14 @@ func (t *ReadFileTool) readSectionWithLineNumbers(entry *knowledge.ScenarioEntry
 
 	lines := strings.Split(string(content), "\n")
 
-	// LineStart/LineEnd 是 1-based
-	start := entry.LineStart - 1
+	// LineStart/LineEnd 是 1-based，但相对 front matter 剥离后的正文行号，
+	// 需换算回文件绝对行号（否则带 front matter 的文档读出的场景段整体错位）
+	offset := knowledge.BodyLineOffset(string(content))
+	start := offset + entry.LineStart - 1
 	if start < 0 {
 		start = 0
 	}
-	end := entry.LineEnd
+	end := offset + entry.LineEnd
 	if end > len(lines) {
 		end = len(lines)
 	}
