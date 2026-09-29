@@ -22,7 +22,9 @@ func beginCLIUsage(env cliEnv, prefix string) (func(string), func(string)) {
 	installation := c.Identity()
 	observe := func(kind string) { c.CountForInstallation(kind, installation) }
 	return func(outcome string) {
-		ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+		// Completion needs enough time to recheck consent and persist the outcome
+		// under load; keep the CLI's telemetry delay bounded.
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		c.Refresh(ctx) // Renew policy readiness after long running commands.
 		done(outcome)
