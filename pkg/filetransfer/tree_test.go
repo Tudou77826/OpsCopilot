@@ -81,7 +81,7 @@ func readRemote(t *testing.T, tr *SFTPTransport, ctx context.Context, path strin
 // 远端树上传：文件落位、空目录建出、符号链接跳过、进度步骤带文件计数。
 func TestUploadTree_SFTP_CreatesDirsAndSkipsLinks(t *testing.T) {
 	tr := newSFTPTreeEnv(t)
-	src, hasLink := seedLocalTree(t)
+	src, _ := seedLocalTree(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -123,9 +123,6 @@ func TestUploadTree_SFTP_CreatesDirsAndSkipsLinks(t *testing.T) {
 	}
 	sort.Strings(names)
 	want := "a.txt,empty,sub"
-	if hasLink {
-		want = "a.txt,empty,link,sub"
-	}
 	if strings.Join(names, ",") != want {
 		t.Errorf("dest 下条目: %v, want %s", names, want)
 	}
@@ -250,8 +247,10 @@ func TestUploadTree_CancelStopsImmediately(t *testing.T) {
 	cancel()
 
 	ops := UploadTreeOps{
-		Mkdir:      func(ctx context.Context, dir string) error { return ctx.Err() },
-		UploadFile: func(ctx context.Context, local, remote string, progress func(Progress)) (TransferResult, error) { return TransferResult{}, nil },
+		Mkdir: func(ctx context.Context, dir string) error { return ctx.Err() },
+		UploadFile: func(ctx context.Context, local, remote string, progress func(Progress)) (TransferResult, error) {
+			return TransferResult{}, nil
+		},
 	}
 	if _, err := UploadTree(ctx, src, "dest", nil, ops); err == nil {
 		t.Fatalf("已取消的 ctx 应返回错误")

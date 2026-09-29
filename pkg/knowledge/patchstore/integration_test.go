@@ -203,6 +203,10 @@ func TestGitFeedbackStoreE2E(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available, skipping E2E test")
 	}
+	t.Setenv("GIT_AUTHOR_NAME", "Test User")
+	t.Setenv("GIT_AUTHOR_EMAIL", "test@example.com")
+	t.Setenv("GIT_COMMITTER_NAME", "Test User")
+	t.Setenv("GIT_COMMITTER_EMAIL", "test@example.com")
 
 	tmpDir := t.TempDir()
 	bareRepo := filepath.Join(tmpDir, "knowledge-bare.git")
