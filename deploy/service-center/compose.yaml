@@ -1,0 +1,21 @@
+services:
+  service-center:
+    build:
+      context: ../..
+      dockerfile: deploy/service-center/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9080:9080"
+    environment:
+      OPS_SERVICE_PUBLIC_URL: ${OPS_SERVICE_PUBLIC_URL:?set the public HTTPS URL}
+      OPS_SERVICE_ADMIN_TOKEN: ${OPS_SERVICE_ADMIN_TOKEN:?set a random token of at least 32 characters}
+      OPS_SERVICE_GITHUB_TOKEN: ${OPS_SERVICE_GITHUB_TOKEN:-}
+    volumes:
+      - service-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+  service-data:

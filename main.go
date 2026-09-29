@@ -92,7 +92,7 @@ func main() {
 	}
 
 	// Installed and portable desktop entry points share the exe-relative defaults.
-	if exe, err := os.Executable(); err == nil {
+	if exe, err := os.Executable(); err == nil && !generatingBindings {
 		if err = os.Chdir(filepath.Dir(exe)); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return

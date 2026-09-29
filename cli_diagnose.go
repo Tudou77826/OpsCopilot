@@ -26,6 +26,9 @@ func cmdDiagnose(args []string) int {
 	}
 
 	env := loadCLIEnv()
+	done, _ := beginCLIUsage(env, "cli_diagnose")
+	outcome := "failure"
+	defer func() { done(outcome) }()
 	aiSvc, err := newAIService(env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "初始化 AI 服务失败: %v\n", err)
@@ -49,6 +52,7 @@ func cmdDiagnose(args []string) int {
 		"diagnosis": answer,
 	})
 	fmt.Println(string(out))
+	outcome = "success"
 	return 0
 }
 
@@ -60,6 +64,13 @@ func cmdFile(args []string) int {
 	}
 
 	env := loadCLIEnv()
+	done, observe := func(string) {}, func(string) {}
+	if !cliHelpRequested(args) && (args[0] == "upload" || args[0] == "download") {
+		done, observe = beginCLIUsage(env, "cli_"+args[0])
+	}
+	outcome := "failure"
+	defer func() { done(outcome) }()
+	env.observe = observe
 	mgr, err := newOpsManager(env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "初始化失败: %v\n", err)
@@ -90,6 +101,9 @@ func cmdFile(args []string) int {
 			fmt.Fprintf(os.Stderr, "下载失败: %v\n", err)
 			return 1
 		}
+		if r.Success {
+			outcome = "success"
+		}
 		out, _ := json.Marshal(r)
 		fmt.Println(string(out))
 
@@ -115,6 +129,9 @@ func cmdFile(args []string) int {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "上传失败: %v\n", err)
 			return 1
+		}
+		if r.Success {
+			outcome = "success"
 		}
 		out, _ := json.Marshal(r)
 		fmt.Println(string(out))

@@ -9,6 +9,8 @@ import QuickCommandPanel from './components/QuickCommandPanel/QuickCommandPanel'
 import { wailsGardenHost } from './shell-adapter/wailsGardenHost';
 import { useGardenAttention } from '../../frontend-shell/src/ui/garden/useGardenAttention';
 import BottomBar from './components/BottomBar/BottomBar';
+import { StartupConsent } from './components/ServiceCenter/ServiceCenter';
+import { CountServiceUsage } from '../wailsjs/go/main/App';
 import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal';
 import Sidebar from './components/Sidebar/Sidebar';
 import SettingsModal from './components/SettingsModal/SettingsModal';
@@ -54,6 +56,7 @@ const getDelayUntilNextDailyUpdateCheck = (now = new Date()) => {
 };
 
 function App() {
+    const [settingsInitialTab, setSettingsInitialTab] = useState<'llm' | 'servicecenter'>('llm');
     const toast = useToast();
     const [status, setStatus] = useState("就绪");
     const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
@@ -89,8 +92,13 @@ function App() {
     const { visible:isCommandQueryOpen, setVisible:setIsCommandQueryOpen, query:commandQueryText, setQuery:setCommandQueryText,
         loading:commandQueryLoading, result:commandQueryResult, error:commandQueryError, generate:generateCommand,
         copy:copyGeneratedCommand, type:typeGeneratedCommand } = useCommandQuery({
-        generate:generateWailsCommand, type:command => handleQuickCommand(command),
+        generate:generateWailsCommand, type:command => {
+            if (!activeTerminalId || !terminalRefs.current.has(activeTerminalId) || !(window as any).go?.main?.App?.Write) throw new Error('终端尚未就绪');
+            handleQuickCommand(command);
+        },
         copy:command => navigator.clipboard.writeText(command), warn:message => toast.warning(message),
+        opened: () => { void CountServiceUsage('ctrl_k').catch(() => {}); },
+ typed: () => { void CountServiceUsage('gui_command_typed').catch(() => {}); },
     }, activeTerminalId, commandQueryShortcut);
     // connectError 携带的额外信息：reopenNewConnect 标记「新建连接失败」（区别于重连失败），
     // failedConfigs 保存失败的配置，供关闭错误弹窗后带回 SmartConnectModal 编辑重试。
@@ -720,8 +728,8 @@ function App() {
                         ? <Suspense fallback={null}><GardenPanel host={wailsGardenHost} isOpen={gardenOpen} height={320} /></Suspense>
                         : <QuickCommandPanel
                         isOpen={isQuickCommandOpen}
-                        onExecute={handleQuickCommand}
-                        onBroadcast={handleQuickCommandBroadcast}
+                        onExecute={command => {if(activeTerminalId && terminalRefs.current.has(activeTerminalId)){void CountServiceUsage('quick_command').catch(()=>{});}handleQuickCommand(command);}}
+                        onBroadcast={command => {if(terminals.length){void CountServiceUsage('quick_command').catch(()=>{});}handleQuickCommandBroadcast(command);}}
                     />}
             sidebar={<Sidebar
                     isOpen={isSidebarOpen}
@@ -735,7 +743,10 @@ function App() {
                     knowledgeTarget={knowledgeTarget}
                 />}
             navigation={<ProductNavigation isSidebarOpen={isSidebarOpen} sidebarTab={sidebarTab} toggleSidebar={toggleSidebar} isQuickCommandOpen={isQuickCommandOpen} onToggleQuickCommands={() => setIsQuickCommandOpen(!isQuickCommandOpen)} gardenActive={gardenEnabled && gardenOpen} gardenAttention={gardenAttention} onToggleGarden={gardenEnabled ? () => setGardenOpen(!gardenOpen) : undefined} />}
-            footer={<BottomBar />}
+            footer={<BottomBar onOpenServiceSettings={() => {
+                setSettingsInitialTab('servicecenter');
+                setIsSettingsOpen(true);
+            }} />}
         >
 
             <SmartConnectModal
@@ -749,9 +760,14 @@ function App() {
                 initialConfigs={reconnectSeedConfigs}
             />
 
+            <StartupConsent />
             <SettingsModal
                 isOpen={isSettingsOpen}
-                onClose={() => setIsSettingsOpen(false)}
+                initialTab={settingsInitialTab}
+                onClose={() => {
+                    setIsSettingsOpen(false);
+                    setSettingsInitialTab('llm');
+                }}
                 isBroadcastMode={isBroadcastMode}
                 onToggleBroadcast={handleToggleBroadcast}
                 onCompletionDelayChange={setCompletionDelay}

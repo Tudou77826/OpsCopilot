@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { TbBulb } from 'react-icons/tb';
+import { ServiceAnnouncements, ServiceLinks } from '../ServiceCenter/ServiceCenter';
 
 export const BOTTOM_BAR_TIPS = [
     'Ctrl + 滚轮：单独调整终端字号',
@@ -15,7 +16,7 @@ export const BOTTOM_BAR_TIPS = [
 
 export const BOTTOM_BAR_TIP_INTERVAL_MS = 5000;
 
-const BottomBar: React.FC = () => {
+const BottomBar: React.FC<{ onOpenServiceSettings: () => void }> = ({ onOpenServiceSettings }) => {
     const [version, setVersion] = useState('');
     const [tipIndex, setTipIndex] = useState(0);
     const [tipVisible, setTipVisible] = useState(true);
@@ -63,6 +64,7 @@ const BottomBar: React.FC = () => {
 
     return (
         <div style={styles.container} data-testid="bottom-bar">
+            <ServiceAnnouncements />
             <div
                 style={styles.tipArea}
                 onMouseEnter={() => setPaused(true)}
@@ -84,6 +86,7 @@ const BottomBar: React.FC = () => {
                 </span>
             </div>
 
+            <ServiceLinks onConfigure={onOpenServiceSettings} />
             {version && (
                 <span style={styles.version}>
                     {version.startsWith('v') ? version : `v${version}`}

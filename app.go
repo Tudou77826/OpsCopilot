@@ -37,6 +37,7 @@ import (
 	"opscopilot/pkg/remote"
 	"opscopilot/pkg/script"
 	"opscopilot/pkg/secretstore"
+	"opscopilot/pkg/servicecenter"
 	"opscopilot/pkg/session"
 	"opscopilot/pkg/sshclient"
 	// blank import 触发 telnetclient 的 init(),向 remote 注册 telnet dialer。
@@ -52,6 +53,7 @@ var Version = "dev"
 
 // App struct
 type App struct {
+	serviceCenter     *servicecenter.Client
 	ctx               context.Context
 	sessionMgr        *session.Manager
 	savedSessionMgr   *connectionstore.Store
@@ -76,19 +78,19 @@ type App struct {
 	// sftpUnsupportedCache 记录已确认 SFTP 不可用的会话（relayMu 保护），
 	// 避免每次路径级失败都重新做有界握手探测。
 	sftpUnsupportedCache map[string]bool
-	sessionStates     map[string]*SessionState // 会话状态追踪
-	sessionStateMu    sync.RWMutex
-	commandExtractors map[string]*terminal.CommandExtractor // 命令提取器（Tab 补全修正）
-	extractorMu       sync.RWMutex                          // 命令提取器锁
-	patchStoreMu      sync.RWMutex
-	patchStore        patchstore.PatchStore    // 补丁存储（可选）
-	feedbackStore     patchstore.FeedbackStore // 反馈存储（可选）
-	patchSyncStatusMu sync.RWMutex
-	patchSyncStatus   PatchSyncStatus
-	patchSyncing      atomic.Bool
-	sessionShareMu    sync.RWMutex         // protects sessionShare
-	sessionShare      *sessionShareRuntime // 会话共享运行时（nil = 未启用，逻辑见 app_sessionshare.go）
-	garden            *garden.Store        // 养成系统存储（nil = 未启用，绑定与钩子见 app_garden.go）
+	sessionStates        map[string]*SessionState // 会话状态追踪
+	sessionStateMu       sync.RWMutex
+	commandExtractors    map[string]*terminal.CommandExtractor // 命令提取器（Tab 补全修正）
+	extractorMu          sync.RWMutex                          // 命令提取器锁
+	patchStoreMu         sync.RWMutex
+	patchStore           patchstore.PatchStore    // 补丁存储（可选）
+	feedbackStore        patchstore.FeedbackStore // 反馈存储（可选）
+	patchSyncStatusMu    sync.RWMutex
+	patchSyncStatus      PatchSyncStatus
+	patchSyncing         atomic.Bool
+	sessionShareMu       sync.RWMutex         // protects sessionShare
+	sessionShare         *sessionShareRuntime // 会话共享运行时（nil = 未启用，逻辑见 app_sessionshare.go）
+	garden               *garden.Store        // 养成系统存储（nil = 未启用，绑定与钩子见 app_garden.go）
 }
 
 // NewApp creates a new App application struct
@@ -423,7 +425,13 @@ func (a *App) GetVersion() string {
 // GetReleaseHistory fetches published releases for the About panel's version log.
 // Returns JSON with a "releases" array (newest first) or an "error" field on failure.
 func (a *App) GetReleaseHistory() string {
-	releases, err := updater.FetchReleaseHistory()
+	var releases []updater.ReleaseInfo
+	var err error
+	if base := a.GetServiceCenterSettings().BaseURL; base != "" {
+		releases, err = updater.IntranetHistory(base)
+	} else {
+		releases, err = updater.FetchReleaseHistory()
+	}
 	if err != nil {
 		slog.Warn("fetch release history failed", "error", err)
 		result, _ := json.Marshal(map[string]interface{}{
@@ -439,7 +447,22 @@ func (a *App) GetReleaseHistory() string {
 
 // CheckUpdate checks GitHub for the latest release and returns update status as JSON.
 func (a *App) CheckUpdate() string {
-	status, err := updater.CheckForUpdate(Version)
+	status, err := a.checkServiceUpdate()
+	if a.serviceCenter != nil {
+		id := uuid.NewString()
+		target := Version
+		result := "failure"
+		code := "network"
+		if err == nil {
+			target = status.LatestVer
+			code = "none"
+			result = "no_update"
+			if status.HasUpdate {
+				result = "success"
+			}
+		}
+		a.serviceCenter.Upgrade(id, target, "check", result, code)
+	}
 	if err != nil {
 		slog.Warn("check update failed", "error", err)
 		result, _ := json.Marshal(map[string]interface{}{
@@ -456,6 +479,28 @@ func (a *App) CheckUpdate() string {
 
 // DoUpdate downloads the update, writes a manifest, and relaunches self in update mode.
 func (a *App) DoUpdate(downloadURL string) string {
+	var artifact *updater.Asset
+	target := Version
+	if a.GetServiceCenterSettings().BaseURL != "" {
+		status, err := a.checkServiceUpdate()
+		if err != nil {
+			return toJSONError("无法确认内网安装包")
+		}
+		if !status.HasUpdate || status.DownloadURL != downloadURL {
+			return toJSONError("请重新检查更新")
+		}
+		for _, asset := range status.Release.Assets {
+			if asset.BrowserDownloadURL == downloadURL {
+				copy := asset
+				artifact = &copy
+			}
+		}
+		if artifact == nil {
+			return toJSONError("安装包未通过来源验证")
+		}
+		target = status.LatestVer
+	}
+	upgradeID := uuid.NewString()
 	if desktopInstallationLease != nil {
 		if err := desktopInstallationLease.CheckUpdate(); err != nil {
 			return toJSONError(err.Error())
@@ -483,10 +528,25 @@ func (a *App) DoUpdate(downloadURL string) string {
 	}
 
 	slog.Info("update: downloading and extracting...")
-	extractedDir, err := updater.DownloadAndExtract(downloadURL, tempDir, progressFn)
+	var extractedDir string
+	if artifact != nil {
+		extractedDir, err = updater.DownloadVerified(downloadURL, tempDir, artifact.SHA256, artifact.Size, progressFn)
+	} else {
+		extractedDir, err = updater.DownloadAndExtract(downloadURL, tempDir, progressFn)
+	}
 	if err != nil {
+		if a.serviceCenter != nil {
+			code := "network"
+			if errors.Is(err, updater.ErrChecksum) {
+				code = "checksum"
+			}
+			a.serviceCenter.Upgrade(upgradeID, target, "download", "failure", code)
+		}
 		slog.Error("update: download/extract failed", "error", err)
 		return toJSONError(fmt.Sprintf("download: %v", err))
+	}
+	if a.serviceCenter != nil {
+		a.serviceCenter.Upgrade(upgradeID, target, "download", "success", "none")
 	}
 	slog.Info("update: download complete, extracted", "extractedDir", extractedDir)
 
@@ -495,7 +555,7 @@ func (a *App) DoUpdate(downloadURL string) string {
 		AppDir:       exeDir,
 		ExePath:      exePath,
 		ParentPid:    os.Getpid(),
-		Version:      Version,
+		Version:      target,
 		LogPath:      filepath.Join(exeDir, "update.log"),
 	}
 	manifestPath := filepath.Join(tempDir, "manifest.json")
@@ -509,9 +569,21 @@ func (a *App) DoUpdate(downloadURL string) string {
 			return toJSONError(err.Error())
 		}
 	}
+	if a.serviceCenter != nil {
+		if err := a.serviceCenter.PendingUpgrade(upgradeID, target); err != nil {
+			return toJSONError("无法保存升级状态，请检查配置目录权限")
+		}
+	}
 	if err := launchSelfUpdate(exePath, manifestPath); err != nil {
+		if a.serviceCenter != nil {
+			a.serviceCenter.Upgrade(upgradeID, target, "install", "failure", "install")
+		}
 		slog.Error("update: launch self-update failed", "error", err)
 		return toJSONError(fmt.Sprintf("launch updater: %v", err))
+	}
+	if a.serviceCenter != nil {
+		a.serviceCenter.Upgrade(upgradeID, target, "install", "success", "none")
+		go a.serviceCenter.Refresh(a.ctx)
 	}
 	slog.Info("update: self-update launched, scheduling quit")
 
@@ -542,6 +614,7 @@ func launchSelfUpdate(exePath, manifestPath string) error {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.initServiceCenter()
 
 	// 快捷命令热加载：监听配置文件外部变化（多窗口互写），推送给前端
 	a.startQuickCommandsWatcher()
@@ -713,7 +786,12 @@ func (a *App) autoSaveConnection(config ConnectConfig) {
 }
 
 // ConnectWithID connects with a specific sessionID (for reconnection)
-func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) ConnectResult {
+func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) (result ConnectResult) {
+	// ReconnectSession reuses a nonempty session ID; only deliberate new connections count.
+	if specifiedSessionID == "" && a.serviceCenter != nil {
+		complete := a.serviceCenter.BeginConnection()
+		defer func() { complete(result.Success) }()
+	}
 	// 尝试从 SecretStore 保存密码（如果提供了）
 	if config.Password != "" {
 		_ = a.secretStore.Set("OpsCopilot-SSH", config.Host+":"+config.User, config.Password)
@@ -1064,7 +1142,18 @@ func (a *App) GetCatalogServices() []ServiceInfo {
 }
 
 // ArchiveSession 归档排查会话到指定文件
-func (a *App) ArchiveSession(rootCause string, conclusion string, service string, module string, targetFile string) string {
+func (a *App) ArchiveSession(rootCause string, conclusion string, service string, module string, targetFile string) (response string) {
+	done := a.beginUsage("gui_archive")
+	defer func() {
+		var status struct {
+			Success bool `json:"success"`
+		}
+		if json.Unmarshal([]byte(response), &status) == nil && status.Success {
+			done("success")
+		} else {
+			done("failure")
+		}
+	}()
 	currentSession := a.coreRecorder.GetCurrentSession()
 	if currentSession == nil {
 		return toJSONError("No active session")
@@ -1290,7 +1379,19 @@ func (a *App) AskAI(question string) string {
 }
 
 // AskTroubleshoot handles the troubleshooting request from frontend
-func (a *App) AskTroubleshoot(problem string) string {
+func (a *App) AskTroubleshoot(problem string) (response string) {
+	done := a.beginUsage("gui_diagnose")
+	defer func() {
+		if strings.HasPrefix(response, "Error:") {
+			if a.ctx != nil && errors.Is(a.ctx.Err(), context.Canceled) {
+				done("cancelled")
+			} else {
+				done("failure")
+			}
+		} else {
+			done("success")
+		}
+	}()
 	knowledgeDir := a.resolveKnowledgeBase()
 	slog.Info("askTroubleshoot problem", "problem", problem)
 	answer, err := a.aiService.AskTroubleshoot(a.ctx, problem, knowledgeDir)
@@ -1376,6 +1477,7 @@ func (a *App) GetKnowledgeFileContent(relPath string) string {
 		"success": true,
 		"content": content,
 	})
+	a.CountServiceUsage("gui_knowledge_opened")
 	return string(result)
 }
 
@@ -1410,6 +1512,7 @@ func (a *App) GetKnowledgeScenarioContent(relPath string, lineStart int, lineEnd
 		"success": true,
 		"content": section,
 	})
+	a.CountServiceUsage("gui_knowledge_opened")
 	return string(result)
 }
 
@@ -2419,10 +2522,16 @@ func friendlyTransportLabel(code string) string {
 }
 
 func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string) string {
+	prefix := "gui_download"
+	if op == "upload" || op == "uploadDir" {
+		prefix = "gui_upload"
+	}
+	done := a.beginUsage(prefix)
 	slog.Info("ft transfer started", "op", op, "session", sessionID[:8], "local", localPath, "remote", remotePath)
 	info, err := a.getTransferClientWithRelay(sessionID)
 	if err != nil {
 		slog.Error("ft failed to get transfer client", "error", err)
+		done("failure")
 		return mustJSON(ftResponse{OK: false, Error: toTransferErr(err)})
 	}
 	// 预检仅用于快速报错；root 直连分支会新建 SSH 连接，须立即关闭，
@@ -2437,6 +2546,14 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 	a.ftMu.Unlock()
 
 	go func() {
+		outcome := "failure"
+		defer func() {
+			if errors.Is(ctx.Err(), context.Canceled) {
+				done("cancelled")
+			} else {
+				done(outcome)
+			}
+		}()
 		defer func() {
 			a.ftMu.Lock()
 			delete(a.ftCancels, taskID)
@@ -2518,6 +2635,9 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 		// 目录级传输（FTUploadDir/FTDownloadDir）：走编排层，单任务单进度。
 		if op == "uploadDir" || op == "downloadDir" {
 			ok, msg, bytes := a.runTreeTransferTask(ctx, sessionID, op, localPath, remotePath, taskInfo, progressFn)
+			if ok {
+				outcome = "success"
+			}
 			if a.ctx == nil {
 				return
 			}
@@ -2569,6 +2689,9 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 			usedTransport := res.Transport
 			if usedTransport == "" {
 				usedTransport = "Root 中转"
+			}
+			if opErr == nil {
+				outcome = "success"
 			}
 			if a.ctx == nil {
 				return
@@ -2641,6 +2764,9 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 			}
 		}
 
+		if opErr == nil {
+			outcome = "success"
+		}
 		if a.ctx == nil {
 			return
 		}
@@ -2681,8 +2807,8 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 //   - SCP 降级模式没有 Mkdir/List 能力，目录传输明确不支持。
 func (a *App) runTreeTransferTask(ctx context.Context, sessionID, op, localPath, remotePath string, taskInfo transferClientInfo, progressFn func(filetransfer.Progress)) (bool, string, int64) {
 	var (
-		res          filetransfer.TreeResult
-		err          error
+		res           filetransfer.TreeResult
+		err           error
 		usedTransport string
 	)
 	if taskInfo.identity == "root-relay" {
@@ -2883,7 +3009,19 @@ func (a *App) PolishRootCause(input string) string {
 	return polished
 }
 
-func (a *App) GenerateLinuxCommand(request string) string {
+func (a *App) GenerateLinuxCommand(request string) (response string) {
+	done := a.beginUsage("gui_generate")
+	defer func() {
+		if strings.HasPrefix(response, "Error:") {
+			if a.ctx != nil && errors.Is(a.ctx.Err(), context.Canceled) {
+				done("cancelled")
+			} else {
+				done("failure")
+			}
+		} else {
+			done("success")
+		}
+	}()
 	result, err := a.aiService.GenerateLinuxCommand(request)
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
@@ -3220,7 +3358,11 @@ func (a *App) StartScriptRecording(name, description, sessionID string) (*script
 
 // StopScriptRecording 停止脚本录制
 func (a *App) StopScriptRecording() (*script.Script, error) {
-	return a.scriptMgr.StopRecording()
+	created, err := a.scriptMgr.StopRecording()
+	if err == nil && created != nil {
+		a.CountServiceUsage("gui_script_created")
+	}
+	return created, err
 }
 
 // GetScriptList 获取脚本列表
@@ -3245,11 +3387,25 @@ func (a *App) DeleteScript(scriptID string) error {
 
 // CreateScript 手动创建空脚本
 func (a *App) CreateScript(name, description string) (*script.Script, error) {
-	return a.scriptMgr.CreateScript(name, description)
+	created, err := a.scriptMgr.CreateScript(name, description)
+	if err == nil && created != nil {
+		a.CountServiceUsage("gui_script_created")
+	}
+	return created, err
 }
 
 // ReplayScript 回放脚本
-func (a *App) ReplayScript(scriptID, sessionID string) error {
+func (a *App) ReplayScript(scriptID, sessionID string) (resultErr error) {
+	done := a.beginUsage("gui_script")
+	defer func() {
+		if errors.Is(resultErr, context.Canceled) {
+			done("cancelled")
+		} else if resultErr != nil {
+			done("failure")
+		} else {
+			done("success")
+		}
+	}()
 	if err := a.scriptMgr.ReplayScript(scriptID, sessionID); err != nil {
 		return err
 	}
@@ -3259,7 +3415,17 @@ func (a *App) ReplayScript(scriptID, sessionID string) error {
 }
 
 // ReplayScriptWithVars 带变量值的回放脚本
-func (a *App) ReplayScriptWithVars(scriptID, sessionID string, varValues map[string]string) error {
+func (a *App) ReplayScriptWithVars(scriptID, sessionID string, varValues map[string]string) (resultErr error) {
+	done := a.beginUsage("gui_script")
+	defer func() {
+		if errors.Is(resultErr, context.Canceled) {
+			done("cancelled")
+		} else if resultErr != nil {
+			done("failure")
+		} else {
+			done("success")
+		}
+	}()
 	if err := a.scriptMgr.ReplayScriptWithVars(scriptID, sessionID, varValues); err != nil {
 		return err
 	}

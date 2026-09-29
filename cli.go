@@ -23,6 +23,7 @@ import (
 // cliEnv 聚合 CLI 子命令需要的环境/路径配置
 // 所有路径默认从可执行文件所在目录推导，支持环境变量覆盖
 type cliEnv struct {
+	observe        func(string)
 	binDir         string
 	sessionsFile   string
 	whitelistPath  string
@@ -68,6 +69,7 @@ func loadCLIExecTimeoutSec(env cliEnv) int {
 // newOpsManager 构造运维内核管理器（复用 core/ops）
 func newOpsManager(env cliEnv) (*ops.Manager, error) {
 	return ops.NewManager(&ops.Config{
+		Observe:        env.observe,
 		SessionsFile:   env.sessionsFile,
 		WhitelistPath:  env.whitelistPath,
 		FilePath:       env.fileAccessPath,
@@ -181,6 +183,10 @@ func cmdExec(args []string) int {
 		return 1
 	}
 
+	done, observe := beginCLIUsage(env, "cli_exec")
+	outcome := "failure"
+	defer func() { done(outcome) }()
+	env.observe = observe
 	mgr, err := newOpsManager(env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "初始化失败: %v\n", err)
@@ -199,6 +205,9 @@ func cmdExec(args []string) int {
 		return 1
 	}
 
+	if result.Success {
+		outcome = "success"
+	}
 	out, _ := json.Marshal(result)
 	fmt.Println(string(out))
 	return 0

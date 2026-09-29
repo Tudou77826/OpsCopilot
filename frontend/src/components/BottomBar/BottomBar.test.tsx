@@ -10,7 +10,7 @@ describe('BottomBar', () => {
     });
 
     it('shows the first terminal tip', () => {
-        render(<BottomBar />);
+        render(<BottomBar onOpenServiceSettings={vi.fn()} />);
         expect(screen.getByTestId('bottom-bar-tip')).toHaveTextContent(BOTTOM_BAR_TIPS[0]);
     });
 
@@ -22,7 +22,7 @@ describe('BottomBar', () => {
             removeEventListener: vi.fn(),
         }));
 
-        render(<BottomBar />);
+        render(<BottomBar onOpenServiceSettings={vi.fn()} />);
         act(() => {
             vi.advanceTimersByTime(BOTTOM_BAR_TIP_INTERVAL_MS);
         });

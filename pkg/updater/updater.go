@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"opscopilot/pkg/servicecenter"
 )
 
 const (
@@ -39,6 +41,16 @@ var retrySleep = time.Sleep
 func newHTTPClient(timeout time.Duration) *http.Client {
 	return &http.Client{
 		Timeout: timeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) > 5 {
+				return fmt.Errorf("too many redirects")
+			}
+			source := via[0].URL
+			if source.Host != "github.com" && source.Host != "api.github.com" && (req.URL.Scheme != source.Scheme || req.URL.Host != source.Host) {
+				return fmt.Errorf("内网更新禁止跨站跳转")
+			}
+			return nil
+		},
 		Transport: &http.Transport{
 			Proxy: systemProxyFunc,
 		},
@@ -46,21 +58,10 @@ func newHTTPClient(timeout time.Duration) *http.Client {
 }
 
 // ReleaseInfo represents a GitHub release.
-type ReleaseInfo struct {
-	TagName     string    `json:"tag_name"`
-	Name        string    `json:"name"`
-	Body        string    `json:"body"`
-	HTMLURL     string    `json:"html_url"`
-	PublishedAt time.Time `json:"published_at"`
-	Assets      []Asset   `json:"assets"`
-}
+type ReleaseInfo = servicecenter.ReleaseInfo
 
 // Asset represents a release asset (downloadable file).
-type Asset struct {
-	Name               string `json:"name"`
-	BrowserDownloadURL string `json:"browser_download_url"`
-	Size               int64  `json:"size"`
-}
+type Asset = servicecenter.Asset
 
 // UpdateStatus is returned to the frontend as JSON.
 type UpdateStatus struct {
@@ -121,6 +122,7 @@ func backoffDelay(attempt int) time.Duration {
 
 // Files that should NOT be overwritten during update.
 var protectedFiles = map[string]bool{
+	"service-center.json":         true,
 	".ops-install-runtime.lock":   true,
 	".ops-install-admission.lock": true,
 	// User data
@@ -182,6 +184,10 @@ func buildCumulativeChangelog(currentVer string, latestRelease *ReleaseInfo) ([]
 		// Fallback: just return the latest release body.
 		return nil, latestRelease.Body
 	}
+	return cumulativeChangelog(currentVer, latestRelease, allReleases)
+}
+
+func cumulativeChangelog(currentVer string, latestRelease *ReleaseInfo, allReleases []ReleaseInfo) ([]string, string) {
 
 	var parts []string
 	var skipped []string
@@ -239,6 +245,10 @@ func selectDownloadURL(assets []Asset) string {
 // Returns the path to the extracted directory.
 // progressFn is called periodically with download progress (may be nil).
 func DownloadAndExtract(downloadURL string, tempDir string, progressFn func(DownloadProgress)) (string, error) {
+	return downloadAndExtract(downloadURL, tempDir, "", 0, progressFn)
+}
+
+func downloadAndExtract(downloadURL string, tempDir, checksum string, size int64, progressFn func(DownloadProgress)) (string, error) {
 	isZip := strings.HasSuffix(downloadURL, ".zip")
 	slog.Info("updater: DownloadAndExtract", "isZip", isZip, "tempDir", tempDir)
 
@@ -255,6 +265,9 @@ func DownloadAndExtract(downloadURL string, tempDir string, progressFn func(Down
 		if err := downloadFile(downloadURL, zipPath, progressFn); err != nil {
 			return "", fmt.Errorf("download: %w", err)
 		}
+		if err := verifyArtifact(zipPath, checksum, size); err != nil {
+			return "", err
+		}
 		slog.Info("updater: download complete, extracting...", "zipPath", zipPath)
 		extractDir := filepath.Join(tempDir, "extracted")
 		if err := unzip(zipPath, extractDir); err != nil {
@@ -269,6 +282,9 @@ func DownloadAndExtract(downloadURL string, tempDir string, progressFn func(Down
 	slog.Info("updater: downloading exe...", "exePath", exePath)
 	if err := downloadFile(downloadURL, exePath, progressFn); err != nil {
 		return "", fmt.Errorf("download: %w", err)
+	}
+	if err := verifyArtifact(exePath, checksum, size); err != nil {
+		return "", err
 	}
 
 	// Verify the exe is non-trivial (at least 1MB).
@@ -347,7 +363,7 @@ func fetchJSONWithRetryClient(url string, out interface{}, client *http.Client) 
 		slog.Warn("updater: api request failed, will retry", "url", url, "attempt", attempt, "delay", delay, "error", err)
 		retrySleep(delay)
 	}
-	return fmt.Errorf("请求 GitHub 失败（已自动重试 %d 次）: %w", apiRetryAttempts-1, lastErr)
+	return fmt.Errorf("请求更新服务失败（已自动重试 %d 次）: %w", apiRetryAttempts-1, lastErr)
 }
 
 func fetchJSONOnce(url string, out interface{}, client *http.Client) error {
@@ -359,7 +375,7 @@ func fetchJSONOnce(url string, out interface{}, client *http.Client) error {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("github api request: %w", err)
+		return fmt.Errorf("update service request: %w", err)
 	}
 	defer resp.Body.Close()
 

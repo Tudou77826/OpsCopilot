@@ -7,6 +7,8 @@ export interface CommandQueryHost {
   type(command: string): void;
   copy(command: string): Promise<void>;
   warn(message: string): void;
+  opened?(): void;
+ typed?(): void;
 }
 
 /** One command-generation lifecycle for desktop and embedded product entries. */
@@ -15,15 +17,18 @@ export function useCommandQuery(host: CommandQueryHost, activeTerminalId: string
   const [result, setResult] = useState<CommandQueryResult | null>(null);
   const [loading, setLoading] = useState(false), [error, setError] = useState('');
   const epoch = useRef(0), currentHost = useRef(host);
+  const visibleRef=useRef(false);visibleRef.current=visible;
   currentHost.current = host;
   const setVisible = (value: boolean) => { epoch.current++; setLoading(false); updateVisible(value); };
   useEffect(() => { setVisible(false); return () => { epoch.current++; }; }, [activeTerminalId]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
-      if (!matchesShortcut(event, shortcut) || isEditableTarget(event.composedPath()[0] ?? event.target)) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      if (event.repeat || !matchesShortcut(event, shortcut) || isEditableTarget(event.composedPath()[0] ?? event.target)) return;
       event.preventDefault(); event.stopPropagation();
       if (!activeTerminalId) { currentHost.current.warn('请先选择一个激活的终端'); return; }
       setQuery(''); setResult(null); setError(''); setVisible(true);
+      if(!visibleRef.current)currentHost.current.opened?.();
     };
     window.addEventListener('keydown', keydown, true);
     return () => window.removeEventListener('keydown', keydown, true);
@@ -46,7 +51,7 @@ export function useCommandQuery(host: CommandQueryHost, activeTerminalId: string
   };
   const type = () => {
     const command = result?.command?.trim(); if (!command || !activeTerminalId) return;
-    try { currentHost.current.type(command); setVisible(false); } catch (err) { setError(String(err)); }
+    try { currentHost.current.type(command); currentHost.current.typed?.(); setVisible(false); } catch (err) { setError(String(err)); }
   };
   return { visible, setVisible, query, setQuery, result, loading, error, generate, copy, type };
 }

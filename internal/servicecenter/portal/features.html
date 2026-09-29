@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpsCopilot 功能清单</title>
+  <link rel="stylesheet" href="/portal/features.css">
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>OpsCopilot</h1>
+        <p class="subtitle">面向运维人员与 AI Agent 的一体化运维工作台，让连接、排查、沉淀和复用形成闭环。</p>
+      </div>
+      <div class="stamp">CODE VERIFIED<br>CURRENT FEATURES</div>
+    </header>
+
+    <div class="legend">
+      <span>功能盘点 · 已核对 48 次 GitHub Releases（v1.0.0—v1.8.9.3）及标签间提交</span>
+      <span><span class="baseline">基础能力</span> 用户通常默认应具备，保留用于范围确认 · 不含路线图功能</span>
+    </div>
+
+    <section>
+      <h2><small>01 / CONNECT</small>连接与会话</h2>
+      <ul>
+        <li><strong>SSH / Telnet</strong> 多协议远程终端</li>
+        <li>Telnet 自动登录、窗口尺寸协商与协议能力提示</li>
+        <li>自然语言解析主机、账号、IP 范围等连接信息</li>
+        <li>SSH 跳板机穿透与自动提权</li>
+        <li>跳板机连接模板，一键填入常用连接描述格式</li>
+        <li>连接信息保存、分组、搜索、编辑与删除 <span class="baseline">基础能力</span></li>
+        <li>批量连接文件夹内的多台主机</li>
+        <li>连接失败后保留配置和原始描述，便于修正重试 <span class="baseline">基础能力</span></li>
+        <li>断线保留标签并支持原会话重连 <span class="baseline">基础能力</span></li>
+        <li>终端标签重命名、复制与连接信息复制 <span class="baseline">基础能力</span></li>
+        <li>关闭应用前检测活动连接和未保存排查 <span class="baseline">基础能力</span></li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><small>02 / TERMINAL</small>终端效率</h2>
+      <ul>
+        <li>xterm.js 交互终端与自适应尺寸 <span class="baseline">基础能力</span></li>
+        <li>标签自由拖拽分屏、成组、调节尺寸与折叠</li>
+        <li>广播输入到多个选定终端</li>
+        <li>Linux 命令、参数及常用组合补全</li>
+        <li><code>Ctrl+K</code> 自然语言生成 Linux 命令，并支持跨会话查询历史</li>
+        <li><code>Ctrl+F</code> 搜索当前终端输出 <span class="baseline">基础能力</span></li>
+        <li>搜索支持大小写、正则、整词、结果计数与前后跳转 <span class="baseline">基础能力</span></li>
+        <li>规则高亮适配中文、软换行和跨行内容，危险正则隔离限时</li>
+        <li>选中时间戳后转换为可读时间</li>
+        <li>中键将终端选区直接发送到会话，不占系统剪贴板 <span class="baseline">基础能力</span></li>
+        <li>快捷命令分组、搜索、编辑与执行 <span class="baseline">基础能力</span></li>
+        <li>亮色/暗色主题、字体与字号调节 <span class="baseline">基础能力</span></li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><small>03 / FILES</small>文件管理</h2>
+      <ul>
+        <li>SFTP 文件浏览、上传与下载 <span class="baseline">基础能力</span></li>
+        <li>SFTP → SCP → Base64 三级传输降级，直传结果进行 MD5 校验</li>
+        <li>拖拽上传与传输进度、取消操作 <span class="baseline">基础能力</span></li>
+        <li>本地与远端目录浏览、面包屑导航 <span class="baseline">基础能力</span></li>
+        <li>新建、重命名、删除和复制文件 <span class="baseline">基础能力</span></li>
+        <li>远端文本文件直接读取与编辑 <span class="baseline">基础能力</span></li>
+        <li>多选、范围选择、批量上传/下载及批量复制路径</li>
+        <li>文件搜索、隐藏项过滤及多字段排序 <span class="baseline">基础能力</span></li>
+        <li>下载覆盖/另存为确认及递归删除警示 <span class="baseline">基础能力</span></li>
+        <li>覆盖前备份与自动创建远端目录</li>
+        <li>Root 直连或经现有 SSH 会话中继访问</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><small>04 / AI</small>AI 辅助</h2>
+      <ul>
+        <li>兼容 OpenAI 协议的模型服务 <span class="baseline">基础能力</span></li>
+        <li>快速模型与复杂模型分别配置</li>
+        <li>基于内部知识库的 AI 问答</li>
+        <li>Agent 自主检索、阅读并组合知识</li>
+        <li>实时展示执行阶段、流式分析和可折叠检索轨迹</li>
+        <li>输出可验证的诊断步骤与命令建议</li>
+        <li>逐条验证命令来源，剥离无法溯源的命令；无知识命中时不猜测</li>
+        <li>根因润色与排查结论辅助生成</li>
+        <li>知识场景按文件和行号回溯</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><small>05 / KNOWLEDGE</small>排查与知识闭环</h2>
+      <ul>
+        <li>定位会话记录终端输入、输出和操作时间线</li>
+        <li>排查过程可补充、编辑和删除事件</li>
+        <li>结束时整理根因、结论和解决方案</li>
+        <li>自动生成结构化 Markdown 知识记录</li>
+        <li>按服务、模块、场景建立多级目录索引</li>
+        <li>知识库三级树形浏览及 Markdown 正文查看 <span class="baseline">基础能力</span></li>
+        <li>按标题、关键词、现象、组件、服务和模块全文搜索</li>
+        <li>归档后立即进入后续 AI 检索范围</li>
+        <li>知识补丁通过 Git 仓库同步共享</li>
+        <li>同步失败补丁本地暂存、待上传计数与一键重试</li>
+        <li>知识评分、问题反馈及处理状态跟踪</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><small>06 / AUTOMATE</small>脚本复用</h2>
+      <ul>
+        <li>把终端操作录制为可复用脚本</li>
+        <li>脚本创建、编辑、删除和列表管理 <span class="baseline">基础能力</span></li>
+        <li>在任意位置插入步骤，并按步骤启用或禁用命令</li>
+        <li>变量占位与回放前变量输入</li>
+        <li>向指定在线会话回放脚本</li>
+        <li>导出为 Bash Shell 脚本</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><small>07 / AGENT</small>外部 Agent 与 CLI</h2>
+      <ul>
+        <li>单一可执行文件同时提供 GUI 与 CLI</li>
+        <li><code>exec</code>：远程执行受控命令</li>
+        <li><code>diagnose</code>：基于知识库进行只读诊断</li>
+        <li><code>file upload/download</code>：受控文件传输</li>
+        <li>CLI 惰性自动连接、失效连接自愈与 Telnet warnings</li>
+        <li>为 Codex、Claude Code、Cursor 等安装 Skill</li>
+        <li>支持多个 Agent Skill 目录并行配置</li>
+        <li>Skill 安装状态检测与一键更新</li>
+        <li>Skill 内嵌于主程序，随单一可执行文件保持版本一致</li>
+        <li>GUI 与 CLI 复用同一运维和安全内核</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><small>08 / GUARDRAILS</small>安全与系统</h2>
+      <ul>
+        <li>密码通过操作系统 Keyring 安全存储 <span class="baseline">基础能力</span></li>
+        <li>日志敏感字段脱敏 <span class="baseline">基础能力</span></li>
+        <li>按服务器 IP / CIDR 配置命令白名单</li>
+        <li>按 IP 实时预览命中的白名单策略与允许命令</li>
+        <li>远端文件读写路径与大小策略控制</li>
+        <li>CLI 命令级超时、输出截断、空闲断连及执行意图审计</li>
+        <li>设置搜索及配置即时保存 <span class="baseline">基础能力</span></li>
+        <li>旧版配置导入，并在导入前自动备份 <span class="baseline">基础能力</span></li>
+        <li>代理感知的更新检查、版本历史、自更新、配置保护与失败回滚 <span class="baseline">基础能力</span></li>
+      </ul>
+    </section>
+
+    <footer>
+      <span class="review">请重点 review：是否缺少业务层能力、内部约定功能，或尚未在当前代码入口暴露的能力。</span>
+      <span>OpsCopilot · Feature inventory</span>
+    </footer>
+  </main>
+</body>
+</html>

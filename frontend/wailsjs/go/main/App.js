@@ -54,6 +54,10 @@ export function CloseSession(arg1) {
   return window['go']['main']['App']['CloseSession'](arg1);
 }
 
+export function ConfigureServiceCenter(arg1) {
+  return window['go']['main']['App']['ConfigureServiceCenter'](arg1);
+}
+
 export function Connect(arg1) {
   return window['go']['main']['App']['Connect'](arg1);
 }
@@ -64,6 +68,10 @@ export function ConnectSharedSession(arg1) {
 
 export function ConnectWithID(arg1, arg2) {
   return window['go']['main']['App']['ConnectWithID'](arg1, arg2);
+}
+
+export function CountServiceUsage(arg1) {
+  return window['go']['main']['App']['CountServiceUsage'](arg1);
 }
 
 export function CreateSavedConnection(arg1, arg2) {
@@ -126,6 +134,10 @@ export function FTDownload(arg1, arg2, arg3) {
   return window['go']['main']['App']['FTDownload'](arg1, arg2, arg3);
 }
 
+export function FTDownloadDir(arg1, arg2, arg3) {
+  return window['go']['main']['App']['FTDownloadDir'](arg1, arg2, arg3);
+}
+
 export function FTList(arg1, arg2) {
   return window['go']['main']['App']['FTList'](arg1, arg2);
 }
@@ -158,8 +170,32 @@ export function FTUpload(arg1, arg2, arg3) {
   return window['go']['main']['App']['FTUpload'](arg1, arg2, arg3);
 }
 
+export function FTUploadDir(arg1, arg2, arg3) {
+  return window['go']['main']['App']['FTUploadDir'](arg1, arg2, arg3);
+}
+
 export function ForceQuit() {
   return window['go']['main']['App']['ForceQuit']();
+}
+
+export function GardenPlace(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['GardenPlace'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function GardenPurchase(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GardenPurchase'](arg1, arg2, arg3);
+}
+
+export function GardenSignal() {
+  return window['go']['main']['App']['GardenSignal']();
+}
+
+export function GardenSnapshot() {
+  return window['go']['main']['App']['GardenSnapshot']();
+}
+
+export function GardenStow(arg1) {
+  return window['go']['main']['App']['GardenStow'](arg1);
 }
 
 export function GenerateConclusionWithContext(arg1, arg2) {
@@ -234,6 +270,14 @@ export function GetScriptRecordingStatus() {
   return window['go']['main']['App']['GetScriptRecordingStatus']();
 }
 
+export function GetServiceAnnouncements() {
+  return window['go']['main']['App']['GetServiceAnnouncements']();
+}
+
+export function GetServiceCenterSettings() {
+  return window['go']['main']['App']['GetServiceCenterSettings']();
+}
+
 export function GetSessionShareStatus() {
   return window['go']['main']['App']['GetSessionShareStatus']();
 }
@@ -304,6 +348,14 @@ export function LocalStat(arg1) {
 
 export function MoveTreeNode(arg1, arg2, arg3) {
   return window['go']['main']['App']['MoveTreeNode'](arg1, arg2, arg3);
+}
+
+export function OpenServiceAnnouncement(arg1) {
+  return window['go']['main']['App']['OpenServiceAnnouncement'](arg1);
+}
+
+export function OpenServicePage(arg1) {
+  return window['go']['main']['App']['OpenServicePage'](arg1);
 }
 
 export function ParseIntent(arg1) {
@@ -410,6 +462,10 @@ export function SendCommand(arg1, arg2) {
   return window['go']['main']['App']['SendCommand'](arg1, arg2);
 }
 
+export function SetReportingChoice(arg1) {
+  return window['go']['main']['App']['SetReportingChoice'](arg1);
+}
+
 export function StartScriptRecording(arg1, arg2, arg3) {
   return window['go']['main']['App']['StartScriptRecording'](arg1, arg2, arg3);
 }
@@ -436,6 +492,10 @@ export function SummarizeUpdateNotes(arg1) {
 
 export function TerminalOutputReady(arg1) {
   return window['go']['main']['App']['TerminalOutputReady'](arg1);
+}
+
+export function TestServiceCenterConnection(arg1) {
+  return window['go']['main']['App']['TestServiceCenterConnection'](arg1);
 }
 
 export function UpdatePatchIssueStatus(arg1, arg2, arg3) {

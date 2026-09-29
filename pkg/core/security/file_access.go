@@ -31,6 +31,7 @@ type FileAccessConfig struct {
 
 // FileAccessCheckResult 文件访问检查结果
 type FileAccessCheckResult struct {
+	Code       string `json:"-"`
 	Allowed    bool   `json:"allowed"`
 	Reason     string `json:"reason"`
 	PolicyName string `json:"policy_name,omitempty"`
@@ -152,12 +153,14 @@ func (c *FileAccessChecker) checkAccess(remotePath string, localPath string, ser
 	if normalizedRemotePath == "" {
 		return FileAccessCheckResult{
 			Allowed: false,
+			Code:    "path",
 			Reason:  "远程路径不能为空",
 		}
 	}
 	if !strings.HasPrefix(normalizedRemotePath, "/") {
 		return FileAccessCheckResult{
 			Allowed: false,
+			Code:    "path",
 			Reason:  fmt.Sprintf("远程路径必须是绝对路径（以 / 开头），当前路径: %s", remotePath),
 		}
 	}
@@ -175,6 +178,7 @@ func (c *FileAccessChecker) checkAccess(remotePath string, localPath string, ser
 	if matchedPolicy == nil {
 		return FileAccessCheckResult{
 			Allowed: false,
+			Code:    "target",
 			Reason:  fmt.Sprintf("服务器 IP %s 未匹配任何文件访问策略", serverIP),
 		}
 	}
@@ -189,6 +193,7 @@ func (c *FileAccessChecker) checkAccess(remotePath string, localPath string, ser
 		if pathMatches(normalizedRemotePath, denied) {
 			return FileAccessCheckResult{
 				Allowed: false,
+				Code:    "path",
 				Reason:  fmt.Sprintf("文件访问被拒绝: 远程路径在拒绝列表中，%s 命中拒绝规则 %q（策略: %s，规范化路径: %s）", remotePath, denied, matchedPolicy.Name, normalizedRemotePath),
 			}
 		}
@@ -199,6 +204,7 @@ func (c *FileAccessChecker) checkAccess(remotePath string, localPath string, ser
 		if !isPathAllowed(normalizedRemotePath, matchedPolicy.ReadPaths) {
 			return FileAccessCheckResult{
 				Allowed: false,
+				Code:    "path",
 				Reason:  fmt.Sprintf("文件访问被拒绝: 远程路径不在允许读取的路径中（路径: %s，规范化路径: %s，策略: %s，允许读取: %s）", remotePath, normalizedRemotePath, matchedPolicy.Name, formatPathList(matchedPolicy.ReadPaths)),
 			}
 		}
@@ -206,6 +212,7 @@ func (c *FileAccessChecker) checkAccess(remotePath string, localPath string, ser
 		if matchedPolicy.MaxReadBytes > 0 && fileSize > int64(matchedPolicy.MaxReadBytes) {
 			return FileAccessCheckResult{
 				Allowed: false,
+				Code:    "size",
 				Reason:  fmt.Sprintf("文件访问被拒绝: 文件大小 %d 字节超过下载上限 %d 字节（策略: %s，路径: %s）", fileSize, matchedPolicy.MaxReadBytes, matchedPolicy.Name, normalizedRemotePath),
 			}
 		}
@@ -213,6 +220,7 @@ func (c *FileAccessChecker) checkAccess(remotePath string, localPath string, ser
 		if !isPathAllowed(normalizedRemotePath, matchedPolicy.WritePaths) {
 			return FileAccessCheckResult{
 				Allowed: false,
+				Code:    "path",
 				Reason:  fmt.Sprintf("文件访问被拒绝: 远程路径不在允许写入的路径中（路径: %s，规范化路径: %s，策略: %s，允许写入: %s）", remotePath, normalizedRemotePath, matchedPolicy.Name, formatPathList(matchedPolicy.WritePaths)),
 			}
 		}
@@ -220,6 +228,7 @@ func (c *FileAccessChecker) checkAccess(remotePath string, localPath string, ser
 		if matchedPolicy.MaxWriteBytes > 0 && fileSize > int64(matchedPolicy.MaxWriteBytes) {
 			return FileAccessCheckResult{
 				Allowed: false,
+				Code:    "size",
 				Reason:  fmt.Sprintf("文件访问被拒绝: 文件大小 %d 字节超过上传上限 %d 字节（策略: %s，路径: %s）", fileSize, matchedPolicy.MaxWriteBytes, matchedPolicy.Name, normalizedRemotePath),
 			}
 		}
@@ -392,6 +401,7 @@ func (c *FileAccessChecker) CheckLocalPath(localPath string, serverIP string) Fi
 			}
 			return FileAccessCheckResult{
 				Allowed: false,
+				Code:    "path",
 				Reason:  fmt.Sprintf("本地路径 %s 不在允许的目录中", localPath),
 			}
 		}
@@ -399,6 +409,7 @@ func (c *FileAccessChecker) CheckLocalPath(localPath string, serverIP string) Fi
 
 	return FileAccessCheckResult{
 		Allowed: false,
+		Code:    "target",
 		Reason:  fmt.Sprintf("服务器 IP %s 未匹配任何文件访问策略", serverIP),
 	}
 }

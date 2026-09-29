@@ -10,6 +10,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/wailsapp/wails/v2 v2.11.0
 	github.com/zalando/go-keyring v0.2.6
+	go.etcd.io/bbolt v1.4.3
 	golang.org/x/crypto v0.46.0
 	golang.org/x/sys v0.39.0
 	golang.org/x/text v0.32.0
@@ -43,6 +44,7 @@ require (
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/wailsapp/go-webview2 v1.0.22 // indirect
 	github.com/wailsapp/mimetype v1.4.1 // indirect
+	github.com/yuin/goldmark v1.7.16
 	golang.org/x/net v0.47.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

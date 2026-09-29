@@ -152,6 +152,7 @@ func (m *WhitelistManager) Check(command string, serverIP string) CheckResult {
 	if command == "" {
 		return CheckResult{
 			Allowed: false,
+			Code:    "command",
 			Reason:  "命令不能为空",
 		}
 	}
@@ -190,7 +191,12 @@ func (m *WhitelistManager) Check(command string, serverIP string) CheckResult {
 	}
 
 	// 命令不在白名单中，返回详细的错误信息
+	code := "command"
+	if len(matchedPolicies) == 0 {
+		code = "target"
+	}
 	return CheckResult{
+		Code:    code,
 		Allowed: false,
 		Reason:  formatDeniedMessage(command, serverIP, matchedPolicies),
 	}

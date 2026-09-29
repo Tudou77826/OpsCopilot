@@ -118,6 +118,7 @@ func (m *Manager) Download(serverName, remotePath string, opts DownloadOptions) 
 	}
 	checkResult := m.fileChecker.CheckRead(remotePath, localPath, conn.Host, 0)
 	if !checkResult.Allowed {
+		m.observe("cli_policy_" + checkResult.Code)
 		return nil, fmt.Errorf("%s", checkResult.Reason)
 	}
 
@@ -138,6 +139,7 @@ func (m *Manager) Download(serverName, remotePath string, opts DownloadOptions) 
 
 	checkResult = m.fileChecker.CheckRead(remotePath, localPath, conn.Host, fileSize)
 	if !checkResult.Allowed {
+		m.observe("cli_policy_" + checkResult.Code)
 		return nil, fmt.Errorf("%s", checkResult.Reason)
 	}
 
@@ -251,6 +253,7 @@ func (m *Manager) Upload(serverName, remotePath string, opts UploadOptions) (*Up
 	}
 	checkResult := m.fileChecker.CheckWrite(remotePath, localPath, conn.Host, 0)
 	if !checkResult.Allowed {
+		m.observe("cli_policy_" + checkResult.Code)
 		return nil, fmt.Errorf("%s", checkResult.Reason)
 	}
 
@@ -265,6 +268,7 @@ func (m *Manager) Upload(serverName, remotePath string, opts UploadOptions) (*Up
 
 	checkResult = m.fileChecker.CheckWrite(remotePath, localPath, conn.Host, fileSize)
 	if !checkResult.Allowed {
+		m.observe("cli_policy_" + checkResult.Code)
 		return nil, fmt.Errorf("%s", checkResult.Reason)
 	}
 

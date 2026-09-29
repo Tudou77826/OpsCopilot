@@ -181,6 +181,9 @@ type Manager struct {
 	quickCmdSize int64
 }
 
+// Directory is the installation's configuration directory.
+func (m *Manager) Directory() string { return filepath.Dir(m.configPath) }
+
 func NewManager() *Manager {
 	return newManagerWithDir("")
 }

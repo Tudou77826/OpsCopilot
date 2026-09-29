@@ -6,6 +6,7 @@ import HighlightRulesModal from './HighlightRulesModal';
 import CommandWhitelistPanel from './CommandWhitelist/CommandWhitelistPanel';
 import FileAccessPanel from './FileAccess/FileAccessPanel';
 import AboutPanel from './AboutPanel';
+import { ServiceCenterSettings } from '../ServiceCenter/ServiceCenter';
 import { HighlightRule, TerminalConfig } from '../Terminal/highlightTypes';
 import { Theme } from '../appearanceTypes';
 import { assessPattern } from '../Terminal/highlight/regexSafety';
@@ -62,6 +63,7 @@ interface AppConfig {
 
 interface SettingsModalProps {
     isOpen: boolean;
+    initialTab?: 'llm' | 'servicecenter';
     onClose: () => void;
     isBroadcastMode?: boolean;
     onToggleBroadcast?: (enabled: boolean) => void;
@@ -109,7 +111,7 @@ interface SessionShareStatus {
     progressLabel?: string;
 }
 
-type TabId = 'llm' | 'appearance' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'knowledge' | 'sessionshare' | 'aiagent' | 'whitelist' | 'fileaccess' | 'experimental' | 'about';
+type TabId = 'llm' | 'appearance' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'knowledge' | 'sessionshare' | 'aiagent' | 'whitelist' | 'fileaccess' | 'experimental' | 'about' | 'servicecenter';
 
 // Skill 安装条目：每个 AI Agent 目录一行，独立保存检测状态/版本/消息。
 // 支撑多个 coding agent（Claude Code / Cursor / Codex 等）并用的场景（issue #54）。
@@ -263,6 +265,7 @@ const defaultPatchSyncStatus: PatchSyncStatus = {
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
     isOpen,
+    initialTab = 'llm',
     onClose,
     isBroadcastMode,
     onToggleBroadcast,
@@ -315,6 +318,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         { id: 'fileaccess', label: '文件访问控制', icon: TbLock({}), category: 'AI 接入' },
         { id: 'experimental', label: '高级选项', icon: TbSettings({}), category: '系统' },
         { id: 'about', label: '关于', icon: TbInfoCircle({}), category: '系统' },
+        { id: 'servicecenter', label: '内网服务', icon: TbPlugConnected({}), category: '系统' },
     ];
 
     // Filter navigation items based on search query
@@ -370,7 +374,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             setImportDir('');
             setImportMsg('');
             setSearchQuery('');
-            setActiveTab('llm');
+            setActiveTab(initialTab);
 
             // 回填上次使用的 skill 目录列表，并据此判断「AI 接入」导航项是否需要亮红点。
             // 兼容旧版单目录存储（opscopilot:skillDir）→ 自动迁移为单元素数组。
@@ -387,7 +391,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 void checkSkills(entries);
             }
         }
-    }, [isOpen]);
+    }, [isOpen, initialTab]);
 
     // Focus search box when tab changes
     useEffect(() => {
@@ -1730,6 +1734,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
             case 'about':
                 return <AboutPanel />;
+            case 'servicecenter':
+                return <ServiceCenterSettings />;
 
             default:
                 return null;

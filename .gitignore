@@ -61,6 +61,12 @@ v2-ui.png
 test-results/
 
 # Local Config
+deploy/service-center/.env
+deploy/service-center/.local.env
+deploy/service-center/.local-admin-token
+service-data/
+service-center.json
+service-center.json.lock
 config.json
 sessions.json
 .env.local

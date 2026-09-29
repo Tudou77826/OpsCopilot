@@ -1,0 +1,24 @@
+# Send only the server's source dependencies to the Docker build context.
+**
+!go.mod
+!go.sum
+!cmd/
+cmd/*
+!cmd/service-center/
+!cmd/service-center/**
+!internal/
+internal/*
+!internal/servicecenter/
+!internal/servicecenter/**
+!pkg/
+pkg/*
+!pkg/servicecenter/
+!pkg/servicecenter/**
+!pkg/filetxn/
+!pkg/filetxn/**
+!deploy/
+deploy/*
+!deploy/service-center/
+deploy/service-center/*
+!deploy/service-center/Dockerfile
+!deploy/service-center/Dockerfile.dockerignore

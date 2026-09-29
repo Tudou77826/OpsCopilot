@@ -11,6 +11,7 @@ import {
     TbRefresh,
 } from 'react-icons/tb';
 import {
+    CountServiceUsage,
     GetKnowledgeTree,
     GetKnowledgeScenarioContent,
     GetPatchFeedback,
@@ -448,6 +449,12 @@ const KnowledgeBrowser: React.FC<KnowledgeBrowserProps> = ({ target }) => {
         return results;
     }, [searchQuery, catalog]);
 
+    const countSearch = () => {
+        if (!searchQuery.trim() || searchResults === null) return;
+        void CountServiceUsage('gui_knowledge_search').catch(() => {});
+        void CountServiceUsage(searchResults.length ? 'gui_knowledge_found' : 'gui_knowledge_empty').catch(() => {});
+    };
+
     // --- Render: Tree View ---
     const renderTree = () => {
         if (loading) return <div style={styles.emptyState}>加载中...</div>;
@@ -468,8 +475,10 @@ const KnowledgeBrowser: React.FC<KnowledgeBrowserProps> = ({ target }) => {
                         placeholder="搜索知识库..."
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
+ onKeyDown={e => { if (e.key === "Enter" && !e.nativeEvent.isComposing) countSearch(); }}
                     />
-                    <button style={styles.searchClear} onClick={loadCatalog} title="刷新">
+                    <button style={styles.searchClear} onClick={countSearch} title="搜索（Enter）">{TbSearch({ size: 14 })}</button>
+ <button style={styles.searchClear} onClick={loadCatalog} title="刷新">
                         {TbRefresh({ size: 14 })}
                     </button>
                     {searchQuery && (

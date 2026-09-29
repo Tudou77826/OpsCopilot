@@ -222,6 +222,11 @@ func (m *Manager) Exec(ctx context.Context, serverName, command string, opts Exe
 	// 2. === 安全闸门：命令必须通过白名单校验（不可绕过，且先于连接）===
 	checkResult := m.whitelistManager.Check(command, host)
 	if !checkResult.Allowed {
+		if checkResult.Code == "target" {
+			m.observe("cli_policy_target")
+		} else {
+			m.observe("cli_policy_command")
+		}
 		return nil, fmt.Errorf("%s", checkResult.Reason)
 	}
 
@@ -269,9 +274,13 @@ func (m *Manager) Exec(ctx context.Context, serverName, command string, opts Exe
 	// 这样单条慢命令把连接拖死后，下一条能自愈，不必重开整个会话
 	if err != nil && !isTimeoutErr(err) && isConnectionDead(conn) {
 		slog.Warn("connection appears dead, attempting reconnect", "server", serverName, "error", err)
+		m.observe("cli_recovery_started")
 		if reconn, rErr := m.reconnect(serverName); rErr == nil {
+			m.observe("cli_recovery_success")
 			activeConn = reconn
 			output, err = runCmd(reconn)
+		} else {
+			m.observe("cli_recovery_failure")
 		}
 	}
 

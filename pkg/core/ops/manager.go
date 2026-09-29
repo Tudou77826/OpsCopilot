@@ -16,6 +16,8 @@ import (
 
 // Config 运维内核配置
 type Config struct {
+	// Observe receives fixed operation categories only, never content. Optional.
+	Observe        func(string)
 	SessionsFile   string // sessions.json 路径
 	WhitelistPath  string // 白名单配置文件路径
 	FilePath       string // 文件访问控制配置路径
@@ -178,5 +180,11 @@ func (m *Manager) cleanIdleConnections() {
 			delete(m.connections, name)
 			fmt.Fprintf(os.Stderr, "[ops] Disconnected idle server '%s' (idle for %v)\n", name, idleDuration.Round(time.Second))
 		}
+	}
+}
+
+func (m *Manager) observe(kind string) {
+	if m.config != nil && m.config.Observe != nil {
+		m.config.Observe(kind)
 	}
 }

@@ -54,3 +54,13 @@ func newPolicyOnlyTransferManager(t *testing.T) *Manager {
 		fileChecker: checker,
 	}
 }
+
+func TestTransferObserverEmitsOnlyFixedCategory(t *testing.T) {
+	m := newPolicyOnlyTransferManager(t)
+	var events []string
+	m.config = &Config{Observe: func(kind string) { events = append(events, kind) }}
+	_, err := m.Download("test-server", "secret-relative-path", DownloadOptions{LocalPath: filepath.Join(t.TempDir(), "password.txt")})
+	if err == nil || len(events) != 1 || events[0] != "cli_policy_path" {
+		t.Fatalf("bad policy observation: %v", events)
+	}
+}

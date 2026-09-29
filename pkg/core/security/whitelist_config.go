@@ -10,17 +10,17 @@ const (
 
 // WhitelistConfig 白名单配置
 type WhitelistConfig struct {
-	Version  string   `json:"version"`   // 配置版本
-	Policies []Policy `json:"policies"`  // 策略列表
+	Version  string   `json:"version"`  // 配置版本
+	Policies []Policy `json:"policies"` // 策略列表
 }
 
 // Policy 策略（按 IP 段区分）
 type Policy struct {
-	ID          string    `json:"id"`           // 策略 ID
-	Name        string    `json:"name"`         // 策略名称
-	Description string    `json:"description"`  // 策略描述
-	IPRanges    []string  `json:"ip_ranges"`    // IP 段（CIDR 或 "*" 表示所有）
-	Commands    []Command `json:"commands"`     // 命令规则
+	ID          string    `json:"id"`          // 策略 ID
+	Name        string    `json:"name"`        // 策略名称
+	Description string    `json:"description"` // 策略描述
+	IPRanges    []string  `json:"ip_ranges"`   // IP 段（CIDR 或 "*" 表示所有）
+	Commands    []Command `json:"commands"`    // 命令规则
 }
 
 // Command 命令规则
@@ -33,6 +33,7 @@ type Command struct {
 
 // CheckResult 检查结果
 type CheckResult struct {
+	Code       string          `json:"-"`
 	Allowed    bool            `json:"allowed"`     // 是否允许
 	Reason     string          `json:"reason"`      // 原因说明
 	Category   CommandCategory `json:"category"`    // 命令分类

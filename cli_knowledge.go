@@ -14,7 +14,17 @@ import (
 // cmdKnowledge: opscopilot knowledge list|search|read
 // 知识库原语接口：单发调用、不依赖服务器登记、不依赖 LLM 配置。
 // 场景是唯一寻址单元（短 ID），不暴露文件路径与行号。
-func cmdKnowledge(args []string) int {
+func cmdKnowledge(args []string) (exitCode int) {
+	if !cliHelpRequested(args) && len(args) > 0 && (args[0] == "list" || args[0] == "search" || args[0] == "read") {
+		done, _ := beginCLIUsage(loadCLIEnv(), "cli_knowledge_"+args[0])
+		defer func() {
+			if exitCode == 0 {
+				done("success")
+			} else {
+				done("failure")
+			}
+		}()
+	}
 	if len(args) < 1 {
 		knowledgeUsage()
 		return 1

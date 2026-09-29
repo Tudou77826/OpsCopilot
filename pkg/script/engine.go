@@ -1,6 +1,7 @@
 package script
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"regexp"
@@ -42,7 +43,7 @@ func SubstituteVariables(template string, vars map[string]string) string {
 func ExecuteSteps(steps []ScriptStep, ctx *PlaybackContext, sender CommandSender, sessionID string) error {
 	for i := range steps {
 		if ctx.Cancelled {
-			return fmt.Errorf("playback cancelled")
+			return fmt.Errorf("playback cancelled: %w", context.Canceled)
 		}
 
 		step := &steps[i]
