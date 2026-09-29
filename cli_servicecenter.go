@@ -15,7 +15,9 @@ func beginCLIUsage(env cliEnv, prefix string) (func(string), func(string)) {
 	if settings.Choice != "standard" || settings.NeedsConsent || settings.BaseURL == "" {
 		return func(string) {}, func(string) {}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+	// A busy machine can spend more than 250 ms establishing the first local
+	// HTTPS connection. A failed check still leaves telemetry disabled.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	c.Refresh(ctx)
 	cancel()
 	done := c.BeginUsage(prefix)
