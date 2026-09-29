@@ -22,7 +22,9 @@ func Lock(path string) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	deadline := time.Now().Add(3 * time.Second)
+	// Windows can spend several seconds syncing and replacing the file under
+	// concurrent processes. Wait for the OS-owned lock instead of dropping edits.
+	deadline := time.Now().Add(15 * time.Second)
 	for {
 		if err = tryLock(f); err == nil {
 			return func() { unlock(f); f.Close() }, nil

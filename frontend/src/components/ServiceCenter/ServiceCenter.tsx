@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { TbInfoCircle, TbMessageExclamation, TbExternalLink, TbDeviceFloppy, TbPlugConnected, TbLoader2 } from "react-icons/tb";
+import { TbInfoCircle, TbMessageExclamation, TbExternalLink, TbDeviceFloppy, TbPlugConnected, TbLoader2, TbSpeakerphone } from "react-icons/tb";
 import { confirmDialog } from "../ConfirmDialog/ConfirmDialog";
 import * as serviceBridge from "../../../wailsjs/go/main/App";
 import {
@@ -19,7 +19,7 @@ type Settings = {
   policy: { version: string; notice: string };
   ready: boolean;
 };
-type Announcement = {
+export type Announcement = {
   id: string;
   text: string;
   url: string;
@@ -381,17 +381,15 @@ export function ServiceCenterSettings() {
   );
 }
 
-export function ServiceAnnouncements() {
-  const [all, setAll] = useState<Announcement[]>([]),
-    [index, setIndex] = useState(0),
-    [paused, setPaused] = useState(false);
+export function useServiceAnnouncements() {
+  const [all, setAll] = useState<Announcement[]>([]);
   useEffect(() => {
     let alive = true;
     const load = () => {
       void Promise.resolve()
         .then(GetServiceAnnouncements)
         .then((a) => {
-          if (alive) setAll(a as Announcement[]);
+          if (alive) setAll(Array.isArray(a) ? a as Announcement[] : []);
         })
         .catch(() => {});
     };
@@ -404,27 +402,14 @@ export function ServiceAnnouncements() {
       window.removeEventListener("service-center-changed", load);
     };
   }, []);
-  useEffect(() => {
-    const tick = window.setInterval(() => {
-      if (!paused && !document.hidden) setIndex((i) => i + 1);
-    }, 7000);
-    return () => window.clearInterval(tick);
-  }, [paused]);
-  const now = Date.now(),
-    active = all.filter(
-      (a) => Date.parse(a.startsAt) <= now && Date.parse(a.endsAt) > now,
-    );
-  if (!active.length) return null;
-  const a = active[index % active.length];
+  const now = Date.now();
+  return all.filter((a) => Date.parse(a.startsAt) <= now && Date.parse(a.endsAt) > now);
+}
+
+export function ServiceAnnouncement({ announcement: a }: { announcement: Announcement }) {
   return (
-    <div
-      className="sc-announcement"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocusCapture={() => setPaused(true)}
-      onBlurCapture={() => setPaused(false)}
-    >
-      <span>公告</span>
+    <div className="sc-announcement">
+      <span className="sc-announcement-label">{TbSpeakerphone({ size: 13, "aria-hidden": true })}公告</span>
       {a.url ? (
         <button
           title={a.text}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { TbBulb } from 'react-icons/tb';
-import { ServiceAnnouncements, ServiceLinks } from '../ServiceCenter/ServiceCenter';
+import { ServiceAnnouncement, ServiceLinks, useServiceAnnouncements } from '../ServiceCenter/ServiceCenter';
 
 export const BOTTOM_BAR_TIPS = [
     'Ctrl + 滚轮：单独调整终端字号',
@@ -18,10 +18,15 @@ export const BOTTOM_BAR_TIP_INTERVAL_MS = 5000;
 
 const BottomBar: React.FC<{ onOpenServiceSettings: () => void }> = ({ onOpenServiceSettings }) => {
     const [version, setVersion] = useState('');
-    const [tipIndex, setTipIndex] = useState(0);
+    const [itemIndex, setItemIndex] = useState(0);
     const [tipVisible, setTipVisible] = useState(true);
     const [paused, setPaused] = useState(false);
     const [reducedMotion, setReducedMotion] = useState(false);
+    const announcements = useServiceAnnouncements();
+    const hasAnnouncements = announcements.length > 0;
+    const current: { kind: 'announcement' | 'tip'; index: number } = hasAnnouncements && itemIndex % 2 === 0
+        ? { kind: 'announcement', index: Math.floor(itemIndex / 2) % announcements.length }
+        : { kind: 'tip', index: (hasAnnouncements ? Math.floor(itemIndex / 2) : itemIndex) % BOTTOM_BAR_TIPS.length };
 
     useEffect(() => {
         (async () => {
@@ -47,12 +52,12 @@ const BottomBar: React.FC<{ onOpenServiceSettings: () => void }> = ({ onOpenServ
         let fadeTimer: number | undefined;
         const interval = window.setInterval(() => {
             if (reducedMotion) {
-                setTipIndex(index => (index + 1) % BOTTOM_BAR_TIPS.length);
+                setItemIndex(index => index + 1);
                 return;
             }
             setTipVisible(false);
             fadeTimer = window.setTimeout(() => {
-                setTipIndex(index => (index + 1) % BOTTOM_BAR_TIPS.length);
+                setItemIndex(index => index + 1);
                 setTipVisible(true);
             }, 180);
         }, BOTTOM_BAR_TIP_INTERVAL_MS);
@@ -64,26 +69,25 @@ const BottomBar: React.FC<{ onOpenServiceSettings: () => void }> = ({ onOpenServ
 
     return (
         <div style={styles.container} data-testid="bottom-bar">
-            <ServiceAnnouncements />
             <div
                 style={styles.tipArea}
+                data-testid="bottom-bar-carousel"
                 onMouseEnter={() => setPaused(true)}
                 onMouseLeave={() => setPaused(false)}
                 onFocusCapture={() => setPaused(true)}
                 onBlurCapture={() => setPaused(false)}
-                title={BOTTOM_BAR_TIPS[tipIndex]}
+                title={current.kind === 'announcement' ? announcements[current.index].text : BOTTOM_BAR_TIPS[current.index]}
             >
-                <span style={styles.tipIcon} aria-hidden="true">{TbBulb({ size: 13 })}</span>
-                <span
-                    data-testid="bottom-bar-tip"
-                    style={{
-                        ...styles.tipText,
-                        opacity: tipVisible ? 1 : 0,
-                        transition: reducedMotion ? 'none' : 'opacity 180ms ease',
-                    }}
-                >
-                    {BOTTOM_BAR_TIPS[tipIndex]}
-                </span>
+                <div style={{ ...styles.carouselItem, opacity: tipVisible ? 1 : 0, transition: reducedMotion ? 'none' : 'opacity 180ms ease' }}>
+                    {current.kind === 'announcement' ? (
+                        <ServiceAnnouncement announcement={announcements[current.index]} />
+                    ) : (
+                        <>
+                            <span style={styles.tipIcon} aria-hidden="true">{TbBulb({ size: 13 })}</span>
+                            <span data-testid="bottom-bar-tip" style={styles.tipText}>{BOTTOM_BAR_TIPS[current.index]}</span>
+                        </>
+                    )}
+                </div>
             </div>
 
             <ServiceLinks onConfigure={onOpenServiceSettings} />
@@ -118,6 +122,13 @@ const styles = {
         alignItems: 'center',
         gap: '6px',
         overflow: 'hidden',
+    },
+    carouselItem: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        width: '100%',
+        minWidth: 0,
     },
     tipIcon: {
         color: 'var(--severity-warning)',

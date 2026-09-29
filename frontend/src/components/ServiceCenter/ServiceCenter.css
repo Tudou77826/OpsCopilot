@@ -205,22 +205,32 @@
 .sc-reporting-details summary { padding: 14px 0; cursor: pointer; color: var(--text-secondary); }
 .sc-announcement {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   min-width: 0;
-  max-width: 40%;
-  font-size: 12px;
+  flex: 1;
+  font-size: 11px;
 }
-.sc-announcement > span:first-child {
-  color: var(--accent);
+.sc-announcement-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  color: var(--severity-warning);
+  background: color-mix(in srgb, var(--severity-warning) 14%, transparent);
+  font-weight: 700;
   flex-shrink: 0;
 }
 .sc-announcement button,
 .sc-announcement > span:last-child {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.sc-announcement button { text-align: left; }
+.sc-announcement button:hover { color: var(--text-primary); text-decoration: underline; }
 .sc-announcement button,
 .sc-links button {
   border: 0;

@@ -12,8 +12,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   StartupConsent,
   ServiceCenterSettings,
-  ServiceAnnouncements,
+  ServiceAnnouncement,
   ServiceLinks,
+  useServiceAnnouncements,
 } from "./ServiceCenter";
 import { useCommandQuery } from "../../../../frontend-shell/src/ui/product/useCommandQuery";
 const bridge = vi.hoisted(() => ({
@@ -252,8 +253,10 @@ it("announcements hide expired entries and open only an explicit clicked link", 
     },
   ]);
   bridge.link.mockResolvedValue(undefined);
-  render(<ServiceAnnouncements />);
-  fireEvent.click(await screen.findByRole("button", { name: "有效公告" }));
+  const { result } = renderHook(() => useServiceAnnouncements());
+  await waitFor(() => expect(result.current).toHaveLength(1));
+  render(<ServiceAnnouncement announcement={result.current[0]} />);
+  fireEvent.click(screen.getByRole("button", { name: "有效公告" }));
   expect(bridge.link).toHaveBeenCalledWith("https://ops.internal/help");
   expect(screen.queryByText("过期公告")).toBeNull();
 });
