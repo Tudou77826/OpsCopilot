@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFile, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { promisify } from 'node:util'
-import { mkdir, mkdtemp, readFile, readdir, writeFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, realpath, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -39,9 +39,9 @@ test('old and missing binaries fail before execution and do not replace the save
   assert.equal(installation.status().configured, false)
   await installation.configure(exe)
   await assert.rejects(installation.configure(old), { code: 'PROTOCOL_MISMATCH' })
-  assert.equal(installation.status().executable, exe)
+  assert.equal(await realpath(installation.status().executable!), await realpath(exe))
   const remembered = new LocalInstallation(join(root, 'invalid')); await remembered.load()
-  assert.equal(remembered.status().executable, exe)
+  assert.equal(await realpath(remembered.status().executable!), await realpath(exe))
   installation.dispose(); remembered.dispose()
 })
 
@@ -54,7 +54,7 @@ test('the selected desktop exe launches distinct processes and shares exe-relati
   const first = new SidecarRuntime(() => local.resolve()), second = new SidecarRuntime(() => local.resolve())
   runtimes.push(first, second); await Promise.all([first.start(), second.start()])
   const child = (r: SidecarRuntime) => (r as unknown as { child: ChildProcessWithoutNullStreams }).child
-  assert.equal(child(first).spawnfile, exe); assert(child(first).spawnargs.includes('--teams-plugin')); assert.notEqual(child(first).pid, child(second).pid)
+  assert.equal(await realpath(child(first).spawnfile), await realpath(exe)); assert(child(first).spawnargs.includes('--teams-plugin')); assert.notEqual(child(first).pid, child(second).pid)
   assert.equal(first.status().version, 'local-test', 'local product version is independent of plugin version')
   const business = new OpsBusiness(first, 'owner'), session = { sessionId: 'a'.repeat(43), expiresAt: Date.now() + 60000 }
   let i = 0; const call = (operation: string, payload = {}) => business.call({ schemaVersion: 1, requestId: `r${++i}`, operation, payload }, 'owner', session) as Promise<any>
@@ -87,6 +87,6 @@ test('unconfigured adapter remains mountable and installation mutations require 
   await assert.rejects(service.call(request), { code: 'FORBIDDEN' })
   const context = { protocol: 1, session: { sessionId: 'b'.repeat(43), expiresAt: Date.now() + 60000 } }
   const result = await service.call(request, context); assert.equal(result.state, 'ready')
-  assert.equal(JSON.parse(await readFile(join(dataDirectory, 'local-installation.json'), 'utf8')).executable, exe)
+  assert.equal(await realpath(JSON.parse(await readFile(join(dataDirectory, 'local-installation.json'), 'utf8')).executable), await realpath(exe))
   } finally { await ctx.fiber.dispose() }
 })
