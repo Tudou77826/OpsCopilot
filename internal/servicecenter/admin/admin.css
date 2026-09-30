@@ -24,3 +24,4 @@
 :root .reporting-minimal { color:#a46b16; }
 :root .reporting-disabled { color:#b44b48; }
 @media(max-width:680px) { :root .reporting-grid { grid-template-columns:1fr; } }
+.upload-fields{display:grid;grid-template-columns:1fr 1fr;gap:0 14px;margin-top:2px}.upload-fields input[type=file]{font-size:11px;padding:8px;min-width:0}.upload-progress{font-size:11px;margin-top:15px;color:var(--accent)}#editor{max-height:calc(100vh - 32px);overflow:auto}@media(max-width:600px){.upload-fields{grid-template-columns:1fr}}

@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	bolt "go.etcd.io/bbolt"
 	protocol "opscopilot/pkg/servicecenter"
 )
 
@@ -72,15 +71,21 @@ func (s *Server) Sync(ctx context.Context) (err error) {
 		return err
 	}
 	release := upstream.ReleaseInfo
+	release.Source = "github"
 	if upstream.Draft || upstream.Prerelease || !safeName(release.TagName) || !protocol.ValidVersion(release.TagName) || len(release.Assets) == 0 {
 		return fmt.Errorf("invalid formal release")
 	}
 	var cached protocol.ReleaseInfo
-	if s.get("releases", release.TagName, &cached) == nil && sameRelease(cached, release) {
+	if s.get("releases", release.TagName, &cached) == nil {
+		// An administrator may publish the same formal version with fewer optional
+		// assets. Keep that immutable upload instead of treating it as a mismatch.
+		if cached.Source != "upload" && !sameRelease(cached, release) {
+			return fmt.Errorf("published version changed")
+		}
 		if err := s.verifyCached(cached); err != nil {
 			return err
 		}
-		return s.put("state", "latest", cached)
+		return s.promoteLatest(cached)
 	}
 	stage, err := os.MkdirTemp(filepath.Join(s.cfg.DataDir, "downloads"), ".sync-")
 	if err != nil {
@@ -135,41 +140,8 @@ func (s *Server) Sync(ctx context.Context) (err error) {
 		release.Assets[i].SHA256 = digest
 		release.Assets[i].BrowserDownloadURL = s.cfg.PublicURL + "/downloads/" + url.PathEscape(release.TagName) + "/" + url.PathEscape(a.Name)
 	}
-	final := filepath.Join(s.cfg.DataDir, "downloads", release.TagName)
-	// Published version contents are immutable. Changed upstream tags must use a new version.
-	if _, e := os.Stat(final); e == nil {
-		if cached.TagName != "" {
-			return fmt.Errorf("published version changed")
-		}
-		// A crash may leave a complete directory before the database publication.
-		// Only remove an unpublished, validated version path inside downloads.
-		root, _ := filepath.Abs(filepath.Join(s.cfg.DataDir, "downloads"))
-		resolved, _ := filepath.Abs(final)
-		if filepath.Dir(resolved) != root {
-			return fmt.Errorf("invalid mirror directory")
-		}
-		if err = os.RemoveAll(resolved); err != nil {
-			return err
-		}
-	}
-	if err = os.Rename(stage, final); err != nil {
-		return err
-	}
 	release.HTMLURL = s.cfg.PublicURL + "/"
-	err = s.db.Update(func(tx *bolt.Tx) error {
-		data, e := json.Marshal(release)
-		if e != nil {
-			return e
-		}
-		if e = tx.Bucket([]byte("releases")).Put([]byte(release.TagName), data); e != nil {
-			return e
-		}
-		return tx.Bucket([]byte("state")).Put([]byte("latest"), data)
-	})
-	if err != nil {
-		_ = os.RemoveAll(final)
-	}
-	return err
+	return s.publishRelease(stage, release, false)
 }
 func (s *Server) verifyCached(r protocol.ReleaseInfo) error {
 	for _, a := range r.Assets {

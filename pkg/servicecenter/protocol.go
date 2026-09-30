@@ -31,6 +31,7 @@ type Policy struct {
 // ReleaseInfo keeps the GitHub-compatible wire shape while using mirrored asset URLs.
 type ReleaseInfo struct {
 	TagName     string    `json:"tag_name"`
+	Source      string    `json:"source,omitempty"`
 	Name        string    `json:"name"`
 	Body        string    `json:"body"`
 	HTMLURL     string    `json:"html_url"`

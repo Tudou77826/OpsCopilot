@@ -31,6 +31,7 @@ type Server struct {
 	db         *bolt.DB
 	client     *http.Client
 	syncing    sync.Mutex
+	publishing sync.Mutex
 	mux        *http.ServeMux
 	syncingNow atomic.Bool
 	ctx        context.Context
@@ -52,10 +53,11 @@ type storedFeedback struct {
 	TokenHash string `json:"tokenHash"`
 }
 type SyncStatus struct {
-	LastSuccess  time.Time `json:"lastSuccess"`
-	Error        string    `json:"error"`
-	StorageBytes int64     `json:"storageBytes"`
-	InProgress   bool      `json:"inProgress"`
+	LastSuccess   time.Time `json:"lastSuccess"`
+	Error         string    `json:"error"`
+	StorageBytes  int64     `json:"storageBytes"`
+	InProgress    bool      `json:"inProgress"`
+	LatestVersion string    `json:"latestVersion"`
 }
 type Aggregate struct {
 	Reporting                                            map[string]int `json:"reporting,omitempty"`
@@ -108,6 +110,8 @@ func (s *Server) Close() error {
 	s.stop()
 	s.syncing.Lock()
 	defer s.syncing.Unlock()
+	s.publishing.Lock()
+	defer s.publishing.Unlock()
 	return s.db.Close()
 }
 func (s *Server) Handler() http.Handler {
@@ -215,6 +219,7 @@ func (s *Server) routes() {
 		respond(w, 200, rows)
 	})
 	s.mux.HandleFunc("GET /downloads/{version}/{filename}", s.download)
+	s.mux.HandleFunc("POST /api/admin/releases", s.admin(s.uploadRelease))
 	s.mux.HandleFunc("GET /api/v1/announcements", func(w http.ResponseWriter, r *http.Request) {
 		var all []protocol.Announcement
 		if s.list("announcements", &all) != nil {
@@ -237,6 +242,10 @@ func (s *Server) routes() {
 		var status SyncStatus
 		_ = s.get("state", "sync", &status)
 		status.InProgress = s.syncingNow.Load()
+		var latest protocol.ReleaseInfo
+		if s.get("state", "latest", &latest) == nil {
+			status.LatestVersion = latest.TagName
+		}
 		_ = filepath.Walk(s.cfg.DataDir, func(path string, info os.FileInfo, err error) error {
 			if err == nil && !info.IsDir() {
 				status.StorageBytes += info.Size()
