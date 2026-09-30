@@ -66,6 +66,7 @@ type Asset = servicecenter.Asset
 // UpdateStatus is returned to the frontend as JSON.
 type UpdateStatus struct {
 	HasUpdate       bool         `json:"hasUpdate"`
+	Source          string       `json:"source,omitempty"`
 	CurrentVer      string       `json:"currentVersion"`
 	LatestVer       string       `json:"latestVersion"`
 	Release         *ReleaseInfo `json:"release,omitempty"`
@@ -159,6 +160,7 @@ func CheckForUpdate(currentVersion string) (*UpdateStatus, error) {
 
 	status := &UpdateStatus{
 		HasUpdate:   hasUpdate,
+		Source:      "github",
 		CurrentVer:  currentVersion,
 		LatestVer:   release.TagName,
 		Release:     release,

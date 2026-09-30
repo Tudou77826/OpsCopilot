@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { compareVersions } from './AboutPanel';
 import AboutPanel from './AboutPanel';
@@ -21,6 +21,19 @@ describe('AboutPanel update flow', () => {
         vi.clearAllMocks();
         Object.keys(eventHandlers).forEach(k => delete eventHandlers[k]);
         localStorage.clear();
+    });
+
+    it('shows GitHub first and then intranet while checking', async () => {
+        let resolveCheck!: (value: string) => void;
+        const checkUpdate = vi.fn().mockImplementation(() => new Promise<string>(resolve => { resolveCheck = resolve; }));
+        window.go = { main: { App: { GetVersion: vi.fn().mockResolvedValue('v1.11.2'), CheckUpdate: checkUpdate } } } as any;
+        render(<AboutPanel />);
+        fireEvent.click(screen.getByRole('button', { name: '检查更新' }));
+        expect(screen.getByText('正在通过 GitHub 检查更新…')).toBeInTheDocument();
+        await act(async () => { eventHandlers['update-check-stage']?.('intranet'); });
+        expect(screen.getByText('GitHub 暂不可用，正在尝试内网服务…')).toBeInTheDocument();
+        await act(async () => { resolveCheck(JSON.stringify({ hasUpdate: false, currentVersion: 'v1.11.2', latestVersion: 'v1.11.2', source: 'intranet' })); });
+        expect(screen.getByText('已是最新版本 (v1.11.2)')).toBeInTheDocument();
     });
 
     it('shows behind-banner and streams AI summary card when multiple versions behind', async () => {

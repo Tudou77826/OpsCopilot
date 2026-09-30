@@ -27,6 +27,7 @@ interface ReleaseHistoryResponse {
 
 interface UpdateStatus {
     hasUpdate: boolean;
+    source?: 'github' | 'intranet';
     currentVersion: string;
     latestVersion?: string;
     release?: ReleaseInfo;
@@ -52,6 +53,7 @@ const GITHUB_REPO = 'https://github.com/Tudou77826/OpsCopilot';
 
 const friendlyError = (raw: string): string => {
     const lower = raw.toLowerCase();
+    if (raw.includes('GitHub 与内网服务均无法完成检查')) return 'GitHub 和内网服务都无法完成检查，请检查网络及内网服务地址';
     if (lower.includes('网络中断') || lower.includes('连接中断')) return '网络不稳定，下载中断；再次点击更新可从断点续传';
     if (lower.includes('连接停滞')) return '网络长时间无响应，连接已断开；请检查网络后重试（已下载部分会续传）';
     if (lower.includes('连接更新服务器失败') || lower.includes('请求 github 失败')) return '网络不稳定，无法连接更新服务器；请稍后再试';
@@ -110,6 +112,7 @@ const extractSingleReleaseBody = (body: string, tagName: string) => {
 const AboutPanel: React.FC = () => {
     const [currentVersion, setCurrentVersion] = useState('...');
     const [updateState, setUpdateState] = useState<UpdateState>('idle');
+    const [checkingStage, setCheckingStage] = useState<'github' | 'intranet'>('github');
     const [latestVersion, setLatestVersion] = useState('');
     const [downloadURL, setDownloadURL] = useState('');
     const [errorMsg, setErrorMsg] = useState('');
@@ -149,8 +152,12 @@ const AboutPanel: React.FC = () => {
 
     const handleCheck = useCallback(async (): Promise<UpdateStatus | null> => {
         setUpdateState('checking');
+        setCheckingStage('github');
         setErrorMsg('');
         setVersionsBehind(null);
+        const offStage = EventsOn('update-check-stage', (stage: string) => {
+            if (stage === 'github' || stage === 'intranet') setCheckingStage(stage);
+        });
         try {
             // @ts-ignore
             const raw = await window.go?.main?.App?.CheckUpdate?.();
@@ -191,7 +198,7 @@ const AboutPanel: React.FC = () => {
                 setUpdateState('available');
                 // 有更新时后台统计落后版本数（仅计数，不影响日志展示状态）。
                 // 优先用 CheckUpdate 返回的后端版本号，避免前端状态尚未就绪
-                void fetchVersionsBehind(status.currentVersion);
+                void fetchVersionsBehind(status.currentVersion, status.latestVersion);
             } else {
                 setLatestVersion(status.latestVersion || status.currentVersion);
                 setUpdateState('no-update');
@@ -201,6 +208,8 @@ const AboutPanel: React.FC = () => {
             setUpdateState('error');
             setErrorMsg(friendlyError(e.toString()));
             return null;
+        } finally {
+            offStage();
         }
     }, []);
 
@@ -262,7 +271,7 @@ const AboutPanel: React.FC = () => {
     // 1. 补全版本日志——deck 此前只有最新一张卡，补全后才能逐版本翻页；
     // 2. 统计落后版本数（列表新→旧，当前版本下标即落后数；不在列表时退回数值比较）。
     // 版本号为非数字（dev 构建）时只做第 1 件事。
-    const fetchVersionsBehind = useCallback(async (versionOverride?: string) => {
+    const fetchVersionsBehind = useCallback(async (versionOverride?: string, expectedLatest?: string) => {
         let list: ReleaseHistoryItem[] = [];
         try {
             // @ts-ignore
@@ -270,6 +279,7 @@ const AboutPanel: React.FC = () => {
             if (raw) {
                 const resp: ReleaseHistoryResponse = typeof raw === 'string' ? JSON.parse(raw) : raw;
                 list = resp.releases || [];
+                if (expectedLatest && !list.some(r => r.tag_name === expectedLatest)) list = [];
                 if (list.length > 0) {
                     setReleaseHistory(list);
                     setHistoryState('loaded');
@@ -470,7 +480,7 @@ const AboutPanel: React.FC = () => {
                 {updateState === 'checking' && (
                     <div style={styles.statusBanner}>
                         <div style={styles.loadingSpinner} />
-                        <span style={styles.checkingText}>正在检查...</span>
+                        <span style={styles.checkingText}>{checkingStage === 'github' ? '正在通过 GitHub 检查更新…' : 'GitHub 暂不可用，正在尝试内网服务…'}</span>
                     </div>
                 )}
                 {updateState === 'no-update' && (

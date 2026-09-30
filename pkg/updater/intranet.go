@@ -1,6 +1,7 @@
 package updater
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -16,11 +17,19 @@ var ErrChecksum = errors.New("安装包校验失败")
 
 // CheckIntranet never falls back to an external source.
 func CheckIntranet(base, current string) (*UpdateStatus, error) {
+	return checkIntranet(base, current, fetchJSONWithRetry)
+}
+
+func CheckIntranetContext(ctx context.Context, base, current string) (*UpdateStatus, error) {
+	return checkIntranet(base, current, func(url string, out any) error { return fetchJSONContext(ctx, url, out) })
+}
+
+func checkIntranet(base, current string, fetch func(string, any) error) (*UpdateStatus, error) {
 	if _, err := servicecenter.ValidateBase(base); err != nil || base == "" {
 		return nil, fmt.Errorf("内网服务地址无效")
 	}
 	var release ReleaseInfo
-	if err := fetchJSONWithRetry(base+"/api/v1/releases/latest", &release); err != nil {
+	if err := fetch(base+"/api/v1/releases/latest", &release); err != nil {
 		return nil, err
 	}
 	if !servicecenter.ValidVersion(release.TagName) {
@@ -32,20 +41,28 @@ func CheckIntranet(base, current string) (*UpdateStatus, error) {
 			return nil, fmt.Errorf("镜像附件信息无效")
 		}
 	}
-	status := &UpdateStatus{CurrentVer: current, LatestVer: release.TagName, Release: &release, HasUpdate: compareVersions(strings.TrimPrefix(current, "v"), strings.TrimPrefix(release.TagName, "v")) < 0, DownloadURL: selectDownloadURL(release.Assets)}
+	status := &UpdateStatus{CurrentVer: current, LatestVer: release.TagName, Source: "intranet", Release: &release, HasUpdate: compareVersions(strings.TrimPrefix(current, "v"), strings.TrimPrefix(release.TagName, "v")) < 0, DownloadURL: selectDownloadURL(release.Assets)}
 	if status.DownloadURL == "" {
 		return nil, fmt.Errorf("镜像没有可用安装包")
 	}
 	if status.HasUpdate {
-		if history, err := IntranetHistory(base); err == nil {
+		if history, err := intranetHistory(base, fetch); err == nil {
 			status.SkippedVersions, status.Release.Body = cumulativeChangelog(strings.TrimPrefix(current, "v"), status.Release, history)
 		}
 	}
 	return status, nil
 }
 func IntranetHistory(base string) ([]ReleaseInfo, error) {
+	return intranetHistory(base, fetchJSONWithRetry)
+}
+
+func IntranetHistoryContext(ctx context.Context, base string) ([]ReleaseInfo, error) {
+	return intranetHistory(base, func(url string, out any) error { return fetchJSONContext(ctx, url, out) })
+}
+
+func intranetHistory(base string, fetch func(string, any) error) ([]ReleaseInfo, error) {
 	var releases []ReleaseInfo
-	err := fetchJSONWithRetry(base+"/api/v1/releases", &releases)
+	err := fetch(base+"/api/v1/releases", &releases)
 	return releases, err
 }
 func verifyArtifact(path, expected string, size int64) error {

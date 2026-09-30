@@ -7,7 +7,6 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"opscopilot/pkg/servicecenter"
-	"opscopilot/pkg/updater"
 )
 
 func (a *App) initServiceCenter() {
@@ -78,14 +77,6 @@ func (a *App) OpenServiceAnnouncement(link string) error {
 	runtime.BrowserOpenURL(a.ctx, link)
 	return nil
 }
-func (a *App) checkServiceUpdate() (*updater.UpdateStatus, error) {
-	base := a.GetServiceCenterSettings().BaseURL
-	if base == "" {
-		return updater.CheckForUpdate(Version)
-	}
-	return updater.CheckIntranet(base, Version)
-}
-
 func (a *App) beginUsage(prefix string) func(string) {
 	if a.serviceCenter == nil {
 		return func(string) {}

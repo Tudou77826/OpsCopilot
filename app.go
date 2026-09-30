@@ -425,13 +425,11 @@ func (a *App) GetVersion() string {
 // GetReleaseHistory fetches published releases for the About panel's version log.
 // Returns JSON with a "releases" array (newest first) or an "error" field on failure.
 func (a *App) GetReleaseHistory() string {
-	var releases []updater.ReleaseInfo
-	var err error
-	if base := a.GetServiceCenterSettings().BaseURL; base != "" {
-		releases, err = updater.IntranetHistory(base)
-	} else {
-		releases, err = updater.FetchReleaseHistory()
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
 	}
+	releases, err := updater.FetchPreferredHistory(ctx, a.GetServiceCenterSettings().BaseURL)
 	if err != nil {
 		slog.Warn("fetch release history failed", "error", err)
 		result, _ := json.Marshal(map[string]interface{}{
@@ -445,9 +443,17 @@ func (a *App) GetReleaseHistory() string {
 	return string(result)
 }
 
-// CheckUpdate checks GitHub for the latest release and returns update status as JSON.
+// CheckUpdate checks GitHub first, then the configured intranet service.
 func (a *App) CheckUpdate() string {
-	status, err := a.checkServiceUpdate()
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	status, err := updater.CheckPreferred(ctx, Version, a.GetServiceCenterSettings().BaseURL, func(stage string) {
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, "update-check-stage", stage)
+		}
+	})
 	if a.serviceCenter != nil {
 		id := uuid.NewString()
 		target := Version
@@ -473,7 +479,7 @@ func (a *App) CheckUpdate() string {
 		return string(result)
 	}
 	result, _ := json.Marshal(status)
-	slog.Info("check update result", "hasUpdate", status.HasUpdate, "latest", status.LatestVer)
+	slog.Info("check update result", "hasUpdate", status.HasUpdate, "latest", status.LatestVer, "source", status.Source)
 	return string(result)
 }
 
@@ -481,22 +487,36 @@ func (a *App) CheckUpdate() string {
 func (a *App) DoUpdate(downloadURL string) string {
 	var artifact *updater.Asset
 	target := Version
-	if a.GetServiceCenterSettings().BaseURL != "" {
-		status, err := a.checkServiceUpdate()
+	if base := a.GetServiceCenterSettings().BaseURL; base != "" {
+		ctx := a.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		var status *updater.UpdateStatus
+		var err error
+		if servicecenter.DownloadURL(base, downloadURL) {
+			status, err = updater.CheckIntranetContext(checkCtx, base, Version)
+		} else {
+			status, err = updater.CheckGitHubContext(checkCtx, Version)
+		}
+		cancel()
 		if err != nil {
-			return toJSONError("无法确认内网安装包")
+			return toJSONError("无法确认安装包来源，请重新检查更新")
 		}
 		if !status.HasUpdate || status.DownloadURL != downloadURL {
 			return toJSONError("请重新检查更新")
 		}
-		for _, asset := range status.Release.Assets {
-			if asset.BrowserDownloadURL == downloadURL {
-				copy := asset
-				artifact = &copy
+		if status.Source == "intranet" {
+			for _, asset := range status.Release.Assets {
+				if asset.BrowserDownloadURL == downloadURL {
+					copy := asset
+					artifact = &copy
+				}
 			}
-		}
-		if artifact == nil {
-			return toJSONError("安装包未通过来源验证")
+			if artifact == nil {
+				return toJSONError("安装包未通过来源验证")
+			}
 		}
 		target = status.LatestVer
 	}
