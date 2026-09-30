@@ -545,7 +545,7 @@ func (c *Client) Refresh(parent context.Context) {
 func (c *Client) TestConnection(ctx context.Context, raw string) error {
 	base, err := ValidateBase(raw)
 	if err != nil || base == "" {
-		return fmt.Errorf("请填写管理员提供的 HTTPS 服务地址")
+		return fmt.Errorf("请填写管理员提供的 HTTP 或 HTTPS 服务地址")
 	}
 	var policy Policy
 	if err := c.get(ctx, base+"/api/v1/telemetry-policy", &policy); err != nil {

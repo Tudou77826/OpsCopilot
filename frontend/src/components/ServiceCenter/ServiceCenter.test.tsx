@@ -179,13 +179,13 @@ describe("startup reporting consent", () => {
     expect(bridge.choose).not.toHaveBeenCalled();
   });
   it("keeps address save errors on the save icon and permits retry", async () => {
-    bridge.configure.mockRejectedValue(new Error("服务地址必须是 HTTPS 根地址，例如 https://ops.example.internal"));
+    bridge.configure.mockRejectedValue(new Error("服务地址必须是 HTTP 或 HTTPS 根地址，例如 http://88.45.4.2:8090"));
     render(<ServiceCenterSettings />);
     const button = await screen.findByRole("button", { name: "保存服务地址" });
     fireEvent.click(button);
     await waitFor(() => expect(button).toHaveClass("is-failure"));
     expect(button).toBeEnabled();
-    expect(button).toHaveAttribute("title", "请填写管理员提供的 HTTPS 服务地址，不要包含路径或参数。");
+    expect(button).toHaveAttribute("title", "请填写 http:// 或 https:// 开头的服务根地址，不要包含路径或参数。");
     expect(document.querySelector(".sc-error")).toBeNull();
     fireEvent.click(button);
     await waitFor(() => expect(bridge.configure).toHaveBeenCalledTimes(2));

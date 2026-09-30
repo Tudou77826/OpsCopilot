@@ -302,7 +302,7 @@ export function ServiceCenterSettings() {
             changed();
             } catch (e) {
               const error = e instanceof Error ? e.message : String(e);
-              setSaveResult(error.includes("HTTPS") ? "请填写管理员提供的 HTTPS 服务地址，不要包含路径或参数。" : "保存失败，请重试或联系管理员。");
+              setSaveResult(error.includes("服务地址必须") ? "请填写 http:// 或 https:// 开头的服务根地址，不要包含路径或参数。" : "保存失败，请重试或联系管理员。");
             } finally {
               setSavingAddress(false);
             }

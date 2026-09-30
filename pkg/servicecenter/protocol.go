@@ -141,10 +141,10 @@ func ValidateBase(raw string) (string, error) {
 		return "", nil
 	}
 	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
-		return "", fmt.Errorf("服务地址必须是 HTTPS 根地址，例如 https://ops.example.internal")
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
+		return "", fmt.Errorf("服务地址必须是 HTTP 或 HTTPS 根地址，例如 http://88.45.4.2:8090")
 	}
-	return "https://" + u.Host, nil
+	return u.Scheme + "://" + u.Host, nil
 }
 func InternalURL(base, raw string) bool {
 	b, e := url.Parse(base)
@@ -161,7 +161,7 @@ func DownloadURL(base, raw string) bool {
 		return false
 	}
 	u, e := url.Parse(raw)
-	return e == nil && u.Scheme == "https" && strings.HasPrefix(u.Path, "/downloads/") && u.RawQuery == "" && u.Fragment == ""
+	return e == nil && (u.Scheme == "https" || u.Scheme == "http") && strings.HasPrefix(u.Path, "/downloads/") && u.RawQuery == "" && u.Fragment == ""
 }
 
 // Fixed keys only. No operation names, arguments, paths or error text are accepted.

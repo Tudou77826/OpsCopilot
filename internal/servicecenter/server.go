@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -68,18 +67,14 @@ type Aggregate struct {
 
 func New(cfg Config) (*Server, error) {
 	base, err := protocol.ValidateBase(cfg.PublicURL)
-	if err != nil && cfg.LocalHTTP {
-		u, e := url.Parse(cfg.PublicURL)
-		if e == nil && u.Scheme == "http" && (u.Hostname() == "127.0.0.1" || u.Hostname() == "localhost" || u.Hostname() == "::1") && u.User == nil && u.RawQuery == "" && u.Fragment == "" && (u.Path == "" || u.Path == "/") {
-			base = "http://" + u.Host
-			err = nil
-		}
-	}
 	if err != nil {
 		return nil, err
 	}
+	if strings.HasPrefix(base, "http://") && !cfg.LocalHTTP {
+		return nil, fmt.Errorf("HTTP 服务地址需要设置 OPS_SERVICE_LOCAL_HTTP=true")
+	}
 	if base == "" || len(cfg.AdminToken) < 32 {
-		return nil, fmt.Errorf("public HTTPS URL and admin token (32+ characters) required")
+		return nil, fmt.Errorf("public URL and admin token (32+ characters) required")
 	}
 	cfg.PublicURL = base
 	if cfg.GitHubURL == "" {

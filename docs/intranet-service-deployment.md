@@ -4,36 +4,36 @@
 
 独立服务程序位于 `cmd/service-center`，提供产品与帮助网页、正式版本镜像、历史下载、公告、反馈及运营统计。管理员通过 `/admin` 管理公告、回复反馈、查看统计、存储用量和同步状态。业务记录保存到 bbolt 数据库，安装包和用户主动选择的附件保存到文件目录。
 
-桌面客户端在“设置 → 内网服务”配置 HTTPS 根地址。底栏提供产品介绍、反馈和有效公告；首次启动展示离线采集说明，用户先选择同意上报或拒绝上报，拒绝后可另行同意最简方案或完全关闭。共享知识库及共享连接信息保留各自配置和权限。
+桌面客户端在“设置 → 内网服务”配置服务根地址（HTTPS，或管理员明确启用的 HTTP）。底栏提供产品介绍、反馈和有效公告；首次启动展示离线采集说明，用户先选择同意上报或拒绝上报，拒绝后可另行同意最简方案或完全关闭。共享知识库及共享连接信息保留各自配置和权限。
 
 ## 运行配置
 
 | 环境变量 | 说明 |
 |---|---|
-| `OPS_SERVICE_PUBLIC_URL` | 必填，客户端访问的 HTTPS 根地址，例如 `https://ops.example.internal`，不带路径或查询参数 |
+| `OPS_SERVICE_PUBLIC_URL` | 必填，客户端访问的根地址，例如 `https://ops.example.internal` 或 `http://192.168.1.10:8090`，不带路径或查询参数 |
 | `OPS_SERVICE_ADMIN_TOKEN` | 必填，至少 32 字符的随机管理员令牌，通过受限环境文件或部署系统注入 |
 | `OPS_SERVICE_DATA` | 数据目录，默认 `./service-data`；容器中为 `/data` |
 | `OPS_SERVICE_LISTEN` | 监听地址，默认 `127.0.0.1:9080` |
 | `OPS_SERVICE_GITHUB_TOKEN` | 可选，服务端访问 GitHub API 的令牌；不发送给客户端 |
-| `OPS_SERVICE_LOCAL_HTTP` | 仅本地网页调试设为 `true`，允许 `http://127.0.0.1`、`http://localhost` 或 `http://[::1]` 的服务地址；默认关闭，不用于客户端升级接入 |
+| `OPS_SERVICE_LOCAL_HTTP` | 使用 HTTP 服务地址时设为 `true`，包括客户端通过 IP 和端口直连；默认关闭。变量名保留以兼容现有部署 |
 
-服务器需要能访问 GitHub API、GitHub 发布附件及附件重定向的下载域名。客户端只需要访问内网服务地址，并信任其 HTTPS 证书。
+服务器需要能访问 GitHub API、GitHub 发布附件及附件重定向的下载域名。客户端只需要访问内网服务地址；使用 HTTPS 时须信任其证书。HTTP 不加密，管理员令牌、用户主动提交的反馈和上报数据可能被网络路径上的设备读取，更新包及校验值也可能同时被篡改；应仅在可信、受控的网络内启用。
 
 ### 容器部署
 
-在 `deploy/service-center` 下创建不入库的 `.env` 文件，写入公网根地址变量和随机管理员令牌。该地址应为内网域名；变量名中的 `PUBLIC` 表示客户端可见地址。限制 `.env` 读取权限。
+在 `deploy/service-center` 下创建不入库的 `.env` 文件，写入客户端可访问的服务根地址和随机管理员令牌。该地址可以是内网 HTTPS 域名；使用 HTTP 直连时也可以是 IP 和端口，且须设置 `OPS_SERVICE_LOCAL_HTTP=true`。变量名中的 `PUBLIC` 表示客户端可见地址。限制 `.env` 读取权限。
 
 ```sh
 docker compose up -d --build
 ```
 
-使用同目录 `nginx.conf.example` 配置内网 HTTPS 反向代理，替换域名和证书路径。服务仅映射到主机回环地址，不直接暴露管理接口的明文端口。反向代理、负载均衡、WAF 和外围监控均应关闭记录客户端 IP、查询参数、请求正文及身份标识的访问日志；示例已关闭 nginx 访问及可能包含客户端信息的错误日志。
+默认 Compose 仅将服务映射到主机回环地址，可使用同目录 `nginx.conf.example` 配置内网 HTTPS 反向代理，替换域名和证书路径。若要通过 HTTP 直连容器，需将 Compose 的端口映射改为内网网卡地址及目标端口，并限制网络访问范围。反向代理、负载均衡、WAF 和外围监控均应关闭记录客户端 IP、查询参数、请求正文及身份标识的访问日志；示例已关闭 nginx 访问及可能包含客户端信息的错误日志。
 
 服务每小时同步一次最新正式版本，管理员可手工触发。全部附件下载完成、大小匹配并计算 SHA-256 后才发布；GitHub 提供摘要时同时校验上游摘要。未提供上游摘要的附件以 HTTPS 来源、声明大小及本地 SHA-256 为完整性依据。历史版本从已同步版本逐步积累，不回溯导入全部 GitHub 历史安装包。
 
 ### 直接运行
 
-从 GitHub Release 下载与服务器 CPU 架构匹配的 `opscopilot-service-center-linux-amd64` 或 `opscopilot-service-center-linux-arm64`，赋予执行权限后运行。程序已包含门户和管理页面，无需安装 Go、glibc 或数据库服务。服务器仍需提供可写数据目录、系统 CA 证书、GitHub 出口及内网 HTTPS 反向代理。不同 CPU 架构不能共用同一个程序；amd64 构建使用通用 x86-64 指令集，arm64 构建面向 ARMv8.0。
+从 GitHub Release 下载与服务器 CPU 架构匹配的 `opscopilot-service-center-linux-amd64` 或 `opscopilot-service-center-linux-arm64`，赋予执行权限后运行。程序已包含门户和管理页面，无需安装 Go、glibc 或数据库服务。服务器仍需提供可写数据目录、系统 CA 证书和 GitHub 出口；采用 HTTPS 时配置反向代理。不同 CPU 架构不能共用同一个程序；amd64 构建使用通用 x86-64 指令集，arm64 构建面向 ARMv8.0。
 
 若需从源码构建：
 
@@ -41,12 +41,12 @@ docker compose up -d --build
 CGO_ENABLED=0 go build -trimpath -o service-center ./cmd/service-center
 ```
 
-通过进程管理器设置上述环境变量后运行程序，并配置 HTTPS 反向代理。数据目录只允许服务账号读写；同一数据目录只运行一个服务实例。Windows 可构建为 `service-center.exe`。
+通过进程管理器设置上述环境变量后运行程序。直连 HTTP 的示例：`OPS_SERVICE_PUBLIC_URL=http://192.168.1.10:8090`、`OPS_SERVICE_LOCAL_HTTP=true`、`OPS_SERVICE_LISTEN=0.0.0.0:8090`；客户端填写相同的 `http://192.168.1.10:8090`。三者分别是客户端地址、HTTP 开关和进程监听地址。数据目录只允许服务账号读写；同一数据目录只运行一个服务实例。Windows 可构建为 `service-center.exe`。
 
 ## 客户端接入
 
 1. 老客户端手工安装一次包含此功能的版本。
-2. 在“设置 → 内网服务”保存内网 HTTPS 地址。
+2. 在“设置 → 内网服务”保存管理员提供的内网服务地址。
 3. 用户选择上报模式。地址变更后，已同意的用户需重新确认；已拒绝的用户保持关闭。
 4. 已配置地址时，版本查询、更新日志和安装包下载走内网，失败不会退回 GitHub。未配置地址保留原有 GitHub 更新能力。
 

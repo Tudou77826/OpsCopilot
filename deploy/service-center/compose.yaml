@@ -7,9 +7,10 @@ services:
     ports:
       - "127.0.0.1:9080:9080"
     environment:
-      OPS_SERVICE_PUBLIC_URL: ${OPS_SERVICE_PUBLIC_URL:?set the public HTTPS URL}
+      OPS_SERVICE_PUBLIC_URL: ${OPS_SERVICE_PUBLIC_URL:?set the client-facing service URL}
       OPS_SERVICE_ADMIN_TOKEN: ${OPS_SERVICE_ADMIN_TOKEN:?set a random token of at least 32 characters}
       OPS_SERVICE_GITHUB_TOKEN: ${OPS_SERVICE_GITHUB_TOKEN:-}
+      OPS_SERVICE_LOCAL_HTTP: ${OPS_SERVICE_LOCAL_HTTP:-false}
     volumes:
       - service-data:/data
     healthcheck:
