@@ -33,8 +33,12 @@ docker compose up -d --build
 
 ### 直接运行
 
+从 GitHub Release 下载与服务器 CPU 架构匹配的 `opscopilot-service-center-linux-amd64` 或 `opscopilot-service-center-linux-arm64`，赋予执行权限后运行。程序已包含门户和管理页面，无需安装 Go、glibc 或数据库服务。服务器仍需提供可写数据目录、系统 CA 证书、GitHub 出口及内网 HTTPS 反向代理。不同 CPU 架构不能共用同一个程序；amd64 构建使用通用 x86-64 指令集，arm64 构建面向 ARMv8.0。
+
+若需从源码构建：
+
 ```sh
-go build -trimpath -o service-center ./cmd/service-center
+CGO_ENABLED=0 go build -trimpath -o service-center ./cmd/service-center
 ```
 
 通过进程管理器设置上述环境变量后运行程序，并配置 HTTPS 反向代理。数据目录只允许服务账号读写；同一数据目录只运行一个服务实例。Windows 可构建为 `service-center.exe`。

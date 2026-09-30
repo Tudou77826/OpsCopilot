@@ -20,7 +20,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version-file: go.mod
           cache: true
 
       - name: Setup Node.js
@@ -56,8 +56,36 @@ jobs:
           name: opscopilot-exe
           path: build/bin/opscopilot.exe
 
+  build-linux-service:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build service center
+        env:
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+        run: go build -trimpath -ldflags '-s -w' -o opscopilot-service-center-linux-${{ matrix.arch }} ./cmd/service-center
+
+      - name: Upload service binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: opscopilot-service-center-linux-${{ matrix.arch }}
+          path: opscopilot-service-center-linux-${{ matrix.arch }}
+
   release:
-    needs: build-windows
+    needs: [build-windows, build-linux-service]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -78,6 +106,8 @@ jobs:
           files: |
             release/opscopilot-windows.zip
             release/opscopilot.exe
+            release/opscopilot-service-center-linux-amd64
+            release/opscopilot-service-center-linux-arm64
           # 仓库内 docs/release-notes/<tag>.md 作为 Release 正文；
           # GitHub 自动生成的变更列表附加在其后
           body_path: docs/release-notes/${{ github.ref_name }}.md
