@@ -1,0 +1,331 @@
+[
+  {
+    "species": "lumen",
+    "corrections": [
+      {
+        "id": "lumen-idle-0",
+        "dx": -2,
+        "dy": 0
+      },
+      {
+        "id": "lumen-idle-1",
+        "dx": -3,
+        "dy": 0
+      },
+      {
+        "id": "lumen-idle-2",
+        "dx": -1,
+        "dy": 0
+      },
+      {
+        "id": "lumen-idle-3",
+        "dx": 1,
+        "dy": 0
+      },
+      {
+        "id": "lumen-idle-4",
+        "dx": 0,
+        "dy": 0
+      },
+      {
+        "id": "lumen-idle-5",
+        "dx": 2,
+        "dy": 0
+      },
+      {
+        "id": "lumen-idle-6",
+        "dx": 3,
+        "dy": 0
+      },
+      {
+        "id": "lumen-idle-7",
+        "dx": 4,
+        "dy": 0
+      }
+    ],
+    "assets": 56,
+    "bytes": 3160753
+  },
+  {
+    "species": "ember",
+    "corrections": [
+      {
+        "id": "ember-idle-0",
+        "dx": -3,
+        "dy": 0
+      },
+      {
+        "id": "ember-idle-1",
+        "dx": -4,
+        "dy": 0
+      },
+      {
+        "id": "ember-idle-2",
+        "dx": -2,
+        "dy": 0
+      },
+      {
+        "id": "ember-idle-3",
+        "dx": -1,
+        "dy": 0
+      },
+      {
+        "id": "ember-idle-4",
+        "dx": 0,
+        "dy": 0
+      },
+      {
+        "id": "ember-idle-5",
+        "dx": 0,
+        "dy": 0
+      },
+      {
+        "id": "ember-idle-6",
+        "dx": 1,
+        "dy": 0
+      },
+      {
+        "id": "ember-idle-7",
+        "dx": 1,
+        "dy": 0
+      }
+    ],
+    "assets": 56,
+    "bytes": 3666086
+  },
+  {
+    "species": "moss",
+    "corrections": [
+      {
+        "id": "moss-idle-0",
+        "dx": -4,
+        "dy": 0
+      },
+      {
+        "id": "moss-idle-1",
+        "dx": -5,
+        "dy": 0
+      },
+      {
+        "id": "moss-idle-2",
+        "dx": 1,
+        "dy": 0
+      },
+      {
+        "id": "moss-idle-3",
+        "dx": 3,
+        "dy": 0
+      },
+      {
+        "id": "moss-idle-4",
+        "dx": 2,
+        "dy": 0
+      },
+      {
+        "id": "moss-idle-5",
+        "dx": 4,
+        "dy": 0
+      },
+      {
+        "id": "moss-idle-6",
+        "dx": 7,
+        "dy": 0
+      },
+      {
+        "id": "moss-idle-7",
+        "dx": 15,
+        "dy": 0
+      }
+    ],
+    "assets": 56,
+    "bytes": 3203034
+  },
+  {
+    "species": "bolt",
+    "corrections": [
+      {
+        "id": "bolt-idle-0",
+        "dx": -4,
+        "dy": 0
+      },
+      {
+        "id": "bolt-idle-1",
+        "dx": -4,
+        "dy": 1
+      },
+      {
+        "id": "bolt-idle-2",
+        "dx": -3,
+        "dy": 0
+      },
+      {
+        "id": "bolt-idle-3",
+        "dx": -1,
+        "dy": 0
+      },
+      {
+        "id": "bolt-idle-4",
+        "dx": 1,
+        "dy": 0
+      },
+      {
+        "id": "bolt-idle-5",
+        "dx": 1,
+        "dy": 0
+      },
+      {
+        "id": "bolt-idle-6",
+        "dx": 3,
+        "dy": 0
+      },
+      {
+        "id": "bolt-idle-7",
+        "dx": 6,
+        "dy": 0
+      }
+    ],
+    "assets": 56,
+    "bytes": 3335015
+  },
+  {
+    "species": "astra",
+    "corrections": [
+      {
+        "id": "astra-idle-0",
+        "dx": -5,
+        "dy": 0
+      },
+      {
+        "id": "astra-idle-1",
+        "dx": -6,
+        "dy": 0
+      },
+      {
+        "id": "astra-idle-2",
+        "dx": -5,
+        "dy": 0
+      },
+      {
+        "id": "astra-idle-3",
+        "dx": -1,
+        "dy": 0
+      },
+      {
+        "id": "astra-idle-4",
+        "dx": 1,
+        "dy": 0
+      },
+      {
+        "id": "astra-idle-5",
+        "dx": 4,
+        "dy": 0
+      },
+      {
+        "id": "astra-idle-6",
+        "dx": 6,
+        "dy": 0
+      },
+      {
+        "id": "astra-idle-7",
+        "dx": 7,
+        "dy": 0
+      }
+    ],
+    "assets": 56,
+    "bytes": 3627950
+  },
+  {
+    "species": "tide",
+    "corrections": [
+      {
+        "id": "tide-idle-0",
+        "dx": -8,
+        "dy": 0
+      },
+      {
+        "id": "tide-idle-1",
+        "dx": -5,
+        "dy": 0
+      },
+      {
+        "id": "tide-idle-2",
+        "dx": -2,
+        "dy": 0
+      },
+      {
+        "id": "tide-idle-3",
+        "dx": 1,
+        "dy": 0
+      },
+      {
+        "id": "tide-idle-4",
+        "dx": 5,
+        "dy": 0
+      },
+      {
+        "id": "tide-idle-5",
+        "dx": 6,
+        "dy": 0
+      },
+      {
+        "id": "tide-idle-6",
+        "dx": 10,
+        "dy": 0
+      },
+      {
+        "id": "tide-idle-7",
+        "dx": 14,
+        "dy": 0
+      }
+    ],
+    "assets": 56,
+    "bytes": 2901544
+  },
+  {
+    "species": "sage",
+    "corrections": [
+      {
+        "id": "sage-idle-0",
+        "dx": -14,
+        "dy": 0
+      },
+      {
+        "id": "sage-idle-1",
+        "dx": -10,
+        "dy": 0
+      },
+      {
+        "id": "sage-idle-2",
+        "dx": -6,
+        "dy": 0
+      },
+      {
+        "id": "sage-idle-3",
+        "dx": -2,
+        "dy": 0
+      },
+      {
+        "id": "sage-idle-4",
+        "dx": 3,
+        "dy": 0
+      },
+      {
+        "id": "sage-idle-5",
+        "dx": 5,
+        "dy": 0
+      },
+      {
+        "id": "sage-idle-6",
+        "dx": 9,
+        "dy": 0
+      },
+      {
+        "id": "sage-idle-7",
+        "dx": 11,
+        "dy": 0
+      }
+    ],
+    "assets": 56,
+    "bytes": 3844034
+  }
+]

@@ -1,0 +1,755 @@
+{
+  "contractVersion": 2,
+  "id": "lumen-v3",
+  "speciesId": "lumen",
+  "style": "pixel",
+  "frameSize": 256,
+  "colorMode": "rgba",
+  "paletteHues": {
+    "mint": null,
+    "amber": 38,
+    "lavender": 272
+  },
+  "assets": {
+    "lumen-child-idle-0": {
+      "path": "lumen-child-idle-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-child-idle-1": {
+      "path": "lumen-child-idle-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-child-idle-2": {
+      "path": "lumen-child-idle-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-child-idle-3": {
+      "path": "lumen-child-idle-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-child-greet-0": {
+      "path": "lumen-child-greet-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-child-greet-1": {
+      "path": "lumen-child-greet-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-child-greet-2": {
+      "path": "lumen-child-greet-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-child-greet-3": {
+      "path": "lumen-child-greet-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-child-happy-0": {
+      "path": "lumen-child-happy-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-child-happy-1": {
+      "path": "lumen-child-happy-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-child-happy-2": {
+      "path": "lumen-child-happy-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-child-happy-3": {
+      "path": "lumen-child-happy-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-child-sleep-0": {
+      "path": "lumen-child-sleep-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-child-sleep-1": {
+      "path": "lumen-child-sleep-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-child-sleep-2": {
+      "path": "lumen-child-sleep-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-child-sleep-3": {
+      "path": "lumen-child-sleep-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-growing-idle-0": {
+      "path": "lumen-growing-idle-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-growing-idle-1": {
+      "path": "lumen-growing-idle-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-growing-idle-2": {
+      "path": "lumen-growing-idle-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-growing-idle-3": {
+      "path": "lumen-growing-idle-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-growing-greet-0": {
+      "path": "lumen-growing-greet-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-growing-greet-1": {
+      "path": "lumen-growing-greet-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-growing-greet-2": {
+      "path": "lumen-growing-greet-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-growing-greet-3": {
+      "path": "lumen-growing-greet-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-growing-happy-0": {
+      "path": "lumen-growing-happy-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-growing-happy-1": {
+      "path": "lumen-growing-happy-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-growing-happy-2": {
+      "path": "lumen-growing-happy-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-growing-happy-3": {
+      "path": "lumen-growing-happy-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-growing-sleep-0": {
+      "path": "lumen-growing-sleep-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-growing-sleep-1": {
+      "path": "lumen-growing-sleep-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-growing-sleep-2": {
+      "path": "lumen-growing-sleep-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-growing-sleep-3": {
+      "path": "lumen-growing-sleep-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-adult-idle-0": {
+      "path": "lumen-adult-idle-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-adult-idle-1": {
+      "path": "lumen-adult-idle-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-adult-idle-2": {
+      "path": "lumen-adult-idle-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-adult-idle-3": {
+      "path": "lumen-adult-idle-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-adult-greet-0": {
+      "path": "lumen-adult-greet-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-adult-greet-1": {
+      "path": "lumen-adult-greet-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-adult-greet-2": {
+      "path": "lumen-adult-greet-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-adult-greet-3": {
+      "path": "lumen-adult-greet-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-adult-happy-0": {
+      "path": "lumen-adult-happy-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-adult-happy-1": {
+      "path": "lumen-adult-happy-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-adult-happy-2": {
+      "path": "lumen-adult-happy-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-adult-happy-3": {
+      "path": "lumen-adult-happy-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-adult-sleep-0": {
+      "path": "lumen-adult-sleep-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-adult-sleep-1": {
+      "path": "lumen-adult-sleep-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-adult-sleep-2": {
+      "path": "lumen-adult-sleep-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "lumen-adult-sleep-3": {
+      "path": "lumen-adult-sleep-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    }
+  },
+  "stages": {
+    "child": {
+      "idle": {
+        "frames": [
+          "lumen-child-idle-0",
+          "lumen-child-idle-1",
+          "lumen-child-idle-2",
+          "lumen-child-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3600
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          }
+        ]
+      },
+      "greet": {
+        "frames": [
+          "lumen-child-greet-0",
+          "lumen-child-greet-1",
+          "lumen-child-greet-2",
+          "lumen-child-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 130
+          },
+          {
+            "frame": 2,
+            "durationMs": 220
+          },
+          {
+            "frame": 1,
+            "durationMs": 150
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 3,
+            "durationMs": 240
+          },
+          {
+            "frame": 0,
+            "durationMs": 250
+          }
+        ]
+      },
+      "happy": {
+        "frames": [
+          "lumen-child-happy-0",
+          "lumen-child-happy-1",
+          "lumen-child-happy-2",
+          "lumen-child-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 160
+          },
+          {
+            "frame": 1,
+            "durationMs": 180
+          },
+          {
+            "frame": 2,
+            "durationMs": 160
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 160
+          },
+          {
+            "frame": 0,
+            "durationMs": 280
+          }
+        ]
+      },
+      "sleep": {
+        "frames": [
+          "lumen-child-sleep-0",
+          "lumen-child-sleep-1",
+          "lumen-child-sleep-2",
+          "lumen-child-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 1100
+          },
+          {
+            "frame": 1,
+            "durationMs": 1200
+          },
+          {
+            "frame": 2,
+            "durationMs": 1300
+          },
+          {
+            "frame": 3,
+            "durationMs": 1200
+          }
+        ]
+      }
+    },
+    "growing": {
+      "idle": {
+        "frames": [
+          "lumen-growing-idle-0",
+          "lumen-growing-idle-1",
+          "lumen-growing-idle-2",
+          "lumen-growing-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3600
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          }
+        ]
+      },
+      "greet": {
+        "frames": [
+          "lumen-growing-greet-0",
+          "lumen-growing-greet-1",
+          "lumen-growing-greet-2",
+          "lumen-growing-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 130
+          },
+          {
+            "frame": 2,
+            "durationMs": 220
+          },
+          {
+            "frame": 1,
+            "durationMs": 150
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 3,
+            "durationMs": 240
+          },
+          {
+            "frame": 0,
+            "durationMs": 250
+          }
+        ]
+      },
+      "happy": {
+        "frames": [
+          "lumen-growing-happy-0",
+          "lumen-growing-happy-1",
+          "lumen-growing-happy-2",
+          "lumen-growing-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 160
+          },
+          {
+            "frame": 1,
+            "durationMs": 180
+          },
+          {
+            "frame": 2,
+            "durationMs": 160
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 160
+          },
+          {
+            "frame": 0,
+            "durationMs": 280
+          }
+        ]
+      },
+      "sleep": {
+        "frames": [
+          "lumen-growing-sleep-0",
+          "lumen-growing-sleep-1",
+          "lumen-growing-sleep-2",
+          "lumen-growing-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 1100
+          },
+          {
+            "frame": 1,
+            "durationMs": 1200
+          },
+          {
+            "frame": 2,
+            "durationMs": 1300
+          },
+          {
+            "frame": 3,
+            "durationMs": 1200
+          }
+        ]
+      }
+    },
+    "adult": {
+      "idle": {
+        "frames": [
+          "lumen-adult-idle-0",
+          "lumen-adult-idle-1",
+          "lumen-adult-idle-2",
+          "lumen-adult-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3600
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          }
+        ]
+      },
+      "greet": {
+        "frames": [
+          "lumen-adult-greet-0",
+          "lumen-adult-greet-1",
+          "lumen-adult-greet-2",
+          "lumen-adult-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 130
+          },
+          {
+            "frame": 2,
+            "durationMs": 220
+          },
+          {
+            "frame": 1,
+            "durationMs": 150
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 3,
+            "durationMs": 240
+          },
+          {
+            "frame": 0,
+            "durationMs": 250
+          }
+        ]
+      },
+      "happy": {
+        "frames": [
+          "lumen-adult-happy-0",
+          "lumen-adult-happy-1",
+          "lumen-adult-happy-2",
+          "lumen-adult-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 160
+          },
+          {
+            "frame": 1,
+            "durationMs": 180
+          },
+          {
+            "frame": 2,
+            "durationMs": 160
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 160
+          },
+          {
+            "frame": 0,
+            "durationMs": 280
+          }
+        ]
+      },
+      "sleep": {
+        "frames": [
+          "lumen-adult-sleep-0",
+          "lumen-adult-sleep-1",
+          "lumen-adult-sleep-2",
+          "lumen-adult-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 1100
+          },
+          {
+            "frame": 1,
+            "durationMs": 1200
+          },
+          {
+            "frame": 2,
+            "durationMs": 1300
+          },
+          {
+            "frame": 3,
+            "durationMs": 1200
+          }
+        ]
+      }
+    }
+  }
+}

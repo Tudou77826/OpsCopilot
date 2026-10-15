@@ -37,10 +37,10 @@ func TestDesktopPathsAndSettingsShareExistingFiles(t *testing.T) {
 	if settings.Theme != "light" {
 		t.Fatal("did not reuse theme")
 	}
-	if settings.GardenEnabled {
-		t.Fatal("garden must default off")
+	if settings.CompanionEnabled {
+		t.Fatal("companion must default off")
 	}
-	settings.GardenEnabled = true
+	settings.CompanionEnabled = true
 	m.Config.LLM.ComplexModel = "other-window"
 	if e = m.Save(); e != nil {
 		t.Fatal(e)
@@ -57,8 +57,8 @@ func TestDesktopPathsAndSettingsShareExistingFiles(t *testing.T) {
 	if verify.Config.LLM.APIKey != "fixture-secret" || verify.Config.LLM.ComplexModel != "other-window" || verify.Config.Appearance.Theme != "dark" {
 		t.Fatal("local config fields overwritten")
 	}
-	if !verify.Config.Experimental.GardenEnabled {
-		t.Fatal("garden setting was not saved in desktop config")
+	if !verify.Config.Experimental.CompanionEnabled {
+		t.Fatal("companion setting was not saved in desktop config")
 	}
 	if _, e = os.Stat(filepath.Join(root, "shell-settings.json")); !os.IsNotExist(e) {
 		t.Fatal("created plugin settings copy")

@@ -1,0 +1,52 @@
+{
+  "generator": "image_gen.imagegen",
+  "transparent_background": true,
+  "grid": {
+    "columns": 4,
+    "rows": [
+      "idle",
+      "greet",
+      "happy",
+      "sleep"
+    ]
+  },
+  "stageSizes": [
+    40,
+    47,
+    54
+  ],
+  "anchor": {
+    "x": 32,
+    "y": 56
+  },
+  "prompts": [
+    {
+      "id": "ember",
+      "prompt": "Create a production pixel-art animation sprite sheet for an original friendly amber fox companion named Ember. Transparent background. Sheet exactly 4 columns x 4 rows, square image, 16 equally sized square cells with generous transparent padding, no labels no grid no text. Each cell same fox body proportions, same position/ground baseline, same camera, limited 24-color palette, crisp pixel edges, no antialiasing, classic 32-bit game aesthetic. Cute orange russet fox, big triangular ears, cream chest, curled fluffy tail, explorer satchel, energetic confident expression. Full body fits entirely inside each cell. Row 1 idle breathing and slow blinking: 4 subtle consecutive frames. Row 2 greeting: 4 consecutive frames left paw rises, waves, lowers, neutral. Row 3 joy: 4 consecutive frames ears perk up, eyes happy crescent, slight hop, lands. Row 4 resting: 4 consecutive frames eyes closed, tail curled, tiny breathing. Absolute identity consistency, no body rotation, no scaling between frames. Frame cells fill ~60 percent of their width, aligned to cell centers and common bottom baseline. Real transparent alpha. This is a sprite asset, not an illustration or poster."
+    },
+    {
+      "id": "moss",
+      "prompt": "Create a production pixel-art animation sprite sheet for an original cute companion: a tiny moss-green round forest tree spirit, short root feet, two leaf ears and a sprout crown, warm cream face, earthy brown twig arms, gentle patient expression. Transparent background. Exactly 4 columns x 4 rows, 16 equally sized square cells, square image, generous transparent padding. No labels no grid no text. Each cell same body proportions, camera, center position and ground baseline. Limited 24-color palette, crisp pixel edges, no antialiasing, classic 32-bit game aesthetic. Full body inside each cell, fills ~60 percent width. Row 1 idle: 4 subtle consecutive frames breathing with blink at frame3. Row 2 greeting: 4 consecutive frames one paw/wing/arm rises, waves, lowers, neutral. Row 3 joy: 4 consecutive frames perk up, eyes smile, small hop, land. Row 4 sleep: 4 consecutive frames eyes closed, head lowered, subtle breathing. Keep EXACT same identity, proportions, framing and scale across all sixteen frames. No dramatic pose changes or perspective changes. Real transparent alpha, this is an animation game asset."
+    },
+    {
+      "id": "bolt",
+      "prompt": "Create a production pixel-art animation sprite sheet for an original cute companion: a compact retro industrial robot, teal and cream metal body, square screen face with two amber pixel eyes, small antenna, stubby mechanical arms and legs, precise helpful expression. Transparent background. Exactly 4 columns x 4 rows, 16 equally sized square cells, square image, generous transparent padding. No labels no grid no text. Each cell same body proportions, camera, center position and ground baseline. Limited 24-color palette, crisp pixel edges, no antialiasing, classic 32-bit game aesthetic. Full body inside each cell, fills ~60 percent width. Row 1 idle: 4 subtle consecutive frames breathing with blink at frame3. Row 2 greeting: 4 consecutive frames one paw/wing/arm rises, waves, lowers, neutral. Row 3 joy: 4 consecutive frames perk up, eyes smile, small hop, land. Row 4 sleep: 4 consecutive frames eyes closed, head lowered, subtle breathing. Keep EXACT same identity, proportions, framing and scale across all sixteen frames. No dramatic pose changes or perspective changes. Real transparent alpha, this is an animation game asset."
+    },
+    {
+      "id": "astra",
+      "prompt": "Create a production pixel-art animation sprite sheet for an original cute companion: a midnight-blue baby dragon, pale turquoise belly, two small crescent horns, tiny wings, star-shaped tail tip, curious thoughtful expression. Transparent background. Exactly 4 columns x 4 rows, 16 equally sized square cells, square image, generous transparent padding. No labels no grid no text. Each cell same body proportions, camera, center position and ground baseline. Limited 24-color palette, crisp pixel edges, no antialiasing, classic 32-bit game aesthetic. Full body inside each cell, fills ~60 percent width. Row 1 idle: 4 subtle consecutive frames breathing with blink at frame3. Row 2 greeting: 4 consecutive frames one paw/wing/arm rises, waves, lowers, neutral. Row 3 joy: 4 consecutive frames perk up, eyes smile, small hop, land. Row 4 sleep: 4 consecutive frames eyes closed, head lowered, subtle breathing. Keep EXACT same identity, proportions, framing and scale across all sixteen frames. No dramatic pose changes or perspective changes. Real transparent alpha, this is an animation game asset."
+    },
+    {
+      "id": "tide",
+      "prompt": "Create a production pixel-art animation sprite sheet for an original cute companion: a playful round aqua penguin, cream belly, coral-orange beak and feet, blue scarf, cheerful optimistic expression. Transparent background. Exactly 4 columns x 4 rows, 16 equally sized square cells, square image, generous transparent padding. No labels no grid no text. Each cell same body proportions, camera, center position and ground baseline. Limited 24-color palette, crisp pixel edges, no antialiasing, classic 32-bit game aesthetic. Full body inside each cell, fills ~60 percent width. Row 1 idle: 4 subtle consecutive frames breathing with blink at frame3. Row 2 greeting: 4 consecutive frames one paw/wing/arm rises, waves, lowers, neutral. Row 3 joy: 4 consecutive frames perk up, eyes smile, small hop, land. Row 4 sleep: 4 consecutive frames eyes closed, head lowered, subtle breathing. Keep EXACT same identity, proportions, framing and scale across all sixteen frames. No dramatic pose changes or perspective changes. Real transparent alpha, this is an animation game asset."
+    },
+    {
+      "id": "sage",
+      "prompt": "Create a production pixel-art animation sprite sheet for an original cute companion: a golden-brown scholarly owl, cream face disk, large round turquoise glasses, small navy cape, short wings and talons, calm analytical expression. Transparent background. Exactly 4 columns x 4 rows, 16 equally sized square cells, square image, generous transparent padding. No labels no grid no text. Each cell same body proportions, camera, center position and ground baseline. Limited 24-color palette, crisp pixel edges, no antialiasing, classic 32-bit game aesthetic. Full body inside each cell, fills ~60 percent width. Row 1 idle: 4 subtle consecutive frames breathing with blink at frame3. Row 2 greeting: 4 consecutive frames one paw/wing/arm rises, waves, lowers, neutral. Row 3 joy: 4 consecutive frames perk up, eyes smile, small hop, land. Row 4 sleep: 4 consecutive frames eyes closed, head lowered, subtle breathing. Keep EXACT same identity, proportions, framing and scale across all sixteen frames. No dramatic pose changes or perspective changes. Real transparent alpha, this is an animation game asset."
+    },
+    {
+      "id": "lumen",
+      "prompt": "Create a production pixel-art animation sprite sheet for an original cute companion: a soft lavender fantasy rabbit-like light spirit, rounded fluffy body, two dark purple ears, cream belly with small gold star, little paws, shy empathetic expression. Transparent background. Exactly 4 columns x 4 rows, 16 equally sized square cells, square image, generous transparent padding. No labels no grid no text. Each cell same body proportions, camera, center position and ground baseline. Limited 24-color palette, crisp pixel edges, no antialiasing, classic 32-bit game aesthetic. Full body inside each cell, fills ~60 percent width. Row 1 idle: 4 subtle consecutive frames breathing with blink at frame3. Row 2 greeting: 4 consecutive frames one paw/wing/arm rises, waves, lowers, neutral. Row 3 joy: 4 consecutive frames perk up, eyes smile, small hop, land. Row 4 sleep: 4 consecutive frames eyes closed, head lowered, subtle breathing. Keep EXACT same identity, proportions, framing and scale across all sixteen frames. No dramatic pose changes or perspective changes. Real transparent alpha, this is an animation game asset."
+    }
+  ]
+}

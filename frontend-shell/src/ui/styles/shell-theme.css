@@ -7,6 +7,8 @@
    暖灰分区与低饱和琥珀交互色），语义对齐。
    ===================================================================== */
 :root {
+  --companion-scene-shade: var(--bg-elevated);
+  --companion-scene-ink: var(--text-primary);
   /* —— 背景层级（由深到浅）—— */
   --bg-primary: #1e1e1e;        /* 主背景（body、终端、主面板） */
   --bg-secondary: #252526;      /* 次级背景（侧栏、次面板） */
@@ -221,26 +223,6 @@
   --mode-danger: #f66c62;
   --mode-danger-bg-subtle: #3a2d2d;
   --mode-shadow-dialog: 0 16px 40px rgba(0, 0, 0, 0.42);
-}
-
-@keyframes product-garden-attention {
-  0%, 100% { transform: rotate(0deg) scale(1); }
-  25% { transform: rotate(-7deg) scale(1.06); }
-  55% { transform: rotate(6deg) scale(1.08); }
-  80% { transform: rotate(-2deg) scale(1.03); }
-}
-
-.product-garden-attention svg {
-  animation: product-garden-attention 1.2s ease-in-out 1;
-  color: var(--accent);
-  transform-origin: 50% 85%;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .product-garden-attention svg {
-    animation: none;
-    color: var(--accent);
-  }
 }
 
 /* —— 亮色主题：覆盖同名 token。色板取自 One Half Light / GitHub Light，

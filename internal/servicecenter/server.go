@@ -19,6 +19,7 @@ import (
 
 	"github.com/google/uuid"
 	bolt "go.etcd.io/bbolt"
+	social "opscopilot/pkg/companionsocial"
 	protocol "opscopilot/pkg/servicecenter"
 )
 
@@ -27,15 +28,18 @@ type Config struct {
 	LocalHTTP                                              bool
 }
 type Server struct {
-	cfg        Config
-	db         *bolt.DB
-	client     *http.Client
-	syncing    sync.Mutex
-	publishing sync.Mutex
-	mux        *http.ServeMux
-	syncingNow atomic.Bool
-	ctx        context.Context
-	stop       context.CancelFunc
+	cfg             Config
+	db              *bolt.DB
+	socialDB        *bolt.DB
+	socialMu        sync.Mutex
+	socialSnapshots map[string]social.Snapshot
+	client          *http.Client
+	syncing         sync.Mutex
+	publishing      sync.Mutex
+	mux             *http.ServeMux
+	syncingNow      atomic.Bool
+	ctx             context.Context
+	stop            context.CancelFunc
 }
 type Feedback struct {
 	ID         string    `json:"id"`
@@ -103,7 +107,13 @@ func New(cfg Config) (*Server, error) {
 		db.Close()
 		return nil, err
 	}
+	if err = s.initSocial(); err != nil {
+		s.stop()
+		db.Close()
+		return nil, err
+	}
 	s.routes()
+	s.socialRoutes()
 	return s, nil
 }
 func (s *Server) Close() error {
@@ -112,7 +122,11 @@ func (s *Server) Close() error {
 	defer s.syncing.Unlock()
 	s.publishing.Lock()
 	defer s.publishing.Unlock()
-	return s.db.Close()
+	socialErr := s.socialDB.Close()
+	if err := s.db.Close(); err != nil {
+		return err
+	}
+	return socialErr
 }
 func (s *Server) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

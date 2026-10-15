@@ -1,0 +1,544 @@
+{
+  "contractVersion": 1,
+  "id": "lumen-v1",
+  "speciesId": "lumen",
+  "style": "pixel",
+  "palette": [
+    "#203247",
+    "#3d6e67",
+    "#6dc7a3",
+    "#a6e4bd",
+    "#fff1d5",
+    "#efb554",
+    "#e8939b",
+    "#7793a1",
+    "#aa744d",
+    "#cbd9dc",
+    "#e7b954"
+  ],
+  "palettes": {
+    "mint": [
+      "#203247",
+      "#3d6e67",
+      "#6dc7a3",
+      "#a6e4bd",
+      "#fff1d5",
+      "#efb554",
+      "#e8939b",
+      "#7793a1",
+      "#aa744d",
+      "#cbd9dc",
+      "#e7b954"
+    ],
+    "amber": [
+      "#203247",
+      "#866444",
+      "#dea45b",
+      "#f2cf86",
+      "#fff1d5",
+      "#efb554",
+      "#e8939b",
+      "#7793a1",
+      "#aa744d",
+      "#cbd9dc",
+      "#e7b954"
+    ],
+    "lavender": [
+      "#203247",
+      "#665e86",
+      "#a89cd7",
+      "#d2c8ed",
+      "#fff1d5",
+      "#efb554",
+      "#e8939b",
+      "#7793a1",
+      "#aa744d",
+      "#cbd9dc",
+      "#e7b954"
+    ]
+  },
+  "assets": {
+    "child-idle-0": {
+      "path": "child-idle-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "child-idle-1": {
+      "path": "child-idle-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "child-happy-0": {
+      "path": "child-happy-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "child-happy-1": {
+      "path": "child-happy-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "child-greet-0": {
+      "path": "child-greet-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "child-greet-1": {
+      "path": "child-greet-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "child-sleep-0": {
+      "path": "child-sleep-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "child-sleep-1": {
+      "path": "child-sleep-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "growing-idle-0": {
+      "path": "growing-idle-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "growing-idle-1": {
+      "path": "growing-idle-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "growing-happy-0": {
+      "path": "growing-happy-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "growing-happy-1": {
+      "path": "growing-happy-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "growing-greet-0": {
+      "path": "growing-greet-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "growing-greet-1": {
+      "path": "growing-greet-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "growing-sleep-0": {
+      "path": "growing-sleep-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "growing-sleep-1": {
+      "path": "growing-sleep-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "adult-idle-0": {
+      "path": "adult-idle-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "adult-idle-1": {
+      "path": "adult-idle-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "adult-happy-0": {
+      "path": "adult-happy-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "adult-happy-1": {
+      "path": "adult-happy-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "adult-greet-0": {
+      "path": "adult-greet-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "adult-greet-1": {
+      "path": "adult-greet-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "adult-sleep-0": {
+      "path": "adult-sleep-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "adult-sleep-1": {
+      "path": "adult-sleep-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "medal-knowledge-archive-locked": {
+      "path": "medal-knowledge-archive-locked.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-knowledge-archive-bronze": {
+      "path": "medal-knowledge-archive-bronze.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-knowledge-archive-silver": {
+      "path": "medal-knowledge-archive-silver.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-knowledge-archive-gold": {
+      "path": "medal-knowledge-archive-gold.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-script-created-locked": {
+      "path": "medal-script-created-locked.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-script-created-bronze": {
+      "path": "medal-script-created-bronze.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-script-created-silver": {
+      "path": "medal-script-created-silver.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-script-created-gold": {
+      "path": "medal-script-created-gold.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-quick-command-created-locked": {
+      "path": "medal-quick-command-created-locked.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-quick-command-created-bronze": {
+      "path": "medal-quick-command-created-bronze.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-quick-command-created-silver": {
+      "path": "medal-quick-command-created-silver.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-quick-command-created-gold": {
+      "path": "medal-quick-command-created-gold.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-case-completed-locked": {
+      "path": "medal-case-completed-locked.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-case-completed-bronze": {
+      "path": "medal-case-completed-bronze.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-case-completed-silver": {
+      "path": "medal-case-completed-silver.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-case-completed-gold": {
+      "path": "medal-case-completed-gold.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-knowledge-read-locked": {
+      "path": "medal-knowledge-read-locked.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-knowledge-read-bronze": {
+      "path": "medal-knowledge-read-bronze.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-knowledge-read-silver": {
+      "path": "medal-knowledge-read-silver.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-knowledge-read-gold": {
+      "path": "medal-knowledge-read-gold.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-script-used-locked": {
+      "path": "medal-script-used-locked.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-script-used-bronze": {
+      "path": "medal-script-used-bronze.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-script-used-silver": {
+      "path": "medal-script-used-silver.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-script-used-gold": {
+      "path": "medal-script-used-gold.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-quick-command-used-locked": {
+      "path": "medal-quick-command-used-locked.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-quick-command-used-bronze": {
+      "path": "medal-quick-command-used-bronze.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-quick-command-used-silver": {
+      "path": "medal-quick-command-used-silver.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-quick-command-used-gold": {
+      "path": "medal-quick-command-used-gold.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-active-day-locked": {
+      "path": "medal-active-day-locked.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-active-day-bronze": {
+      "path": "medal-active-day-bronze.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-active-day-silver": {
+      "path": "medal-active-day-silver.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "medal-active-day-gold": {
+      "path": "medal-active-day-gold.png",
+      "role": "icon",
+      "width": 32,
+      "height": 32
+    },
+    "profile-background": {
+      "path": "profile-background.png",
+      "role": "background",
+      "width": 320,
+      "height": 180
+    }
+  },
+  "stages": {
+    "child": {
+      "idle": {
+        "frames": [
+          "child-idle-0",
+          "child-idle-1"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "happy": {
+        "frames": [
+          "child-happy-0",
+          "child-happy-1"
+        ],
+        "fps": 4,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "greet": {
+        "frames": [
+          "child-greet-0",
+          "child-greet-1"
+        ],
+        "fps": 4,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "sleep": {
+        "frames": [
+          "child-sleep-0",
+          "child-sleep-1"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      }
+    },
+    "growing": {
+      "idle": {
+        "frames": [
+          "growing-idle-0",
+          "growing-idle-1"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "happy": {
+        "frames": [
+          "growing-happy-0",
+          "growing-happy-1"
+        ],
+        "fps": 4,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "greet": {
+        "frames": [
+          "growing-greet-0",
+          "growing-greet-1"
+        ],
+        "fps": 4,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "sleep": {
+        "frames": [
+          "growing-sleep-0",
+          "growing-sleep-1"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      }
+    },
+    "adult": {
+      "idle": {
+        "frames": [
+          "adult-idle-0",
+          "adult-idle-1"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "happy": {
+        "frames": [
+          "adult-happy-0",
+          "adult-happy-1"
+        ],
+        "fps": 4,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "greet": {
+        "frames": [
+          "adult-greet-0",
+          "adult-greet-1"
+        ],
+        "fps": 4,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "sleep": {
+        "frames": [
+          "adult-sleep-0",
+          "adult-sleep-1"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "id": "companion-scenes-v2",
+  "width": 1536,
+  "height": 1024,
+  "encoding": "webp-quality-92",
+  "resize": false,
+  "light": { "path": "light.webp", "bytes": 25958, "source": "art/companion/reviews/rabbit-v1/background-source.png" },
+  "dark": { "path": "dark.webp", "bytes": 22070, "source": "art/companion/reviews/rabbit-v1/background-dark-source.png" }
+}

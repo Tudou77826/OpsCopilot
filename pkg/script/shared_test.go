@@ -8,6 +8,34 @@ import (
 	"testing"
 )
 
+type emptyReplaySender struct{ calls int }
+
+func (s *emptyReplaySender) SendCommand(string, string) error { s.calls++; return nil }
+func TestEmptyReplayCannotReportDispatchedOrOverwriteIdentity(t *testing.T) {
+	sender := &emptyReplaySender{}
+	m := NewManager(nil, t.TempDir(), sender)
+	sc, err := m.CreateScript("empty", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = m.ReplayScript(sc.ID, "terminal"); err == nil {
+		t.Fatal("empty replay succeeded")
+	}
+	sc.Steps = []ScriptStep{{Command: "${EMPTY}", Enabled: true}}
+	if err = m.UpdateScript(sc); err != nil {
+		t.Fatal(err)
+	}
+	if err = m.ReplayScriptWithVars(sc.ID, "terminal", map[string]string{"EMPTY": " "}); err == nil {
+		t.Fatal("blank replay succeeded")
+	}
+	if sender.calls != 0 {
+		t.Fatal("blank commands sent")
+	}
+	if _, err = m.CreateScriptWithID(sc.ID, "overwritten", ""); err == nil {
+		t.Fatal("identity overwritten")
+	}
+}
+
 func TestSharedStaleScriptCannotOverwriteOrResurrect(t *testing.T) {
 	dir := t.TempDir()
 	a := NewManager(nil, dir, nil)

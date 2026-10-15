@@ -6,14 +6,14 @@ import { ProductFrame, ProductToolbar, ProductNavigation } from '../../frontend-
 import { TerminalRef } from './components/Terminal/Terminal';
 import FlexLayoutAdapter from './components/FlexLayout/FlexLayoutAdapter';
 import QuickCommandPanel from './components/QuickCommandPanel/QuickCommandPanel';
-import { wailsGardenHost } from './shell-adapter/wailsGardenHost';
-import { useGardenAttention } from '../../frontend-shell/src/ui/garden/useGardenAttention';
 import BottomBar from './components/BottomBar/BottomBar';
 import { StartupConsent } from './components/ServiceCenter/ServiceCenter';
 import { CountServiceUsage } from '../wailsjs/go/main/App';
 import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal';
 import Sidebar from './components/Sidebar/Sidebar';
 import SettingsModal from './components/SettingsModal/SettingsModal';
+import { wailsCompanionHost } from './shell-adapter/wailsCompanionHost';
+import { wailsSocialHost } from './shell-adapter/wailsSocialHost';
 import ConfirmCloseModal from './components/ConfirmCloseModal/ConfirmCloseModal';
 import CommandQueryOverlay from './components/CommandQueryOverlay/CommandQueryOverlay';
 import { useCommandQuery } from '../../frontend-shell/src/ui/product/useCommandQuery';
@@ -44,7 +44,6 @@ interface TerminalSession {
 
 const DAILY_UPDATE_CHECK_HOUR = 8;
 const ATTENTION_DOT_COLOR = 'var(--danger)';
-const GardenPanel = lazy(() => import('../../frontend-shell/src/ui/garden/GardenPanel'));
 
 const getDelayUntilNextDailyUpdateCheck = (now = new Date()) => {
     const next = new Date(now);
@@ -56,17 +55,13 @@ const getDelayUntilNextDailyUpdateCheck = (now = new Date()) => {
 };
 
 function App() {
-    const [settingsInitialTab, setSettingsInitialTab] = useState<'llm' | 'servicecenter'>('llm');
+    const [settingsInitialTab, setSettingsInitialTab] = useState<'llm' | 'servicecenter' | 'achievements' | 'experimental'>('llm');
+    const [companionEnabled, setCompanionEnabled] = useState(false);
     const toast = useToast();
     const [status, setStatus] = useState("就绪");
     const [isSmartModalOpen, setIsSmartModalOpen] = useState(false);
     const { settingsOpen:isSettingsOpen, setSettingsOpen:setIsSettingsOpen, sidebarOpen:isSidebarOpen, setSidebarOpen:setIsSidebarOpen,
         tab:sidebarTab, setTab:setSidebarTab, quickOpen:isQuickCommandOpen, setQuickOpen:setIsQuickCommandOpen, toggleSidebar } = useProductNavigation({sidebarOpen:false,quickOpen:false});
-    // 花园与快捷命令共用停靠槽位：开启花园时暂时替换快捷命令（与 Teams 插件同一交互）。
-    const [gardenOpen, setGardenOpen] = useState(false);
-    const [gardenEnabled, setGardenEnabled] = useState(false);
-    const gardenAttention = useGardenAttention(gardenEnabled ? wailsGardenHost : undefined, gardenOpen);
-    useEffect(() => { if (!gardenEnabled) setGardenOpen(false); }, [gardenEnabled]);
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
     const [knowledgeTarget, setKnowledgeTarget] = useState<KnowledgeTarget | null>(null);
@@ -294,7 +289,7 @@ function App() {
                 if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSettings) {
                     // @ts-ignore
                     const cfg = await window.go.main.App.GetSettings();
-                    setGardenEnabled(cfg?.experimental?.garden_enabled === true);
+                    setCompanionEnabled(cfg?.experimental?.companion_enabled === true);
                     if (cfg && cfg.completion_delay !== undefined) {
                         setCompletionDelay(cfg.completion_delay);
                     }
@@ -571,7 +566,7 @@ function App() {
         });
     };
 
-    const handleQuickCommand = (command: string) => {
+    const handleQuickCommand = (command: string, commandId?: string) => {
         const targetTerminalId = activeTerminalId;
         if (!targetTerminalId) {
             toast.warning("请先选择一个激活的终端");
@@ -590,7 +585,9 @@ function App() {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.Write) {
             const payload = command.replace(/[\r\n]+$/g, '');
             // @ts-ignore
-            window.go.main.App.Write(targetTerminalId, payload);
+            if (commandId) {
+                window.go.main.App.DispatchQuickCommand(commandId, [targetTerminalId]).then((result: {warning?:string}) => {if(result.warning)toast.warning(result.warning);}).catch((error: Error) => toast.error(String(error)));
+            } else window.go.main.App.Write(targetTerminalId, payload);
         }
         setTimeout(() => {
             terminalRefs.current.get(targetTerminalId)?.focus();
@@ -599,7 +596,7 @@ function App() {
 
     // 快捷命令广播执行（右键菜单「发送广播」）：广播模式开启时发到广播组，
     // 否则发到全部终端——免去先切广播模式再点命令的两步操作（issue #76）。
-    const handleQuickCommandBroadcast = (command: string) => {
+    const handleQuickCommandBroadcast = (command: string, commandId?: string) => {
         const targets = isBroadcastModeRef.current && broadcastIdsRef.current.length > 0
             ? Array.from(broadcastIdsRef.current)
             : terminals.map(t => t.id);
@@ -612,9 +609,14 @@ function App() {
         if (window.go && window.go.main && window.go.main.App && window.go.main.App.Broadcast) {
             const payload = command.replace(/[\r\n]+$/g, '');
             // @ts-ignore
-            window.go.main.App.Broadcast(targets, payload);
+            if (commandId) {
+                window.go.main.App.DispatchQuickCommand(commandId, targets).then((result: {sent:number;failed:number;warning?:string}) => {
+                    if(result.failed)toast.warning(`已发送到 ${result.sent} 个终端，${result.failed} 个发送失败`);else toast.success(`已广播发送到 ${result.sent} 个终端`);
+                    if(result.warning)toast.warning(result.warning);
+                }).catch((error:Error)=>toast.error(String(error)));
+            } else window.go.main.App.Broadcast(targets, payload);
         }
-        toast.success(`已广播发送到 ${targets.length} 个终端`);
+        if(!commandId) toast.success(`已广播发送到 ${targets.length} 个终端`);
     };
 
     const handleOpenKnowledgeSource = useCallback((target: Omit<KnowledgeTarget, 'requestId'>) => {
@@ -702,7 +704,7 @@ function App() {
 
     return (
         <ProductFrame id="app"
-            toolbar={<ProductToolbar status={status} theme={theme} onNewConnection={() => setIsSmartModalOpen(true)} onThemeToggle={handleThemeToggle} onSettings={() => setIsSettingsOpen(true)} updateAvailable={updateAvailable} highlightNeedsAttention={highlightNeedsAttention} parsedTimestamp={parsedTimestamp} />}
+            toolbar={<ProductToolbar status={status} theme={theme} onNewConnection={() => setIsSmartModalOpen(true)} onThemeToggle={handleThemeToggle} onSettings={() => { setSettingsInitialTab('llm'); setIsSettingsOpen(true); }} updateAvailable={updateAvailable} highlightNeedsAttention={highlightNeedsAttention} parsedTimestamp={parsedTimestamp} />}
             terminal={<FlexLayoutAdapter
                             terminals={terminals}
                             onTerminalData={handleTerminalData}
@@ -724,14 +726,16 @@ function App() {
                             theme={theme}
                             onSelectionParsed={setParsedTimestamp}
                         />}
-            quickCommands={gardenEnabled && gardenOpen
-                        ? <Suspense fallback={null}><GardenPanel host={wailsGardenHost} isOpen={gardenOpen} height={320} /></Suspense>
-                        : <QuickCommandPanel
+            quickCommands={<QuickCommandPanel
                         isOpen={isQuickCommandOpen}
-                        onExecute={command => {if(activeTerminalId && terminalRefs.current.has(activeTerminalId)){void CountServiceUsage('quick_command').catch(()=>{});}handleQuickCommand(command);}}
+                        onExecute={(command, commandId) => {if(activeTerminalId && terminalRefs.current.has(activeTerminalId)){void CountServiceUsage('quick_command').catch(()=>{});}handleQuickCommand(command, commandId);}}
                         onBroadcast={command => {if(terminals.length){void CountServiceUsage('quick_command').catch(()=>{});}handleQuickCommandBroadcast(command);}}
                     />}
             sidebar={<Sidebar
+                    companionEnabled={companionEnabled}
+                    companionHost={wailsCompanionHost}
+                    socialHost={wailsSocialHost}
+                    onManageCompanion={() => { setSettingsInitialTab(companionEnabled ? 'achievements' : 'experimental'); setIsSettingsOpen(true); }}
                     isOpen={isSidebarOpen}
                     activeTab={sidebarTab}
                     onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -742,7 +746,7 @@ function App() {
                     onOpenKnowledgeSource={handleOpenKnowledgeSource}
                     knowledgeTarget={knowledgeTarget}
                 />}
-            navigation={<ProductNavigation isSidebarOpen={isSidebarOpen} sidebarTab={sidebarTab} toggleSidebar={toggleSidebar} isQuickCommandOpen={isQuickCommandOpen} onToggleQuickCommands={() => setIsQuickCommandOpen(!isQuickCommandOpen)} gardenActive={gardenEnabled && gardenOpen} gardenAttention={gardenAttention} onToggleGarden={gardenEnabled ? () => setGardenOpen(!gardenOpen) : undefined} />}
+            navigation={<ProductNavigation companionHost={wailsCompanionHost} companionEnabled={companionEnabled} isSidebarOpen={isSidebarOpen} sidebarTab={sidebarTab} toggleSidebar={toggleSidebar} isQuickCommandOpen={isQuickCommandOpen} onToggleQuickCommands={() => setIsQuickCommandOpen(!isQuickCommandOpen)} />}
             footer={<BottomBar onOpenServiceSettings={() => {
                 setSettingsInitialTab('servicecenter');
                 setIsSettingsOpen(true);
@@ -771,7 +775,7 @@ function App() {
                 isBroadcastMode={isBroadcastMode}
                 onToggleBroadcast={handleToggleBroadcast}
                 onCompletionDelayChange={setCompletionDelay}
-                onGardenEnabledChange={setGardenEnabled}
+                onCompanionEnabledChange={setCompanionEnabled}
                 onHighlightRulesChange={setHighlightRules}
                 onTerminalConfigChange={handleTerminalConfigChange}
                 theme={theme}

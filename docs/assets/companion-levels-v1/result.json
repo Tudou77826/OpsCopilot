@@ -1,0 +1,12 @@
+{
+  "level": 2,
+  "totalXP": 12,
+  "levelXP": 2,
+  "levelXPRequired": 10,
+  "publicLevel": 2,
+  "petAndXPUnchanged": true,
+  "petRevisionUnchanged": true,
+  "selectionUnchanged": true,
+  "appearanceFixed": "child art index; no gameplay stages",
+  "errors": []
+}

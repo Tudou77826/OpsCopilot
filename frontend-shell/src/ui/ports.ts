@@ -249,53 +249,8 @@ export interface QuickCommandImportReport {
 }
 
 /** 快捷命令 UI 所需宿主能力。execute → 发送到激活终端。 */
-/**
- * 花园能力端口。与 QuickCommandHost 同理：宿主未实现时花园入口隐藏，
- * 不做能力猜测（桌面壳与 Teams 插件各自适配自己的 RPC 前缀）。
- * 端口只暴露"取快照"与"标记已读"——成长结算完全在后端，前台不上报事件。
- */
-export interface GardenSnapshotPort {
-  schemaVersion: number;
-  ruleVersion: number;
-  gardenLevel: number;
-  balance: number;
-  earned: number;
-  spent: number;
-  specimens: Array<{
-    itemId: string;
-    instanceId: string;
-    level: number;
-    xp: number;
-    shiny: boolean;
-    acquiredAt: string;
-    lastGrewAt: string;
-    milestones?: string[];
-    placement: { placed: boolean; x: number; y: number; scale: number; flipX: boolean };
-  }> | null;
-  changeSignal: GardenChangeSignalPort | null;
-}
-
-export interface GardenChangeSignalPort {
-  revision: number;
-  kind: 'currency-earned';
-  amount?: number;
-  instanceId?: string;
-  itemId?: string;
-  at: string;
-}
-
-export interface GardenHost {
-  /** 只读快照；面板打开时拉一次。 */
-  snapshot(): Promise<GardenSnapshotPort>;
-  /** 关闭状态只读取轻量 revision，不取收藏清单。 */
-  signal(): Promise<GardenChangeSignalPort | null>;
-  purchase(itemId: string, price: number, initialLevel: number): Promise<{ balance: number; specimen: NonNullable<GardenSnapshotPort['specimens']>[number] }>;
-  place(instanceId: string, x: number, y: number, scale: number, flipX: boolean): Promise<GardenSnapshotPort>;
-  stow(instanceId: string): Promise<GardenSnapshotPort>;
-}
-
 export interface QuickCommandHost {
-  execute(content: string): void;
+  execute(content: string, commandId?: string): void;
   storage: QuickCommandStorageAdapter;
   /** 多窗口变更通知订阅。Wails 走 window.runtime.EventsOn；Sidecar 走配置轮询。 */
   onExternalChange?: (handler: (cmds: QuickCommand[]) => void) => () => void;

@@ -40,7 +40,7 @@ describe('CommandGrid context menu broadcast (#76)', () => {
         renderGrid(onBroadcast);
         fireEvent.contextMenu(screen.getByTestId('command-card-c2'));
         fireEvent.click(screen.getByText('发送广播'));
-        expect(onBroadcast).toHaveBeenCalledWith('tail -f /var/log/syslog');
+        expect(onBroadcast).toHaveBeenCalledWith('tail -f /var/log/syslog', 'c2');
         expect(screen.queryByTestId('command-context-menu')).toBeNull();
     });
 

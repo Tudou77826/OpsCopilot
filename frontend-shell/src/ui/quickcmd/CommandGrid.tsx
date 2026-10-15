@@ -4,14 +4,14 @@ import { confirmDialog } from '../feedback/ConfirmDialog';
 
 interface CommandGridProps {
     commands: QuickCommand[];
-    onExecute: (content: string) => void;
+    onExecute: (content: string, commandId?: string) => void;
     onEdit: (command: QuickCommand) => void;
     onDelete: (id: string) => void;
     onAdd: () => void;
     /** 传入时在「+ 添加」后多出一个「导入」块。宿主未提供导入能力时不传（入口自动消失）。 */
     onImport?: () => void;
     /** 广播执行：右键菜单出现「发送广播」项。宿主未提供广播能力时不传（菜单项自动消失）。 */
-    onBroadcast?: (content: string) => void;
+    onBroadcast?: (content: string, commandId?: string) => void;
     /** 当前搜索关键字（在当前分组内进一步过滤） */
     searchQuery: string;
     onSearchChange: (query: string) => void;
@@ -123,7 +123,7 @@ const CommandGrid: React.FC<CommandGridProps> = ({
                                 setDragId(null);
                                 setDropHint(null);
                             }}
-                            onClick={() => onExecute(cmd.content)}
+                            onClick={() => onExecute(cmd.content, cmd.id)}
                             onContextMenu={(e) => {
                                 e.preventDefault();
                                 setContextMenu({ x: e.clientX, y: e.clientY, cmdId: cmd.id });
@@ -178,7 +178,7 @@ const CommandGrid: React.FC<CommandGridProps> = ({
                                         onMouseLeave={() => setHoveredMenuItem(null)}
                                         onClick={() => {
                                             const cmd = commands.find(c => c.id === contextMenu.cmdId);
-                                            if (cmd) onBroadcast(cmd.content);
+                                            if (cmd) onBroadcast(cmd.content, cmd.id);
                                             setContextMenu(null);
                                         }}
                                     >

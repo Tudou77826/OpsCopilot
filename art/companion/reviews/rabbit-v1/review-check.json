@@ -1,0 +1,10 @@
+{
+  "draftOnly": true,
+  "playback": true,
+  "pause": true,
+  "step": true,
+  "lightDark": true,
+  "sizeControls": true,
+  "responsive": true,
+  "errors": []
+}

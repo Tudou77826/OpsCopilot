@@ -59,6 +59,8 @@ OpsCopilot 是一款兼具**人机交互**与**AI Agent 工具**双重属性的�
 
 ## ✨ 核心功能
 
+侧边栏快捷命令上方的宠物入口承接 AI 问答，可在助手内进入“养成与奖章”。伙伴养成与功能奖章默认关闭，在“设置 → 高级选项”启用并保存后，可免费开蛋获得随机像素伙伴，通过实际使用积累成长与八类奖章；重新开蛋消耗50点经验，名字可修改；连接组织成员账号并明确参与后，可查看分类排名和成员资料。设计、数据存储及完整本地验收见 [伙伴系统](docs/companion-system-design.md) 与 [本地实测](e2e/SOCIAL-LOCAL.md)。
+
 ### 1. 🤖 AI 智能连接解析
 <img width="2880" height="1676" alt="image" src="https://github.com/user-attachments/assets/4ce115cb-ee2e-443a-9f78-e30950522b7b" />
 

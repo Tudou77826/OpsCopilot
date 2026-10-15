@@ -1,0 +1,598 @@
+{
+  "contractVersion": 1,
+  "id": "astra-v2",
+  "speciesId": "astra",
+  "style": "pixel",
+  "palette": [
+    "#000000",
+    "#303078",
+    "#183060",
+    "#001848",
+    "#000018",
+    "#183078",
+    "#304890",
+    "#90d8d8",
+    "#304878",
+    "#001860",
+    "#001830",
+    "#a8d8d8",
+    "#181848",
+    "#181860",
+    "#4890a8",
+    "#181818",
+    "#78c0c0",
+    "#fff0c0",
+    "#001818",
+    "#181830",
+    "#183048",
+    "#90c0c0",
+    "#fff0a8",
+    "#000030",
+    "#60a8c0",
+    "#fff090",
+    "#306090",
+    "#f0d8a8",
+    "#f0f0c0",
+    "#f0d878",
+    "#f0c090",
+    "#307890"
+  ],
+  "palettes": {
+    "mint": [
+      "#000000",
+      "#303078",
+      "#183060",
+      "#001848",
+      "#000018",
+      "#183078",
+      "#304890",
+      "#90d8d8",
+      "#304878",
+      "#001860",
+      "#001830",
+      "#a8d8d8",
+      "#181848",
+      "#181860",
+      "#4890a8",
+      "#181818",
+      "#78c0c0",
+      "#fff0c0",
+      "#001818",
+      "#181830",
+      "#183048",
+      "#90c0c0",
+      "#fff0a8",
+      "#000030",
+      "#60a8c0",
+      "#fff090",
+      "#306090",
+      "#f0d8a8",
+      "#f0f0c0",
+      "#f0d878",
+      "#f0c090",
+      "#307890"
+    ],
+    "amber": [
+      "#000000",
+      "#785e30",
+      "#604618",
+      "#482e00",
+      "#000018",
+      "#785518",
+      "#906d30",
+      "#d8be90",
+      "#785e31",
+      "#603d00",
+      "#001830",
+      "#d8c6a8",
+      "#483618",
+      "#604619",
+      "#a88548",
+      "#181818",
+      "#c0a678",
+      "#ffe8c0",
+      "#001818",
+      "#181830",
+      "#483619",
+      "#c0ae90",
+      "#ffdfa8",
+      "#000030",
+      "#c09d60",
+      "#ffd690",
+      "#906d31",
+      "#f0d6a8",
+      "#f0dec0",
+      "#f0c478",
+      "#f0cd90",
+      "#906d32"
+    ],
+    "lavender": [
+      "#000000",
+      "#563078",
+      "#3e1860",
+      "#260048",
+      "#000018",
+      "#4b1878",
+      "#633090",
+      "#b690d8",
+      "#563079",
+      "#330060",
+      "#001830",
+      "#c2a8d8",
+      "#321848",
+      "#3e1861",
+      "#7b48a8",
+      "#181818",
+      "#9e78c0",
+      "#e2c0ff",
+      "#001818",
+      "#181830",
+      "#321849",
+      "#aa90c0",
+      "#d6a8ff",
+      "#000030",
+      "#9360c0",
+      "#cb90ff",
+      "#633091",
+      "#cea8f0",
+      "#dac0f0",
+      "#b878f0",
+      "#c390f0",
+      "#633092"
+    ]
+  },
+  "assets": {
+    "astra-child-idle-0": {
+      "path": "astra-child-idle-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-child-idle-1": {
+      "path": "astra-child-idle-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-child-idle-2": {
+      "path": "astra-child-idle-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-child-idle-3": {
+      "path": "astra-child-idle-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-child-greet-0": {
+      "path": "astra-child-greet-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-child-greet-1": {
+      "path": "astra-child-greet-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-child-greet-2": {
+      "path": "astra-child-greet-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-child-greet-3": {
+      "path": "astra-child-greet-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-child-happy-0": {
+      "path": "astra-child-happy-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-child-happy-1": {
+      "path": "astra-child-happy-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-child-happy-2": {
+      "path": "astra-child-happy-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-child-happy-3": {
+      "path": "astra-child-happy-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-child-sleep-0": {
+      "path": "astra-child-sleep-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-child-sleep-1": {
+      "path": "astra-child-sleep-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-child-sleep-2": {
+      "path": "astra-child-sleep-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-child-sleep-3": {
+      "path": "astra-child-sleep-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-growing-idle-0": {
+      "path": "astra-growing-idle-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-growing-idle-1": {
+      "path": "astra-growing-idle-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-growing-idle-2": {
+      "path": "astra-growing-idle-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-growing-idle-3": {
+      "path": "astra-growing-idle-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-growing-greet-0": {
+      "path": "astra-growing-greet-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-growing-greet-1": {
+      "path": "astra-growing-greet-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-growing-greet-2": {
+      "path": "astra-growing-greet-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-growing-greet-3": {
+      "path": "astra-growing-greet-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-growing-happy-0": {
+      "path": "astra-growing-happy-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-growing-happy-1": {
+      "path": "astra-growing-happy-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-growing-happy-2": {
+      "path": "astra-growing-happy-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-growing-happy-3": {
+      "path": "astra-growing-happy-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-growing-sleep-0": {
+      "path": "astra-growing-sleep-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-growing-sleep-1": {
+      "path": "astra-growing-sleep-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-growing-sleep-2": {
+      "path": "astra-growing-sleep-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-growing-sleep-3": {
+      "path": "astra-growing-sleep-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-adult-idle-0": {
+      "path": "astra-adult-idle-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-adult-idle-1": {
+      "path": "astra-adult-idle-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-adult-idle-2": {
+      "path": "astra-adult-idle-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-adult-idle-3": {
+      "path": "astra-adult-idle-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-adult-greet-0": {
+      "path": "astra-adult-greet-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-adult-greet-1": {
+      "path": "astra-adult-greet-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-adult-greet-2": {
+      "path": "astra-adult-greet-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-adult-greet-3": {
+      "path": "astra-adult-greet-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-adult-happy-0": {
+      "path": "astra-adult-happy-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-adult-happy-1": {
+      "path": "astra-adult-happy-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-adult-happy-2": {
+      "path": "astra-adult-happy-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-adult-happy-3": {
+      "path": "astra-adult-happy-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-adult-sleep-0": {
+      "path": "astra-adult-sleep-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-adult-sleep-1": {
+      "path": "astra-adult-sleep-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-adult-sleep-2": {
+      "path": "astra-adult-sleep-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "astra-adult-sleep-3": {
+      "path": "astra-adult-sleep-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    }
+  },
+  "stages": {
+    "child": {
+      "idle": {
+        "frames": [
+          "astra-child-idle-0",
+          "astra-child-idle-1",
+          "astra-child-idle-2",
+          "astra-child-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "greet": {
+        "frames": [
+          "astra-child-greet-0",
+          "astra-child-greet-1",
+          "astra-child-greet-2",
+          "astra-child-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "happy": {
+        "frames": [
+          "astra-child-happy-0",
+          "astra-child-happy-1",
+          "astra-child-happy-2",
+          "astra-child-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "sleep": {
+        "frames": [
+          "astra-child-sleep-0",
+          "astra-child-sleep-1",
+          "astra-child-sleep-2",
+          "astra-child-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      }
+    },
+    "growing": {
+      "idle": {
+        "frames": [
+          "astra-growing-idle-0",
+          "astra-growing-idle-1",
+          "astra-growing-idle-2",
+          "astra-growing-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "greet": {
+        "frames": [
+          "astra-growing-greet-0",
+          "astra-growing-greet-1",
+          "astra-growing-greet-2",
+          "astra-growing-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "happy": {
+        "frames": [
+          "astra-growing-happy-0",
+          "astra-growing-happy-1",
+          "astra-growing-happy-2",
+          "astra-growing-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "sleep": {
+        "frames": [
+          "astra-growing-sleep-0",
+          "astra-growing-sleep-1",
+          "astra-growing-sleep-2",
+          "astra-growing-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      }
+    },
+    "adult": {
+      "idle": {
+        "frames": [
+          "astra-adult-idle-0",
+          "astra-adult-idle-1",
+          "astra-adult-idle-2",
+          "astra-adult-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "greet": {
+        "frames": [
+          "astra-adult-greet-0",
+          "astra-adult-greet-1",
+          "astra-adult-greet-2",
+          "astra-adult-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "happy": {
+        "frames": [
+          "astra-adult-happy-0",
+          "astra-adult-happy-1",
+          "astra-adult-happy-2",
+          "astra-adult-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "sleep": {
+        "frames": [
+          "astra-adult-sleep-0",
+          "astra-adult-sleep-1",
+          "astra-adult-sleep-2",
+          "astra-adult-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      }
+    }
+  }
+}

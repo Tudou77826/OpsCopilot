@@ -1,0 +1,14 @@
+{
+  "status": "draft-awaiting-user-review",
+  "generator": "image_gen.imagegen",
+  "neutralPrompt": "Use case: identity-preserve. Reference is the existing lavender bunny-like light spirit; keep the same face, colors, cream chest bib/gold diamond star, long drooping purple ears with pink interiors, TWO little gold star clusters above the ear tops and ONE cream fluffy tail. Full isolated body, genuine transparency, detailed pixel illustration with soft RGBA edge, ample transparent margin, no text or scenery.\nCRITICAL USER DIRECTION: a RABBIT-LIKE ANIMAL, NOT a humanoid. Preserve the low compact seated/crouched silhouette of the reference. Its round body rests close to the ground on folded rabbit hindquarters, head large, belly low. TWO short FORELEGS descend from the chest, with TWO small forepaws resting on the floor immediately in front of the chest. Those visible front floor paws are FOREPAWS, not hindfeet. The TWO folded hindlegs are tucked beneath rear haunches and mostly OCCLUDED in this front seated view; do not expose an extra pair of paws below the forepaws. One cream pompom tail behind left rear hip, recognizably fluffy. NO raised human hands, NO arms at chest, NO upright standing, NO long human thighs, NO knee-gap standing pose. Low friendly seated rabbit, not standing on two hindlegs. Small forepaws natural animal paws without human palm gestures. Exactly four anatomical legs under normal occlusion, not six limbs.",
+  "backgroundPrompt": "Use case: stylized-concept. Asset type: SIMPLE 3:2 pixel-art background for a companion panel in a light warm-ivory/beige software interface. Redraw with a very limited, muted palette: warm ivory upper area (#f6f2e9), pale grey-sage grass (#c8d2b7), soft olive accents, warm grey-beige stones. Calm flat 2D side view. The upper75%is mostly clean warm ivory with just a very subtle pale beige horizon layer; lower25%is one wide FLAT level grassy walking strip extending edge to edge, unobstructed across central85%. Sparse little pixel-grass tufts only near bottom edge, one tiny fern cluster at extremeleft and one low leaf cluster at extremeright, no tall plants or objects covering a character's feet. Quiet rightmost16%for badge overlays. Elegant simple fine pixel edges; NO realistic painting, deep forest, mountains, moon, stars, night sky, dramatic light, gradients, complicated texture, characters, text, UI or border. Match light neutral product UI, low contrast, decorative details kept minimal. Fullbleed opaque horizontal3:2.",
+  "implementationPending": [
+    "all-companions-70-percent",
+    "new-art-integration"
+  ],
+  "references": {
+    "motion": "seated-source.png",
+    "neutral": "frontend-shell/src/companion/packs/lumen-v7/lumen-idle-0.png"
+  }
+}

@@ -1,0 +1,1158 @@
+{
+  "contractVersion": 2,
+  "id": "moss-v5",
+  "speciesId": "moss",
+  "style": "pixel",
+  "frameSize": 256,
+  "colorMode": "rgba",
+  "paletteHues": {
+    "mint": null,
+    "amber": 38,
+    "lavender": 272
+  },
+  "stageScale": {
+    "child": 0.7407407407407407,
+    "growing": 0.8703703703703703,
+    "adult": 1
+  },
+  "assets": {
+    "moss-idle-0": {
+      "path": "moss-idle-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-idle-1": {
+      "path": "moss-idle-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-idle-2": {
+      "path": "moss-idle-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-idle-3": {
+      "path": "moss-idle-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-idle-4": {
+      "path": "moss-idle-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-idle-5": {
+      "path": "moss-idle-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-idle-6": {
+      "path": "moss-idle-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-idle-7": {
+      "path": "moss-idle-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-greet-0": {
+      "path": "moss-greet-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-greet-1": {
+      "path": "moss-greet-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-greet-2": {
+      "path": "moss-greet-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-greet-3": {
+      "path": "moss-greet-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-greet-4": {
+      "path": "moss-greet-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-greet-5": {
+      "path": "moss-greet-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-greet-6": {
+      "path": "moss-greet-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-greet-7": {
+      "path": "moss-greet-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-happy-0": {
+      "path": "moss-happy-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-happy-1": {
+      "path": "moss-happy-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-happy-2": {
+      "path": "moss-happy-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-happy-3": {
+      "path": "moss-happy-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-happy-4": {
+      "path": "moss-happy-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-happy-5": {
+      "path": "moss-happy-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-happy-6": {
+      "path": "moss-happy-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-happy-7": {
+      "path": "moss-happy-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-sleep-0": {
+      "path": "moss-sleep-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-sleep-1": {
+      "path": "moss-sleep-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-sleep-2": {
+      "path": "moss-sleep-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-sleep-3": {
+      "path": "moss-sleep-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-sleep-4": {
+      "path": "moss-sleep-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-sleep-5": {
+      "path": "moss-sleep-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-sleep-6": {
+      "path": "moss-sleep-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-sleep-7": {
+      "path": "moss-sleep-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-look-0": {
+      "path": "moss-look-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-look-1": {
+      "path": "moss-look-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-look-2": {
+      "path": "moss-look-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-look-3": {
+      "path": "moss-look-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-look-4": {
+      "path": "moss-look-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-look-5": {
+      "path": "moss-look-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-look-6": {
+      "path": "moss-look-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-look-7": {
+      "path": "moss-look-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-stretch-0": {
+      "path": "moss-stretch-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-stretch-1": {
+      "path": "moss-stretch-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-stretch-2": {
+      "path": "moss-stretch-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-stretch-3": {
+      "path": "moss-stretch-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-stretch-4": {
+      "path": "moss-stretch-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-stretch-5": {
+      "path": "moss-stretch-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-stretch-6": {
+      "path": "moss-stretch-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-stretch-7": {
+      "path": "moss-stretch-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-walk-0": {
+      "path": "moss-walk-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-walk-1": {
+      "path": "moss-walk-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-walk-2": {
+      "path": "moss-walk-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-walk-3": {
+      "path": "moss-walk-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-walk-4": {
+      "path": "moss-walk-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-walk-5": {
+      "path": "moss-walk-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-walk-6": {
+      "path": "moss-walk-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-walk-7": {
+      "path": "moss-walk-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    }
+  },
+  "stages": {
+    "child": {
+      "idle": {
+        "frames": [
+          "moss-idle-0",
+          "moss-idle-1",
+          "moss-idle-2",
+          "moss-idle-3",
+          "moss-idle-4",
+          "moss-idle-5",
+          "moss-idle-6",
+          "moss-idle-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3400
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 90
+          },
+          {
+            "frame": 3,
+            "durationMs": 70
+          },
+          {
+            "frame": 4,
+            "durationMs": 110
+          },
+          {
+            "frame": 5,
+            "durationMs": 70
+          },
+          {
+            "frame": 6,
+            "durationMs": 90
+          },
+          {
+            "frame": 7,
+            "durationMs": 270
+          }
+        ],
+        "loop": true
+      },
+      "greet": {
+        "frames": [
+          "moss-greet-0",
+          "moss-greet-1",
+          "moss-greet-2",
+          "moss-greet-3",
+          "moss-greet-4",
+          "moss-greet-5",
+          "moss-greet-6",
+          "moss-greet-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 120
+          },
+          {
+            "frame": 3,
+            "durationMs": 120
+          },
+          {
+            "frame": 5,
+            "durationMs": 120
+          },
+          {
+            "frame": 3,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 120
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 7,
+            "durationMs": 200
+          }
+        ],
+        "loop": false
+      },
+      "happy": {
+        "frames": [
+          "moss-happy-0",
+          "moss-happy-1",
+          "moss-happy-2",
+          "moss-happy-3",
+          "moss-happy-4",
+          "moss-happy-5",
+          "moss-happy-6",
+          "moss-happy-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 140
+          },
+          {
+            "frame": 2,
+            "durationMs": 130
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 180
+          },
+          {
+            "frame": 5,
+            "durationMs": 140
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 220
+          }
+        ],
+        "loop": false
+      },
+      "sleep": {
+        "frames": [
+          "moss-sleep-0",
+          "moss-sleep-1",
+          "moss-sleep-2",
+          "moss-sleep-3",
+          "moss-sleep-4",
+          "moss-sleep-5",
+          "moss-sleep-6",
+          "moss-sleep-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 800
+          },
+          {
+            "frame": 1,
+            "durationMs": 750
+          },
+          {
+            "frame": 2,
+            "durationMs": 650
+          },
+          {
+            "frame": 3,
+            "durationMs": 650
+          },
+          {
+            "frame": 4,
+            "durationMs": 800
+          },
+          {
+            "frame": 5,
+            "durationMs": 750
+          },
+          {
+            "frame": 6,
+            "durationMs": 650
+          },
+          {
+            "frame": 7,
+            "durationMs": 650
+          }
+        ],
+        "loop": true
+      }
+    },
+    "growing": {
+      "idle": {
+        "frames": [
+          "moss-idle-0",
+          "moss-idle-1",
+          "moss-idle-2",
+          "moss-idle-3",
+          "moss-idle-4",
+          "moss-idle-5",
+          "moss-idle-6",
+          "moss-idle-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3400
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 90
+          },
+          {
+            "frame": 3,
+            "durationMs": 70
+          },
+          {
+            "frame": 4,
+            "durationMs": 110
+          },
+          {
+            "frame": 5,
+            "durationMs": 70
+          },
+          {
+            "frame": 6,
+            "durationMs": 90
+          },
+          {
+            "frame": 7,
+            "durationMs": 270
+          }
+        ],
+        "loop": true
+      },
+      "greet": {
+        "frames": [
+          "moss-greet-0",
+          "moss-greet-1",
+          "moss-greet-2",
+          "moss-greet-3",
+          "moss-greet-4",
+          "moss-greet-5",
+          "moss-greet-6",
+          "moss-greet-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 120
+          },
+          {
+            "frame": 3,
+            "durationMs": 120
+          },
+          {
+            "frame": 5,
+            "durationMs": 120
+          },
+          {
+            "frame": 3,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 120
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 7,
+            "durationMs": 200
+          }
+        ],
+        "loop": false
+      },
+      "happy": {
+        "frames": [
+          "moss-happy-0",
+          "moss-happy-1",
+          "moss-happy-2",
+          "moss-happy-3",
+          "moss-happy-4",
+          "moss-happy-5",
+          "moss-happy-6",
+          "moss-happy-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 140
+          },
+          {
+            "frame": 2,
+            "durationMs": 130
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 180
+          },
+          {
+            "frame": 5,
+            "durationMs": 140
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 220
+          }
+        ],
+        "loop": false
+      },
+      "sleep": {
+        "frames": [
+          "moss-sleep-0",
+          "moss-sleep-1",
+          "moss-sleep-2",
+          "moss-sleep-3",
+          "moss-sleep-4",
+          "moss-sleep-5",
+          "moss-sleep-6",
+          "moss-sleep-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 800
+          },
+          {
+            "frame": 1,
+            "durationMs": 750
+          },
+          {
+            "frame": 2,
+            "durationMs": 650
+          },
+          {
+            "frame": 3,
+            "durationMs": 650
+          },
+          {
+            "frame": 4,
+            "durationMs": 800
+          },
+          {
+            "frame": 5,
+            "durationMs": 750
+          },
+          {
+            "frame": 6,
+            "durationMs": 650
+          },
+          {
+            "frame": 7,
+            "durationMs": 650
+          }
+        ],
+        "loop": true
+      }
+    },
+    "adult": {
+      "idle": {
+        "frames": [
+          "moss-idle-0",
+          "moss-idle-1",
+          "moss-idle-2",
+          "moss-idle-3",
+          "moss-idle-4",
+          "moss-idle-5",
+          "moss-idle-6",
+          "moss-idle-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3400
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 90
+          },
+          {
+            "frame": 3,
+            "durationMs": 70
+          },
+          {
+            "frame": 4,
+            "durationMs": 110
+          },
+          {
+            "frame": 5,
+            "durationMs": 70
+          },
+          {
+            "frame": 6,
+            "durationMs": 90
+          },
+          {
+            "frame": 7,
+            "durationMs": 270
+          }
+        ],
+        "loop": true
+      },
+      "greet": {
+        "frames": [
+          "moss-greet-0",
+          "moss-greet-1",
+          "moss-greet-2",
+          "moss-greet-3",
+          "moss-greet-4",
+          "moss-greet-5",
+          "moss-greet-6",
+          "moss-greet-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 120
+          },
+          {
+            "frame": 3,
+            "durationMs": 120
+          },
+          {
+            "frame": 5,
+            "durationMs": 120
+          },
+          {
+            "frame": 3,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 120
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 7,
+            "durationMs": 200
+          }
+        ],
+        "loop": false
+      },
+      "happy": {
+        "frames": [
+          "moss-happy-0",
+          "moss-happy-1",
+          "moss-happy-2",
+          "moss-happy-3",
+          "moss-happy-4",
+          "moss-happy-5",
+          "moss-happy-6",
+          "moss-happy-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 140
+          },
+          {
+            "frame": 2,
+            "durationMs": 130
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 180
+          },
+          {
+            "frame": 5,
+            "durationMs": 140
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 220
+          }
+        ],
+        "loop": false
+      },
+      "sleep": {
+        "frames": [
+          "moss-sleep-0",
+          "moss-sleep-1",
+          "moss-sleep-2",
+          "moss-sleep-3",
+          "moss-sleep-4",
+          "moss-sleep-5",
+          "moss-sleep-6",
+          "moss-sleep-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 800
+          },
+          {
+            "frame": 1,
+            "durationMs": 750
+          },
+          {
+            "frame": 2,
+            "durationMs": 650
+          },
+          {
+            "frame": 3,
+            "durationMs": 650
+          },
+          {
+            "frame": 4,
+            "durationMs": 800
+          },
+          {
+            "frame": 5,
+            "durationMs": 750
+          },
+          {
+            "frame": 6,
+            "durationMs": 650
+          },
+          {
+            "frame": 7,
+            "durationMs": 650
+          }
+        ],
+        "loop": true
+      }
+    }
+  },
+  "ambient": {
+    "look": {
+      "frames": [
+        "moss-look-0",
+        "moss-look-1",
+        "moss-look-2",
+        "moss-look-3",
+        "moss-look-4",
+        "moss-look-5",
+        "moss-look-6",
+        "moss-look-7"
+      ],
+      "fps": 7,
+      "anchor": {
+        "x": 128,
+        "y": 240
+      },
+      "sequence": [
+        {
+          "frame": 0,
+          "durationMs": 160
+        },
+        {
+          "frame": 1,
+          "durationMs": 180
+        },
+        {
+          "frame": 2,
+          "durationMs": 220
+        },
+        {
+          "frame": 3,
+          "durationMs": 420
+        },
+        {
+          "frame": 4,
+          "durationMs": 200
+        },
+        {
+          "frame": 5,
+          "durationMs": 220
+        },
+        {
+          "frame": 6,
+          "durationMs": 420
+        },
+        {
+          "frame": 7,
+          "durationMs": 200
+        }
+      ],
+      "loop": false
+    },
+    "stretch": {
+      "frames": [
+        "moss-stretch-0",
+        "moss-stretch-1",
+        "moss-stretch-2",
+        "moss-stretch-3",
+        "moss-stretch-4",
+        "moss-stretch-5",
+        "moss-stretch-6",
+        "moss-stretch-7"
+      ],
+      "fps": 7,
+      "anchor": {
+        "x": 128,
+        "y": 240
+      },
+      "sequence": [
+        {
+          "frame": 0,
+          "durationMs": 180
+        },
+        {
+          "frame": 1,
+          "durationMs": 200
+        },
+        {
+          "frame": 2,
+          "durationMs": 220
+        },
+        {
+          "frame": 3,
+          "durationMs": 240
+        },
+        {
+          "frame": 4,
+          "durationMs": 450
+        },
+        {
+          "frame": 5,
+          "durationMs": 240
+        },
+        {
+          "frame": 6,
+          "durationMs": 220
+        },
+        {
+          "frame": 7,
+          "durationMs": 200
+        }
+      ],
+      "loop": false
+    },
+    "walk": {
+      "frames": [
+        "moss-walk-0",
+        "moss-walk-1",
+        "moss-walk-2",
+        "moss-walk-3",
+        "moss-walk-4",
+        "moss-walk-5",
+        "moss-walk-6",
+        "moss-walk-7"
+      ],
+      "fps": 7,
+      "anchor": {
+        "x": 128,
+        "y": 240
+      },
+      "sequence": [
+        {
+          "frame": 0,
+          "durationMs": 140
+        },
+        {
+          "frame": 1,
+          "durationMs": 140
+        },
+        {
+          "frame": 2,
+          "durationMs": 140
+        },
+        {
+          "frame": 3,
+          "durationMs": 140
+        },
+        {
+          "frame": 4,
+          "durationMs": 140
+        },
+        {
+          "frame": 5,
+          "durationMs": 140
+        },
+        {
+          "frame": 6,
+          "durationMs": 140
+        },
+        {
+          "frame": 7,
+          "durationMs": 140
+        }
+      ],
+      "loop": true
+    }
+  }
+}

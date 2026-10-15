@@ -52,6 +52,12 @@ export class TerminalAccess {
     }
   }
 
+  assertWriter(terminalId: string, session?: BrowserSession) {
+    this.prune()
+    const lease = this.leases.get(terminalId)
+    if (!session || !lease?.attached || lease.sessionId !== session.sessionId || session.expiresAt <= this.now() || this.exclusive.has(terminalId)) throw new OpsError('FORBIDDEN', '请先附着该终端，再发送快捷指令')
+  }
+
   revokeTerminal(terminalId: string) { const lease = this.leases.get(terminalId); if (lease) this.remove(lease) }
   /** Trusted business only. Explicit replay confirmation is required by the caller. */
   acquireExclusive(terminalId: string) {

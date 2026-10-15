@@ -1,0 +1,755 @@
+{
+  "contractVersion": 2,
+  "id": "astra-v3",
+  "speciesId": "astra",
+  "style": "pixel",
+  "frameSize": 256,
+  "colorMode": "rgba",
+  "paletteHues": {
+    "mint": null,
+    "amber": 38,
+    "lavender": 272
+  },
+  "assets": {
+    "astra-child-idle-0": {
+      "path": "astra-child-idle-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-child-idle-1": {
+      "path": "astra-child-idle-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-child-idle-2": {
+      "path": "astra-child-idle-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-child-idle-3": {
+      "path": "astra-child-idle-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-child-greet-0": {
+      "path": "astra-child-greet-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-child-greet-1": {
+      "path": "astra-child-greet-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-child-greet-2": {
+      "path": "astra-child-greet-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-child-greet-3": {
+      "path": "astra-child-greet-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-child-happy-0": {
+      "path": "astra-child-happy-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-child-happy-1": {
+      "path": "astra-child-happy-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-child-happy-2": {
+      "path": "astra-child-happy-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-child-happy-3": {
+      "path": "astra-child-happy-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-child-sleep-0": {
+      "path": "astra-child-sleep-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-child-sleep-1": {
+      "path": "astra-child-sleep-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-child-sleep-2": {
+      "path": "astra-child-sleep-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-child-sleep-3": {
+      "path": "astra-child-sleep-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-growing-idle-0": {
+      "path": "astra-growing-idle-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-growing-idle-1": {
+      "path": "astra-growing-idle-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-growing-idle-2": {
+      "path": "astra-growing-idle-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-growing-idle-3": {
+      "path": "astra-growing-idle-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-growing-greet-0": {
+      "path": "astra-growing-greet-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-growing-greet-1": {
+      "path": "astra-growing-greet-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-growing-greet-2": {
+      "path": "astra-growing-greet-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-growing-greet-3": {
+      "path": "astra-growing-greet-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-growing-happy-0": {
+      "path": "astra-growing-happy-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-growing-happy-1": {
+      "path": "astra-growing-happy-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-growing-happy-2": {
+      "path": "astra-growing-happy-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-growing-happy-3": {
+      "path": "astra-growing-happy-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-growing-sleep-0": {
+      "path": "astra-growing-sleep-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-growing-sleep-1": {
+      "path": "astra-growing-sleep-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-growing-sleep-2": {
+      "path": "astra-growing-sleep-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-growing-sleep-3": {
+      "path": "astra-growing-sleep-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-adult-idle-0": {
+      "path": "astra-adult-idle-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-adult-idle-1": {
+      "path": "astra-adult-idle-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-adult-idle-2": {
+      "path": "astra-adult-idle-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-adult-idle-3": {
+      "path": "astra-adult-idle-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-adult-greet-0": {
+      "path": "astra-adult-greet-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-adult-greet-1": {
+      "path": "astra-adult-greet-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-adult-greet-2": {
+      "path": "astra-adult-greet-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-adult-greet-3": {
+      "path": "astra-adult-greet-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-adult-happy-0": {
+      "path": "astra-adult-happy-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-adult-happy-1": {
+      "path": "astra-adult-happy-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-adult-happy-2": {
+      "path": "astra-adult-happy-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-adult-happy-3": {
+      "path": "astra-adult-happy-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-adult-sleep-0": {
+      "path": "astra-adult-sleep-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-adult-sleep-1": {
+      "path": "astra-adult-sleep-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-adult-sleep-2": {
+      "path": "astra-adult-sleep-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-adult-sleep-3": {
+      "path": "astra-adult-sleep-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    }
+  },
+  "stages": {
+    "child": {
+      "idle": {
+        "frames": [
+          "astra-child-idle-0",
+          "astra-child-idle-1",
+          "astra-child-idle-2",
+          "astra-child-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3600
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          }
+        ]
+      },
+      "greet": {
+        "frames": [
+          "astra-child-greet-0",
+          "astra-child-greet-1",
+          "astra-child-greet-2",
+          "astra-child-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 130
+          },
+          {
+            "frame": 2,
+            "durationMs": 220
+          },
+          {
+            "frame": 1,
+            "durationMs": 150
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 3,
+            "durationMs": 240
+          },
+          {
+            "frame": 0,
+            "durationMs": 250
+          }
+        ]
+      },
+      "happy": {
+        "frames": [
+          "astra-child-happy-0",
+          "astra-child-happy-1",
+          "astra-child-happy-2",
+          "astra-child-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 160
+          },
+          {
+            "frame": 1,
+            "durationMs": 180
+          },
+          {
+            "frame": 2,
+            "durationMs": 160
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 160
+          },
+          {
+            "frame": 0,
+            "durationMs": 280
+          }
+        ]
+      },
+      "sleep": {
+        "frames": [
+          "astra-child-sleep-0",
+          "astra-child-sleep-1",
+          "astra-child-sleep-2",
+          "astra-child-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 1100
+          },
+          {
+            "frame": 1,
+            "durationMs": 1200
+          },
+          {
+            "frame": 2,
+            "durationMs": 1300
+          },
+          {
+            "frame": 3,
+            "durationMs": 1200
+          }
+        ]
+      }
+    },
+    "growing": {
+      "idle": {
+        "frames": [
+          "astra-growing-idle-0",
+          "astra-growing-idle-1",
+          "astra-growing-idle-2",
+          "astra-growing-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3600
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          }
+        ]
+      },
+      "greet": {
+        "frames": [
+          "astra-growing-greet-0",
+          "astra-growing-greet-1",
+          "astra-growing-greet-2",
+          "astra-growing-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 130
+          },
+          {
+            "frame": 2,
+            "durationMs": 220
+          },
+          {
+            "frame": 1,
+            "durationMs": 150
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 3,
+            "durationMs": 240
+          },
+          {
+            "frame": 0,
+            "durationMs": 250
+          }
+        ]
+      },
+      "happy": {
+        "frames": [
+          "astra-growing-happy-0",
+          "astra-growing-happy-1",
+          "astra-growing-happy-2",
+          "astra-growing-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 160
+          },
+          {
+            "frame": 1,
+            "durationMs": 180
+          },
+          {
+            "frame": 2,
+            "durationMs": 160
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 160
+          },
+          {
+            "frame": 0,
+            "durationMs": 280
+          }
+        ]
+      },
+      "sleep": {
+        "frames": [
+          "astra-growing-sleep-0",
+          "astra-growing-sleep-1",
+          "astra-growing-sleep-2",
+          "astra-growing-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 1100
+          },
+          {
+            "frame": 1,
+            "durationMs": 1200
+          },
+          {
+            "frame": 2,
+            "durationMs": 1300
+          },
+          {
+            "frame": 3,
+            "durationMs": 1200
+          }
+        ]
+      }
+    },
+    "adult": {
+      "idle": {
+        "frames": [
+          "astra-adult-idle-0",
+          "astra-adult-idle-1",
+          "astra-adult-idle-2",
+          "astra-adult-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3600
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          }
+        ]
+      },
+      "greet": {
+        "frames": [
+          "astra-adult-greet-0",
+          "astra-adult-greet-1",
+          "astra-adult-greet-2",
+          "astra-adult-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 130
+          },
+          {
+            "frame": 2,
+            "durationMs": 220
+          },
+          {
+            "frame": 1,
+            "durationMs": 150
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 3,
+            "durationMs": 240
+          },
+          {
+            "frame": 0,
+            "durationMs": 250
+          }
+        ]
+      },
+      "happy": {
+        "frames": [
+          "astra-adult-happy-0",
+          "astra-adult-happy-1",
+          "astra-adult-happy-2",
+          "astra-adult-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 160
+          },
+          {
+            "frame": 1,
+            "durationMs": 180
+          },
+          {
+            "frame": 2,
+            "durationMs": 160
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 160
+          },
+          {
+            "frame": 0,
+            "durationMs": 280
+          }
+        ]
+      },
+      "sleep": {
+        "frames": [
+          "astra-adult-sleep-0",
+          "astra-adult-sleep-1",
+          "astra-adult-sleep-2",
+          "astra-adult-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 1100
+          },
+          {
+            "frame": 1,
+            "durationMs": 1200
+          },
+          {
+            "frame": 2,
+            "durationMs": 1300
+          },
+          {
+            "frame": 3,
+            "durationMs": 1200
+          }
+        ]
+      }
+    }
+  }
+}

@@ -78,6 +78,14 @@ logs/opscopilot.log
 .zcode/
 
 # Runtime data (generated at runtime, not source-controlled)
+companion.json
+companion.json.lock
+achievements.json
+achievements.json.lock
+achievements.json.sync.lock
+social.db
+garden.json
+garden.json.lock
 patchstore/
 sessionstore/
 sessionstore-local.json

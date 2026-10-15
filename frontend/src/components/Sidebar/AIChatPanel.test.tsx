@@ -8,25 +8,38 @@ const mockAskAI = vi.fn();
 window.go = {
     main: {
         App: {
-            AskAI: mockAskAI,
+            AskCompanionAI: mockAskAI,
         }
     }
 } as any;
 
 describe('AIChatPanel', () => {
+    it('uses the injected assistant runtime and releases its status subscription', async () => {
+        const release = vi.fn();
+        const runtime = {ask:vi.fn(async () => '适配器的回答'),subscribeStatus:vi.fn(() => release)};
+        render(<AIChatPanel runtime={runtime}/>);
+        fireEvent.change(screen.getByPlaceholderText(/输入问题/i),{target:{value:'通过伙伴提问'}});
+        fireEvent.click(screen.getByTitle('发送'));
+        await screen.findByText('适配器的回答');
+        expect(runtime.ask).toHaveBeenCalledWith('通过伙伴提问');
+        expect(mockAskAI).not.toHaveBeenCalled();
+        await waitFor(() => expect(release).toHaveBeenCalledOnce());
+    });
     beforeAll(() => {
         Element.prototype.scrollIntoView = vi.fn();
     });
 
     beforeEach(() => {
         mockAskAI.mockReset();
-        window.go = { main: { App: { AskAI: mockAskAI } } } as any;
+        window.go = { main: { App: { AskCompanionAI: mockAskAI } } } as any;
     });
 
     it('renders empty chat state correctly', () => {
         render(<AIChatPanel />);
         expect(screen.getByPlaceholderText(/输入问题/i)).toBeInTheDocument();
         expect(screen.queryByTestId('message-item')).not.toBeInTheDocument();
+        expect(screen.queryByText('COMPANION ASSISTANT')).not.toBeInTheDocument();
+        expect(screen.queryByText('和伙伴一起探索运维知识')).not.toBeInTheDocument();
     });
 
     it('sends message and displays user input', async () => {

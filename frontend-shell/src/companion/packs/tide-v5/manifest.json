@@ -1,0 +1,1158 @@
+{
+  "contractVersion": 2,
+  "id": "tide-v5",
+  "speciesId": "tide",
+  "style": "pixel",
+  "frameSize": 256,
+  "colorMode": "rgba",
+  "paletteHues": {
+    "mint": null,
+    "amber": 38,
+    "lavender": 272
+  },
+  "stageScale": {
+    "child": 0.7407407407407407,
+    "growing": 0.8703703703703703,
+    "adult": 1
+  },
+  "assets": {
+    "tide-idle-0": {
+      "path": "tide-idle-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-idle-1": {
+      "path": "tide-idle-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-idle-2": {
+      "path": "tide-idle-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-idle-3": {
+      "path": "tide-idle-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-idle-4": {
+      "path": "tide-idle-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-idle-5": {
+      "path": "tide-idle-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-idle-6": {
+      "path": "tide-idle-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-idle-7": {
+      "path": "tide-idle-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-greet-0": {
+      "path": "tide-greet-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-greet-1": {
+      "path": "tide-greet-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-greet-2": {
+      "path": "tide-greet-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-greet-3": {
+      "path": "tide-greet-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-greet-4": {
+      "path": "tide-greet-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-greet-5": {
+      "path": "tide-greet-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-greet-6": {
+      "path": "tide-greet-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-greet-7": {
+      "path": "tide-greet-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-happy-0": {
+      "path": "tide-happy-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-happy-1": {
+      "path": "tide-happy-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-happy-2": {
+      "path": "tide-happy-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-happy-3": {
+      "path": "tide-happy-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-happy-4": {
+      "path": "tide-happy-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-happy-5": {
+      "path": "tide-happy-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-happy-6": {
+      "path": "tide-happy-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-happy-7": {
+      "path": "tide-happy-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-sleep-0": {
+      "path": "tide-sleep-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-sleep-1": {
+      "path": "tide-sleep-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-sleep-2": {
+      "path": "tide-sleep-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-sleep-3": {
+      "path": "tide-sleep-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-sleep-4": {
+      "path": "tide-sleep-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-sleep-5": {
+      "path": "tide-sleep-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-sleep-6": {
+      "path": "tide-sleep-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-sleep-7": {
+      "path": "tide-sleep-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-look-0": {
+      "path": "tide-look-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-look-1": {
+      "path": "tide-look-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-look-2": {
+      "path": "tide-look-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-look-3": {
+      "path": "tide-look-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-look-4": {
+      "path": "tide-look-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-look-5": {
+      "path": "tide-look-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-look-6": {
+      "path": "tide-look-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-look-7": {
+      "path": "tide-look-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-stretch-0": {
+      "path": "tide-stretch-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-stretch-1": {
+      "path": "tide-stretch-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-stretch-2": {
+      "path": "tide-stretch-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-stretch-3": {
+      "path": "tide-stretch-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-stretch-4": {
+      "path": "tide-stretch-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-stretch-5": {
+      "path": "tide-stretch-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-stretch-6": {
+      "path": "tide-stretch-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-stretch-7": {
+      "path": "tide-stretch-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-walk-0": {
+      "path": "tide-walk-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-walk-1": {
+      "path": "tide-walk-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-walk-2": {
+      "path": "tide-walk-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-walk-3": {
+      "path": "tide-walk-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-walk-4": {
+      "path": "tide-walk-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-walk-5": {
+      "path": "tide-walk-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-walk-6": {
+      "path": "tide-walk-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "tide-walk-7": {
+      "path": "tide-walk-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    }
+  },
+  "stages": {
+    "child": {
+      "idle": {
+        "frames": [
+          "tide-idle-0",
+          "tide-idle-1",
+          "tide-idle-2",
+          "tide-idle-3",
+          "tide-idle-4",
+          "tide-idle-5",
+          "tide-idle-6",
+          "tide-idle-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3400
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 90
+          },
+          {
+            "frame": 3,
+            "durationMs": 70
+          },
+          {
+            "frame": 4,
+            "durationMs": 110
+          },
+          {
+            "frame": 5,
+            "durationMs": 70
+          },
+          {
+            "frame": 6,
+            "durationMs": 90
+          },
+          {
+            "frame": 7,
+            "durationMs": 270
+          }
+        ],
+        "loop": true
+      },
+      "greet": {
+        "frames": [
+          "tide-greet-0",
+          "tide-greet-1",
+          "tide-greet-2",
+          "tide-greet-3",
+          "tide-greet-4",
+          "tide-greet-5",
+          "tide-greet-6",
+          "tide-greet-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 120
+          },
+          {
+            "frame": 3,
+            "durationMs": 120
+          },
+          {
+            "frame": 4,
+            "durationMs": 120
+          },
+          {
+            "frame": 3,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 120
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 7,
+            "durationMs": 200
+          }
+        ],
+        "loop": false
+      },
+      "happy": {
+        "frames": [
+          "tide-happy-0",
+          "tide-happy-1",
+          "tide-happy-2",
+          "tide-happy-3",
+          "tide-happy-4",
+          "tide-happy-5",
+          "tide-happy-6",
+          "tide-happy-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 140
+          },
+          {
+            "frame": 2,
+            "durationMs": 130
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 180
+          },
+          {
+            "frame": 5,
+            "durationMs": 140
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 220
+          }
+        ],
+        "loop": false
+      },
+      "sleep": {
+        "frames": [
+          "tide-sleep-0",
+          "tide-sleep-1",
+          "tide-sleep-2",
+          "tide-sleep-3",
+          "tide-sleep-4",
+          "tide-sleep-5",
+          "tide-sleep-6",
+          "tide-sleep-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 800
+          },
+          {
+            "frame": 1,
+            "durationMs": 750
+          },
+          {
+            "frame": 2,
+            "durationMs": 650
+          },
+          {
+            "frame": 3,
+            "durationMs": 650
+          },
+          {
+            "frame": 4,
+            "durationMs": 800
+          },
+          {
+            "frame": 5,
+            "durationMs": 750
+          },
+          {
+            "frame": 6,
+            "durationMs": 650
+          },
+          {
+            "frame": 7,
+            "durationMs": 650
+          }
+        ],
+        "loop": true
+      }
+    },
+    "growing": {
+      "idle": {
+        "frames": [
+          "tide-idle-0",
+          "tide-idle-1",
+          "tide-idle-2",
+          "tide-idle-3",
+          "tide-idle-4",
+          "tide-idle-5",
+          "tide-idle-6",
+          "tide-idle-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3400
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 90
+          },
+          {
+            "frame": 3,
+            "durationMs": 70
+          },
+          {
+            "frame": 4,
+            "durationMs": 110
+          },
+          {
+            "frame": 5,
+            "durationMs": 70
+          },
+          {
+            "frame": 6,
+            "durationMs": 90
+          },
+          {
+            "frame": 7,
+            "durationMs": 270
+          }
+        ],
+        "loop": true
+      },
+      "greet": {
+        "frames": [
+          "tide-greet-0",
+          "tide-greet-1",
+          "tide-greet-2",
+          "tide-greet-3",
+          "tide-greet-4",
+          "tide-greet-5",
+          "tide-greet-6",
+          "tide-greet-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 120
+          },
+          {
+            "frame": 3,
+            "durationMs": 120
+          },
+          {
+            "frame": 4,
+            "durationMs": 120
+          },
+          {
+            "frame": 3,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 120
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 7,
+            "durationMs": 200
+          }
+        ],
+        "loop": false
+      },
+      "happy": {
+        "frames": [
+          "tide-happy-0",
+          "tide-happy-1",
+          "tide-happy-2",
+          "tide-happy-3",
+          "tide-happy-4",
+          "tide-happy-5",
+          "tide-happy-6",
+          "tide-happy-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 140
+          },
+          {
+            "frame": 2,
+            "durationMs": 130
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 180
+          },
+          {
+            "frame": 5,
+            "durationMs": 140
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 220
+          }
+        ],
+        "loop": false
+      },
+      "sleep": {
+        "frames": [
+          "tide-sleep-0",
+          "tide-sleep-1",
+          "tide-sleep-2",
+          "tide-sleep-3",
+          "tide-sleep-4",
+          "tide-sleep-5",
+          "tide-sleep-6",
+          "tide-sleep-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 800
+          },
+          {
+            "frame": 1,
+            "durationMs": 750
+          },
+          {
+            "frame": 2,
+            "durationMs": 650
+          },
+          {
+            "frame": 3,
+            "durationMs": 650
+          },
+          {
+            "frame": 4,
+            "durationMs": 800
+          },
+          {
+            "frame": 5,
+            "durationMs": 750
+          },
+          {
+            "frame": 6,
+            "durationMs": 650
+          },
+          {
+            "frame": 7,
+            "durationMs": 650
+          }
+        ],
+        "loop": true
+      }
+    },
+    "adult": {
+      "idle": {
+        "frames": [
+          "tide-idle-0",
+          "tide-idle-1",
+          "tide-idle-2",
+          "tide-idle-3",
+          "tide-idle-4",
+          "tide-idle-5",
+          "tide-idle-6",
+          "tide-idle-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3400
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 90
+          },
+          {
+            "frame": 3,
+            "durationMs": 70
+          },
+          {
+            "frame": 4,
+            "durationMs": 110
+          },
+          {
+            "frame": 5,
+            "durationMs": 70
+          },
+          {
+            "frame": 6,
+            "durationMs": 90
+          },
+          {
+            "frame": 7,
+            "durationMs": 270
+          }
+        ],
+        "loop": true
+      },
+      "greet": {
+        "frames": [
+          "tide-greet-0",
+          "tide-greet-1",
+          "tide-greet-2",
+          "tide-greet-3",
+          "tide-greet-4",
+          "tide-greet-5",
+          "tide-greet-6",
+          "tide-greet-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 120
+          },
+          {
+            "frame": 3,
+            "durationMs": 120
+          },
+          {
+            "frame": 4,
+            "durationMs": 120
+          },
+          {
+            "frame": 3,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 120
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 7,
+            "durationMs": 200
+          }
+        ],
+        "loop": false
+      },
+      "happy": {
+        "frames": [
+          "tide-happy-0",
+          "tide-happy-1",
+          "tide-happy-2",
+          "tide-happy-3",
+          "tide-happy-4",
+          "tide-happy-5",
+          "tide-happy-6",
+          "tide-happy-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 140
+          },
+          {
+            "frame": 2,
+            "durationMs": 130
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 180
+          },
+          {
+            "frame": 5,
+            "durationMs": 140
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 220
+          }
+        ],
+        "loop": false
+      },
+      "sleep": {
+        "frames": [
+          "tide-sleep-0",
+          "tide-sleep-1",
+          "tide-sleep-2",
+          "tide-sleep-3",
+          "tide-sleep-4",
+          "tide-sleep-5",
+          "tide-sleep-6",
+          "tide-sleep-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 800
+          },
+          {
+            "frame": 1,
+            "durationMs": 750
+          },
+          {
+            "frame": 2,
+            "durationMs": 650
+          },
+          {
+            "frame": 3,
+            "durationMs": 650
+          },
+          {
+            "frame": 4,
+            "durationMs": 800
+          },
+          {
+            "frame": 5,
+            "durationMs": 750
+          },
+          {
+            "frame": 6,
+            "durationMs": 650
+          },
+          {
+            "frame": 7,
+            "durationMs": 650
+          }
+        ],
+        "loop": true
+      }
+    }
+  },
+  "ambient": {
+    "look": {
+      "frames": [
+        "tide-look-0",
+        "tide-look-1",
+        "tide-look-2",
+        "tide-look-3",
+        "tide-look-4",
+        "tide-look-5",
+        "tide-look-6",
+        "tide-look-7"
+      ],
+      "fps": 7,
+      "anchor": {
+        "x": 128,
+        "y": 240
+      },
+      "sequence": [
+        {
+          "frame": 0,
+          "durationMs": 160
+        },
+        {
+          "frame": 1,
+          "durationMs": 180
+        },
+        {
+          "frame": 2,
+          "durationMs": 220
+        },
+        {
+          "frame": 3,
+          "durationMs": 420
+        },
+        {
+          "frame": 4,
+          "durationMs": 200
+        },
+        {
+          "frame": 5,
+          "durationMs": 220
+        },
+        {
+          "frame": 6,
+          "durationMs": 420
+        },
+        {
+          "frame": 7,
+          "durationMs": 200
+        }
+      ],
+      "loop": false
+    },
+    "stretch": {
+      "frames": [
+        "tide-stretch-0",
+        "tide-stretch-1",
+        "tide-stretch-2",
+        "tide-stretch-3",
+        "tide-stretch-4",
+        "tide-stretch-5",
+        "tide-stretch-6",
+        "tide-stretch-7"
+      ],
+      "fps": 7,
+      "anchor": {
+        "x": 128,
+        "y": 240
+      },
+      "sequence": [
+        {
+          "frame": 0,
+          "durationMs": 180
+        },
+        {
+          "frame": 1,
+          "durationMs": 200
+        },
+        {
+          "frame": 2,
+          "durationMs": 220
+        },
+        {
+          "frame": 3,
+          "durationMs": 240
+        },
+        {
+          "frame": 4,
+          "durationMs": 450
+        },
+        {
+          "frame": 5,
+          "durationMs": 240
+        },
+        {
+          "frame": 6,
+          "durationMs": 220
+        },
+        {
+          "frame": 7,
+          "durationMs": 200
+        }
+      ],
+      "loop": false
+    },
+    "walk": {
+      "frames": [
+        "tide-walk-0",
+        "tide-walk-1",
+        "tide-walk-2",
+        "tide-walk-3",
+        "tide-walk-4",
+        "tide-walk-5",
+        "tide-walk-6",
+        "tide-walk-7"
+      ],
+      "fps": 7,
+      "anchor": {
+        "x": 128,
+        "y": 240
+      },
+      "sequence": [
+        {
+          "frame": 0,
+          "durationMs": 140
+        },
+        {
+          "frame": 1,
+          "durationMs": 140
+        },
+        {
+          "frame": 2,
+          "durationMs": 140
+        },
+        {
+          "frame": 3,
+          "durationMs": 140
+        },
+        {
+          "frame": 4,
+          "durationMs": 140
+        },
+        {
+          "frame": 5,
+          "durationMs": 140
+        },
+        {
+          "frame": 6,
+          "durationMs": 140
+        },
+        {
+          "frame": 7,
+          "durationMs": 140
+        }
+      ],
+      "loop": true
+    }
+  }
+}

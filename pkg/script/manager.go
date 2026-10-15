@@ -38,6 +38,8 @@ func NewManager(rec *recorder.Recorder, storagePath string, commandSender Comman
 	}
 }
 
+func (m *Manager) StorageDirectory() string { return m.storagePath }
+
 // SetCommandSender 设置命令发送器
 func (m *Manager) SetCommandSender(sender CommandSender) {
 	m.mu.Lock()
@@ -260,7 +262,13 @@ func (m *Manager) ReplayScriptWithVars(scriptID string, sessionID string, varVal
 
 	// 优先使用步骤树
 	if len(scriptData.Steps) > 0 {
-		return m.replaySteps(scriptData.Steps, ctx, sessionID)
+		if err := m.replaySteps(scriptData.Steps, ctx, sessionID); err != nil {
+			return err
+		}
+		if ctx.Sent == 0 {
+			return fmt.Errorf("脚本没有可派发的有效命令")
+		}
+		return nil
 	}
 
 	// 降级到旧的命令列表模式
@@ -293,16 +301,23 @@ func (m *Manager) replayCommands(commands []ScriptCommand, ctx *PlaybackContext,
 		}
 
 		command := SubstituteVariables(cmd.Content, ctx.Variables)
+		if strings.TrimSpace(command) == "" {
+			continue
+		}
 		slog.Debug("scriptReplay executing command", "index", i, "cmd", command)
 		if err := m.commandSender.SendCommand(sessionID, command+"\n"); err != nil {
 			slog.Error("scriptReplay execute failed", "cmd", cmd.Content, "error", err)
 			return fmt.Errorf("failed to execute command '%s': %w", cmd.Content, err)
 		}
+		ctx.Sent++
 
 		time.Sleep(500 * time.Millisecond)
 	}
 
 	slog.Debug("scriptreplay Replay completed successfully")
+	if ctx.Sent == 0 {
+		return fmt.Errorf("脚本没有可派发的有效命令")
+	}
 	return nil
 }
 
@@ -411,6 +426,11 @@ func (m *Manager) saveScript(script *Script) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal script: %w", err)
 	}
+	release, err := filetxn.Lock(filename)
+	if err != nil {
+		return err
+	}
+	defer release()
 
 	if err := filetxn.Write(filename, data); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
@@ -421,12 +441,31 @@ func (m *Manager) saveScript(script *Script) error {
 
 // CreateScript 手动创建一个空脚本
 func (m *Manager) CreateScript(name, description string) (*Script, error) {
+	return m.CreateScriptWithID(uuid.NewString(), name, description)
+}
+
+// CreateScriptWithID lets a backend journal an object before persistence.
+func (m *Manager) CreateScriptWithID(id, name, description string) (*Script, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if _, err := uuid.Parse(id); err != nil {
+		return nil, fmt.Errorf("脚本标识无效: %w", err)
+	}
+	release, err := filetxn.Lock(filepath.Join(m.storagePath, "scripts"))
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	if _, err := os.Stat(filepath.Join(m.storagePath, "script_"+id+".json")); !os.IsNotExist(err) {
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("脚本标识已存在")
+	}
 
 	now := time.Now()
 	script := &Script{
-		ID:          uuid.New().String(),
+		ID:          id,
 		StartTime:   now,
 		UpdatedAt:   now,
 		Name:        name,

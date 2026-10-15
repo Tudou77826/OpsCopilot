@@ -1,5 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import Sidebar from './Sidebar';
+import { wailsCompanionHost } from '../../shell-adapter/wailsCompanionHost';
+import { wailsSocialHost } from '../../shell-adapter/wailsSocialHost';
 import { ToastProvider } from '../Toast/Toast';
 import { describe, it, expect, vi } from 'vitest';
 import '@testing-library/jest-dom';
@@ -8,6 +10,7 @@ describe('Sidebar Component', () => {
     // Mock scrollIntoView
     beforeAll(() => {
         Element.prototype.scrollIntoView = vi.fn();
+        window.matchMedia = vi.fn(() => ({matches:false,addEventListener:vi.fn(),removeEventListener:vi.fn()})) as any;
         // @ts-ignore
         window.go = {
             main: {
@@ -26,6 +29,10 @@ describe('Sidebar Component', () => {
         const { container } = render(
             <ToastProvider>
                 <Sidebar
+                    companionHost={wailsCompanionHost}
+                    socialHost={wailsSocialHost}
+                    companionEnabled={false}
+                    onManageCompanion={() => {}}
                     isOpen={false}
                     activeTab={activeTab}
                     onToggle={() => { }}
@@ -48,6 +55,10 @@ describe('Sidebar Component', () => {
         render(
             <ToastProvider>
                 <Sidebar
+                    companionHost={wailsCompanionHost}
+                    socialHost={wailsSocialHost}
+                    companionEnabled={false}
+                    onManageCompanion={() => {}}
                     isOpen={true}
                     activeTab="troubleshoot"
                     onToggle={() => { }}
@@ -64,6 +75,10 @@ describe('Sidebar Component', () => {
         render(
             <ToastProvider>
                 <Sidebar
+                    companionHost={wailsCompanionHost}
+                    socialHost={wailsSocialHost}
+                    companionEnabled={false}
+                    onManageCompanion={() => {}}
                     isOpen={true}
                     activeTab="chat"
                     onToggle={() => { }}
@@ -73,6 +88,6 @@ describe('Sidebar Component', () => {
                 />
             </ToastProvider>
         );
-        expect(screen.getByText('AI 问答')).toBeInTheDocument();
+        expect(screen.getByText('伙伴助手')).toBeInTheDocument();
     });
 });

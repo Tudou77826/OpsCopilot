@@ -1,0 +1,34 @@
+{
+  "viewport": {
+    "width": 850,
+    "height": 833
+  },
+  "icon": {
+    "x": 765,
+    "y": 215,
+    "width": 28,
+    "height": 28
+  },
+  "tooltip": {
+    "x": 553,
+    "y": 153.8125,
+    "width": 240,
+    "height": 53.1875
+  },
+  "home": {
+    "x": 321,
+    "y": 114,
+    "width": 489,
+    "height": 210
+  },
+  "checks": [
+    "icon only",
+    "28px entry in actions row",
+    "hover and focus tooltip",
+    "tooltip within card",
+    "dialog opens",
+    "unfunded confirm disabled",
+    "Escape restores focus",
+    "save unchanged"
+  ]
+}

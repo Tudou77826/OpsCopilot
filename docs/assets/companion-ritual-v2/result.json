@@ -1,0 +1,31 @@
+{
+  "pluginApiRevision": 2,
+  "firstSpecies": "ember",
+  "paidSpecies": "moss",
+  "cost": 50,
+  "xpBefore": 73,
+  "xpAfter": 23,
+  "levelBefore": 8,
+  "levelAfter": 3,
+  "levelXP": 3,
+  "portrait": {
+    "visibleHeight": 133.86396139860153,
+    "artTop": 185.99969899654388,
+    "artBottom": 319.8636603951454,
+    "sceneTop": 115,
+    "sceneBottom": 331,
+    "homeHeight": 218
+  },
+  "modalFocusContained": true,
+  "escapePreservesSettings": true,
+  "dedicatedHatchEntry": true,
+  "stagedReveal": true,
+  "firstFree": true,
+  "confirmationCancellable": true,
+  "oldFreeChoiceBindingsRemoved": true,
+  "staleAndInsufficientRejected": true,
+  "historyPreserved": true,
+  "restartPersisted": true,
+  "existingReviewSaveUnchanged": true,
+  "errors": []
+}

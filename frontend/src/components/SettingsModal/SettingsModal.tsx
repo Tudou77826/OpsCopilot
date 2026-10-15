@@ -1,7 +1,11 @@
+import { PersonaSettingsDisclosure, usePersonaSettings } from '../../../../frontend-shell/src/ui/settings/PersonaSettingsPage';
+import { wailsAssistantSettings } from '../../shell-adapter/wailsAssistantSettings';
+import CompanionPage, { CompanionEnable } from '../../../../frontend-shell/src/ui/companion/CompanionPage';
+import { wailsCompanionHost } from '../../shell-adapter/wailsCompanionHost';
+import { wailsSocialHost } from '../../shell-adapter/wailsSocialHost';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { TbRobot, TbPalette, TbKeyboard, TbLayoutGrid, TbBooks, TbShieldCheck, TbLock, TbSettings, TbInfoCircle, TbSearch, TbPlugConnected, TbMinus, TbPlus, TbRefresh, TbCheck, TbSun, TbMoon, TbUsers } from 'react-icons/tb';
 import KeysMap from './KeysMap';
-import GardenExperimentCard from '../../../../frontend-shell/src/ui/settings/GardenExperimentCard';
 import HighlightRulesModal from './HighlightRulesModal';
 import CommandWhitelistPanel from './CommandWhitelist/CommandWhitelistPanel';
 import FileAccessPanel from './FileAccess/FileAccessPanel';
@@ -41,7 +45,7 @@ interface AppConfig {
         exec_timeout_sec: number;
     };
     experimental?: {
-        garden_enabled?: boolean;
+        companion_enabled?: boolean;
     };
     terminal?: TerminalConfig;
     highlight_rules?: HighlightRule[];
@@ -63,12 +67,12 @@ interface AppConfig {
 
 interface SettingsModalProps {
     isOpen: boolean;
-    initialTab?: 'llm' | 'servicecenter';
+    initialTab?: 'llm' | 'servicecenter' | 'achievements' | 'experimental';
+    onCompanionEnabledChange?: (enabled: boolean) => void;
     onClose: () => void;
     isBroadcastMode?: boolean;
     onToggleBroadcast?: (enabled: boolean) => void;
     onCompletionDelayChange?: (delay: number) => void;
-    onGardenEnabledChange?: (enabled: boolean) => void;
     onHighlightRulesChange?: (rules: HighlightRule[]) => void;
     onTerminalConfigChange?: (config: TerminalConfig) => void;
     theme?: Theme;
@@ -111,7 +115,7 @@ interface SessionShareStatus {
     progressLabel?: string;
 }
 
-type TabId = 'llm' | 'appearance' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'knowledge' | 'sessionshare' | 'aiagent' | 'whitelist' | 'fileaccess' | 'experimental' | 'about' | 'servicecenter';
+type TabId = 'llm' | 'appearance' | 'terminal' | 'highlight' | 'shortcuts' | 'broadcast' | 'knowledge' | 'sessionshare' | 'aiagent' | 'whitelist' | 'fileaccess' | 'experimental' | 'about' | 'servicecenter' | 'achievements';
 
 // Skill 安装条目：每个 AI Agent 目录一行，独立保存检测状态/版本/消息。
 // 支撑多个 coding agent（Claude Code / Cursor / Codex 等）并用的场景（issue #54）。
@@ -270,7 +274,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     isBroadcastMode,
     onToggleBroadcast,
     onCompletionDelayChange,
-    onGardenEnabledChange,
+    onCompanionEnabledChange,
     onHighlightRulesChange,
     onTerminalConfigChange,
     theme = 'dark',
@@ -287,6 +291,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     // 关闭页面时存在未保存改动 → 弹确认框
     const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
     const [activeTab, setActiveTab] = useState<TabId>('llm');
+    const persona = usePersonaSettings(wailsAssistantSettings, isOpen);
     const [importDir, setImportDir] = useState('');
     const [importLoading, setImportLoading] = useState(false);
     const [importMsg, setImportMsg] = useState('');
@@ -306,6 +311,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
     // Navigation items structure
     const navItems: NavItem[] = [
+        {id:'achievements' as TabId,label:'伙伴与奖章',icon:TbUsers({}),category:'个人',keywords:['排名','功能奖章','伙伴','养成','进度','伙伴人设','提示词','性格','语气','persona']},
         { id: 'llm', label: '模型服务', icon: TbRobot({}), category: 'AI' },
         { id: 'appearance', label: '外观', icon: TbSun({}), category: '终端', keywords: ['终端外观', '终端', '字体', '字号', 'theme', '主题'] },
         { id: 'highlight', label: '突出显示', icon: TbPalette({}), category: '终端' },
@@ -408,7 +414,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             // Ctrl/Cmd + S: Save
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
-                handleSave();
+                if (activeTab !== 'achievements' || isDirty) handleSave();
             }
 
             // Escape: Close
@@ -425,7 +431,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen, config]);
+    }, [isOpen, config, activeTab, persona.draft, persona.saved]);
 
     // Auto-select first result when searching
     useEffect(() => {
@@ -540,10 +546,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
     // 是否有未保存改动：对比当前工作副本与最近一次已落盘快照。
     // 主题不经过 config（走 onThemeChange 即时落盘），因此不会误报为脏。
-    const isDirty = useMemo(() => {
+    const configDirty = useMemo(() => {
         if (!config || savedConfigJson === null) return false;
         return JSON.stringify(config) !== savedConfigJson;
     }, [config, savedConfigJson]);
+
+    const isDirty = configDirty || persona.dirty;
 
     // 统一落盘逻辑，保存成功返回 true。closeAfter 为 true 时保存成功后关闭页面，
     // 用于「保存并关闭」；普通「保存更改」只提示成功、不关闭。
@@ -551,6 +559,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         if (!config) return false;
         setLoading(true);
         try {
+            if (persona.dirty) {
+                await persona.save();
+                if (!configDirty) { setMsg('人设已保存，下次问答生效'); if (closeAfter) onClose(); return true; }
+            }
+            if (activeTab === 'achievements' && !configDirty) return true;
             const nextConfig = {
                 ...config,
                 cli: normalizeCliConfig(config.cli),
@@ -568,12 +581,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             // 落盘成功后更新快照，避免 isDirty 仍判定为「有未保存改动」
             setSavedConfigJson(JSON.stringify(nextConfig));
             setMsg('设置已保存！');
-            onGardenEnabledChange?.(nextConfig.experimental?.garden_enabled === true);
             await loadPatchSyncStatus();
             await loadSessionShareStatus();
             if (onCompletionDelayChange && nextConfig.completion_delay !== undefined) {
                 onCompletionDelayChange(nextConfig.completion_delay);
             }
+            onCompanionEnabledChange?.(nextConfig.experimental?.companion_enabled === true);
             if (onHighlightRulesChange) {
                 onHighlightRulesChange(nextConfig.highlight_rules || []);
             }
@@ -1640,10 +1653,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             case 'fileaccess':
                 return <FileAccessPanel />;
 
+            case 'achievements':
+                return savedConfigJson && JSON.parse(savedConfigJson).experimental?.companion_enabled ? <CompanionPage host={wailsCompanionHost} socialHost={wailsSocialHost} preferences={<PersonaSettingsDisclosure state={persona} disabled={loading}/>}/> : <div className="oc-companion-page"><header className="oc-companion-page-heading"><h2>伙伴与奖章</h2><PersonaSettingsDisclosure state={persona} disabled={loading}/></header></div>;
+
             case 'experimental':
                 return (
                     <div style={styles.settingsGroup}>
-                        <GardenExperimentCard enabled={config.experimental?.garden_enabled === true} onChange={garden_enabled => setConfig({ ...config, experimental: { ...config.experimental, garden_enabled } })} />
                         <div style={styles.card}>
                             <div style={styles.cardTitle}>目录设置</div>
                             <div style={styles.row}>
@@ -1677,6 +1692,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
                         <div style={styles.card}>
                             <div style={styles.cardTitle}>高级功能</div>
+                            <CompanionEnable enabled={config.experimental?.companion_enabled === true} onChange={enabled => setConfig({ ...config, experimental: { ...config.experimental, companion_enabled: enabled } })}/>
                             <div style={styles.row}>
                                 <div style={styles.rowLeft}>
                                     <div style={styles.rowLabel}>命令补全延迟时间 (毫秒)</div>
@@ -1821,10 +1837,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div style={styles.footer}>
                     <div style={styles.statusMsg}>{msg}</div>
                     <div style={styles.footerActions}>
-                        <button onClick={handleClose} style={styles.cancelBtn}>取消</button>
-                        <button onClick={handleSave} style={styles.saveBtn} disabled={loading}>
+                        <button onClick={handleClose} style={styles.cancelBtn}>{activeTab === 'achievements' && !isDirty ? '关闭' : '取消'}</button>
+                        {(activeTab !== 'achievements' || isDirty) && <button onClick={handleSave} style={styles.saveBtn} disabled={loading}>
                             {loading ? '正在保存...' : '保存更改'}
-                        </button>
+                        </button>}
                     </div>
                 </div>
             </div>

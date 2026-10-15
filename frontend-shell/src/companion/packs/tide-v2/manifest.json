@@ -1,0 +1,598 @@
+{
+  "contractVersion": 1,
+  "id": "tide-v2",
+  "speciesId": "tide",
+  "style": "pixel",
+  "palette": [
+    "#30c0c0",
+    "#f0f0d8",
+    "#001830",
+    "#0060c0",
+    "#001848",
+    "#0048a8",
+    "#000030",
+    "#f0f0c0",
+    "#f0d8c0",
+    "#00a8a8",
+    "#30a8c0",
+    "#003078",
+    "#003060",
+    "#0090a8",
+    "#009090",
+    "#fff0d8",
+    "#0060d8",
+    "#18a8a8",
+    "#004890",
+    "#f06030",
+    "#ff7848",
+    "#18c0c0",
+    "#000018",
+    "#003048",
+    "#d8c0a8",
+    "#18a8c0",
+    "#ff7830",
+    "#ffa890",
+    "#f04830",
+    "#d8d8a8",
+    "#003090",
+    "#001860"
+  ],
+  "palettes": {
+    "mint": [
+      "#30c0c0",
+      "#f0f0d8",
+      "#001830",
+      "#0060c0",
+      "#001848",
+      "#0048a8",
+      "#000030",
+      "#f0f0c0",
+      "#f0d8c0",
+      "#00a8a8",
+      "#30a8c0",
+      "#003078",
+      "#003060",
+      "#0090a8",
+      "#009090",
+      "#fff0d8",
+      "#0060d8",
+      "#18a8a8",
+      "#004890",
+      "#f06030",
+      "#ff7848",
+      "#18c0c0",
+      "#000018",
+      "#003048",
+      "#d8c0a8",
+      "#18a8c0",
+      "#ff7830",
+      "#ffa890",
+      "#f04830",
+      "#d8d8a8",
+      "#003090",
+      "#001860"
+    ],
+    "amber": [
+      "#c08b30",
+      "#f0f0d8",
+      "#001830",
+      "#c07a00",
+      "#482e00",
+      "#a86a00",
+      "#000030",
+      "#f0dec0",
+      "#f0dec1",
+      "#a86a01",
+      "#c08b31",
+      "#784c00",
+      "#603d00",
+      "#a86a02",
+      "#905b00",
+      "#fff0d8",
+      "#d88900",
+      "#a87318",
+      "#905b01",
+      "#f0aa30",
+      "#ffbc48",
+      "#c08218",
+      "#000018",
+      "#482e01",
+      "#d8c6a8",
+      "#c08219",
+      "#ffb330",
+      "#ffd690",
+      "#f0aa31",
+      "#d8c6a9",
+      "#905b02",
+      "#603d01"
+    ],
+    "lavender": [
+      "#7d30c0",
+      "#f0f0d8",
+      "#001830",
+      "#6600c0",
+      "#260048",
+      "#5a00a8",
+      "#000030",
+      "#dac0f0",
+      "#dac0f1",
+      "#5a00a9",
+      "#7d30c1",
+      "#400078",
+      "#330060",
+      "#5a00aa",
+      "#4d0090",
+      "#fff0d8",
+      "#7300d8",
+      "#6518a8",
+      "#4d0091",
+      "#9630f0",
+      "#aa48ff",
+      "#7218c0",
+      "#000018",
+      "#260049",
+      "#c2a8d8",
+      "#7218c1",
+      "#9e30ff",
+      "#cb90ff",
+      "#9630f1",
+      "#c2a8d9",
+      "#4d0092",
+      "#330061"
+    ]
+  },
+  "assets": {
+    "tide-child-idle-0": {
+      "path": "tide-child-idle-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-child-idle-1": {
+      "path": "tide-child-idle-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-child-idle-2": {
+      "path": "tide-child-idle-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-child-idle-3": {
+      "path": "tide-child-idle-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-child-greet-0": {
+      "path": "tide-child-greet-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-child-greet-1": {
+      "path": "tide-child-greet-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-child-greet-2": {
+      "path": "tide-child-greet-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-child-greet-3": {
+      "path": "tide-child-greet-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-child-happy-0": {
+      "path": "tide-child-happy-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-child-happy-1": {
+      "path": "tide-child-happy-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-child-happy-2": {
+      "path": "tide-child-happy-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-child-happy-3": {
+      "path": "tide-child-happy-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-child-sleep-0": {
+      "path": "tide-child-sleep-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-child-sleep-1": {
+      "path": "tide-child-sleep-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-child-sleep-2": {
+      "path": "tide-child-sleep-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-child-sleep-3": {
+      "path": "tide-child-sleep-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-growing-idle-0": {
+      "path": "tide-growing-idle-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-growing-idle-1": {
+      "path": "tide-growing-idle-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-growing-idle-2": {
+      "path": "tide-growing-idle-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-growing-idle-3": {
+      "path": "tide-growing-idle-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-growing-greet-0": {
+      "path": "tide-growing-greet-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-growing-greet-1": {
+      "path": "tide-growing-greet-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-growing-greet-2": {
+      "path": "tide-growing-greet-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-growing-greet-3": {
+      "path": "tide-growing-greet-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-growing-happy-0": {
+      "path": "tide-growing-happy-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-growing-happy-1": {
+      "path": "tide-growing-happy-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-growing-happy-2": {
+      "path": "tide-growing-happy-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-growing-happy-3": {
+      "path": "tide-growing-happy-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-growing-sleep-0": {
+      "path": "tide-growing-sleep-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-growing-sleep-1": {
+      "path": "tide-growing-sleep-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-growing-sleep-2": {
+      "path": "tide-growing-sleep-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-growing-sleep-3": {
+      "path": "tide-growing-sleep-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-adult-idle-0": {
+      "path": "tide-adult-idle-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-adult-idle-1": {
+      "path": "tide-adult-idle-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-adult-idle-2": {
+      "path": "tide-adult-idle-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-adult-idle-3": {
+      "path": "tide-adult-idle-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-adult-greet-0": {
+      "path": "tide-adult-greet-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-adult-greet-1": {
+      "path": "tide-adult-greet-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-adult-greet-2": {
+      "path": "tide-adult-greet-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-adult-greet-3": {
+      "path": "tide-adult-greet-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-adult-happy-0": {
+      "path": "tide-adult-happy-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-adult-happy-1": {
+      "path": "tide-adult-happy-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-adult-happy-2": {
+      "path": "tide-adult-happy-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-adult-happy-3": {
+      "path": "tide-adult-happy-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-adult-sleep-0": {
+      "path": "tide-adult-sleep-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-adult-sleep-1": {
+      "path": "tide-adult-sleep-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-adult-sleep-2": {
+      "path": "tide-adult-sleep-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "tide-adult-sleep-3": {
+      "path": "tide-adult-sleep-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    }
+  },
+  "stages": {
+    "child": {
+      "idle": {
+        "frames": [
+          "tide-child-idle-0",
+          "tide-child-idle-1",
+          "tide-child-idle-2",
+          "tide-child-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "greet": {
+        "frames": [
+          "tide-child-greet-0",
+          "tide-child-greet-1",
+          "tide-child-greet-2",
+          "tide-child-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "happy": {
+        "frames": [
+          "tide-child-happy-0",
+          "tide-child-happy-1",
+          "tide-child-happy-2",
+          "tide-child-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "sleep": {
+        "frames": [
+          "tide-child-sleep-0",
+          "tide-child-sleep-1",
+          "tide-child-sleep-2",
+          "tide-child-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      }
+    },
+    "growing": {
+      "idle": {
+        "frames": [
+          "tide-growing-idle-0",
+          "tide-growing-idle-1",
+          "tide-growing-idle-2",
+          "tide-growing-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "greet": {
+        "frames": [
+          "tide-growing-greet-0",
+          "tide-growing-greet-1",
+          "tide-growing-greet-2",
+          "tide-growing-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "happy": {
+        "frames": [
+          "tide-growing-happy-0",
+          "tide-growing-happy-1",
+          "tide-growing-happy-2",
+          "tide-growing-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "sleep": {
+        "frames": [
+          "tide-growing-sleep-0",
+          "tide-growing-sleep-1",
+          "tide-growing-sleep-2",
+          "tide-growing-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      }
+    },
+    "adult": {
+      "idle": {
+        "frames": [
+          "tide-adult-idle-0",
+          "tide-adult-idle-1",
+          "tide-adult-idle-2",
+          "tide-adult-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "greet": {
+        "frames": [
+          "tide-adult-greet-0",
+          "tide-adult-greet-1",
+          "tide-adult-greet-2",
+          "tide-adult-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "happy": {
+        "frames": [
+          "tide-adult-happy-0",
+          "tide-adult-happy-1",
+          "tide-adult-happy-2",
+          "tide-adult-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "sleep": {
+        "frames": [
+          "tide-adult-sleep-0",
+          "tide-adult-sleep-1",
+          "tide-adult-sleep-2",
+          "tide-adult-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      }
+    }
+  }
+}

@@ -9,6 +9,22 @@ function setup() {
   return { authority, session, advance: (ms: number) => { now += ms }, restart: () => { generation++ } }
 }
 
+test('quick dispatch requires the current authenticated attached writer',()=>{
+ const {authority,session,advance}=setup()
+ try{
+  assert.throws(()=>authority.assertWriter('term-1',session),{code:'FORBIDDEN'})
+  const ticket=authority.issue('term-1','view',session)
+  assert.throws(()=>authority.assertWriter('term-1',session),{code:'FORBIDDEN'})
+  authority.consume(ticket.ticket,'term-1',session,()=>{})
+  assert.doesNotThrow(()=>authority.assertWriter('term-1',session))
+  assert.throws(()=>authority.assertWriter('term-1',{...session,sessionId:'b'.repeat(43)}),{code:'FORBIDDEN'})
+  const release=authority.acquireExclusive('term-1')
+  assert.throws(()=>authority.assertWriter('term-1',session),{code:'FORBIDDEN'});release()
+  const next=authority.issue('term-1','next',session);authority.consume(next.ticket,'term-1',session,()=>{})
+  advance(100_000);assert.throws(()=>authority.assertWriter('term-1',session),{code:'FORBIDDEN'})
+ }finally{authority.invalidate()}
+})
+
 test('script exclusivity revokes interactive input and cannot be bypassed by takeover', () => {
   const { authority, session } = setup()
   const ticket = authority.issue('term-1', 'view', session)

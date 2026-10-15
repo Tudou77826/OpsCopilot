@@ -8,15 +8,16 @@ import (
 	"strings"
 	"sync"
 
+	"opscopilot/pkg/filetxn"
 	"opscopilot/pkg/recorder"
 )
 
 // Manager 故障排查管理器
 type Manager struct {
-	recorder      *recorder.Recorder
-	storagePath   string
-	currentCase   *Case
-	mu            sync.RWMutex
+	recorder    *recorder.Recorder
+	storagePath string
+	currentCase *Case
+	mu          sync.RWMutex
 }
 
 // NewManager 创建故障排查管理器
@@ -253,8 +254,13 @@ func (m *Manager) saveCase(caseData *Case) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal case: %w", err)
 	}
+	release, err := filetxn.Lock(filename)
+	if err != nil {
+		return err
+	}
+	defer release()
 
-	if err := os.WriteFile(filename, data, 0644); err != nil {
+	if err := filetxn.Write(filename, data); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 

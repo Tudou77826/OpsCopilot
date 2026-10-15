@@ -4,11 +4,36 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
+	"opscopilot/pkg/achievements"
+	social "opscopilot/pkg/companionsocial"
 	"opscopilot/pkg/filetxn"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
+
+func (s *QuickCmdService) Dispatch(svc *TerminalService, commandID string, terminals []string, execute bool) (achievements.DispatchResult, error) {
+	commands, err := s.ListChecked()
+	if err != nil {
+		return achievements.DispatchResult{}, err
+	}
+	var content string
+	for _, cmd := range commands {
+		if cmd.ID == commandID {
+			content = cmd.Content
+			break
+		}
+	}
+	content = strings.TrimRight(content, "\r\n")
+	if strings.TrimSpace(content) == "" {
+		return achievements.DispatchResult{}, fmt.Errorf("快捷指令不存在或内容为空")
+	}
+	if execute {
+		content += "\r"
+	}
+	return achievements.Dispatch(s.achievements, commandID, terminals, func(id string) error { return svc.WriteInput(id, []byte(content)) })
+}
 
 func timeNowUnixMilli() int64 { return time.Now().UnixMilli() }
 
@@ -116,7 +141,10 @@ func (s *jsonListService) persist() error {
 }
 
 // QuickCmdService 快捷命令（与终端应用同格式，可直接拷贝旧 quick_commands.json）。
-type QuickCmdService struct{ inner *jsonListService }
+type QuickCmdService struct {
+	inner        *jsonListService
+	achievements *achievements.Store
+}
 
 func NewQuickCmdService(dataDir string) (*QuickCmdService, error) {
 	inner, err := newJSONListService(dataDir + "/quick-commands.json")
@@ -126,9 +154,39 @@ func NewQuickCmdService(dataDir string) (*QuickCmdService, error) {
 	return &QuickCmdService{inner: inner}, nil
 }
 
-func (s *QuickCmdService) List() []QuickCommand                  { return s.inner.list() }
-func (s *QuickCmdService) Save(cmd QuickCommand) (string, error) { return s.inner.upsert(cmd) }
-func (s *QuickCmdService) Delete(id string) error                { return s.inner.remove(id) }
+func (s *QuickCmdService) List() []QuickCommand { return s.inner.list() }
+func (s *QuickCmdService) Save(cmd QuickCommand) (string, error) {
+	if cmd.ID == "" {
+		cmd.ID = uuid.NewString()
+	}
+	write := func() error { _, err := s.inner.upsert(cmd); return err }
+	if s.achievements == nil {
+		return s.inner.upsert(cmd)
+	}
+	items, err := s.ListChecked()
+	if err != nil {
+		return "", err
+	}
+	exists := false
+	for _, item := range items {
+		if item.ID == cmd.ID {
+			exists = true
+			break
+		}
+	}
+	if exists {
+		err = s.achievements.TrackExisting(social.MedalQuickCommandCreated, cmd.ID, strings.TrimSpace(cmd.Content) != "", write)
+	} else {
+		err = s.achievements.TrackNew(social.MedalQuickCommandCreated, cmd.ID, strings.TrimSpace(cmd.Content) != "", write)
+	}
+	return cmd.ID, err
+}
+func (s *QuickCmdService) Delete(id string) error {
+	if s.achievements != nil {
+		return s.achievements.TrackExisting(social.MedalQuickCommandCreated, id, false, func() error { return s.inner.remove(id) })
+	}
+	return s.inner.remove(id)
+}
 
 // Reorder only changes the slots belonging to the supplied IDs. Other groups
 // and commands added by another control client keep their positions.

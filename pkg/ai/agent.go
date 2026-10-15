@@ -50,7 +50,7 @@ func trimEarlyToolResults(messages []llm.ChatMessage, maxChars int) {
 
 	target := int(float64(maxChars) * trimTargetRatio)
 	protected := len(messages) - 4 // 保护最近 4 条
-	if protected < 3 {              // 至少保护 system + user + 第一条
+	if protected < 3 {             // 至少保护 system + user + 第一条
 		protected = 3
 	}
 
@@ -66,6 +66,7 @@ func trimEarlyToolResults(messages []llm.ChatMessage, maxChars int) {
 
 // AgentRunOptions defines options for the agent execution
 type AgentRunOptions struct {
+	KnowledgeQA  bool // Plain knowledge Q&A does not use diagnostic JSON constraints.
 	Question     string
 	KnowledgeDir string
 	SystemPrompt string
@@ -167,7 +168,11 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 
 	// 合并 system messages 为一个，避免某些模型报错 "System message must be at the beginning"
 	var systemPromptBuilder strings.Builder
-	systemPromptBuilder.WriteString(agentBasePrompt)
+	if opts.KnowledgeQA {
+		systemPromptBuilder.WriteString(agentQABasePrompt)
+	} else {
+		systemPromptBuilder.WriteString(agentBasePrompt)
+	}
 
 	// 注入目录上下文
 	if opts.Catalog != nil {
@@ -233,7 +238,7 @@ func (s *AIService) RunAgent(ctx context.Context, opts AgentRunOptions) (string,
 		}
 
 		messages = append(messages, llm.ChatMessage{
-			Role:      "assistant",
+			Role:             "assistant",
 			Content:          resp.Content,
 			ToolCalls:        resp.ToolCalls,
 			ReasoningContent: resp.ReasoningContent,
@@ -483,4 +488,3 @@ func inferNextStepMessage(toolCalls []llm.ToolCall, step, maxSteps int) string {
 		return fmt.Sprintf("正在思考下一步...%s", stepHint)
 	}
 }
-

@@ -1,0 +1,51 @@
+{
+  "generator": "image_gen.imagegen",
+  "transparent_background": true,
+  "referencePack": "v5",
+  "species": [
+    "lumen",
+    "ember",
+    "moss",
+    "bolt",
+    "astra",
+    "tide",
+    "sage"
+  ],
+  "actions": {
+    "walk": {
+      "columns": 8,
+      "rows": 4,
+      "prompt": "Edit references: image1 is the approved resting character, image2 its RIGHT facing view. Preserve EXACT identity, proportions, costume, fine pixel-illustration shading and material colors. Create ONE independent WALK action atlas: exactly 8 columns x4 rows,32 equal square cells,wide 2:1 canvas. Genuine transparent background; no grid,text,shadows,ground,particles,extra icons. Every character fully inside CENTRAL 65% of its cell including all ears/tails/arms; at least 15% completely transparent margins on each side; NO crossing cells. Identical body scale and planted ground-contact baseline all cells. Retain soft RGBA edge detail, no extra pixelation/low-color filter. Consecutive consistent poses, NOT separate redesigns. Read left-to-right row-major.\nFrames0-3: TURN OUT from approved front/three-quarter resting pose to RIGHT-facing standing:0 exact resting,1 eyes/head begin right,2 intermediate three-quarter,3 stable right-facing standing BOTH feet down.\nFrames4-7: START WALKING right:4 identical right-facing standing,5 gentle weight shift,6 first forward step,7 join first contact pose of walking loop.\nFrames8-23 (row2+row3): ONE smooth16-pose RIGHT-facing walking-in-place cycle, realistic alternating legs/feet, subtle opposite arm/wing swing, two half-strides.8 right-facing left-foot contact,9-15 down/passing/lift/reach intermediate poses,16 opposite-foot contact,17-23 other half-stride returning smoothly to8. Keep torso root centered; do not translate character between cells; clear changing leg poses, NOT duplicate stills, NO hopping or exaggerated bounce. Root facing right throughout, preserve face shape and accessories. Creature-appropriate movement: soft tiny steps for light creature/tree, padded fox/dragon steps, mechanical robot, waddling penguin/owl.\nFrames24-27: STOP WALKING, from contact posture to weight settling and stable RIGHT-facing stand with both feet grounded.27 is a comfortable SIDE STANDING idle pose.\nFrames28-31: TURN IN from that RIGHT-facing stand through three-quarter back to EXACT approved resting view, gradual head+body turn,31 matching0. This is ONE complete motion with 5 phases. Pay special attention to scale consistency and contiguous turning, and readable stepping at small display size. All isolated frames full body; generous gutters matter more than large character size."
+    },
+    "idle": {
+      "columns": 4,
+      "rows": 2,
+      "prompt": "Edit target: the supplied approved character resting image. Preserve EXACT identity, proportions, face, costume, colors, lighting and polished detailed pixel-illustration art. Generate ONE independent action ONLY, a transparent sprite atlas. No labels, grid,text,shadows,ground,sparks,hearts,speed lines or stray fragments. Full body in every equal square cell; character including ALL appendages must fit CENTRAL 65% of each cell with at least15% transparent margin, no overlap/crossing cell boundaries. IDENTICAL character scale, torso root center, planted ground baseline. Frame order left to right, top to bottom. Consecutive intermediate poses, not unrelated drawings, no duplicates to fake smoothness. Preserve detailed colors and soft alpha; no forced low resolution/color quantization.\nExact grid FOUR columns by TWO rows, 8 frames, wide2:1 canvas.\n8 consecutive standing blink poses: neutral, eyelids slightly lower, half closed, nearly closed, briefly closed, half reopen, nearly open, exactly neutral. Torso and BOTH feet remain fixed, no whole-body drift. Tiny natural secondary ear/leaf/antenna movement only."
+    },
+    "greet": {
+      "columns": 4,
+      "rows": 3,
+      "prompt": "Edit target: the supplied approved character resting image. Preserve EXACT identity, proportions, face, costume, colors, lighting and polished detailed pixel-illustration art. Generate ONE independent action ONLY, a transparent sprite atlas. No labels, grid,text,shadows,ground,sparks,hearts,speed lines or stray fragments. Full body in every equal square cell; character including ALL appendages must fit CENTRAL 65% of each cell with at least15% transparent margin, no overlap/crossing cell boundaries. IDENTICAL character scale, torso root center, planted ground baseline. Frame order left to right, top to bottom. Consecutive intermediate poses, not unrelated drawings, no duplicates to fake smoothness. Preserve detailed colors and soft alpha; no forced low resolution/color quantization.\nExact grid FOUR columns by THREE rows, 12 frames, 4:3 canvas.\n12 consecutive greeting poses: 0 approved neutral; 1-3 SAME arm/wing/paw gently lifts; 4 fully raised; 5-8 two small outward/inward waves using that SAME limb; 9-10 lowers;11 EXACT neutral again. Keep the other arm, torso and feet stable. Cheerful restrained face, no changing identity or waving with the opposite limb."
+    },
+    "happy": {
+      "columns": 4,
+      "rows": 3,
+      "prompt": "Edit target: the supplied approved character resting image. Preserve EXACT identity, proportions, face, costume, colors, lighting and polished detailed pixel-illustration art. Generate ONE independent action ONLY, a transparent sprite atlas. No labels, grid,text,shadows,ground,sparks,hearts,speed lines or stray fragments. Full body in every equal square cell; character including ALL appendages must fit CENTRAL 65% of each cell with at least15% transparent margin, no overlap/crossing cell boundaries. IDENTICAL character scale, torso root center, planted ground baseline. Frame order left to right, top to bottom. Consecutive intermediate poses, not unrelated drawings, no duplicates to fake smoothness. Preserve detailed colors and soft alpha; no forced low resolution/color quantization.\nExact grid FOUR columns by THREE rows, 12 frames, 4:3 canvas.\n12 consecutive happy poses:0 neutral,1 pleased eyes,2-3 gentle anticipation crouch,4 takeoff,5 rising,6 tiny hop apex,7 descending,8 landing,9 soft recovery,10 settles,11 exact neutral. ONE small hop, preserve native height difference for airborne frames, all grounded poses on same floor baseline. No cast shadows or effects."
+    },
+    "look": {
+      "columns": 4,
+      "rows": 3,
+      "prompt": "Edit target: the supplied approved character resting image. Preserve EXACT identity, proportions, face, costume, colors, lighting and polished detailed pixel-illustration art. Generate ONE independent action ONLY, a transparent sprite atlas. No labels, grid,text,shadows,ground,sparks,hearts,speed lines or stray fragments. Full body in every equal square cell; character including ALL appendages must fit CENTRAL 65% of each cell with at least15% transparent margin, no overlap/crossing cell boundaries. IDENTICAL character scale, torso root center, planted ground baseline. Frame order left to right, top to bottom. Consecutive intermediate poses, not unrelated drawings, no duplicates to fake smoothness. Preserve detailed colors and soft alpha; no forced low resolution/color quantization.\nExact grid FOUR columns by THREE rows, 12 frames, 4:3 canvas.\n12 consecutive quiet looking-around poses:0 neutral,1 eyes glance left,2-3 head turns slightly left,4 left glance,5 returns toward center,6 neutral,7-8 eyes/head slightly right,9 right glance,10 returns,11 exact neutral. BOTH feet and torso remain planted, only head/gaze and subtle appendages move, no entire-body rotation or drift."
+    },
+    "stretch": {
+      "columns": 4,
+      "rows": 3,
+      "prompt": "Edit target: the supplied approved character resting image. Preserve EXACT identity, proportions, face, costume, colors, lighting and polished detailed pixel-illustration art. Generate ONE independent action ONLY, a transparent sprite atlas. No labels, grid,text,shadows,ground,sparks,hearts,speed lines or stray fragments. Full body in every equal square cell; character including ALL appendages must fit CENTRAL 65% of each cell with at least15% transparent margin, no overlap/crossing cell boundaries. IDENTICAL character scale, torso root center, planted ground baseline. Frame order left to right, top to bottom. Consecutive intermediate poses, not unrelated drawings, no duplicates to fake smoothness. Preserve detailed colors and soft alpha; no forced low resolution/color quantization.\nExact grid FOUR columns by THREE rows, 12 frames, 4:3 canvas.\n12 consecutive gentle stretch poses:0 neutral;1-3 slowly raise BOTH arms/wings;4-5 extend gently;6 comfortable stretch apex;7 slight release;8-10 lower;11 exact neutral. Feet stay grounded, NO jump. Natural species-appropriate limb/wing extension. ALL ear ends, tail and fingers remain fully inside cells, avoid wide exaggerated wing/ear spreads."
+    },
+    "sleep": {
+      "columns": 4,
+      "rows": 2,
+      "prompt": "Edit target: the supplied approved character resting image. Preserve EXACT identity, proportions, face, costume, colors, lighting and polished detailed pixel-illustration art. Generate ONE independent action ONLY, a transparent sprite atlas. No labels, grid,text,shadows,ground,sparks,hearts,speed lines or stray fragments. Full body in every equal square cell; character including ALL appendages must fit CENTRAL 65% of each cell with at least15% transparent margin, no overlap/crossing cell boundaries. IDENTICAL character scale, torso root center, planted ground baseline. Frame order left to right, top to bottom. Consecutive intermediate poses, not unrelated drawings, no duplicates to fake smoothness. Preserve detailed colors and soft alpha; no forced low resolution/color quantization.\nExact grid FOUR columns by TWO rows, 8 frames, wide2:1 canvas.\n8 soft sleeping poses: comfortably closed eyes in approved resting shape, slow tiny inhale/exhale with a matching first/last resting pose. Keep feet planted and bodily proportions unchanged; no collapsing into a different creature, no floating symbols. Preserve costume/materials."
+    }
+  }
+}

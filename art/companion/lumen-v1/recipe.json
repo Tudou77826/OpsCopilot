@@ -1,0 +1,80 @@
+{
+  "sheet": "source/lumen-sheet.png",
+  "background": "source/profile-background.png",
+  "backgroundCrop": [4, 4, 1664, 936],
+  "palette": [
+    "#203247",
+    "#3d6e67",
+    "#6dc7a3",
+    "#a6e4bd",
+    "#fff1d5",
+    "#efb554",
+    "#e8939b",
+    "#7793a1",
+    "#aa744d",
+    "#cbd9dc",
+    "#e7b954"
+  ],
+  "palettes": {
+    "mint": [
+      "#203247",
+      "#3d6e67",
+      "#6dc7a3",
+      "#a6e4bd",
+      "#fff1d5",
+      "#efb554",
+      "#e8939b",
+      "#7793a1",
+      "#aa744d",
+      "#cbd9dc",
+      "#e7b954"
+    ],
+    "amber": [
+      "#203247",
+      "#866444",
+      "#dea45b",
+      "#f2cf86",
+      "#fff1d5",
+      "#efb554",
+      "#e8939b",
+      "#7793a1",
+      "#aa744d",
+      "#cbd9dc",
+      "#e7b954"
+    ],
+    "lavender": [
+      "#203247",
+      "#665e86",
+      "#a89cd7",
+      "#d2c8ed",
+      "#fff1d5",
+      "#efb554",
+      "#e8939b",
+      "#7793a1",
+      "#aa744d",
+      "#cbd9dc",
+      "#e7b954"
+    ]
+  },
+  "stageSizes": [
+    34,
+    44,
+    52
+  ],
+  "medalBorders": {
+    "locked": "#7793a1",
+    "bronze": "#aa744d",
+    "silver": "#cbd9dc",
+    "gold": "#e7b954"
+  },
+  "icons": {
+    "knowledge-archive": "source/knowledge-archive.png",
+    "script-created": "source/script-created.png",
+    "quick-command-created": "source/quick-command-created.png",
+    "case-completed": "source/case-completed.png",
+    "knowledge-read": "source/knowledge-read.png",
+    "script-used": "source/script-used.png",
+    "quick-command-used": "source/quick-command-used.png",
+    "active-day": "source/active-day.png"
+  }
+}

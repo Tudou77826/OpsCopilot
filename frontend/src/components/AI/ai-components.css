@@ -616,7 +616,6 @@
 .ai-panel-footer > .ai-composer { padding: 10px 11px 9px; border-top: 0; background: transparent; }
 .ai-panel-footer .ai-composer-hint { margin-top: 4px; padding-right: 2px; opacity: .72; }
 .ai-panel-footer .ai-context-chip { background: transparent; }
-.ai-chat-empty { min-height: 100%; }
 
 .ai-conclusion-transition {
     min-width: 0;

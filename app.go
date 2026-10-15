@@ -22,13 +22,15 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/crypto/ssh"
 
+	"opscopilot/pkg/achievements"
 	"opscopilot/pkg/ai"
+	"opscopilot/pkg/companion"
+	social "opscopilot/pkg/companionsocial"
 	"opscopilot/pkg/completion"
 	"opscopilot/pkg/config"
 	"opscopilot/pkg/connectionstore"
 	"opscopilot/pkg/core/security"
 	"opscopilot/pkg/filetransfer"
-	"opscopilot/pkg/garden"
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/knowledge/patchstore"
 	"opscopilot/pkg/llm"
@@ -90,7 +92,9 @@ type App struct {
 	patchSyncing         atomic.Bool
 	sessionShareMu       sync.RWMutex         // protects sessionShare
 	sessionShare         *sessionShareRuntime // 会话共享运行时（nil = 未启用，逻辑见 app_sessionshare.go）
-	garden               *garden.Store        // 养成系统存储（nil = 未启用，绑定与钩子见 app_garden.go）
+	companion            *companion.Store     // 单伙伴成长存储，默认休眠；绑定见 app_companion.go
+	achievements         *achievements.Store
+	social               *achievements.Client
 }
 
 // NewApp creates a new App application struct
@@ -191,9 +195,12 @@ func NewApp() *App {
 		app.fileAccessMgr = fileAccessMgr
 	}
 
-	// 养成系统：与 Teams 插件共用同一份 pkg/garden；失败只降级（无花园入口）。
-	app.garden = garden.NewDormant("garden.json")
-	app.garden.SetEnabled(configMgr.Config.Experimental.GardenEnabled)
+	// 养成系统：与 Teams 插件共用同一份 pkg/companion；失败只降级（不影响工作台）。
+	app.companion = companion.NewDormant(filepath.Join(configMgr.Directory(), "companion.json"))
+	app.companion.SetEnabled(configMgr.Config.Experimental.CompanionEnabled)
+	app.achievements = achievements.NewDormant(filepath.Join(configMgr.Directory(), "achievements.json"))
+	app.achievements.SetEnabled(configMgr.Config.Experimental.CompanionEnabled)
+	app.social = achievements.NewClient(app.achievements, app.secretStore)
 
 	// Set the CommandSender to app itself
 	scriptMgr.SetCommandSender(app)
@@ -896,8 +903,8 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) (re
 	// 会话共享：记录本次成功登录并异步推送（未启用时 nil 守卫直接返回）
 	a.recordSharedLogin(config)
 
-	// 花园：会话建立事件（与 sidecar 的连接成功钩子同源同键格式）
-	a.recordGarden(garden.EventSessionEstablished, "conn:"+sessionID)
+	// 伙伴成长：会话建立事件与 sidecar 使用同一业务结果。
+	a.recordCompanion(companion.EventSessionEstablished, "conn:"+sessionID)
 
 	// Read loop
 	go func() {
@@ -1082,7 +1089,14 @@ func (a *App) StopSession(rootCause string, conclusion string) string {
 	}
 
 	// Stop and Save Session (JSON)
-	if err := a.coreRecorder.StopSession(rootCause, conclusion); err != nil {
+	writeCase := func() error { return a.coreRecorder.StopSession(rootCause, conclusion) }
+	var caseErr error
+	if a.achievements != nil && strings.TrimSpace(rootCause) != "" && strings.TrimSpace(conclusion) != "" && conclusion != "Failed to generate conclusion via AI." {
+		caseErr = a.achievements.Do(social.MedalCaseCompleted, currentSession.ID, true, writeCase)
+	} else {
+		caseErr = writeCase()
+	}
+	if err := caseErr; err != nil {
 		return fmt.Sprintf("Error saving session: %v", err)
 	}
 
@@ -1217,9 +1231,17 @@ func (a *App) ArchiveSession(rootCause string, conclusion string, service string
 		}
 	}
 
-	relPath, err := knowledge.AppendRecord(knowledgeDir, input)
+	var relPath string
+	var archiveErr error
+	writeArchive := func() error { relPath, archiveErr = knowledge.AppendRecord(knowledgeDir, input); return archiveErr }
+	var err error
+	if a.achievements != nil && currentSession.ID != "" && strings.TrimSpace(conclusion) != "" {
+		err = a.achievements.Do(social.MedalKnowledgeArchive, currentSession.ID, true, writeArchive)
+	} else {
+		err = writeArchive()
+	}
 	if err != nil {
-		if pendingStore != nil && patch != nil {
+		if archiveErr != nil && pendingStore != nil && patch != nil {
 			if rmErr := pendingStore.Delete(*patch); rmErr != nil {
 				slog.Warn("failed to rollback pending patch after archive failure", "error", rmErr, "patch_id", patch.ID)
 			}
@@ -1229,7 +1251,14 @@ func (a *App) ArchiveSession(rootCause string, conclusion string, service string
 	}
 
 	// 保留 recorder JSON 保存
-	if err := a.coreRecorder.StopSession(rootCause, conclusion); err != nil {
+	writeCase := func() error { return a.coreRecorder.StopSession(rootCause, conclusion) }
+	var caseErr error
+	if a.achievements != nil && strings.TrimSpace(rootCause) != "" && strings.TrimSpace(conclusion) != "" && conclusion != "Failed to generate conclusion via AI." {
+		caseErr = a.achievements.Do(social.MedalCaseCompleted, currentSession.ID, true, writeCase)
+	} else {
+		caseErr = writeCase()
+	}
+	if err := caseErr; err != nil {
 		slog.Error("failed to save session recording", "error", err)
 	}
 
@@ -1498,6 +1527,7 @@ func (a *App) GetKnowledgeFileContent(relPath string) string {
 		"content": content,
 	})
 	a.CountServiceUsage("gui_knowledge_opened")
+	a.recordKnowledgeRead(knowledgeDir, relPath, content)
 	return string(result)
 }
 
@@ -1516,6 +1546,9 @@ func (a *App) GetKnowledgeScenarioContent(relPath string, lineStart int, lineEnd
 		return string(result)
 	}
 	lines := strings.Split(content, "\n")
+	if lineStart < 1 || lineEnd < lineStart || lineStart > len(lines) {
+		return toJSONError("知识段落范围无效")
+	}
 	start := lineStart - 1
 	if start < 0 {
 		start = 0
@@ -1533,6 +1566,7 @@ func (a *App) GetKnowledgeScenarioContent(relPath string, lineStart int, lineEnd
 		"content": section,
 	})
 	a.CountServiceUsage("gui_knowledge_opened")
+	a.recordKnowledgeRead(knowledgeDir, relPath, section)
 	return string(result)
 }
 
@@ -1757,20 +1791,27 @@ func (a *App) SaveSettings(cfg config.AppConfig) string {
 	cfg.SessionShare.SecretKey = strings.TrimSpace(cfg.SessionShare.SecretKey)
 
 	// Update config in memory
+	previousConfig := *a.configMgr.Config
 	*a.configMgr.Config = cfg
+
+	// Finish the independently stored rules before committing the feature flag.
+	if err := a.configMgr.SetHighlightRules(cfg.HighlightRules); err != nil {
+		*a.configMgr.Config = previousConfig
+		return err.Error()
+	}
 
 	// Save to disk
 	if err := a.configMgr.Save(); err != nil {
+		*a.configMgr.Config = previousConfig
 		return fmt.Sprintf("Failed to save settings: %v", err)
 	}
-	if a.garden != nil {
-		a.garden.SetEnabled(cfg.Experimental.GardenEnabled)
+	// Shared-file merge may preserve edits made by another host.
+	cfg = *a.configMgr.Config
+	if a.companion != nil {
+		a.companion.SetEnabled(cfg.Experimental.CompanionEnabled)
 	}
-
-	// 高亮规则独立存储于 highlight_rules.json，主配置 Save() 不覆盖它，
-	// 需要单独落盘，否则开关规则后仅写入内存、重启即丢失。
-	if err := a.configMgr.SetHighlightRules(cfg.HighlightRules); err != nil {
-		return err.Error()
+	if a.achievements != nil {
+		a.achievements.SetEnabled(cfg.Experimental.CompanionEnabled)
 	}
 
 	// Update AI Service Provider
@@ -2662,7 +2703,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 				return
 			}
 			if ok {
-				a.recordGarden(garden.EventTransferCompleted, "ft:"+taskID)
+				a.recordCompanion(companion.EventTransferCompleted, "ft:"+taskID)
 			}
 			runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
 				"taskId":    taskID,
@@ -2729,7 +2770,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 				})
 				return
 			}
-			a.recordGarden(garden.EventTransferCompleted, "ft:"+taskID)
+			a.recordCompanion(companion.EventTransferCompleted, "ft:"+taskID)
 			runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
 				"taskId":    taskID,
 				"sessionId": sessionID,
@@ -2803,7 +2844,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 			})
 			return
 		}
-		a.recordGarden(garden.EventTransferCompleted, "ft:"+taskID)
+		a.recordCompanion(companion.EventTransferCompleted, "ft:"+taskID)
 		runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
 			"taskId":    taskID,
 			"sessionId": sessionID,
@@ -2936,7 +2977,17 @@ func (a *App) LoadQuickCommands() []config.QuickCommand {
 // 单条操作 + 文件变化热加载保证各窗口近实时一致。
 
 func (a *App) AddQuickCommand(cmd config.QuickCommand) string {
-	if err := a.configMgr.AddQuickCommand(cmd); err != nil {
+	if cmd.ID == "" {
+		cmd.ID = uuid.NewString()
+	}
+	write := func() error { return a.configMgr.AddQuickCommand(cmd) }
+	var err error
+	if a.achievements != nil {
+		err = a.achievements.TrackNew(social.MedalQuickCommandCreated, cmd.ID, strings.TrimSpace(cmd.Content) != "", write)
+	} else {
+		err = write()
+	}
+	if err := err; err != nil {
 		return err.Error()
 	}
 	a.emitQuickCommandsUpdated()
@@ -2944,16 +2995,40 @@ func (a *App) AddQuickCommand(cmd config.QuickCommand) string {
 }
 
 func (a *App) UpdateQuickCommand(id string, cmd config.QuickCommand) string {
-	if !a.configMgr.UpdateQuickCommand(id, cmd) {
-		return "命令已变化或保存失败，请重新加载"
+	write := func() error {
+		if !a.configMgr.UpdateQuickCommand(id, cmd) {
+			return fmt.Errorf("命令已变化或保存失败，请重新加载")
+		}
+		return nil
+	}
+	var err error
+	if a.achievements != nil {
+		err = a.achievements.TrackExisting(social.MedalQuickCommandCreated, id, strings.TrimSpace(cmd.Content) != "", write)
+	} else {
+		err = write()
+	}
+	if err != nil {
+		return err.Error()
 	}
 	a.emitQuickCommandsUpdated()
 	return ""
 }
 
 func (a *App) DeleteQuickCommand(id string) string {
-	if !a.configMgr.DeleteQuickCommand(id) {
-		return "命令已变化或保存失败，请重新加载"
+	write := func() error {
+		if !a.configMgr.DeleteQuickCommand(id) {
+			return fmt.Errorf("命令已变化或保存失败，请重新加载")
+		}
+		return nil
+	}
+	var err error
+	if a.achievements != nil {
+		err = a.achievements.TrackExisting(social.MedalQuickCommandCreated, id, false, write)
+	} else {
+		err = write()
+	}
+	if err != nil {
+		return err.Error()
 	}
 	a.emitQuickCommandsUpdated()
 	return ""
@@ -3346,7 +3421,10 @@ func (a *App) SendCommand(sessionID string, command string) error {
 		return fmt.Errorf("session not found or not ready: %s", sessionID)
 	}
 
-	_, err := sess.Stdin.Write([]byte(command))
+	n, err := sess.Stdin.Write([]byte(command))
+	if err == nil && n != len([]byte(command)) {
+		return io.ErrShortWrite
+	}
 	return err
 }
 
@@ -3378,7 +3456,15 @@ func (a *App) StartScriptRecording(name, description, sessionID string) (*script
 
 // StopScriptRecording 停止脚本录制
 func (a *App) StopScriptRecording() (*script.Script, error) {
-	created, err := a.scriptMgr.StopRecording()
+	status := a.scriptMgr.GetRecordingStatus()
+	var created *script.Script
+	write := func() error { var err error; created, err = a.scriptMgr.StopRecording(); return err }
+	var err error
+	if a.achievements != nil && status.ScriptID != "" {
+		err = a.achievements.Do(social.MedalScriptCreated, status.ScriptID, status.CommandCount > 0, write)
+	} else {
+		err = write()
+	}
 	if err == nil && created != nil {
 		a.CountServiceUsage("gui_script_created")
 	}
@@ -3397,17 +3483,35 @@ func (a *App) LoadScript(scriptID string) (*script.Script, error) {
 
 // UpdateScript 更新脚本
 func (a *App) UpdateScript(scriptData *script.Script) error {
+	if a.achievements != nil {
+		return a.achievements.TrackExisting(social.MedalScriptCreated, scriptData.ID, achievements.EligibleScript(scriptData), func() error { return a.scriptMgr.UpdateScript(scriptData) })
+	}
 	return a.scriptMgr.UpdateScript(scriptData)
 }
 
 // DeleteScript 删除脚本
 func (a *App) DeleteScript(scriptID string) error {
+	if a.achievements != nil {
+		return a.achievements.TrackExisting(social.MedalScriptCreated, scriptID, false, func() error { return a.scriptMgr.DeleteScript(scriptID) })
+	}
 	return a.scriptMgr.DeleteScript(scriptID)
 }
 
 // CreateScript 手动创建空脚本
 func (a *App) CreateScript(name, description string) (*script.Script, error) {
-	created, err := a.scriptMgr.CreateScript(name, description)
+	id := uuid.NewString()
+	var created *script.Script
+	write := func() error {
+		var err error
+		created, err = a.scriptMgr.CreateScriptWithID(id, name, description)
+		return err
+	}
+	var err error
+	if a.achievements != nil {
+		err = a.achievements.TrackNew(social.MedalScriptCreated, id, false, write)
+	} else {
+		err = write()
+	}
 	if err == nil && created != nil {
 		a.CountServiceUsage("gui_script_created")
 	}
@@ -3429,8 +3533,11 @@ func (a *App) ReplayScript(scriptID, sessionID string) (resultErr error) {
 	if err := a.scriptMgr.ReplayScript(scriptID, sessionID); err != nil {
 		return err
 	}
-	// 花园：回放派发完成。桌面回放是同步调用，一次调用即一次运行，用随机键去重。
-	a.recordGarden(garden.EventScriptReplayDone, "replay:"+uuid.New().String())
+	// 伙伴成长：记录回放派发，不将派发完成视为远端执行成功。
+	a.recordCompanion(companion.EventScriptReplayDone, "replay:"+uuid.New().String())
+	if a.achievements != nil {
+		_ = a.achievements.Record(social.MedalScriptUsed, scriptID, true)
+	}
 	return nil
 }
 
@@ -3449,7 +3556,10 @@ func (a *App) ReplayScriptWithVars(scriptID, sessionID string, varValues map[str
 	if err := a.scriptMgr.ReplayScriptWithVars(scriptID, sessionID, varValues); err != nil {
 		return err
 	}
-	a.recordGarden(garden.EventScriptReplayDone, "replay:"+uuid.New().String())
+	a.recordCompanion(companion.EventScriptReplayDone, "replay:"+uuid.New().String())
+	if a.achievements != nil {
+		_ = a.achievements.Record(social.MedalScriptUsed, scriptID, true)
+	}
 	return nil
 }
 

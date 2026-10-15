@@ -30,16 +30,6 @@ function integer(value: unknown, fallback: number, max: number) {
   if (!Number.isInteger(result) || Number(result) < 1 || Number(result) > max) throw new OpsError('INVALID_ARGUMENT', '数值参数无效')
   return Number(result)
 }
-function nonnegativeInteger(value: unknown, fallback: number, max: number) {
-  const result = value ?? fallback
-  if (!Number.isInteger(result) || Number(result) < 0 || Number(result) > max) throw new OpsError('INVALID_ARGUMENT', '数值参数无效')
-  return Number(result)
-}
-function boundedNumber(value: unknown, min: number, max: number) {
-  const result = Number(value)
-  if (!Number.isFinite(result) || result < min || result > max) throw new OpsError('INVALID_ARGUMENT', '数值参数无效')
-  return result
-}
 interface SavedSession { id: string; name: string; type: string; config?: Record<string, any>; children?: SavedSession[] }
 function flatten(nodes: SavedSession[]): SavedSession[] { return nodes.flatMap(node => [node, ...flatten(node.children ?? [])]) }
 function publicSessions(nodes: SavedSession[]): unknown[] {
@@ -172,7 +162,7 @@ export class OpsBusiness {
         if (this.disposed) throw new OpsError('RUNTIME_UNAVAILABLE', 'Ops 实例已卸载')
         if (session && session.expiresAt <= Date.now()) throw new OpsError('FORBIDDEN', '浏览器会话已过期')
         if (this.runtime.status().generation !== generation) throw new OpsError('RUNTIME_UNAVAILABLE', '运行时已更换，请重新确认操作')
-        return this.dispatch(copied.operation, copied.payload, generation)
+        return this.dispatch(copied.operation, copied.payload, generation, session)
       })
       const settled = result.then(() => undefined, () => undefined).finally(() => { this.queued--; if (choose) this.choosing = false })
       if (!choose) this.pending = settled
@@ -185,7 +175,7 @@ export class OpsBusiness {
     }
   }
 
-  private async dispatch(operation: string, payload: ObjectValue, generation: number): Promise<unknown> {
+  private async dispatch(operation: string, payload: ObjectValue, generation: number, session?: BrowserSession): Promise<unknown> {
     const ensureCurrent = () => {
       if (this.disposed || this.runtime.status().generation !== generation || this.runtime.status().state !== 'ready') {
         throw new OpsError('RUNTIME_UNAVAILABLE', '运行时已中断，请重新确认操作')
@@ -296,23 +286,48 @@ export class OpsBusiness {
       }
       case 'terminals.resize': return rpc('shell.resize', { terminalId: this.ownedTerminal(payload.terminalId), cols: integer(payload.cols, 80, 1000), rows: integer(payload.rows, 24, 1000) })
       case 'completion': return rpc('shell.completion', { input: typeof payload.input === 'string' ? payload.input.slice(0, 8192) : '', cursor: Math.max(0, Math.min(8192, Number(payload.cursor) || 0)) })
-        // 养成：展开时取快照，关闭时只取轻量变化 revision；购买与布局写入
-        // 由本地 sidecar 持久化，工作事件仍只在后端业务成功路径结算。
-      case 'garden.snapshot': return rpc('shell.garden.snapshot')
-      case 'garden.signal': return rpc('shell.garden.signal')
-        case 'garden.purchase': return rpc('shell.garden.purchase', { itemId: id(payload.itemId), price: integer(payload.price, 1, 100000), initialLevel: nonnegativeInteger(payload.initialLevel, 0, 100) })
-        case 'garden.place': return rpc('shell.garden.place', { instanceId: id(payload.instanceId), x: boundedNumber(payload.x, 0, 1), y: boundedNumber(payload.y, 0, 1), scale: boundedNumber(payload.scale, 0.5, 1.5), flipX: payload.flipX === true })
-      case 'garden.stow': return rpc('shell.garden.stow', { instanceId: id(payload.instanceId) })
+      case 'social.status': case 'social.catalog': case 'social.sync': return rpc(`shell.${operation}`)
+      case 'social.connect': return rpc('shell.social.connect', {baseUrl:text(payload.baseUrl,2048),credential:text(payload.credential,256),claimLocal:payload.claimLocal===true})
+      case 'social.participation': {
+        if(typeof payload.enabled!=='boolean')throw new OpsError('INVALID_ARGUMENT','需要参与选择')
+        return rpc('shell.social.participation',{enabled:payload.enabled})
+      }
+      case 'social.profile': return rpc('shell.social.profile',{userId:id(payload.userId)})
+      case 'social.showcase': {
+        if(!Array.isArray(payload.selected)||payload.selected.length>3)throw new OpsError('INVALID_ARGUMENT','最多展示三枚奖章')
+        return rpc('shell.social.showcase',{selected:payload.selected.map(id)})
+      }
+      case 'social.rankings': {
+        const offset=payload.offset??0
+        if(!Number.isSafeInteger(offset)||Number(offset)<0)throw new OpsError('INVALID_ARGUMENT','排名页码无效')
+        return rpc('shell.social.rankings',{kind:id(payload.kind),offset,limit:integer(payload.limit,20,100),snapshotId:payload.snapshotId===undefined?'':id(payload.snapshotId)})
+      }
+      case 'companion.snapshot': return rpc('shell.companion.snapshot')
+      case 'companion.hatch':
+      case 'companion.rename': {
+        if(!Number.isSafeInteger(payload.revision)||Number(payload.revision)<0)throw new OpsError('INVALID_ARGUMENT','伙伴版本无效')
+        return rpc(`shell.${operation}`, {revision:payload.revision,...(operation === 'companion.rename' ? {name:text(payload.name,24)} : {})})
+      }
+      case 'assistant.getSettings': return rpc('shell.assistant.getSettings')
+      case 'assistant.saveSettings': {
+        if (typeof payload.personaPrompt !== 'string' || Array.from(payload.personaPrompt).length > 4000 || typeof payload.revision !== 'string') throw new OpsError('INVALID_ARGUMENT','人设提示词最多 4000 字，且需要配置版本')
+        return rpc('shell.assistant.saveSettings', {personaPrompt:payload.personaPrompt,revision:payload.revision})
+      }
       case 'settings.load': return rpc('shell.settings.get')
       case 'settings.save': {
         const settings = object(payload.settings), terminal = object(settings.terminal)
         if (!['light', 'dark'].includes(String(settings.theme)) || !Array.isArray(settings.highlightRules) || settings.highlightRules.length > 128) throw new OpsError('INVALID_ARGUMENT', '设置无效')
-        if (settings.gardenEnabled !== undefined && typeof settings.gardenEnabled !== 'boolean') throw new OpsError('INVALID_ARGUMENT', '养成开关无效')
-        return rpc('shell.settings.save', { gardenEnabled: settings.gardenEnabled === true, theme: settings.theme, terminal: {
+        if (settings.companionEnabled !== undefined && typeof settings.companionEnabled !== 'boolean') throw new OpsError('INVALID_ARGUMENT', '伙伴功能开关无效')
+        return rpc('shell.settings.save', { companionEnabled: settings.companionEnabled === true, theme: settings.theme, terminal: {
           scrollback: integer(terminal.scrollback, 5000, 100000), search_enabled: terminal.search_enabled === true,
           highlight_enabled: terminal.highlight_enabled === true, font_family: text(terminal.font_family, 64), font_size: integer(terminal.font_size, 14, 32),
         }, completionDelay: Math.min(2000, Math.max(0, Number(settings.completionDelay) || 0)), highlightRules: settings.highlightRules,
         revision: typeof settings.revision === 'string' ? settings.revision : undefined, commandQueryShortcut: text(settings.commandQueryShortcut || 'Ctrl+K', 64) })
+      }
+      case 'quickCommands.dispatch': {
+        const terminalId = this.ownedTerminal(payload.terminalId)
+        this.terminalAccess.assertWriter(terminalId, session)
+        return rpc('shell.quickcmds.dispatch', { id: id(payload.id), terminalIds: [terminalId], execute: true })
       }
       case 'quickCommands.list': return rpc('shell.quickcmds.list')
       case 'quickCommands.save': return rpc('shell.quickcmds.save', { id: payload.id === undefined ? '' : id(payload.id), name: text(payload.name, 128), content: text(payload.content, 65536), group: typeof payload.group === 'string' ? payload.group.slice(0, 128) : '' })

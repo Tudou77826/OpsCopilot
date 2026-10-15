@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"opscopilot/pkg/assistantsettings"
+	"opscopilot/pkg/companion"
+	social "opscopilot/pkg/companionsocial"
 	"opscopilot/pkg/config"
-	"opscopilot/pkg/garden"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -53,11 +55,13 @@ func Run(version string, args []string, desktopRoot string) error {
 	stdioWriter := &RPCWriter{Out: os.Stdout}
 	service := NewTerminalService(version)
 	api := &ControlAPI{Service: service, Version: version, Token: tok, LocalInstallation: desktopRoot != ""}
+	achievementRoot := *dataDir
 	if desktopRoot != "" {
 		paths, err := ResolveDesktopData(desktopRoot)
 		if err != nil {
 			return err
 		}
+		achievementRoot = paths.Root
 		api.Configs, err = NewConfigServiceWithPath(filepath.Join(paths.Root, "sessions.json"))
 		if err != nil {
 			return err
@@ -70,13 +74,14 @@ func Run(version string, args []string, desktopRoot string) error {
 		api.QuickCmds = &QuickCmdService{inner: inner}
 		api.Settings = &SettingsService{desktop: &desktopSettings{root: paths.Root, snapshots: map[string]*config.Manager{}}}
 		api.AI = &AIConfigService{desktopRoot: paths.Root}
+		api.AssistantSettings = assistantsettings.New(filepath.Join(paths.Root, "assistant.json"))
 		api.Scripts, err = NewStructuredScriptServiceWithPaths(service, paths.Scripts, paths.Recordings)
 		if err != nil {
 			return err
 		}
-		// 花园与设置/快捷命令/脚本同源：本地安装模式下用桌面那份数据根，
-		// 这样桌面里养的花园和 Teams 插件里看到的是同一座（共享配置语义）。
-		api.Garden = &GardenService{inner: garden.NewDormant(filepath.Join(paths.Root, "garden.json"))}
+		// 伙伴与设置/快捷命令/脚本同源：本地安装模式下用桌面那份数据根，
+		// 桌面与 Teams 插件读取同一个伙伴存档。
+		api.Companion = &CompanionService{inner: companion.NewDormant(filepath.Join(paths.Root, "companion.json"))}
 		defer api.Scripts.Close()
 		api.FT, err = NewWorkspaceFT(service, filepath.Join(*dataDir, "files"))
 		if err != nil {
@@ -84,7 +89,7 @@ func Run(version string, args []string, desktopRoot string) error {
 		}
 		defer api.FT.Close()
 		api.FT.SetNotify(api.Notify)
-		wireGarden(api)
+		wireCompanion(api)
 		*workspaceFiles = true
 	} else if *dataDir != "" {
 		configs, err := NewConfigService(*dataDir)
@@ -99,7 +104,7 @@ func Run(version string, args []string, desktopRoot string) error {
 			return fmt.Errorf("初始化 Ops 服务失败")
 		}
 		api.QuickCmds = quickCmds
-		api.Garden = &GardenService{inner: garden.NewDormant(filepath.Join(*dataDir, "garden.json"))}
+		api.Companion = &CompanionService{inner: companion.NewDormant(filepath.Join(*dataDir, "companion.json"))}
 		scripts, err := NewStructuredScriptService(service, *dataDir)
 		if err != nil {
 			slog.Error("初始化脚本服务失败", "error", err)
@@ -118,13 +123,14 @@ func Run(version string, args []string, desktopRoot string) error {
 		defer ft.Close()
 		ft.SetNotify(api.Notify)
 		api.FT = ft
-		wireGarden(api)
+		wireCompanion(api)
 		settingsSvc, err := NewSettingsService(*dataDir)
 		if err != nil {
 			slog.Error("初始化设置存储失败", "error", err)
 			return fmt.Errorf("初始化 Ops 服务失败")
 		}
 		api.Settings = settingsSvc
+		api.AssistantSettings = assistantsettings.New(filepath.Join(*dataDir, "assistant.json"))
 		aiCfg, err := NewAIConfigService(*dataDir)
 		if err != nil {
 			slog.Error("初始化 AI 配置存储失败", "error", err)
@@ -140,13 +146,36 @@ func Run(version string, args []string, desktopRoot string) error {
 		diagnose.SetNotify(api.Notify)
 		api.Diagnose = diagnose
 	}
-	if api.Garden != nil && api.Settings != nil {
+	if achievementRoot != "" {
+		api.Social = newSocialService(achievementRoot, api)
+		if api.Companion != nil {
+			api.Companion.achievements = api.Social.store
+		}
+		if api.Scripts != nil {
+			api.Scripts.achievements = api.Social.store
+		}
+		if api.QuickCmds != nil {
+			api.QuickCmds.achievements = api.Social.store
+		}
+		if api.Diagnose != nil {
+			api.Diagnose.achievements = api.Social.store
+		}
+	}
+	if api.Companion != nil && api.Settings != nil {
 		settings, err := api.Settings.Get()
 		if err != nil {
 			return fmt.Errorf("读取养成功能开关: %w", err)
 		}
-		api.Garden.inner.SetEnabled(settings.GardenEnabled)
-		api.Settings.onSaved = func(next ShellSettingsJSON) { api.Garden.inner.SetEnabled(next.GardenEnabled) }
+		api.Companion.inner.SetEnabled(settings.CompanionEnabled)
+		if api.Social != nil {
+			api.Social.store.SetEnabled(settings.CompanionEnabled)
+		}
+		api.Settings.onSaved = func(next ShellSettingsJSON) {
+			api.Companion.inner.SetEnabled(next.CompanionEnabled)
+			if api.Social != nil {
+				api.Social.store.SetEnabled(next.CompanionEnabled)
+			}
+		}
 	}
 	// 补全服务：静态命令库（内嵌），无持久化依赖，始终可用；失败仅降级。
 	if compDB, err := completion.NewDatabase(); err != nil {
@@ -201,23 +230,33 @@ func Run(version string, args []string, desktopRoot string) error {
 	return nil
 }
 
-// wireGarden 把养成系统接到三处可验证的业务结果上（docs/garden-presentation-architecture.md §5）：
+// wireCompanion 把养成系统接到三处可验证的业务结果上（docs/companion-system-design.md）：
 // 连接建立、传输完成、脚本回放派发完毕。事件只在后端已确认成功处产生，
-// 前台不上报；花园未启用时本函数零操作。
-func wireGarden(api *ControlAPI) {
-	if api.Garden == nil {
+// 前台不上报；关闭时成长核心不读取或写入存档。
+func wireCompanion(api *ControlAPI) {
+	if api.Companion == nil {
 		return
 	}
 	// 传输完成：任务 id 即幂等键，重复通知不会重复结算。
-	api.FT.SetTransferDoneHook(func(taskID string) {
-		if err := api.Garden.Record(garden.EventTransferCompleted, "ft:"+taskID); err != nil {
-			slog.Warn("养成事件未结算", "kind", "transfer", "error", err)
-		}
-	})
+	if api.FT != nil {
+		api.FT.SetTransferDoneHook(func(taskID string) {
+			if api.Social != nil {
+				api.Social.day()
+			}
+			if err := api.Companion.Record(companion.EventTransferCompleted, "ft:"+taskID); err != nil {
+				slog.Warn("养成事件未结算", "kind", "transfer", "error", err)
+			}
+		})
+	}
 	if api.Scripts != nil {
 		// 回放派发完毕：run id 即幂等键。
 		api.Scripts.SetReplayDispatchedHook(func(runID string) {
-			if err := api.Garden.Record(garden.EventScriptReplayDone, "replay:"+runID); err != nil {
+			if api.Social != nil {
+				if state, err := api.Scripts.ReplayStatus(runID); err == nil {
+					_ = api.Social.store.Record(social.MedalScriptUsed, state.ScriptID, true)
+				}
+			}
+			if err := api.Companion.Record(companion.EventScriptReplayDone, "replay:"+runID); err != nil {
 				slog.Warn("养成事件未结算", "kind", "replay", "error", err)
 			}
 		})

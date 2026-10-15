@@ -9,8 +9,8 @@ import {
     RichText,
     referencesFromDocuments,
 } from '../AI';
-// @ts-ignore
-import { EventsOn } from '../../../wailsjs/runtime/runtime';
+import type { AssistantRuntime } from '../../../../frontend-shell/src/assistant/runtime';
+import { wailsAssistantRuntime } from '../../shell-adapter/wailsAssistantRuntime';
 
 interface Message {
     role: 'user' | 'ai';
@@ -21,6 +21,7 @@ interface Message {
 }
 
 interface AIChatPanelProps {
+    runtime?: AssistantRuntime;
     activeTerminalTitle?: string;
     onOpenSource?: (target: Omit<KnowledgeTarget, 'requestId'>) => void;
 }
@@ -32,7 +33,7 @@ const extractDocFromReadingMessage = (message: string): string | null => {
     return message.slice(index + marker.length).trim().replace(/\.\.\.$/, '').trim() || null;
 };
 
-const AIChatPanel: React.FC<AIChatPanelProps> = ({ activeTerminalTitle, onOpenSource }) => {
+const AIChatPanel: React.FC<AIChatPanelProps> = ({ activeTerminalTitle, onOpenSource, runtime = wailsAssistantRuntime }) => {
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
     const [agentTrace, setAgentTrace] = useState<AgentTraceEvent[]>([]);
@@ -60,9 +61,8 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ activeTerminalTitle, onOpenSo
         let cancelStatus: (() => void) | undefined;
         try {
             try {
-                if (EventsOn) {
-                    cancelStatus = EventsOn('agent:status', (...args: any[]) => {
-                        const data = args?.[0] ?? {};
+                if (runtime.subscribeStatus) {
+                    cancelStatus = runtime.subscribeStatus(data => {
                         const stage = String(data?.stage ?? '');
                         const message = String(data?.message ?? '');
                         if (!stage || !message) return;
@@ -89,14 +89,7 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ activeTerminalTitle, onOpenSo
                 console.error('Failed to register event listener:', listenerError);
             }
 
-            let response: string;
-            // @ts-ignore
-            if (window.go?.main?.App?.AskAI) {
-                // @ts-ignore
-                response = String(await window.go.main.App.AskAI(question) ?? '');
-            } else {
-                response = 'Error: Backend not connected.';
-            }
+            const response = await runtime.ask(question);
             setMessages(previous => [...previous, {
                 role: 'ai',
                 content: response,
@@ -128,21 +121,14 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ activeTerminalTitle, onOpenSo
     };
 
     return (
-        <div className="ai-panel ai-chat-panel" style={styles.container}>
+        <div className="ai-panel ai-chat-panel" style={{...styles.container, flex: 1, minHeight: 0}}>
             <div className="ai-chat-subheader">
                 <span className="ai-session-state"><i /> 知识增强</span>
-                <button onClick={handleNewChat} className="ai-new-chat-button">+ 新建对话</button>
+                <button disabled={busy} onClick={handleNewChat} className="ai-new-chat-button">+ 新建对话</button>
             </div>
 
             <div className="ai-conversation-scroll">
-                {messages.length === 0 ? (
-                    <div className="ai-empty-stage ai-chat-empty">
-                        <div className="ai-empty-glyph" aria-hidden="true"><span>AI</span><i /><i /><i /></div>
-                        <span className="ai-empty-eyebrow">KNOWLEDGE ASSISTANT</span>
-                        <h4>询问运维知识</h4>
-                        <p>了解机制、对比方案，或从现象中寻找可能的原因。</p>
-                    </div>
-                ) : (
+                {messages.length > 0 && (
                     <div className="ai-message-list">
                         {messages.map((message, index) => message.role === 'user' ? (
                             <div key={`${message.timestamp}-${index}`} className="ai-user-message" data-testid="message-item">
@@ -181,21 +167,9 @@ const AIChatPanel: React.FC<AIChatPanelProps> = ({ activeTerminalTitle, onOpenSo
 };
 
 const styles = {
-    container: { display: 'flex', flexDirection: 'column' as const, height: '100%', color: 'var(--text-secondary)' },
-    header: { padding: '8px 14px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-    headerHint: { color: 'var(--text-muted)', fontSize: '11px' },
-    newChatBtn: { padding: '4px 8px', backgroundColor: 'transparent', border: '1px solid var(--border-strong)', borderRadius: '4px', color: 'var(--text-secondary)', fontSize: '12px', cursor: 'pointer' },
-    chatContainer: { flex: 1, overflowY: 'auto' as const, padding: '16px 18px', minHeight: 0 },
-    emptyState: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', textAlign: 'center' as const },
-    emptyMark: { width: '42px', height: '42px', display: 'grid', placeItems: 'center', border: '1px solid var(--border-strong)', borderRadius: '10px', color: 'var(--accent)', fontWeight: 700, letterSpacing: '0.05em' },
-    emptyTitle: { margin: '14px 0 4px', color: 'var(--text-primary)', fontSize: '14px' },
-    emptyText: { margin: 0, maxWidth: '260px', fontSize: '12px', lineHeight: 1.6 },
-    messageList: { display: 'flex', flexDirection: 'column' as const, gap: '16px' },
-    userMessage: { alignSelf: 'flex-end', maxWidth: '85%', padding: '8px 12px', borderRadius: '8px 8px 2px 8px', background: 'var(--accent)', color: 'var(--text-on-accent)', overflow: 'hidden' },
-    aiMessage: { width: '100%', color: 'var(--text-primary)', overflow: 'hidden' },
+    container: { display: 'flex', flexDirection: 'column' as const, color: 'var(--text-secondary)' },
     references: { marginTop: '18px' },
     sectionTitle: { margin: '0 0 8px', color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em' },
-    footer: { padding: '10px 12px 12px', backgroundColor: 'var(--bg-secondary)', borderTop: '1px solid var(--border)' },
 };
 
 export default AIChatPanel;

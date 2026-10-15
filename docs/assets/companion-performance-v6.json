@@ -1,0 +1,97 @@
+{
+  "assetsVersion": "v6",
+  "character": {
+    "speciesId": "ember",
+    "stage": "child",
+    "paletteId": "mint"
+  },
+  "storedPetPreserved": true,
+  "samples": [
+    {
+      "name": "idle",
+      "wallMs": 8505.974900000001,
+      "taskMs": 87.94400000000002,
+      "scriptMs": 23.059000000000022,
+      "layouts": 4,
+      "styleRecalculations": 23,
+      "networkBytes": 634739,
+      "poseChanges": 16,
+      "heapBytes": 7567484
+    },
+    {
+      "name": "interaction",
+      "wallMs": 3770.9555,
+      "taskMs": 108.69100000000003,
+      "scriptMs": 32.476999999999975,
+      "layouts": 4,
+      "styleRecalculations": 33,
+      "networkBytes": 1322435,
+      "poseChanges": 37,
+      "heapBytes": 7825216
+    },
+    {
+      "name": "walking",
+      "wallMs": 1002.9526000000042,
+      "taskMs": 28.93499999999993,
+      "scriptMs": 10.097999999999995,
+      "layouts": 0,
+      "styleRecalculations": 16,
+      "networkBytes": 0,
+      "poseChanges": 16,
+      "heapBytes": 7251984
+    },
+    {
+      "name": "typing",
+      "wallMs": 491.2997000000032,
+      "taskMs": 197.35399999999993,
+      "scriptMs": 18.726999999999993,
+      "layouts": 60,
+      "styleRecalculations": 77,
+      "networkBytes": 0,
+      "poseChanges": 8,
+      "heapBytes": 7647016
+    },
+    {
+      "name": "gallery",
+      "wallMs": 847.3364999999976,
+      "taskMs": 416.76599999999996,
+      "scriptMs": 188.828,
+      "layouts": 15,
+      "styleRecalculations": 48,
+      "networkBytes": 596939,
+      "poseChanges": 4,
+      "heapBytes": 8881508
+    },
+    {
+      "name": "collapsed",
+      "wallMs": 3010.8364,
+      "taskMs": 17.76500000000003,
+      "scriptMs": 3.4480000000000066,
+      "layouts": 3,
+      "styleRecalculations": 15,
+      "networkBytes": 0,
+      "poseChanges": 0,
+      "heapBytes": 10112984
+    }
+  ],
+  "inputMedianMs": 23.45270000000164,
+  "inputP95Ms": 28.44919999999547,
+  "longTasks": [
+    {
+      "duration": 50,
+      "startTime": 33305.60000002384,
+      "phase": "gallery"
+    },
+    {
+      "duration": 75,
+      "startTime": 33394.10000002384,
+      "phase": "gallery"
+    },
+    {
+      "duration": 70,
+      "startTime": 33571,
+      "phase": "gallery"
+    }
+  ],
+  "pageErrors": []
+}

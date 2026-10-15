@@ -59,6 +59,58 @@ function runtime(name: string, override = {}) {
 const request = (requestId: string, operation: string, payload = {}) => ({ schemaVersion: 1, requestId, operation, payload })
 async function trustedHost(service: SidecarRuntime) { return (await service.request<{ key: string }>('shell.hostKey.probe', { host: '127.0.0.1', port: sshPort })).key }
 
+test('real assistant persona RPC persists across restart without enabling growth', async () => {
+  const service=runtime('assistant-persona')
+  await service.start()
+  const business=new OpsBusiness(service,'owner')
+  let sequence=0
+  const call=(operation:string,payload={})=>business.call(request(`persona-${++sequence}`,operation,payload),'owner') as Promise<any>
+  try {
+    const before=await call('assistant.getSettings')
+    const next=await call('assistant.saveSettings',{personaPrompt:'你叫小圆，温和、简洁。',revision:before.revision})
+    await assert.rejects(call('assistant.saveSettings',{personaPrompt:'旧窗口',revision:before.revision}))
+    await service.stop();await service.start()
+    assert.equal((await call('assistant.getSettings')).personaPrompt,'你叫小圆，温和、简洁。')
+    assert.equal((await call('settings.load')).companionEnabled,false)
+    const reset=await call('assistant.saveSettings',{personaPrompt:'',revision:next.revision})
+    assert.equal(reset.personaPrompt,'');assert.equal(reset.defaultPrompt,before.defaultPrompt)
+  } finally {business.dispose()}
+})
+
+test('real Teams business adapter opts in, hatches and renames one persisted companion without accepting XP', async () => {
+  const service = runtime('companion-product')
+  await service.start()
+  const business = new OpsBusiness(service, 'owner')
+  let sequence = 0
+  const call = (operation: string, payload = {}) => business.call(request(`companion-${++sequence}`, operation, payload), 'owner') as Promise<any>
+  try {
+    const settings = await call('settings.load')
+    assert.equal(settings.companionEnabled, false)
+    await assert.rejects(call('companion.snapshot'))
+    await call('settings.save', { settings: { ...settings, companionEnabled: true } })
+    const adopted = (await call('companion.hatch', {revision:0,xp:999,speciesId:'unknown'})).companion
+    assert.equal(adopted.pet.xp, 0)
+    const next = (await call('companion.rename', {name:'Teams 暮光',revision:adopted.revision,xp:999})).companion
+    assert.equal(next.pet.id, adopted.pet.id); assert.equal(next.pet.xp, 0)
+    assert.equal(next.pet.speciesId,adopted.pet.speciesId)
+    assert.ok((await call('assistant.getSettings')).defaultPrompt.length > 0)
+    await assert.rejects(call('companion.hatch',{revision:next.revision}))
+    await assert.rejects(call('companion.adopt',{speciesId:'bolt',name:'bypass',paletteId:'mint'}))
+    await assert.rejects(call('companion.update',{speciesId:'bolt',name:'bypass',paletteId:'mint',revision:next.revision}))
+    await assert.rejects(call('companion.rename', {name:'stale',revision:adopted.revision}))
+    await service.stop(); await service.start()
+    const restored = (await call('companion.snapshot')).companion
+    assert.equal(restored.pet.name, 'Teams 暮光'); assert.equal(restored.pet.paletteId, 'mint')
+    assert.equal(restored.pet.speciesId,adopted.pet.speciesId)
+    const profile = JSON.parse(await readFile(join(root, 'companion-product', 'achievements.json'), 'utf8')).profile
+    assert.equal(profile.companion.name, 'Teams 暮光'); assert.equal(profile.companion.level, 1)
+    const latestSettings = await call('settings.load')
+    await call('settings.save', {settings:{...latestSettings, companionEnabled:false}})
+    await assert.rejects(call('companion.snapshot'))
+    assert.equal(JSON.parse(await readFile(join(root,'companion-product','companion.json'),'utf8')).pet.id, adopted.pet.id)
+  } finally { business.dispose() }
+})
+
 test('real process verifies digest, handshakes once, hides endpoints and closes on stdio EOF', async () => {
   const service = runtime('lifecycle')
   await Promise.all([service.start(), service.start()])

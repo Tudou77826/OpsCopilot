@@ -112,7 +112,8 @@ func TestAIConfigEnvFallback(t *testing.T) {
 	}
 }
 
-func TestShellCompletionDispatch(t *testing.T) {	db, err := completion.NewDatabase()
+func TestShellCompletionDispatch(t *testing.T) {
+	db, err := completion.NewDatabase()
 	if err != nil {
 		t.Skipf("补全数据库初始化失败: %v", err)
 	}

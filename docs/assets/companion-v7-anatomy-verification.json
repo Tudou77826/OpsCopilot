@@ -1,0 +1,38 @@
+{
+  "assetsVersion": "v7",
+  "realIdleObservationMs": 44000,
+  "idleChanges": 70,
+  "onlyMicroIdle": true,
+  "unsavedPreviews": [
+    {
+      "id": "lumen",
+      "src": "/assets/lumen-greet-6-c2xcttyP.png"
+    },
+    {
+      "id": "ember",
+      "src": "/assets/ember-greet-6-R74ECUqK.png"
+    },
+    {
+      "id": "moss",
+      "src": "/assets/moss-greet-6-CYrLPuY8.png"
+    },
+    {
+      "id": "bolt",
+      "src": "/assets/bolt-greet-6-CUz4foRT.png"
+    },
+    {
+      "id": "astra",
+      "src": "/assets/astra-greet-6-BAPQad8h.png"
+    },
+    {
+      "id": "tide",
+      "src": "/assets/tide-greet-6-Blofiomi.png"
+    },
+    {
+      "id": "sage",
+      "src": "/assets/sage-greet-6-CbYrcLyh.png"
+    }
+  ],
+  "savedPetPreserved": true,
+  "errors": []
+}

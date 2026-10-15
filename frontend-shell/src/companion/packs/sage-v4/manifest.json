@@ -1,0 +1,844 @@
+{
+  "contractVersion": 2,
+  "id": "sage-v4",
+  "speciesId": "sage",
+  "style": "pixel",
+  "frameSize": 256,
+  "colorMode": "rgba",
+  "paletteHues": {
+    "mint": null,
+    "amber": 38,
+    "lavender": 272
+  },
+  "stageScale": {
+    "child": 0.7407407407407407,
+    "growing": 0.8703703703703703,
+    "adult": 1
+  },
+  "assets": {
+    "sage-idle-0": {
+      "path": "sage-idle-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-idle-1": {
+      "path": "sage-idle-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-idle-2": {
+      "path": "sage-idle-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-idle-3": {
+      "path": "sage-idle-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-idle-4": {
+      "path": "sage-idle-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-idle-5": {
+      "path": "sage-idle-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-idle-6": {
+      "path": "sage-idle-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-idle-7": {
+      "path": "sage-idle-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-greet-0": {
+      "path": "sage-greet-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-greet-1": {
+      "path": "sage-greet-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-greet-2": {
+      "path": "sage-greet-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-greet-3": {
+      "path": "sage-greet-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-greet-4": {
+      "path": "sage-greet-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-greet-5": {
+      "path": "sage-greet-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-greet-6": {
+      "path": "sage-greet-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-greet-7": {
+      "path": "sage-greet-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-happy-0": {
+      "path": "sage-happy-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-happy-1": {
+      "path": "sage-happy-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-happy-2": {
+      "path": "sage-happy-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-happy-3": {
+      "path": "sage-happy-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-happy-4": {
+      "path": "sage-happy-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-happy-5": {
+      "path": "sage-happy-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-happy-6": {
+      "path": "sage-happy-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-happy-7": {
+      "path": "sage-happy-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-sleep-0": {
+      "path": "sage-sleep-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-sleep-1": {
+      "path": "sage-sleep-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-sleep-2": {
+      "path": "sage-sleep-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-sleep-3": {
+      "path": "sage-sleep-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-sleep-4": {
+      "path": "sage-sleep-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-sleep-5": {
+      "path": "sage-sleep-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-sleep-6": {
+      "path": "sage-sleep-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "sage-sleep-7": {
+      "path": "sage-sleep-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    }
+  },
+  "stages": {
+    "child": {
+      "idle": {
+        "frames": [
+          "sage-idle-0",
+          "sage-idle-1",
+          "sage-idle-2",
+          "sage-idle-3",
+          "sage-idle-4",
+          "sage-idle-5",
+          "sage-idle-6",
+          "sage-idle-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3400
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 90
+          },
+          {
+            "frame": 3,
+            "durationMs": 70
+          },
+          {
+            "frame": 4,
+            "durationMs": 110
+          },
+          {
+            "frame": 5,
+            "durationMs": 70
+          },
+          {
+            "frame": 6,
+            "durationMs": 90
+          },
+          {
+            "frame": 7,
+            "durationMs": 270
+          }
+        ],
+        "loop": true
+      },
+      "greet": {
+        "frames": [
+          "sage-greet-0",
+          "sage-greet-1",
+          "sage-greet-2",
+          "sage-greet-3",
+          "sage-greet-4",
+          "sage-greet-5",
+          "sage-greet-6",
+          "sage-greet-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 150
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 110
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 130
+          },
+          {
+            "frame": 5,
+            "durationMs": 130
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 240
+          }
+        ],
+        "loop": false
+      },
+      "happy": {
+        "frames": [
+          "sage-happy-0",
+          "sage-happy-1",
+          "sage-happy-2",
+          "sage-happy-3",
+          "sage-happy-4",
+          "sage-happy-5",
+          "sage-happy-6",
+          "sage-happy-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 140
+          },
+          {
+            "frame": 2,
+            "durationMs": 130
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 180
+          },
+          {
+            "frame": 5,
+            "durationMs": 140
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 220
+          }
+        ],
+        "loop": false
+      },
+      "sleep": {
+        "frames": [
+          "sage-sleep-0",
+          "sage-sleep-1",
+          "sage-sleep-2",
+          "sage-sleep-3",
+          "sage-sleep-4",
+          "sage-sleep-5",
+          "sage-sleep-6",
+          "sage-sleep-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 800
+          },
+          {
+            "frame": 1,
+            "durationMs": 750
+          },
+          {
+            "frame": 2,
+            "durationMs": 650
+          },
+          {
+            "frame": 3,
+            "durationMs": 650
+          },
+          {
+            "frame": 4,
+            "durationMs": 800
+          },
+          {
+            "frame": 5,
+            "durationMs": 750
+          },
+          {
+            "frame": 6,
+            "durationMs": 650
+          },
+          {
+            "frame": 7,
+            "durationMs": 650
+          }
+        ],
+        "loop": true
+      }
+    },
+    "growing": {
+      "idle": {
+        "frames": [
+          "sage-idle-0",
+          "sage-idle-1",
+          "sage-idle-2",
+          "sage-idle-3",
+          "sage-idle-4",
+          "sage-idle-5",
+          "sage-idle-6",
+          "sage-idle-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3400
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 90
+          },
+          {
+            "frame": 3,
+            "durationMs": 70
+          },
+          {
+            "frame": 4,
+            "durationMs": 110
+          },
+          {
+            "frame": 5,
+            "durationMs": 70
+          },
+          {
+            "frame": 6,
+            "durationMs": 90
+          },
+          {
+            "frame": 7,
+            "durationMs": 270
+          }
+        ],
+        "loop": true
+      },
+      "greet": {
+        "frames": [
+          "sage-greet-0",
+          "sage-greet-1",
+          "sage-greet-2",
+          "sage-greet-3",
+          "sage-greet-4",
+          "sage-greet-5",
+          "sage-greet-6",
+          "sage-greet-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 150
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 110
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 130
+          },
+          {
+            "frame": 5,
+            "durationMs": 130
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 240
+          }
+        ],
+        "loop": false
+      },
+      "happy": {
+        "frames": [
+          "sage-happy-0",
+          "sage-happy-1",
+          "sage-happy-2",
+          "sage-happy-3",
+          "sage-happy-4",
+          "sage-happy-5",
+          "sage-happy-6",
+          "sage-happy-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 140
+          },
+          {
+            "frame": 2,
+            "durationMs": 130
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 180
+          },
+          {
+            "frame": 5,
+            "durationMs": 140
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 220
+          }
+        ],
+        "loop": false
+      },
+      "sleep": {
+        "frames": [
+          "sage-sleep-0",
+          "sage-sleep-1",
+          "sage-sleep-2",
+          "sage-sleep-3",
+          "sage-sleep-4",
+          "sage-sleep-5",
+          "sage-sleep-6",
+          "sage-sleep-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 800
+          },
+          {
+            "frame": 1,
+            "durationMs": 750
+          },
+          {
+            "frame": 2,
+            "durationMs": 650
+          },
+          {
+            "frame": 3,
+            "durationMs": 650
+          },
+          {
+            "frame": 4,
+            "durationMs": 800
+          },
+          {
+            "frame": 5,
+            "durationMs": 750
+          },
+          {
+            "frame": 6,
+            "durationMs": 650
+          },
+          {
+            "frame": 7,
+            "durationMs": 650
+          }
+        ],
+        "loop": true
+      }
+    },
+    "adult": {
+      "idle": {
+        "frames": [
+          "sage-idle-0",
+          "sage-idle-1",
+          "sage-idle-2",
+          "sage-idle-3",
+          "sage-idle-4",
+          "sage-idle-5",
+          "sage-idle-6",
+          "sage-idle-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3400
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 90
+          },
+          {
+            "frame": 3,
+            "durationMs": 70
+          },
+          {
+            "frame": 4,
+            "durationMs": 110
+          },
+          {
+            "frame": 5,
+            "durationMs": 70
+          },
+          {
+            "frame": 6,
+            "durationMs": 90
+          },
+          {
+            "frame": 7,
+            "durationMs": 270
+          }
+        ],
+        "loop": true
+      },
+      "greet": {
+        "frames": [
+          "sage-greet-0",
+          "sage-greet-1",
+          "sage-greet-2",
+          "sage-greet-3",
+          "sage-greet-4",
+          "sage-greet-5",
+          "sage-greet-6",
+          "sage-greet-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 150
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 110
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 130
+          },
+          {
+            "frame": 5,
+            "durationMs": 130
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 240
+          }
+        ],
+        "loop": false
+      },
+      "happy": {
+        "frames": [
+          "sage-happy-0",
+          "sage-happy-1",
+          "sage-happy-2",
+          "sage-happy-3",
+          "sage-happy-4",
+          "sage-happy-5",
+          "sage-happy-6",
+          "sage-happy-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 140
+          },
+          {
+            "frame": 2,
+            "durationMs": 130
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 180
+          },
+          {
+            "frame": 5,
+            "durationMs": 140
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 220
+          }
+        ],
+        "loop": false
+      },
+      "sleep": {
+        "frames": [
+          "sage-sleep-0",
+          "sage-sleep-1",
+          "sage-sleep-2",
+          "sage-sleep-3",
+          "sage-sleep-4",
+          "sage-sleep-5",
+          "sage-sleep-6",
+          "sage-sleep-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 800
+          },
+          {
+            "frame": 1,
+            "durationMs": 750
+          },
+          {
+            "frame": 2,
+            "durationMs": 650
+          },
+          {
+            "frame": 3,
+            "durationMs": 650
+          },
+          {
+            "frame": 4,
+            "durationMs": 800
+          },
+          {
+            "frame": 5,
+            "durationMs": 750
+          },
+          {
+            "frame": 6,
+            "durationMs": 650
+          },
+          {
+            "frame": 7,
+            "durationMs": 650
+          }
+        ],
+        "loop": true
+      }
+    }
+  }
+}

@@ -1,0 +1,1146 @@
+{
+  "contractVersion": 2,
+  "id": "ember-v5",
+  "speciesId": "ember",
+  "style": "pixel",
+  "frameSize": 256,
+  "colorMode": "rgba",
+  "paletteHues": {
+    "mint": null,
+    "amber": 38,
+    "lavender": 272
+  },
+  "stageScale": {
+    "child": 0.7407407407407407,
+    "growing": 0.8703703703703703,
+    "adult": 1
+  },
+  "assets": {
+    "ember-idle-0": {
+      "path": "ember-idle-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-idle-1": {
+      "path": "ember-idle-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-idle-2": {
+      "path": "ember-idle-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-idle-3": {
+      "path": "ember-idle-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-idle-4": {
+      "path": "ember-idle-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-idle-5": {
+      "path": "ember-idle-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-idle-6": {
+      "path": "ember-idle-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-idle-7": {
+      "path": "ember-idle-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-greet-0": {
+      "path": "ember-greet-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-greet-1": {
+      "path": "ember-greet-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-greet-2": {
+      "path": "ember-greet-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-greet-3": {
+      "path": "ember-greet-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-greet-4": {
+      "path": "ember-greet-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-greet-5": {
+      "path": "ember-greet-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-greet-6": {
+      "path": "ember-greet-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-greet-7": {
+      "path": "ember-greet-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-happy-0": {
+      "path": "ember-happy-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-happy-1": {
+      "path": "ember-happy-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-happy-2": {
+      "path": "ember-happy-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-happy-3": {
+      "path": "ember-happy-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-happy-4": {
+      "path": "ember-happy-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-happy-5": {
+      "path": "ember-happy-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-happy-6": {
+      "path": "ember-happy-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-happy-7": {
+      "path": "ember-happy-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-sleep-0": {
+      "path": "ember-sleep-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-sleep-1": {
+      "path": "ember-sleep-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-sleep-2": {
+      "path": "ember-sleep-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-sleep-3": {
+      "path": "ember-sleep-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-sleep-4": {
+      "path": "ember-sleep-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-sleep-5": {
+      "path": "ember-sleep-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-sleep-6": {
+      "path": "ember-sleep-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-sleep-7": {
+      "path": "ember-sleep-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-look-0": {
+      "path": "ember-look-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-look-1": {
+      "path": "ember-look-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-look-2": {
+      "path": "ember-look-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-look-3": {
+      "path": "ember-look-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-look-4": {
+      "path": "ember-look-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-look-5": {
+      "path": "ember-look-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-look-6": {
+      "path": "ember-look-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-look-7": {
+      "path": "ember-look-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-stretch-0": {
+      "path": "ember-stretch-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-stretch-1": {
+      "path": "ember-stretch-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-stretch-2": {
+      "path": "ember-stretch-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-stretch-3": {
+      "path": "ember-stretch-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-stretch-4": {
+      "path": "ember-stretch-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-stretch-5": {
+      "path": "ember-stretch-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-stretch-6": {
+      "path": "ember-stretch-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-stretch-7": {
+      "path": "ember-stretch-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-walk-0": {
+      "path": "ember-walk-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-walk-1": {
+      "path": "ember-walk-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-walk-2": {
+      "path": "ember-walk-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-walk-3": {
+      "path": "ember-walk-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-walk-4": {
+      "path": "ember-walk-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-walk-5": {
+      "path": "ember-walk-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-walk-6": {
+      "path": "ember-walk-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "ember-walk-7": {
+      "path": "ember-walk-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    }
+  },
+  "stages": {
+    "child": {
+      "idle": {
+        "frames": [
+          "ember-idle-0",
+          "ember-idle-1",
+          "ember-idle-2",
+          "ember-idle-3",
+          "ember-idle-4",
+          "ember-idle-5",
+          "ember-idle-6",
+          "ember-idle-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3400
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 90
+          },
+          {
+            "frame": 3,
+            "durationMs": 70
+          },
+          {
+            "frame": 4,
+            "durationMs": 110
+          },
+          {
+            "frame": 5,
+            "durationMs": 70
+          },
+          {
+            "frame": 6,
+            "durationMs": 90
+          },
+          {
+            "frame": 7,
+            "durationMs": 270
+          }
+        ],
+        "loop": true
+      },
+      "greet": {
+        "frames": [
+          "ember-greet-0",
+          "ember-greet-1",
+          "ember-greet-2",
+          "ember-greet-3",
+          "ember-greet-4",
+          "ember-greet-5",
+          "ember-greet-6",
+          "ember-greet-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 150
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 110
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 130
+          },
+          {
+            "frame": 5,
+            "durationMs": 130
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 240
+          }
+        ],
+        "loop": false
+      },
+      "happy": {
+        "frames": [
+          "ember-happy-0",
+          "ember-happy-1",
+          "ember-happy-2",
+          "ember-happy-3",
+          "ember-happy-4",
+          "ember-happy-5",
+          "ember-happy-6",
+          "ember-happy-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 140
+          },
+          {
+            "frame": 2,
+            "durationMs": 130
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 180
+          },
+          {
+            "frame": 5,
+            "durationMs": 140
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 220
+          }
+        ],
+        "loop": false
+      },
+      "sleep": {
+        "frames": [
+          "ember-sleep-0",
+          "ember-sleep-1",
+          "ember-sleep-2",
+          "ember-sleep-3",
+          "ember-sleep-4",
+          "ember-sleep-5",
+          "ember-sleep-6",
+          "ember-sleep-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 800
+          },
+          {
+            "frame": 1,
+            "durationMs": 750
+          },
+          {
+            "frame": 2,
+            "durationMs": 650
+          },
+          {
+            "frame": 3,
+            "durationMs": 650
+          },
+          {
+            "frame": 4,
+            "durationMs": 800
+          },
+          {
+            "frame": 5,
+            "durationMs": 750
+          },
+          {
+            "frame": 6,
+            "durationMs": 650
+          },
+          {
+            "frame": 7,
+            "durationMs": 650
+          }
+        ],
+        "loop": true
+      }
+    },
+    "growing": {
+      "idle": {
+        "frames": [
+          "ember-idle-0",
+          "ember-idle-1",
+          "ember-idle-2",
+          "ember-idle-3",
+          "ember-idle-4",
+          "ember-idle-5",
+          "ember-idle-6",
+          "ember-idle-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3400
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 90
+          },
+          {
+            "frame": 3,
+            "durationMs": 70
+          },
+          {
+            "frame": 4,
+            "durationMs": 110
+          },
+          {
+            "frame": 5,
+            "durationMs": 70
+          },
+          {
+            "frame": 6,
+            "durationMs": 90
+          },
+          {
+            "frame": 7,
+            "durationMs": 270
+          }
+        ],
+        "loop": true
+      },
+      "greet": {
+        "frames": [
+          "ember-greet-0",
+          "ember-greet-1",
+          "ember-greet-2",
+          "ember-greet-3",
+          "ember-greet-4",
+          "ember-greet-5",
+          "ember-greet-6",
+          "ember-greet-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 150
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 110
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 130
+          },
+          {
+            "frame": 5,
+            "durationMs": 130
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 240
+          }
+        ],
+        "loop": false
+      },
+      "happy": {
+        "frames": [
+          "ember-happy-0",
+          "ember-happy-1",
+          "ember-happy-2",
+          "ember-happy-3",
+          "ember-happy-4",
+          "ember-happy-5",
+          "ember-happy-6",
+          "ember-happy-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 140
+          },
+          {
+            "frame": 2,
+            "durationMs": 130
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 180
+          },
+          {
+            "frame": 5,
+            "durationMs": 140
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 220
+          }
+        ],
+        "loop": false
+      },
+      "sleep": {
+        "frames": [
+          "ember-sleep-0",
+          "ember-sleep-1",
+          "ember-sleep-2",
+          "ember-sleep-3",
+          "ember-sleep-4",
+          "ember-sleep-5",
+          "ember-sleep-6",
+          "ember-sleep-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 800
+          },
+          {
+            "frame": 1,
+            "durationMs": 750
+          },
+          {
+            "frame": 2,
+            "durationMs": 650
+          },
+          {
+            "frame": 3,
+            "durationMs": 650
+          },
+          {
+            "frame": 4,
+            "durationMs": 800
+          },
+          {
+            "frame": 5,
+            "durationMs": 750
+          },
+          {
+            "frame": 6,
+            "durationMs": 650
+          },
+          {
+            "frame": 7,
+            "durationMs": 650
+          }
+        ],
+        "loop": true
+      }
+    },
+    "adult": {
+      "idle": {
+        "frames": [
+          "ember-idle-0",
+          "ember-idle-1",
+          "ember-idle-2",
+          "ember-idle-3",
+          "ember-idle-4",
+          "ember-idle-5",
+          "ember-idle-6",
+          "ember-idle-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3400
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 90
+          },
+          {
+            "frame": 3,
+            "durationMs": 70
+          },
+          {
+            "frame": 4,
+            "durationMs": 110
+          },
+          {
+            "frame": 5,
+            "durationMs": 70
+          },
+          {
+            "frame": 6,
+            "durationMs": 90
+          },
+          {
+            "frame": 7,
+            "durationMs": 270
+          }
+        ],
+        "loop": true
+      },
+      "greet": {
+        "frames": [
+          "ember-greet-0",
+          "ember-greet-1",
+          "ember-greet-2",
+          "ember-greet-3",
+          "ember-greet-4",
+          "ember-greet-5",
+          "ember-greet-6",
+          "ember-greet-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 150
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 110
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 130
+          },
+          {
+            "frame": 5,
+            "durationMs": 130
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 240
+          }
+        ],
+        "loop": false
+      },
+      "happy": {
+        "frames": [
+          "ember-happy-0",
+          "ember-happy-1",
+          "ember-happy-2",
+          "ember-happy-3",
+          "ember-happy-4",
+          "ember-happy-5",
+          "ember-happy-6",
+          "ember-happy-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 140
+          },
+          {
+            "frame": 2,
+            "durationMs": 130
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 180
+          },
+          {
+            "frame": 5,
+            "durationMs": 140
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 220
+          }
+        ],
+        "loop": false
+      },
+      "sleep": {
+        "frames": [
+          "ember-sleep-0",
+          "ember-sleep-1",
+          "ember-sleep-2",
+          "ember-sleep-3",
+          "ember-sleep-4",
+          "ember-sleep-5",
+          "ember-sleep-6",
+          "ember-sleep-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 800
+          },
+          {
+            "frame": 1,
+            "durationMs": 750
+          },
+          {
+            "frame": 2,
+            "durationMs": 650
+          },
+          {
+            "frame": 3,
+            "durationMs": 650
+          },
+          {
+            "frame": 4,
+            "durationMs": 800
+          },
+          {
+            "frame": 5,
+            "durationMs": 750
+          },
+          {
+            "frame": 6,
+            "durationMs": 650
+          },
+          {
+            "frame": 7,
+            "durationMs": 650
+          }
+        ],
+        "loop": true
+      }
+    }
+  },
+  "ambient": {
+    "look": {
+      "frames": [
+        "ember-look-0",
+        "ember-look-1",
+        "ember-look-2",
+        "ember-look-3",
+        "ember-look-4",
+        "ember-look-5",
+        "ember-look-6",
+        "ember-look-7"
+      ],
+      "fps": 7,
+      "anchor": {
+        "x": 128,
+        "y": 240
+      },
+      "sequence": [
+        {
+          "frame": 0,
+          "durationMs": 160
+        },
+        {
+          "frame": 1,
+          "durationMs": 180
+        },
+        {
+          "frame": 2,
+          "durationMs": 220
+        },
+        {
+          "frame": 3,
+          "durationMs": 420
+        },
+        {
+          "frame": 4,
+          "durationMs": 200
+        },
+        {
+          "frame": 5,
+          "durationMs": 220
+        },
+        {
+          "frame": 6,
+          "durationMs": 420
+        },
+        {
+          "frame": 7,
+          "durationMs": 200
+        }
+      ],
+      "loop": false
+    },
+    "stretch": {
+      "frames": [
+        "ember-stretch-0",
+        "ember-stretch-1",
+        "ember-stretch-2",
+        "ember-stretch-3",
+        "ember-stretch-4",
+        "ember-stretch-5",
+        "ember-stretch-6",
+        "ember-stretch-7"
+      ],
+      "fps": 7,
+      "anchor": {
+        "x": 128,
+        "y": 240
+      },
+      "sequence": [
+        {
+          "frame": 0,
+          "durationMs": 180
+        },
+        {
+          "frame": 1,
+          "durationMs": 200
+        },
+        {
+          "frame": 2,
+          "durationMs": 220
+        },
+        {
+          "frame": 3,
+          "durationMs": 240
+        },
+        {
+          "frame": 4,
+          "durationMs": 450
+        },
+        {
+          "frame": 5,
+          "durationMs": 240
+        },
+        {
+          "frame": 6,
+          "durationMs": 220
+        },
+        {
+          "frame": 7,
+          "durationMs": 200
+        }
+      ],
+      "loop": false
+    },
+    "walk": {
+      "frames": [
+        "ember-walk-0",
+        "ember-walk-1",
+        "ember-walk-2",
+        "ember-walk-3",
+        "ember-walk-4",
+        "ember-walk-5",
+        "ember-walk-6",
+        "ember-walk-7"
+      ],
+      "fps": 7,
+      "anchor": {
+        "x": 128,
+        "y": 240
+      },
+      "sequence": [
+        {
+          "frame": 0,
+          "durationMs": 140
+        },
+        {
+          "frame": 1,
+          "durationMs": 140
+        },
+        {
+          "frame": 2,
+          "durationMs": 140
+        },
+        {
+          "frame": 3,
+          "durationMs": 140
+        },
+        {
+          "frame": 4,
+          "durationMs": 140
+        },
+        {
+          "frame": 5,
+          "durationMs": 140
+        },
+        {
+          "frame": 6,
+          "durationMs": 140
+        },
+        {
+          "frame": 7,
+          "durationMs": 140
+        }
+      ],
+      "loop": true
+    }
+  }
+}

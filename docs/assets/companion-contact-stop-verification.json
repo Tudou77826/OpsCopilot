@@ -1,0 +1,2258 @@
+{
+  "trace": [
+    {
+      "t": 619.6999999284744,
+      "action": "idle",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 4011.1999999284744,
+      "action": "idle",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-1-nBSS6GJg.png",
+      "x": 600
+    },
+    {
+      "t": 4111.5,
+      "action": "idle",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-2-OBQSHDLp.png",
+      "x": 600
+    },
+    {
+      "t": 4201.099999904633,
+      "action": "idle",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-3-B25nvdFS.png",
+      "x": 600
+    },
+    {
+      "t": 4278.599999904633,
+      "action": "idle",
+      "frame": "4",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-4-DvSHOrVd.png",
+      "x": 600
+    },
+    {
+      "t": 4387.5,
+      "action": "idle",
+      "frame": "5",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-5-DdfWmPZg.png",
+      "x": 600
+    },
+    {
+      "t": 4450.099999904633,
+      "action": "idle",
+      "frame": "6",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-6-Rr7hHERY.png",
+      "x": 600
+    },
+    {
+      "t": 4542.5,
+      "action": "idle",
+      "frame": "7",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 4811.599999904633,
+      "action": "idle",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 8209.599999904633,
+      "action": "idle",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-1-nBSS6GJg.png",
+      "x": 600
+    },
+    {
+      "t": 8211.5,
+      "action": "look",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-1-nBSS6GJg.png",
+      "x": 600
+    },
+    {
+      "t": 8302.199999928474,
+      "action": "look",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 8398.399999976158,
+      "action": "look",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-look-1-UfSIYrkh.png",
+      "x": 600
+    },
+    {
+      "t": 8474.299999952316,
+      "action": "look",
+      "frame": "4",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-look-4-Bvrj-wzD.png",
+      "x": 600
+    },
+    {
+      "t": 8568,
+      "action": "look",
+      "frame": "5",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-look-5-BoUg-RD1.png",
+      "x": 600
+    },
+    {
+      "t": 8786.199999928474,
+      "action": "look",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-look-1-UfSIYrkh.png",
+      "x": 600
+    },
+    {
+      "t": 8862.199999928474,
+      "action": "look",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 8953.699999928474,
+      "action": "look",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-look-2-Bn0DXSJL.png",
+      "x": 600
+    },
+    {
+      "t": 9029.599999904633,
+      "action": "look",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-look-3-C3444G_m.png",
+      "x": 600
+    },
+    {
+      "t": 9121.5,
+      "action": "look",
+      "frame": "7",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-look-7-CAnyo2uL.png",
+      "x": 600
+    },
+    {
+      "t": 9338.399999976158,
+      "action": "look",
+      "frame": "8",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-look-8-D8sdawvq.png",
+      "x": 600
+    },
+    {
+      "t": 9416.5,
+      "action": "look",
+      "frame": "10",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-look-10-DULBvzmO.png",
+      "x": 600
+    },
+    {
+      "t": 9495.699999928474,
+      "action": "look",
+      "frame": "11",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 9589.899999976158,
+      "action": "idle",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 9591.199999928474,
+      "action": "idle",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 12995.299999952316,
+      "action": "idle",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-1-nBSS6GJg.png",
+      "x": 600
+    },
+    {
+      "t": 13096.899999976158,
+      "action": "idle",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-2-OBQSHDLp.png",
+      "x": 600
+    },
+    {
+      "t": 13193.899999976158,
+      "action": "idle",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-3-B25nvdFS.png",
+      "x": 600
+    },
+    {
+      "t": 13255.899999976158,
+      "action": "idle",
+      "frame": "4",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-4-DvSHOrVd.png",
+      "x": 600
+    },
+    {
+      "t": 13379.199999928474,
+      "action": "idle",
+      "frame": "5",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-5-DdfWmPZg.png",
+      "x": 600
+    },
+    {
+      "t": 13440,
+      "action": "idle",
+      "frame": "6",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-6-Rr7hHERY.png",
+      "x": 600
+    },
+    {
+      "t": 13528.599999904633,
+      "action": "idle",
+      "frame": "7",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 13794.599999904633,
+      "action": "idle",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 17194.399999976158,
+      "action": "idle",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-1-nBSS6GJg.png",
+      "x": 600
+    },
+    {
+      "t": 17295.599999904633,
+      "action": "idle",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-2-OBQSHDLp.png",
+      "x": 600
+    },
+    {
+      "t": 17396.299999952316,
+      "action": "idle",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-3-B25nvdFS.png",
+      "x": 600
+    },
+    {
+      "t": 17461.599999904633,
+      "action": "idle",
+      "frame": "4",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-4-DvSHOrVd.png",
+      "x": 600
+    },
+    {
+      "t": 17569.5,
+      "action": "idle",
+      "frame": "5",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-5-DdfWmPZg.png",
+      "x": 600
+    },
+    {
+      "t": 17647.099999904633,
+      "action": "idle",
+      "frame": "6",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-6-Rr7hHERY.png",
+      "x": 600
+    },
+    {
+      "t": 17725.699999928474,
+      "action": "idle",
+      "frame": "7",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 17995.399999976158,
+      "action": "idle",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 19495.199999928474,
+      "action": "stretch",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 19559.899999976158,
+      "action": "stretch",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 19649.799999952316,
+      "action": "stretch",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-stretch-1-CfLO12x3.png",
+      "x": 600
+    },
+    {
+      "t": 19744.099999904633,
+      "action": "stretch",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-stretch-2-D5sHsPyx.png",
+      "x": 600
+    },
+    {
+      "t": 19818.899999976158,
+      "action": "stretch",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-stretch-3-BBc2XgF7.png",
+      "x": 600
+    },
+    {
+      "t": 19895.699999928474,
+      "action": "stretch",
+      "frame": "4",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-stretch-4-CEj2vb3w.png",
+      "x": 600
+    },
+    {
+      "t": 19989.699999928474,
+      "action": "stretch",
+      "frame": "5",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-stretch-5-BTQXiPH7.png",
+      "x": 600
+    },
+    {
+      "t": 20069.599999904633,
+      "action": "stretch",
+      "frame": "6",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-stretch-6-DXYoe-Mv.png",
+      "x": 600
+    },
+    {
+      "t": 20311.099999904633,
+      "action": "stretch",
+      "frame": "7",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-stretch-7-N22D_EvB.png",
+      "x": 600
+    },
+    {
+      "t": 20396.099999904633,
+      "action": "stretch",
+      "frame": "8",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-stretch-8-DkotSVRm.png",
+      "x": 600
+    },
+    {
+      "t": 20480.699999928474,
+      "action": "stretch",
+      "frame": "9",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-stretch-9-B9jK7usq.png",
+      "x": 600
+    },
+    {
+      "t": 20562,
+      "action": "stretch",
+      "frame": "10",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-stretch-10-DRRrTpVY.png",
+      "x": 600
+    },
+    {
+      "t": 20645.699999928474,
+      "action": "stretch",
+      "frame": "11",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 20738.099999904633,
+      "action": "idle",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 20740,
+      "action": "idle",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 24144.699999928474,
+      "action": "idle",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-1-nBSS6GJg.png",
+      "x": 600
+    },
+    {
+      "t": 24244.799999952316,
+      "action": "idle",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-2-OBQSHDLp.png",
+      "x": 600
+    },
+    {
+      "t": 24346.299999952316,
+      "action": "idle",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-3-B25nvdFS.png",
+      "x": 600
+    },
+    {
+      "t": 24406.699999928474,
+      "action": "idle",
+      "frame": "4",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-4-DvSHOrVd.png",
+      "x": 600
+    },
+    {
+      "t": 24512.199999928474,
+      "action": "idle",
+      "frame": "5",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-5-DdfWmPZg.png",
+      "x": 600
+    },
+    {
+      "t": 24595.399999976158,
+      "action": "idle",
+      "frame": "6",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-6-Rr7hHERY.png",
+      "x": 600
+    },
+    {
+      "t": 24673.799999952316,
+      "action": "idle",
+      "frame": "7",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 24946,
+      "action": "idle",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 28347,
+      "action": "idle",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-1-nBSS6GJg.png",
+      "x": 600
+    },
+    {
+      "t": 28445.099999904633,
+      "action": "idle",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-2-OBQSHDLp.png",
+      "x": 600
+    },
+    {
+      "t": 28539.699999928474,
+      "action": "idle",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-3-B25nvdFS.png",
+      "x": 600
+    },
+    {
+      "t": 28601.099999904633,
+      "action": "idle",
+      "frame": "4",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-4-DvSHOrVd.png",
+      "x": 600
+    },
+    {
+      "t": 28711.599999904633,
+      "action": "idle",
+      "frame": "5",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-5-DdfWmPZg.png",
+      "x": 600
+    },
+    {
+      "t": 28787.5,
+      "action": "idle",
+      "frame": "6",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-6-Rr7hHERY.png",
+      "x": 600
+    },
+    {
+      "t": 28880.299999952316,
+      "action": "idle",
+      "frame": "7",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 29145.899999976158,
+      "action": "idle",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 29497,
+      "action": "turnOut",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 29535.599999904633,
+      "action": "turnOut",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 600
+    },
+    {
+      "t": 29625.5,
+      "action": "turnOut",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-1-CQ2Sw2FZ.png",
+      "x": 600
+    },
+    {
+      "t": 29718,
+      "action": "turnOut",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-2-DTpaNRws.png",
+      "x": 600
+    },
+    {
+      "t": 29795.799999952316,
+      "action": "turnOut",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-3-CoT_0sJf.png",
+      "x": 600
+    },
+    {
+      "t": 29872.699999928474,
+      "action": "walkStart",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-3-CoT_0sJf.png",
+      "x": 600
+    },
+    {
+      "t": 29916.199999928474,
+      "action": "walkStart",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-3-CoT_0sJf.png",
+      "x": 600
+    },
+    {
+      "t": 29980.399999976158,
+      "action": "walkStart",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-5-v8o-SpkG.png",
+      "x": 600
+    },
+    {
+      "t": 30056.099999904633,
+      "action": "walkStart",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-6-BcpwUoBk.png",
+      "x": 600
+    },
+    {
+      "t": 30118.699999928474,
+      "action": "walkStart",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-7-D7tR3QuQ.png",
+      "x": 600
+    },
+    {
+      "t": 30179.699999928474,
+      "action": "walk",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-7-D7tR3QuQ.png",
+      "x": 600
+    },
+    {
+      "t": 30234.799999952316,
+      "action": "walk",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-7-D7tR3QuQ.png",
+      "x": 600
+    },
+    {
+      "t": 30304.099999904633,
+      "action": "walk",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-9-CzZpHciQ.png",
+      "x": 601.5477905273438
+    },
+    {
+      "t": 30363.5,
+      "action": "walk",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-10-CMfOb85m.png",
+      "x": 603.279541015625
+    },
+    {
+      "t": 30427.899999976158,
+      "action": "walk",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-11-BA2c1eAN.png",
+      "x": 605.0140380859375
+    },
+    {
+      "t": 30488.199999928474,
+      "action": "walk",
+      "frame": "4",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-12-Chb7Otqs.png",
+      "x": 606.3026123046875
+    },
+    {
+      "t": 30550.699999928474,
+      "action": "walk",
+      "frame": "5",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-13-3NuAbxo9.png",
+      "x": 608.0308837890625
+    },
+    {
+      "t": 30611.699999928474,
+      "action": "walk",
+      "frame": "6",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-14-EEYZf4ia.png",
+      "x": 609.763671875
+    },
+    {
+      "t": 30676.199999928474,
+      "action": "walk",
+      "frame": "7",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-15-ToXYQQJ-.png",
+      "x": 611.0548095703125
+    },
+    {
+      "t": 30737.599999904633,
+      "action": "walk",
+      "frame": "8",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-16-BUi8-9sw.png",
+      "x": 612.7840576171875
+    },
+    {
+      "t": 30798.699999928474,
+      "action": "walk",
+      "frame": "9",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-17-u4XDd2kn.png",
+      "x": 614.5106811523438
+    },
+    {
+      "t": 30861.199999928474,
+      "action": "walk",
+      "frame": "10",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-18-OXHqIxO2.png",
+      "x": 616.24169921875
+    },
+    {
+      "t": 30925.699999928474,
+      "action": "walk",
+      "frame": "11",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-19-C-FrGFXT.png",
+      "x": 617.5345458984375
+    },
+    {
+      "t": 30987.699999928474,
+      "action": "walk",
+      "frame": "12",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-20-CfaosGIh.png",
+      "x": 619.262939453125
+    },
+    {
+      "t": 31062.799999952316,
+      "action": "walk",
+      "frame": "13",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-21-C26ebU9J.png",
+      "x": 621.429443359375
+    },
+    {
+      "t": 31110.099999904633,
+      "action": "walk",
+      "frame": "14",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-22-B4YpWhD9.png",
+      "x": 622.7197265625
+    },
+    {
+      "t": 31178.399999976158,
+      "action": "walk",
+      "frame": "15",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-23-DlH0fXoK.png",
+      "x": 624.4515380859375
+    },
+    {
+      "t": 31249.799999952316,
+      "action": "walkStop",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-23-DlH0fXoK.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 31289.299999952316,
+      "action": "walkStop",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-7-D7tR3QuQ.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 31353.5,
+      "action": "walkStop",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-25-BYunqCSE.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 31415.699999928474,
+      "action": "walkStop",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-26-BhWhYhF5.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 31482.299999952316,
+      "action": "walkStop",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-27-BnG9V55-.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 31552.599999904633,
+      "action": "turnIn",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-27-BnG9V55-.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 31589.199999928474,
+      "action": "turnIn",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-27-BnG9V55-.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 31675.299999952316,
+      "action": "turnIn",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-29-CsloJmz3.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 31767.399999976158,
+      "action": "turnIn",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-30-OPlnui4G.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 31843.799999952316,
+      "action": "turnIn",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 31936.799999952316,
+      "action": "greet",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 31987.399999976158,
+      "action": "greet",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 32075.699999928474,
+      "action": "greet",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-greet-1-o5xyUXUN.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 32170.5,
+      "action": "greet",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-greet-2-C8EJ-a0-.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 32248.799999952316,
+      "action": "greet",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-greet-3-BE92HQJ_.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 32329.799999952316,
+      "action": "greet",
+      "frame": "4",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-greet-4-DHbR0dHC.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 32406.5,
+      "action": "greet",
+      "frame": "5",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-greet-5-CGCRteFv.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 32499,
+      "action": "greet",
+      "frame": "6",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-greet-6-DMNqew4M.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 32670,
+      "action": "greet",
+      "frame": "7",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-greet-7-Ck5l1mdK.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 32765.199999928474,
+      "action": "greet",
+      "frame": "8",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-greet-8-BdYmSlIv.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 32842.59999990463,
+      "action": "greet",
+      "frame": "9",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-greet-9-DAiVtyGF.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 32934.5,
+      "action": "greet",
+      "frame": "10",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-greet-10-Y7jS8DBT.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 33009.799999952316,
+      "action": "greet",
+      "frame": "11",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 33089,
+      "action": "idle",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 33091,
+      "action": "idle",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 36496.199999928474,
+      "action": "idle",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-1-nBSS6GJg.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 36595.39999997616,
+      "action": "idle",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-2-OBQSHDLp.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 36690,
+      "action": "idle",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-3-B25nvdFS.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 36761.199999928474,
+      "action": "idle",
+      "frame": "4",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-4-DvSHOrVd.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 36861.5,
+      "action": "idle",
+      "frame": "5",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-5-DdfWmPZg.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 36936.39999997616,
+      "action": "idle",
+      "frame": "6",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-6-Rr7hHERY.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 37029.09999990463,
+      "action": "idle",
+      "frame": "7",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 37295.299999952316,
+      "action": "idle",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 40697,
+      "action": "idle",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-1-nBSS6GJg.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 40796.89999997616,
+      "action": "idle",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-2-OBQSHDLp.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 40891.699999928474,
+      "action": "idle",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-3-B25nvdFS.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 40963,
+      "action": "idle",
+      "frame": "4",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-4-DvSHOrVd.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 41077.89999997616,
+      "action": "idle",
+      "frame": "5",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-5-DdfWmPZg.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 41142.699999928474,
+      "action": "idle",
+      "frame": "6",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-6-Rr7hHERY.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 41228.89999997616,
+      "action": "idle",
+      "frame": "7",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 41495.59999990463,
+      "action": "idle",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 41593.59999990463,
+      "action": "look",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 41594.799999952316,
+      "action": "look",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 41685.59999990463,
+      "action": "look",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-look-1-UfSIYrkh.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 41763.199999928474,
+      "action": "look",
+      "frame": "4",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-look-4-Bvrj-wzD.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 41857.199999928474,
+      "action": "look",
+      "frame": "5",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-look-5-BoUg-RD1.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 42072.299999952316,
+      "action": "look",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-look-1-UfSIYrkh.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 42164.299999952316,
+      "action": "look",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 42241.799999952316,
+      "action": "look",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-look-2-Bn0DXSJL.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 42318.09999990463,
+      "action": "look",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-look-3-C3444G_m.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 42411.199999928474,
+      "action": "look",
+      "frame": "7",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-look-7-CAnyo2uL.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 42629.699999928474,
+      "action": "look",
+      "frame": "8",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-look-8-D8sdawvq.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 42704.199999928474,
+      "action": "look",
+      "frame": "10",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-look-10-DULBvzmO.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 42794.799999952316,
+      "action": "look",
+      "frame": "11",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 42874.799999952316,
+      "action": "idle",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 42878.5,
+      "action": "idle",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 46293.39999997616,
+      "action": "idle",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-1-nBSS6GJg.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 46386.89999997616,
+      "action": "idle",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-2-OBQSHDLp.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 46479,
+      "action": "idle",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-3-B25nvdFS.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 46544.89999997616,
+      "action": "idle",
+      "frame": "4",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-4-DvSHOrVd.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 46655.5,
+      "action": "idle",
+      "frame": "5",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-5-DdfWmPZg.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 46728.799999952316,
+      "action": "idle",
+      "frame": "6",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-6-Rr7hHERY.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 46812.09999990463,
+      "action": "idle",
+      "frame": "7",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 47090.799999952316,
+      "action": "idle",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 50479.39999997616,
+      "action": "idle",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-1-nBSS6GJg.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 50580.699999928474,
+      "action": "idle",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-2-OBQSHDLp.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 50675.89999997616,
+      "action": "idle",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-3-B25nvdFS.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 50745,
+      "action": "idle",
+      "frame": "4",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-4-DvSHOrVd.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 50862.299999952316,
+      "action": "idle",
+      "frame": "5",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-5-DdfWmPZg.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 50924.699999928474,
+      "action": "idle",
+      "frame": "6",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-6-Rr7hHERY.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 51012.09999990463,
+      "action": "idle",
+      "frame": "7",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 51282.59999990463,
+      "action": "idle",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 51695.89999997616,
+      "action": "stretch",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 51696.199999928474,
+      "action": "stretch",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 51780.299999952316,
+      "action": "stretch",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-stretch-1-CfLO12x3.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 51873.199999928474,
+      "action": "stretch",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-stretch-2-D5sHsPyx.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 51949.799999952316,
+      "action": "stretch",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-stretch-3-BBc2XgF7.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 52042.699999928474,
+      "action": "stretch",
+      "frame": "4",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-stretch-4-CEj2vb3w.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 52119.699999928474,
+      "action": "stretch",
+      "frame": "5",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-stretch-5-BTQXiPH7.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 52211.799999952316,
+      "action": "stretch",
+      "frame": "6",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-stretch-6-DXYoe-Mv.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 52461.89999997616,
+      "action": "stretch",
+      "frame": "7",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-stretch-7-N22D_EvB.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 52537.39999997616,
+      "action": "stretch",
+      "frame": "8",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-stretch-8-DkotSVRm.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 52616.699999928474,
+      "action": "stretch",
+      "frame": "9",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-stretch-9-B9jK7usq.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 52707.59999990463,
+      "action": "stretch",
+      "frame": "10",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-stretch-10-DRRrTpVY.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 52785.09999990463,
+      "action": "stretch",
+      "frame": "11",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 52879.199999928474,
+      "action": "idle",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 52881.5,
+      "action": "idle",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 56293.699999928474,
+      "action": "idle",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-1-nBSS6GJg.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 56385.39999997616,
+      "action": "idle",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-2-OBQSHDLp.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 56477.89999997616,
+      "action": "idle",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-3-B25nvdFS.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 56545,
+      "action": "idle",
+      "frame": "4",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-4-DvSHOrVd.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 56661.799999952316,
+      "action": "idle",
+      "frame": "5",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-5-DdfWmPZg.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 56723.89999997616,
+      "action": "idle",
+      "frame": "6",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-6-Rr7hHERY.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 56812.299999952316,
+      "action": "idle",
+      "frame": "7",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 57095,
+      "action": "idle",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 60491.89999997616,
+      "action": "idle",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-1-nBSS6GJg.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 60585.699999928474,
+      "action": "idle",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-2-OBQSHDLp.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 60679.299999952316,
+      "action": "idle",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-3-B25nvdFS.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 60745.5,
+      "action": "idle",
+      "frame": "4",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-4-DvSHOrVd.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 60862.59999990463,
+      "action": "idle",
+      "frame": "5",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-5-DdfWmPZg.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 60927.09999990463,
+      "action": "idle",
+      "frame": "6",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-6-Rr7hHERY.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 61019.5,
+      "action": "idle",
+      "frame": "7",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 61295.299999952316,
+      "action": "idle",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 62322.299999952316,
+      "action": "turnOut",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 62322.5,
+      "action": "turnOut",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 62416,
+      "action": "turnOut",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-1-CQ2Sw2FZ.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 62491.89999997616,
+      "action": "turnOut",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-2-DTpaNRws.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 62578.799999952316,
+      "action": "turnOut",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-3-CoT_0sJf.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 62661.699999928474,
+      "action": "walkStart",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-3-CoT_0sJf.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 62661.89999997616,
+      "action": "walkStart",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-3-CoT_0sJf.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 62739.39999997616,
+      "action": "walkStart",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-5-v8o-SpkG.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 62800.89999997616,
+      "action": "walkStart",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-6-BcpwUoBk.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 62851.09999990463,
+      "action": "walkStart",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-7-D7tR3QuQ.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 62926.89999997616,
+      "action": "walk",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-7-D7tR3QuQ.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 62930.199999928474,
+      "action": "walk",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-7-D7tR3QuQ.png",
+      "x": 626.1799926757812
+    },
+    {
+      "t": 62995.5,
+      "action": "walk",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-9-CzZpHciQ.png",
+      "x": 624.509521484375
+    },
+    {
+      "t": 63061.799999952316,
+      "action": "walk",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-10-CMfOb85m.png",
+      "x": 622.7846069335938
+    },
+    {
+      "t": 63126.5,
+      "action": "walk",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-11-BA2c1eAN.png",
+      "x": 621.4917602539062
+    },
+    {
+      "t": 63182.199999928474,
+      "action": "walk",
+      "frame": "4",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-12-Chb7Otqs.png",
+      "x": 619.7581787109375
+    },
+    {
+      "t": 63246,
+      "action": "walk",
+      "frame": "5",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-13-3NuAbxo9.png",
+      "x": 618.0289306640625
+    },
+    {
+      "t": 63311.39999997616,
+      "action": "walk",
+      "frame": "6",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-14-EEYZf4ia.png",
+      "x": 616.3031005859375
+    },
+    {
+      "t": 63369.5,
+      "action": "walk",
+      "frame": "7",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-15-ToXYQQJ-.png",
+      "x": 615.0076904296875
+    },
+    {
+      "t": 63435.199999928474,
+      "action": "walkStop",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-15-ToXYQQJ-.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 63435.799999952316,
+      "action": "walkStop",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-16-BUi8-9sw.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 63512.5,
+      "action": "walkStop",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-17-u4XDd2kn.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 63562.09999990463,
+      "action": "walkStop",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-26-BhWhYhF5.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 63636.199999928474,
+      "action": "walkStop",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-27-BnG9V55-.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 63698.09999990463,
+      "action": "turnIn",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-27-BnG9V55-.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 63698.799999952316,
+      "action": "turnIn",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-27-BnG9V55-.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 63792,
+      "action": "turnIn",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-29-CsloJmz3.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 63869,
+      "action": "turnIn",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-walk-30-OPlnui4G.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 63951.09999990463,
+      "action": "turnIn",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 64039.5,
+      "action": "happy",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 64083.699999928474,
+      "action": "happy",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 64180,
+      "action": "happy",
+      "frame": "1",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-happy-1-BQqoEnVM.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 64257.59999990463,
+      "action": "happy",
+      "frame": "2",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-happy-2-DjHakS5r.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 64335.5,
+      "action": "happy",
+      "frame": "3",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-happy-3-BjI9OjGn.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 64428.89999997616,
+      "action": "happy",
+      "frame": "4",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-happy-4-L9KiTl-O.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 64506.299999952316,
+      "action": "happy",
+      "frame": "5",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-happy-5-KaiRt4PB.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 64599.5,
+      "action": "happy",
+      "frame": "6",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-happy-6-BlYgH2KB.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 64772.09999990463,
+      "action": "happy",
+      "frame": "7",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-happy-7-DhHCjMgN.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 64849.09999990463,
+      "action": "happy",
+      "frame": "8",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-happy-8-s8S_8_kQ.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 64943,
+      "action": "happy",
+      "frame": "9",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-happy-9-DTR5TLJ_.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 65019.799999952316,
+      "action": "happy",
+      "frame": "10",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-happy-10-C2L3pvRc.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 65112.199999928474,
+      "action": "happy",
+      "frame": "11",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 65187.699999928474,
+      "action": "idle",
+      "frame": "0",
+      "ready": "false",
+      "motion": "paused",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 613.2789916992188
+    },
+    {
+      "t": 65189,
+      "action": "idle",
+      "frame": "0",
+      "ready": "true",
+      "motion": "running",
+      "src": "http://127.0.0.1:34115/assets/ember-idle-0-DQi3lmVn.png",
+      "x": 613.2789916992188
+    }
+  ],
+  "before": {
+    "schemaVersion": 1,
+    "ruleVersion": 1,
+    "revision": 49,
+    "pet": {
+      "id": "8eb4a41e-06c2-462d-a64f-2f28ab2d99bc",
+      "speciesId": "ember",
+      "name": "本地微光二号",
+      "paletteId": "mint",
+      "xp": 12,
+      "adoptedAt": "2026-10-10T09:47:12.1373733Z"
+    },
+    "stage": "child",
+    "todayXP": 0,
+    "dailyXPMax": 12
+  },
+  "after": {
+    "schemaVersion": 1,
+    "ruleVersion": 1,
+    "revision": 49,
+    "pet": {
+      "id": "8eb4a41e-06c2-462d-a64f-2f28ab2d99bc",
+      "speciesId": "ember",
+      "name": "本地微光二号",
+      "paletteId": "mint",
+      "xp": 12,
+      "adoptedAt": "2026-10-10T09:47:12.1373733Z"
+    },
+    "stage": "child",
+    "todayXP": 0,
+    "dailyXPMax": 12
+  },
+  "errors": [],
+  "offscreenPaused": true,
+  "rect": {
+    "x": 346.59173583984375,
+    "y": -291.38726806640625,
+    "width": 94.8165283203125,
+    "height": 94.81307983398438
+  }
+}

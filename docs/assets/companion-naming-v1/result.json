@@ -1,0 +1,32 @@
+{
+  "pluginApiRevision": 2,
+  "firstSpecies": "ember",
+  "paidSpecies": "lumen",
+  "cost": 50,
+  "xpBefore": 73,
+  "xpAfter": 23,
+  "levelBefore": 8,
+  "levelAfter": 3,
+  "levelXP": 3,
+  "portrait": {
+    "visibleHeight": 160.63446986675262,
+    "artTop": 151.22916108369827,
+    "artBottom": 311.8636309504509,
+    "sceneTop": 115,
+    "sceneBottom": 323,
+    "homeHeight": 210
+  },
+  "modalFocusContained": true,
+  "escapePreservesSettings": true,
+  "dedicatedHatchEntry": true,
+  "stagedReveal": true,
+  "firstFree": true,
+  "firstNamingPersisted": true,
+  "confirmationCancellable": true,
+  "oldFreeChoiceBindingsRemoved": true,
+  "staleAndInsufficientRejected": true,
+  "historyPreserved": true,
+  "restartPersisted": true,
+  "existingReviewSaveUnchanged": true,
+  "errors": []
+}

@@ -1,0 +1,24 @@
+{
+  "packs": "lumen-v8; other species v7",
+  "localPreviewMotion": true,
+  "size": {
+    "canvas": 320,
+    "transform": "scale(0.518519)",
+    "src": "http://127.0.0.1:34115/assets/lumen-idle-0-D0MkDxtE.png",
+    "species": "lumen",
+    "stage": "child"
+  },
+  "themes": {
+    "light": "url(\"http://127.0.0.1:34115/assets/light-DcfvhQiq.webp\")",
+    "dark": "url(\"http://127.0.0.1:34115/assets/dark-BO2LJzPH.webp\")"
+  },
+  "movementInOneSecond": 28.13499999999999,
+  "walkScriptMs": 11.44299999999998,
+  "walkTaskMs": 39.918000000000006,
+  "walkLayouts": 3,
+  "settledPosition": -87.4074,
+  "inputP95Ms": 43.39990000000034,
+  "collapsedPoseChanges": 0,
+  "storedPetPreserved": true,
+  "errors": []
+}

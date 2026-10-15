@@ -1,6 +1,8 @@
 import React from 'react';
-import { TbClock, TbScreenShare, TbStethoscope, TbMessageChatbot, TbCode, TbBolt, TbBook, TbPlant } from 'react-icons/tb';
+import { TbClock, TbScreenShare, TbStethoscope, TbCode, TbBolt, TbBook } from 'react-icons/tb';
 import logo from '../assets/logo-universal.png';
+import { CompanionEntry } from '../companion/CompanionEntry';
+import type { CompanionHost } from '../../companion/types';
 
 export type ProductTab = 'sessions' | 'troubleshoot' | 'chat' | 'knowledge' | 'script';
 const ATTENTION_DOT_COLOR = 'var(--danger)';
@@ -97,11 +99,10 @@ export function ProductToolbar({ status = '就绪', theme, onNewConnection, onTh
             </div>);
 }
 
-export function ProductNavigation({ isSidebarOpen, sidebarTab, toggleSidebar, isQuickCommandOpen, onToggleQuickCommands, gardenActive, gardenAttention, onToggleGarden, tabs = ['sessions','troubleshoot','chat','knowledge','script'] }: {
+export function ProductNavigation({ isSidebarOpen, sidebarTab, toggleSidebar, isQuickCommandOpen, onToggleQuickCommands, tabs = ['sessions','troubleshoot','chat','knowledge','script'], companionHost, companionEnabled, onOpenCompanion }: {
   isSidebarOpen: boolean; sidebarTab: ProductTab; toggleSidebar(tab: ProductTab): void;
   isQuickCommandOpen: boolean; onToggleQuickCommands(): void; tabs?: ProductTab[];
-  /** 花园入口：与快捷命令并列挂在右侧导航条底部；不传即不显示（能力边界纪律）。 */
-  gardenActive?: boolean; gardenAttention?: boolean; onToggleGarden?(): void;
+  companionHost?: CompanionHost; companionEnabled?: boolean; onOpenCompanion?(): void;
 }) {
   const setIsQuickCommandOpen = (_value: boolean) => onToggleQuickCommands();
   return (<div style={styles.rightNav}>
@@ -131,19 +132,6 @@ export function ProductNavigation({ isSidebarOpen, sidebarTab, toggleSidebar, is
                         {TbStethoscope({ size: 20 })}
                     </div>
                     )}
-                    {tabs.includes('chat') && (
-                    <div
-                        style={{
-                            ...styles.navIcon,
-                            backgroundColor: (isSidebarOpen && sidebarTab === 'chat') ? 'var(--bg-elevated)' : 'transparent',
-                            borderRight: (isSidebarOpen && sidebarTab === 'chat') ? '2px solid var(--accent)' : '2px solid transparent'
-                        }}
-                        onClick={() => toggleSidebar('chat')}
-                        title="AI 问答"
-                    >
-                        {TbMessageChatbot({ size: 20 })}
-                    </div>
-                    )}
                     {tabs.includes('knowledge') && (
                     <div
                         style={{
@@ -171,22 +159,7 @@ export function ProductNavigation({ isSidebarOpen, sidebarTab, toggleSidebar, is
                     </div>
                     )}
                     <div style={{ flex: 1 }} />
-                    {onToggleGarden && (
-                    <div
-                        className={gardenAttention ? 'product-garden-attention' : undefined}
-                        style={{
-                            ...styles.navIcon,
-                            backgroundColor: gardenActive ? 'var(--bg-elevated)' : 'transparent',
-                            borderRight: gardenActive ? '2px solid var(--accent)' : '2px solid transparent',
-                        }}
-                        onClick={onToggleGarden}
-                        title="花园"
-                        aria-pressed={gardenActive === true}
-                        data-testid="nav-icon-garden"
-                    >
-                        {TbPlant({ size: 20 })}
-                    </div>
-                    )}
+                    {(tabs.includes('chat') || (companionEnabled && onOpenCompanion)) && <CompanionEntry label={tabs.includes('chat') ? '伙伴助手' : '伙伴与奖章'} host={companionHost} enabled={companionEnabled} selected={isSidebarOpen && sidebarTab === 'chat'} onOpen={onOpenCompanion ?? (() => toggleSidebar('chat'))}/>}
                     <div
                         style={{
                             ...styles.navIcon,

@@ -5,6 +5,9 @@
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed",
+    "social:start": "node harness/social-launch.mjs",
+    "social:test": "node harness/social-smoke.mjs",
+    "social:test:stop": "node harness/social-smoke.mjs --stop",
     "report": "playwright show-report"
   },
   "devDependencies": {

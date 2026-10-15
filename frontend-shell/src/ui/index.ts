@@ -80,3 +80,4 @@ export type { CommandGeneratorRuntime, ConnectIntentParserRuntime } from './port
 export { default as DiagnosePanel } from './diagnose/DiagnosePanel';
 export type { DiagnoseEvent, DiagnoseRuntime, DiagnoseStartOptions, DiagnoseArchiveInput, DiagnoseCaseRuntime, DiagnosePanelProps } from './diagnose/DiagnosePanel';
 export * from './settings/settingsStyles';
+export type { CompanionHost, CompanionSocialHost, CompanionSnapshot, CompanionProfile, PublicCompanionProfile, MedalKind, MedalDefinition, Medal, AchievementSummary, RankingQuery, RankingPage } from '../companion/types';

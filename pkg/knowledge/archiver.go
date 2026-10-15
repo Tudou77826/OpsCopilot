@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"opscopilot/pkg/filetxn"
 	"opscopilot/pkg/recorder"
 )
 
@@ -57,8 +58,20 @@ func AppendRecord(knowledgeDir string, input *ArchiveInput) (string, error) {
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 			return "", fmt.Errorf("create new directory: %w", err)
 		}
+		release, err := filetxn.Lock(targetPath)
+		if err != nil {
+			return "", err
+		}
+		defer release()
+		existing, err := filetxn.Read(targetPath)
+		if err != nil {
+			return "", err
+		}
 		content := buildNewFile(input.Service, input.Module, record)
-		if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
+		if existing != nil {
+			content = string(existing) + record
+		}
+		if err := filetxn.Write(targetPath, []byte(content)); err != nil {
 			return "", fmt.Errorf("create file: %w", err)
 		}
 	}
@@ -272,14 +285,14 @@ func appendToFile(path, content string) error {
 		return fmt.Errorf("create directory: %w", err)
 	}
 
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	release, err := filetxn.Lock(path)
 	if err != nil {
-		return fmt.Errorf("open file: %w", err)
+		return err
 	}
-	defer f.Close()
-
-	if _, err := f.WriteString(content); err != nil {
-		return fmt.Errorf("write file: %w", err)
+	defer release()
+	data, err := filetxn.Read(path)
+	if err != nil {
+		return err
 	}
-	return nil
+	return filetxn.Write(path, append(data, []byte(content)...))
 }

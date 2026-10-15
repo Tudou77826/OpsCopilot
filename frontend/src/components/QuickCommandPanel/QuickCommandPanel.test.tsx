@@ -37,7 +37,7 @@ describe('QuickCommandPanel', () => {
 
         const cmd = await screen.findByText('List Files');
         fireEvent.click(cmd);
-        expect(onExecute).toHaveBeenCalledWith('ls -la');
+        expect(onExecute).toHaveBeenCalledWith('ls -la', '1');
     });
 
     it('shows group strip with current group', async () => {

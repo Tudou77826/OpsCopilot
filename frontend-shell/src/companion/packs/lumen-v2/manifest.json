@@ -1,0 +1,598 @@
+{
+  "contractVersion": 1,
+  "id": "lumen-v2",
+  "speciesId": "lumen",
+  "style": "pixel",
+  "palette": [
+    "#d8c0f0",
+    "#483078",
+    "#c0a8f0",
+    "#fff0d8",
+    "#603078",
+    "#604890",
+    "#784890",
+    "#301860",
+    "#301848",
+    "#604878",
+    "#d8c0c0",
+    "#181848",
+    "#180048",
+    "#f0f0d8",
+    "#d8a8f0",
+    "#c0a8d8",
+    "#a890d8",
+    "#f090c0",
+    "#c090d8",
+    "#f0d8d8",
+    "#483060",
+    "#f0d8c0",
+    "#a860a8",
+    "#9060a8",
+    "#9078c0",
+    "#a878c0",
+    "#f0a8d8",
+    "#603090",
+    "#481860",
+    "#7860a8",
+    "#180030",
+    "#c0a8c0"
+  ],
+  "palettes": {
+    "mint": [
+      "#d8c0f0",
+      "#483078",
+      "#c0a8f0",
+      "#fff0d8",
+      "#603078",
+      "#604890",
+      "#784890",
+      "#301860",
+      "#301848",
+      "#604878",
+      "#d8c0c0",
+      "#181848",
+      "#180048",
+      "#f0f0d8",
+      "#d8a8f0",
+      "#c0a8d8",
+      "#a890d8",
+      "#f090c0",
+      "#c090d8",
+      "#f0d8d8",
+      "#483060",
+      "#f0d8c0",
+      "#a860a8",
+      "#9060a8",
+      "#9078c0",
+      "#a878c0",
+      "#f0a8d8",
+      "#603090",
+      "#481860",
+      "#7860a8",
+      "#180030",
+      "#c0a8c0"
+    ],
+    "amber": [
+      "#f0dec0",
+      "#785e30",
+      "#f0d6a8",
+      "#fff0d8",
+      "#785e31",
+      "#907648",
+      "#907649",
+      "#604618",
+      "#483618",
+      "#786648",
+      "#d8c0c0",
+      "#483619",
+      "#482e00",
+      "#f0f0d8",
+      "#f0d6a9",
+      "#d8c6a8",
+      "#d8be90",
+      "#f0cd90",
+      "#d8be91",
+      "#f0d8d8",
+      "#604e30",
+      "#f0dec1",
+      "#a88e60",
+      "#a88e61",
+      "#c0a678",
+      "#c0a679",
+      "#f0d6aa",
+      "#906d30",
+      "#604619",
+      "#a88e62",
+      "#180030",
+      "#c0a8c0"
+    ],
+    "lavender": [
+      "#dac0f0",
+      "#563078",
+      "#cea8f0",
+      "#fff0d8",
+      "#563079",
+      "#6e4890",
+      "#6e4891",
+      "#3e1860",
+      "#321848",
+      "#624878",
+      "#d8c0c0",
+      "#321849",
+      "#260048",
+      "#f0f0d8",
+      "#cea8f1",
+      "#c2a8d8",
+      "#b690d8",
+      "#c390f0",
+      "#b690d9",
+      "#f0d8d8",
+      "#4a3060",
+      "#dac0f1",
+      "#8660a8",
+      "#8660a9",
+      "#9e78c0",
+      "#9e78c1",
+      "#cea8f2",
+      "#633090",
+      "#3e1861",
+      "#8660aa",
+      "#180030",
+      "#c0a8c0"
+    ]
+  },
+  "assets": {
+    "lumen-child-idle-0": {
+      "path": "lumen-child-idle-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-child-idle-1": {
+      "path": "lumen-child-idle-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-child-idle-2": {
+      "path": "lumen-child-idle-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-child-idle-3": {
+      "path": "lumen-child-idle-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-child-greet-0": {
+      "path": "lumen-child-greet-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-child-greet-1": {
+      "path": "lumen-child-greet-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-child-greet-2": {
+      "path": "lumen-child-greet-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-child-greet-3": {
+      "path": "lumen-child-greet-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-child-happy-0": {
+      "path": "lumen-child-happy-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-child-happy-1": {
+      "path": "lumen-child-happy-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-child-happy-2": {
+      "path": "lumen-child-happy-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-child-happy-3": {
+      "path": "lumen-child-happy-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-child-sleep-0": {
+      "path": "lumen-child-sleep-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-child-sleep-1": {
+      "path": "lumen-child-sleep-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-child-sleep-2": {
+      "path": "lumen-child-sleep-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-child-sleep-3": {
+      "path": "lumen-child-sleep-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-growing-idle-0": {
+      "path": "lumen-growing-idle-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-growing-idle-1": {
+      "path": "lumen-growing-idle-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-growing-idle-2": {
+      "path": "lumen-growing-idle-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-growing-idle-3": {
+      "path": "lumen-growing-idle-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-growing-greet-0": {
+      "path": "lumen-growing-greet-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-growing-greet-1": {
+      "path": "lumen-growing-greet-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-growing-greet-2": {
+      "path": "lumen-growing-greet-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-growing-greet-3": {
+      "path": "lumen-growing-greet-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-growing-happy-0": {
+      "path": "lumen-growing-happy-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-growing-happy-1": {
+      "path": "lumen-growing-happy-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-growing-happy-2": {
+      "path": "lumen-growing-happy-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-growing-happy-3": {
+      "path": "lumen-growing-happy-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-growing-sleep-0": {
+      "path": "lumen-growing-sleep-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-growing-sleep-1": {
+      "path": "lumen-growing-sleep-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-growing-sleep-2": {
+      "path": "lumen-growing-sleep-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-growing-sleep-3": {
+      "path": "lumen-growing-sleep-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-adult-idle-0": {
+      "path": "lumen-adult-idle-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-adult-idle-1": {
+      "path": "lumen-adult-idle-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-adult-idle-2": {
+      "path": "lumen-adult-idle-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-adult-idle-3": {
+      "path": "lumen-adult-idle-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-adult-greet-0": {
+      "path": "lumen-adult-greet-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-adult-greet-1": {
+      "path": "lumen-adult-greet-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-adult-greet-2": {
+      "path": "lumen-adult-greet-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-adult-greet-3": {
+      "path": "lumen-adult-greet-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-adult-happy-0": {
+      "path": "lumen-adult-happy-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-adult-happy-1": {
+      "path": "lumen-adult-happy-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-adult-happy-2": {
+      "path": "lumen-adult-happy-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-adult-happy-3": {
+      "path": "lumen-adult-happy-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-adult-sleep-0": {
+      "path": "lumen-adult-sleep-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-adult-sleep-1": {
+      "path": "lumen-adult-sleep-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-adult-sleep-2": {
+      "path": "lumen-adult-sleep-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "lumen-adult-sleep-3": {
+      "path": "lumen-adult-sleep-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    }
+  },
+  "stages": {
+    "child": {
+      "idle": {
+        "frames": [
+          "lumen-child-idle-0",
+          "lumen-child-idle-1",
+          "lumen-child-idle-2",
+          "lumen-child-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "greet": {
+        "frames": [
+          "lumen-child-greet-0",
+          "lumen-child-greet-1",
+          "lumen-child-greet-2",
+          "lumen-child-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "happy": {
+        "frames": [
+          "lumen-child-happy-0",
+          "lumen-child-happy-1",
+          "lumen-child-happy-2",
+          "lumen-child-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "sleep": {
+        "frames": [
+          "lumen-child-sleep-0",
+          "lumen-child-sleep-1",
+          "lumen-child-sleep-2",
+          "lumen-child-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      }
+    },
+    "growing": {
+      "idle": {
+        "frames": [
+          "lumen-growing-idle-0",
+          "lumen-growing-idle-1",
+          "lumen-growing-idle-2",
+          "lumen-growing-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "greet": {
+        "frames": [
+          "lumen-growing-greet-0",
+          "lumen-growing-greet-1",
+          "lumen-growing-greet-2",
+          "lumen-growing-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "happy": {
+        "frames": [
+          "lumen-growing-happy-0",
+          "lumen-growing-happy-1",
+          "lumen-growing-happy-2",
+          "lumen-growing-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "sleep": {
+        "frames": [
+          "lumen-growing-sleep-0",
+          "lumen-growing-sleep-1",
+          "lumen-growing-sleep-2",
+          "lumen-growing-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      }
+    },
+    "adult": {
+      "idle": {
+        "frames": [
+          "lumen-adult-idle-0",
+          "lumen-adult-idle-1",
+          "lumen-adult-idle-2",
+          "lumen-adult-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "greet": {
+        "frames": [
+          "lumen-adult-greet-0",
+          "lumen-adult-greet-1",
+          "lumen-adult-greet-2",
+          "lumen-adult-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "happy": {
+        "frames": [
+          "lumen-adult-happy-0",
+          "lumen-adult-happy-1",
+          "lumen-adult-happy-2",
+          "lumen-adult-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "sleep": {
+        "frames": [
+          "lumen-adult-sleep-0",
+          "lumen-adult-sleep-1",
+          "lumen-adult-sleep-2",
+          "lumen-adult-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      }
+    }
+  }
+}

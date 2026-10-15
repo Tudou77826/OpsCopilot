@@ -10,9 +10,9 @@ import QuickCommandImportDialog from './QuickCommandImportDialog';
 interface QuickCommandPanelProps {
     host: QuickCommandHost;
     isOpen: boolean;
-    onExecute: (content: string) => void;
+    onExecute: (content: string, commandId?: string) => void;
     /** 广播执行：命令卡右键菜单的「发送广播」项。宿主未提供广播能力时不传（项自动消失）。 */
-    onBroadcast?: (content: string) => void;
+    onBroadcast?: (content: string, commandId?: string) => void;
 }
 
 // —— 面板高度 / 分组条宽度：可拖拽调整并持久化（与文件传输队列的调高交互一致）——

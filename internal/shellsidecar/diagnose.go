@@ -11,7 +11,9 @@ import (
 	"strings"
 	"sync"
 
+	"opscopilot/pkg/achievements"
 	"opscopilot/pkg/ai"
+	social "opscopilot/pkg/companionsocial"
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/recorder"
 	"opscopilot/pkg/troubleshoot"
@@ -30,7 +32,8 @@ type DiagnoseService struct {
 	ai           *AIConfigService
 	knowledgeDir string
 	// cases 为 nil 时案例能力不可用（未接脚本服务的 recorder）。
-	cases *troubleshoot.Manager
+	cases        *troubleshoot.Manager
+	achievements *achievements.Store
 
 	mu              sync.Mutex
 	runs            map[string]context.CancelFunc
@@ -201,7 +204,15 @@ func (s *DiagnoseService) StopCase(rootCause, conclusion string) (*troubleshoot.
 	if s.cases == nil {
 		return nil, errCaseUnavailable
 	}
-	cs, err := s.cases.StopCase(rootCause, conclusion)
+	var cs *troubleshoot.Case
+	write := func() error { var err error; cs, err = s.cases.StopCase(rootCause, conclusion); return err }
+	var err error
+	current := s.cases.GetCurrentCase()
+	if s.achievements != nil && current != nil && strings.TrimSpace(rootCause) != "" && strings.TrimSpace(conclusion) != "" {
+		err = s.achievements.Do(social.MedalCaseCompleted, current.ID, true, write)
+	} else {
+		err = write()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -298,12 +309,23 @@ func (s *DiagnoseService) Archive(input ArchiveInputJSON) (string, error) {
 	if rootCause == "" {
 		rootCause = cs.RootCause
 	}
-	path, err := knowledge.AppendRecord(s.knowledgeDir, &knowledge.ArchiveInput{
-		Session:    &cs.RecordingSession,
-		Conclusion: input.Conclusion,
-		Service:    input.Service,
-		Module:     input.Module,
-	})
+	var path string
+	write := func() error {
+		var err error
+		path, err = knowledge.AppendRecord(s.knowledgeDir, &knowledge.ArchiveInput{
+			Session:    &cs.RecordingSession,
+			Conclusion: input.Conclusion,
+			Service:    input.Service,
+			Module:     input.Module,
+		})
+		return err
+	}
+	var err error
+	if s.achievements != nil && strings.TrimSpace(input.Conclusion) != "" {
+		err = s.achievements.Do(social.MedalKnowledgeArchive, cs.ID, true, write)
+	} else {
+		err = write()
+	}
 	if err != nil {
 		return "", err
 	}

@@ -1,0 +1,25 @@
+{
+  "packs": "lumen-v8; other species v7",
+  "ambientWaitOnlyAcceleratedInTestPage": true,
+  "size": {
+    "canvas": 320,
+    "transform": "scale(0.518519)",
+    "src": "http://127.0.0.1:34115/assets/sage-idle-0-B-iZ4Jlc.png",
+    "species": "sage",
+    "stage": "child"
+  },
+  "themes": {
+    "light": "url(\"http://127.0.0.1:34115/assets/light-DcfvhQiq.webp\")",
+    "dark": "url(\"http://127.0.0.1:34115/assets/dark-BO2LJzPH.webp\")"
+  },
+  "movementInOneSecond": 25.70599999999999,
+  "walkScriptMs": 6.8330000000000055,
+  "walkTaskMs": 24.13300000000007,
+  "walkLayouts": 0,
+  "settledPosition": -92.5926,
+  "inputP95Ms": 18.152600000001257,
+  "collapsedPoseChanges": 0,
+  "storedPetPreserved": true,
+  "errors": [],
+  "recording": "playback.webm"
+}

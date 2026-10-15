@@ -1,0 +1,66 @@
+{
+  "samples": [
+    {
+      "name": "idle",
+      "wallMs": 8503.0541,
+      "taskMs": 82.27500000000005,
+      "scriptMs": 20.10300000000001,
+      "layouts": 4,
+      "styleRecalculations": 34,
+      "networkBytes": 0,
+      "poseChanges": 16,
+      "heapBytes": 7648220
+    },
+    {
+      "name": "interaction",
+      "wallMs": 3769.308799999999,
+      "taskMs": 113.36899999999994,
+      "scriptMs": 26.222999999999995,
+      "layouts": 4,
+      "styleRecalculations": 48,
+      "networkBytes": 1043803,
+      "poseChanges": 33,
+      "heapBytes": 8249844
+    },
+    {
+      "name": "typing",
+      "wallMs": 147.054900000001,
+      "taskMs": 81.41999999999993,
+      "scriptMs": 9.596999999999994,
+      "layouts": 60,
+      "styleRecalculations": 58,
+      "networkBytes": 0,
+      "poseChanges": 0,
+      "heapBytes": 8188316
+    },
+    {
+      "name": "gallery",
+      "wallMs": 752.2140999999992,
+      "taskMs": 329.2259999999999,
+      "scriptMs": 108.03200000000001,
+      "layouts": 14,
+      "styleRecalculations": 48,
+      "networkBytes": 359753,
+      "poseChanges": 0,
+      "heapBytes": 9697376
+    },
+    {
+      "name": "collapsed",
+      "wallMs": 3008.4022000000004,
+      "taskMs": 19.47399999999999,
+      "scriptMs": 3.1809999999999894,
+      "layouts": 3,
+      "styleRecalculations": 15,
+      "networkBytes": 0,
+      "poseChanges": 0,
+      "heapBytes": 9558240
+    }
+  ],
+  "inputMedianMs": 6.913300000000163,
+  "inputP95Ms": 11.897999999999229,
+  "longTasks": [
+    67,
+    71
+  ],
+  "pageErrors": []
+}

@@ -2,6 +2,8 @@ package shellsidecar
 
 import (
 	"encoding/json"
+	"fmt"
+	"opscopilot/pkg/filetxn"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,12 +48,12 @@ type HighlightRuleJSON struct {
 
 // ShellSettingsJSON 与共享 ShellSettings 同构。
 type ShellSettingsJSON struct {
-	GardenEnabled   bool                `json:"gardenEnabled"`
-	Revision        string              `json:"revision,omitempty"`
-	Theme           string              `json:"theme"`
-	Terminal        TerminalConfigJSON  `json:"terminal"`
-	CompletionDelay int                 `json:"completionDelay"`
-	HighlightRules  []HighlightRuleJSON `json:"highlightRules"`
+	CompanionEnabled bool                `json:"companionEnabled"`
+	Revision         string              `json:"revision,omitempty"`
+	Theme            string              `json:"theme"`
+	Terminal         TerminalConfigJSON  `json:"terminal"`
+	CompletionDelay  int                 `json:"completionDelay"`
+	HighlightRules   []HighlightRuleJSON `json:"highlightRules"`
 	// CommandQueryShortcut 命令查询（Ctrl+K）快捷键，如 "Ctrl+K"；空值取默认。
 	CommandQueryShortcut string `json:"commandQueryShortcut,omitempty"`
 }
@@ -79,7 +81,7 @@ func NewSettingsService(dataDir string) (*SettingsService, error) {
 	return &SettingsService{path: filepath.Join(dataDir, "shell-settings.json")}, nil
 }
 
-// Get 返回设置（缺失/损坏时回退默认并落盘）。
+// Get returns defaults for a missing file; malformed files remain untouched.
 func (s *SettingsService) Get() (ShellSettingsJSON, error) {
 	if s.desktop != nil {
 		return s.desktop.get()
@@ -87,15 +89,13 @@ func (s *SettingsService) Get() (ShellSettingsJSON, error) {
 	data, err := os.ReadFile(s.path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			def := defaultShellSettings()
-			_ = s.write(def)
-			return def, nil
+			return defaultShellSettings(), nil
 		}
 		return defaultShellSettings(), err
 	}
 	var out ShellSettingsJSON
 	if err := json.Unmarshal(data, &out); err != nil {
-		return defaultShellSettings(), nil
+		return ShellSettingsJSON{}, fmt.Errorf("读取设置失败，请保留原文件: %w", err)
 	}
 	// 阶段 5 的早期构建曾把这两个顶层字段写成 snake_case。
 	// 读取时兼容一次，后续 Save 会统一写回共享 TS 类型使用的 camelCase。
@@ -146,7 +146,11 @@ func (s *SettingsService) Save(next ShellSettingsJSON) (err error) {
 		}
 	}()
 	if s.desktop != nil {
-		return s.desktop.save(next)
+		if err = s.desktop.save(next); err != nil {
+			return err
+		}
+		next, err = s.desktop.get()
+		return err
 	}
 	if next.HighlightRules == nil {
 		next.HighlightRules = []HighlightRuleJSON{}
@@ -159,5 +163,20 @@ func (s *SettingsService) write(v ShellSettingsJSON) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.path, data, 0o644)
+	if _, err = os.Stat(filepath.Dir(s.path)); err != nil {
+		return err
+	}
+	release, err := filetxn.Lock(s.path)
+	if err != nil {
+		return err
+	}
+	defer release()
+	current, err := filetxn.Read(s.path)
+	if err != nil {
+		return err
+	}
+	if len(current) != 0 && !json.Valid(current) {
+		return fmt.Errorf("设置文件损坏，请保留原文件")
+	}
+	return filetxn.Write(s.path, data)
 }

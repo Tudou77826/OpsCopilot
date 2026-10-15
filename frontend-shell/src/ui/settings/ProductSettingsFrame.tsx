@@ -89,7 +89,7 @@ export function ProductSettingsFrame<T extends string>({ embedded = false, showS
                 <div style={styles.footer}>
                     <div style={styles.statusMsg}>{msg}</div>
                     <div style={styles.footerActions}>
-                        <button onClick={handleClose} style={styles.cancelBtn}>取消</button>
+                        <button onClick={handleClose} style={styles.cancelBtn}>{showSaveAction ? '取消' : '关闭'}</button>
                         {showSaveAction && <button onClick={handleSave} style={styles.saveBtn} disabled={loading}>
                             {loading ? '正在保存...' : '保存更改'}
                         </button>}

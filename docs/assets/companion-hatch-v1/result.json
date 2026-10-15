@@ -1,0 +1,19 @@
+{
+  "pluginApiRevision": 2,
+  "firstSpecies": "astra",
+  "paidSpecies": "tide",
+  "cost": 50,
+  "xpBefore": 73,
+  "xpAfter": 23,
+  "levelBefore": 8,
+  "levelAfter": 3,
+  "levelXP": 3,
+  "firstFree": true,
+  "confirmationCancellable": true,
+  "oldFreeChoiceBindingsRemoved": true,
+  "staleAndInsufficientRejected": true,
+  "historyPreserved": true,
+  "restartPersisted": true,
+  "existingReviewSaveUnchanged": true,
+  "errors": []
+}

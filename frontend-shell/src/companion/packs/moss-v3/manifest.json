@@ -1,0 +1,755 @@
+{
+  "contractVersion": 2,
+  "id": "moss-v3",
+  "speciesId": "moss",
+  "style": "pixel",
+  "frameSize": 256,
+  "colorMode": "rgba",
+  "paletteHues": {
+    "mint": null,
+    "amber": 38,
+    "lavender": 272
+  },
+  "assets": {
+    "moss-child-idle-0": {
+      "path": "moss-child-idle-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-child-idle-1": {
+      "path": "moss-child-idle-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-child-idle-2": {
+      "path": "moss-child-idle-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-child-idle-3": {
+      "path": "moss-child-idle-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-child-greet-0": {
+      "path": "moss-child-greet-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-child-greet-1": {
+      "path": "moss-child-greet-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-child-greet-2": {
+      "path": "moss-child-greet-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-child-greet-3": {
+      "path": "moss-child-greet-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-child-happy-0": {
+      "path": "moss-child-happy-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-child-happy-1": {
+      "path": "moss-child-happy-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-child-happy-2": {
+      "path": "moss-child-happy-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-child-happy-3": {
+      "path": "moss-child-happy-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-child-sleep-0": {
+      "path": "moss-child-sleep-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-child-sleep-1": {
+      "path": "moss-child-sleep-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-child-sleep-2": {
+      "path": "moss-child-sleep-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-child-sleep-3": {
+      "path": "moss-child-sleep-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-growing-idle-0": {
+      "path": "moss-growing-idle-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-growing-idle-1": {
+      "path": "moss-growing-idle-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-growing-idle-2": {
+      "path": "moss-growing-idle-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-growing-idle-3": {
+      "path": "moss-growing-idle-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-growing-greet-0": {
+      "path": "moss-growing-greet-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-growing-greet-1": {
+      "path": "moss-growing-greet-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-growing-greet-2": {
+      "path": "moss-growing-greet-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-growing-greet-3": {
+      "path": "moss-growing-greet-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-growing-happy-0": {
+      "path": "moss-growing-happy-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-growing-happy-1": {
+      "path": "moss-growing-happy-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-growing-happy-2": {
+      "path": "moss-growing-happy-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-growing-happy-3": {
+      "path": "moss-growing-happy-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-growing-sleep-0": {
+      "path": "moss-growing-sleep-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-growing-sleep-1": {
+      "path": "moss-growing-sleep-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-growing-sleep-2": {
+      "path": "moss-growing-sleep-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-growing-sleep-3": {
+      "path": "moss-growing-sleep-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-adult-idle-0": {
+      "path": "moss-adult-idle-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-adult-idle-1": {
+      "path": "moss-adult-idle-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-adult-idle-2": {
+      "path": "moss-adult-idle-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-adult-idle-3": {
+      "path": "moss-adult-idle-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-adult-greet-0": {
+      "path": "moss-adult-greet-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-adult-greet-1": {
+      "path": "moss-adult-greet-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-adult-greet-2": {
+      "path": "moss-adult-greet-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-adult-greet-3": {
+      "path": "moss-adult-greet-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-adult-happy-0": {
+      "path": "moss-adult-happy-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-adult-happy-1": {
+      "path": "moss-adult-happy-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-adult-happy-2": {
+      "path": "moss-adult-happy-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-adult-happy-3": {
+      "path": "moss-adult-happy-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-adult-sleep-0": {
+      "path": "moss-adult-sleep-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-adult-sleep-1": {
+      "path": "moss-adult-sleep-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-adult-sleep-2": {
+      "path": "moss-adult-sleep-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "moss-adult-sleep-3": {
+      "path": "moss-adult-sleep-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    }
+  },
+  "stages": {
+    "child": {
+      "idle": {
+        "frames": [
+          "moss-child-idle-0",
+          "moss-child-idle-1",
+          "moss-child-idle-2",
+          "moss-child-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3600
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          }
+        ]
+      },
+      "greet": {
+        "frames": [
+          "moss-child-greet-0",
+          "moss-child-greet-1",
+          "moss-child-greet-2",
+          "moss-child-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 130
+          },
+          {
+            "frame": 2,
+            "durationMs": 220
+          },
+          {
+            "frame": 1,
+            "durationMs": 150
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 3,
+            "durationMs": 240
+          },
+          {
+            "frame": 0,
+            "durationMs": 250
+          }
+        ]
+      },
+      "happy": {
+        "frames": [
+          "moss-child-happy-0",
+          "moss-child-happy-1",
+          "moss-child-happy-2",
+          "moss-child-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 160
+          },
+          {
+            "frame": 1,
+            "durationMs": 180
+          },
+          {
+            "frame": 2,
+            "durationMs": 160
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 160
+          },
+          {
+            "frame": 0,
+            "durationMs": 280
+          }
+        ]
+      },
+      "sleep": {
+        "frames": [
+          "moss-child-sleep-0",
+          "moss-child-sleep-1",
+          "moss-child-sleep-2",
+          "moss-child-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 1100
+          },
+          {
+            "frame": 1,
+            "durationMs": 1200
+          },
+          {
+            "frame": 2,
+            "durationMs": 1300
+          },
+          {
+            "frame": 3,
+            "durationMs": 1200
+          }
+        ]
+      }
+    },
+    "growing": {
+      "idle": {
+        "frames": [
+          "moss-growing-idle-0",
+          "moss-growing-idle-1",
+          "moss-growing-idle-2",
+          "moss-growing-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3600
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          }
+        ]
+      },
+      "greet": {
+        "frames": [
+          "moss-growing-greet-0",
+          "moss-growing-greet-1",
+          "moss-growing-greet-2",
+          "moss-growing-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 130
+          },
+          {
+            "frame": 2,
+            "durationMs": 220
+          },
+          {
+            "frame": 1,
+            "durationMs": 150
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 3,
+            "durationMs": 240
+          },
+          {
+            "frame": 0,
+            "durationMs": 250
+          }
+        ]
+      },
+      "happy": {
+        "frames": [
+          "moss-growing-happy-0",
+          "moss-growing-happy-1",
+          "moss-growing-happy-2",
+          "moss-growing-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 160
+          },
+          {
+            "frame": 1,
+            "durationMs": 180
+          },
+          {
+            "frame": 2,
+            "durationMs": 160
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 160
+          },
+          {
+            "frame": 0,
+            "durationMs": 280
+          }
+        ]
+      },
+      "sleep": {
+        "frames": [
+          "moss-growing-sleep-0",
+          "moss-growing-sleep-1",
+          "moss-growing-sleep-2",
+          "moss-growing-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 1100
+          },
+          {
+            "frame": 1,
+            "durationMs": 1200
+          },
+          {
+            "frame": 2,
+            "durationMs": 1300
+          },
+          {
+            "frame": 3,
+            "durationMs": 1200
+          }
+        ]
+      }
+    },
+    "adult": {
+      "idle": {
+        "frames": [
+          "moss-adult-idle-0",
+          "moss-adult-idle-1",
+          "moss-adult-idle-2",
+          "moss-adult-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3600
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          }
+        ]
+      },
+      "greet": {
+        "frames": [
+          "moss-adult-greet-0",
+          "moss-adult-greet-1",
+          "moss-adult-greet-2",
+          "moss-adult-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 130
+          },
+          {
+            "frame": 2,
+            "durationMs": 220
+          },
+          {
+            "frame": 1,
+            "durationMs": 150
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 3,
+            "durationMs": 240
+          },
+          {
+            "frame": 0,
+            "durationMs": 250
+          }
+        ]
+      },
+      "happy": {
+        "frames": [
+          "moss-adult-happy-0",
+          "moss-adult-happy-1",
+          "moss-adult-happy-2",
+          "moss-adult-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 160
+          },
+          {
+            "frame": 1,
+            "durationMs": 180
+          },
+          {
+            "frame": 2,
+            "durationMs": 160
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 160
+          },
+          {
+            "frame": 0,
+            "durationMs": 280
+          }
+        ]
+      },
+      "sleep": {
+        "frames": [
+          "moss-adult-sleep-0",
+          "moss-adult-sleep-1",
+          "moss-adult-sleep-2",
+          "moss-adult-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 1100
+          },
+          {
+            "frame": 1,
+            "durationMs": 1200
+          },
+          {
+            "frame": 2,
+            "durationMs": 1300
+          },
+          {
+            "frame": 3,
+            "durationMs": 1200
+          }
+        ]
+      }
+    }
+  }
+}

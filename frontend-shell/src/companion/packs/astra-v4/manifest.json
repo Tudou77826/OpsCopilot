@@ -1,0 +1,844 @@
+{
+  "contractVersion": 2,
+  "id": "astra-v4",
+  "speciesId": "astra",
+  "style": "pixel",
+  "frameSize": 256,
+  "colorMode": "rgba",
+  "paletteHues": {
+    "mint": null,
+    "amber": 38,
+    "lavender": 272
+  },
+  "stageScale": {
+    "child": 0.7407407407407407,
+    "growing": 0.8703703703703703,
+    "adult": 1
+  },
+  "assets": {
+    "astra-idle-0": {
+      "path": "astra-idle-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-idle-1": {
+      "path": "astra-idle-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-idle-2": {
+      "path": "astra-idle-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-idle-3": {
+      "path": "astra-idle-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-idle-4": {
+      "path": "astra-idle-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-idle-5": {
+      "path": "astra-idle-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-idle-6": {
+      "path": "astra-idle-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-idle-7": {
+      "path": "astra-idle-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-greet-0": {
+      "path": "astra-greet-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-greet-1": {
+      "path": "astra-greet-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-greet-2": {
+      "path": "astra-greet-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-greet-3": {
+      "path": "astra-greet-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-greet-4": {
+      "path": "astra-greet-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-greet-5": {
+      "path": "astra-greet-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-greet-6": {
+      "path": "astra-greet-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-greet-7": {
+      "path": "astra-greet-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-happy-0": {
+      "path": "astra-happy-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-happy-1": {
+      "path": "astra-happy-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-happy-2": {
+      "path": "astra-happy-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-happy-3": {
+      "path": "astra-happy-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-happy-4": {
+      "path": "astra-happy-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-happy-5": {
+      "path": "astra-happy-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-happy-6": {
+      "path": "astra-happy-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-happy-7": {
+      "path": "astra-happy-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-sleep-0": {
+      "path": "astra-sleep-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-sleep-1": {
+      "path": "astra-sleep-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-sleep-2": {
+      "path": "astra-sleep-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-sleep-3": {
+      "path": "astra-sleep-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-sleep-4": {
+      "path": "astra-sleep-4.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-sleep-5": {
+      "path": "astra-sleep-5.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-sleep-6": {
+      "path": "astra-sleep-6.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "astra-sleep-7": {
+      "path": "astra-sleep-7.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    }
+  },
+  "stages": {
+    "child": {
+      "idle": {
+        "frames": [
+          "astra-idle-0",
+          "astra-idle-1",
+          "astra-idle-2",
+          "astra-idle-3",
+          "astra-idle-4",
+          "astra-idle-5",
+          "astra-idle-6",
+          "astra-idle-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3400
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 90
+          },
+          {
+            "frame": 3,
+            "durationMs": 70
+          },
+          {
+            "frame": 4,
+            "durationMs": 110
+          },
+          {
+            "frame": 5,
+            "durationMs": 70
+          },
+          {
+            "frame": 6,
+            "durationMs": 90
+          },
+          {
+            "frame": 7,
+            "durationMs": 270
+          }
+        ],
+        "loop": true
+      },
+      "greet": {
+        "frames": [
+          "astra-greet-0",
+          "astra-greet-1",
+          "astra-greet-2",
+          "astra-greet-3",
+          "astra-greet-4",
+          "astra-greet-5",
+          "astra-greet-6",
+          "astra-greet-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 150
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 110
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 130
+          },
+          {
+            "frame": 5,
+            "durationMs": 130
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 240
+          }
+        ],
+        "loop": false
+      },
+      "happy": {
+        "frames": [
+          "astra-happy-0",
+          "astra-happy-1",
+          "astra-happy-2",
+          "astra-happy-3",
+          "astra-happy-4",
+          "astra-happy-5",
+          "astra-happy-6",
+          "astra-happy-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 140
+          },
+          {
+            "frame": 2,
+            "durationMs": 130
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 180
+          },
+          {
+            "frame": 5,
+            "durationMs": 140
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 220
+          }
+        ],
+        "loop": false
+      },
+      "sleep": {
+        "frames": [
+          "astra-sleep-0",
+          "astra-sleep-1",
+          "astra-sleep-2",
+          "astra-sleep-3",
+          "astra-sleep-4",
+          "astra-sleep-5",
+          "astra-sleep-6",
+          "astra-sleep-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 800
+          },
+          {
+            "frame": 1,
+            "durationMs": 750
+          },
+          {
+            "frame": 2,
+            "durationMs": 650
+          },
+          {
+            "frame": 3,
+            "durationMs": 650
+          },
+          {
+            "frame": 4,
+            "durationMs": 800
+          },
+          {
+            "frame": 5,
+            "durationMs": 750
+          },
+          {
+            "frame": 6,
+            "durationMs": 650
+          },
+          {
+            "frame": 7,
+            "durationMs": 650
+          }
+        ],
+        "loop": true
+      }
+    },
+    "growing": {
+      "idle": {
+        "frames": [
+          "astra-idle-0",
+          "astra-idle-1",
+          "astra-idle-2",
+          "astra-idle-3",
+          "astra-idle-4",
+          "astra-idle-5",
+          "astra-idle-6",
+          "astra-idle-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3400
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 90
+          },
+          {
+            "frame": 3,
+            "durationMs": 70
+          },
+          {
+            "frame": 4,
+            "durationMs": 110
+          },
+          {
+            "frame": 5,
+            "durationMs": 70
+          },
+          {
+            "frame": 6,
+            "durationMs": 90
+          },
+          {
+            "frame": 7,
+            "durationMs": 270
+          }
+        ],
+        "loop": true
+      },
+      "greet": {
+        "frames": [
+          "astra-greet-0",
+          "astra-greet-1",
+          "astra-greet-2",
+          "astra-greet-3",
+          "astra-greet-4",
+          "astra-greet-5",
+          "astra-greet-6",
+          "astra-greet-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 150
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 110
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 130
+          },
+          {
+            "frame": 5,
+            "durationMs": 130
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 240
+          }
+        ],
+        "loop": false
+      },
+      "happy": {
+        "frames": [
+          "astra-happy-0",
+          "astra-happy-1",
+          "astra-happy-2",
+          "astra-happy-3",
+          "astra-happy-4",
+          "astra-happy-5",
+          "astra-happy-6",
+          "astra-happy-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 140
+          },
+          {
+            "frame": 2,
+            "durationMs": 130
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 180
+          },
+          {
+            "frame": 5,
+            "durationMs": 140
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 220
+          }
+        ],
+        "loop": false
+      },
+      "sleep": {
+        "frames": [
+          "astra-sleep-0",
+          "astra-sleep-1",
+          "astra-sleep-2",
+          "astra-sleep-3",
+          "astra-sleep-4",
+          "astra-sleep-5",
+          "astra-sleep-6",
+          "astra-sleep-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 800
+          },
+          {
+            "frame": 1,
+            "durationMs": 750
+          },
+          {
+            "frame": 2,
+            "durationMs": 650
+          },
+          {
+            "frame": 3,
+            "durationMs": 650
+          },
+          {
+            "frame": 4,
+            "durationMs": 800
+          },
+          {
+            "frame": 5,
+            "durationMs": 750
+          },
+          {
+            "frame": 6,
+            "durationMs": 650
+          },
+          {
+            "frame": 7,
+            "durationMs": 650
+          }
+        ],
+        "loop": true
+      }
+    },
+    "adult": {
+      "idle": {
+        "frames": [
+          "astra-idle-0",
+          "astra-idle-1",
+          "astra-idle-2",
+          "astra-idle-3",
+          "astra-idle-4",
+          "astra-idle-5",
+          "astra-idle-6",
+          "astra-idle-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3400
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 90
+          },
+          {
+            "frame": 3,
+            "durationMs": 70
+          },
+          {
+            "frame": 4,
+            "durationMs": 110
+          },
+          {
+            "frame": 5,
+            "durationMs": 70
+          },
+          {
+            "frame": 6,
+            "durationMs": 90
+          },
+          {
+            "frame": 7,
+            "durationMs": 270
+          }
+        ],
+        "loop": true
+      },
+      "greet": {
+        "frames": [
+          "astra-greet-0",
+          "astra-greet-1",
+          "astra-greet-2",
+          "astra-greet-3",
+          "astra-greet-4",
+          "astra-greet-5",
+          "astra-greet-6",
+          "astra-greet-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 150
+          },
+          {
+            "frame": 1,
+            "durationMs": 120
+          },
+          {
+            "frame": 2,
+            "durationMs": 110
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 130
+          },
+          {
+            "frame": 5,
+            "durationMs": 130
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 240
+          }
+        ],
+        "loop": false
+      },
+      "happy": {
+        "frames": [
+          "astra-happy-0",
+          "astra-happy-1",
+          "astra-happy-2",
+          "astra-happy-3",
+          "astra-happy-4",
+          "astra-happy-5",
+          "astra-happy-6",
+          "astra-happy-7"
+        ],
+        "fps": 8,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 140
+          },
+          {
+            "frame": 2,
+            "durationMs": 130
+          },
+          {
+            "frame": 3,
+            "durationMs": 140
+          },
+          {
+            "frame": 4,
+            "durationMs": 180
+          },
+          {
+            "frame": 5,
+            "durationMs": 140
+          },
+          {
+            "frame": 6,
+            "durationMs": 150
+          },
+          {
+            "frame": 7,
+            "durationMs": 220
+          }
+        ],
+        "loop": false
+      },
+      "sleep": {
+        "frames": [
+          "astra-sleep-0",
+          "astra-sleep-1",
+          "astra-sleep-2",
+          "astra-sleep-3",
+          "astra-sleep-4",
+          "astra-sleep-5",
+          "astra-sleep-6",
+          "astra-sleep-7"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 240
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 800
+          },
+          {
+            "frame": 1,
+            "durationMs": 750
+          },
+          {
+            "frame": 2,
+            "durationMs": 650
+          },
+          {
+            "frame": 3,
+            "durationMs": 650
+          },
+          {
+            "frame": 4,
+            "durationMs": 800
+          },
+          {
+            "frame": 5,
+            "durationMs": 750
+          },
+          {
+            "frame": 6,
+            "durationMs": 650
+          },
+          {
+            "frame": 7,
+            "durationMs": 650
+          }
+        ],
+        "loop": true
+      }
+    }
+  }
+}

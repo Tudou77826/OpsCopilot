@@ -3,11 +3,15 @@ package shellsidecar
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
+	"github.com/google/uuid"
+	"opscopilot/pkg/achievements"
+	social "opscopilot/pkg/companionsocial"
 	"opscopilot/pkg/recorder"
 	"opscopilot/pkg/script"
 )
@@ -19,18 +23,19 @@ import (
 // 数据兼容：旧的文本脚本（scripts.json，{id,name,content,group}）在初始化时
 // 迁移为结构化脚本（content 按行拆为 steps），原文件改名为 scripts.json.migrated。
 type StructuredScriptService struct {
-	mu     sync.Mutex
-	svc    *TerminalService
-	mgr    *script.Manager
-	rec    *recorder.Recorder
-	jobs   map[string]*replayJob
-	closed bool
+	mu           sync.Mutex
+	svc          *TerminalService
+	mgr          *script.Manager
+	rec          *recorder.Recorder
+	jobs         map[string]*replayJob
+	closed       bool
+	achievements *achievements.Store
 	// onReplayDispatched 在一次回放把全部命令成功派发完毕时被调用
 	// （run id 作为幂等键）。养成系统事件源；nil 时零开销。
 	onReplayDispatched func(runID string)
 }
 
-// SetReplayDispatchedHook 注入"回放派发完毕"回调（养成系统事件源；见 pkg/garden）。
+// SetReplayDispatchedHook 注入"回放派发完毕"回调（养成系统事件源；见 pkg/companion）。
 // 只在一次回放把全部命令成功派发完毕时触发，失败/中止不触发。
 func (s *StructuredScriptService) SetReplayDispatchedHook(fn func(runID string)) {
 	s.mu.Lock()
@@ -128,20 +133,55 @@ func (s *StructuredScriptService) Load(id string) (*script.Script, error) {
 	return s.mgr.LoadScript(id)
 }
 
-func (s *StructuredScriptService) Update(sc *script.Script) error { return s.mgr.UpdateScript(sc) }
+func (s *StructuredScriptService) Update(sc *script.Script) error {
+	if s.achievements != nil {
+		return s.achievements.TrackExisting(social.MedalScriptCreated, sc.ID, achievements.EligibleScript(sc), func() error { return s.mgr.UpdateScript(sc) })
+	}
+	return s.mgr.UpdateScript(sc)
+}
 
-func (s *StructuredScriptService) Delete(id string) error { return s.mgr.DeleteScript(id) }
+func (s *StructuredScriptService) Delete(id string) error {
+	if s.achievements != nil {
+		return s.achievements.TrackExisting(social.MedalScriptCreated, id, false, func() error { return s.mgr.DeleteScript(id) })
+	}
+	return s.mgr.DeleteScript(id)
+}
 
 func (s *StructuredScriptService) Create(name, description string) (*script.Script, error) {
-	return s.mgr.CreateScript(name, description)
+	id := uuid.NewString()
+	var sc *script.Script
+	write := func() error { var err error; sc, err = s.mgr.CreateScriptWithID(id, name, description); return err }
+	var err error
+	if s.achievements != nil {
+		err = s.achievements.TrackNew(social.MedalScriptCreated, id, false, write)
+	} else {
+		err = write()
+	}
+	return sc, err
 }
 
 func (s *StructuredScriptService) Replay(id, terminalID string) error {
-	return s.mgr.ReplayScript(id, terminalID)
+	if err := s.mgr.ReplayScript(id, terminalID); err != nil {
+		return err
+	}
+	if s.achievements != nil {
+		if err := s.achievements.Record(social.MedalScriptUsed, id, true); err != nil {
+			slog.Warn("脚本已派发，奖章记录未保存", "error", err)
+		}
+	}
+	return nil
 }
 
 func (s *StructuredScriptService) ReplayWithVars(id, terminalID string, values map[string]string) error {
-	return s.mgr.ReplayScriptWithVars(id, terminalID, values)
+	if err := s.mgr.ReplayScriptWithVars(id, terminalID, values); err != nil {
+		return err
+	}
+	if s.achievements != nil {
+		if err := s.achievements.Record(social.MedalScriptUsed, id, true); err != nil {
+			slog.Warn("脚本已派发，奖章记录未保存", "error", err)
+		}
+	}
+	return nil
 }
 
 // StartRecording 开始录制。host/user 取自终端所属连接配置（与 Wails 语义一致）。
@@ -164,7 +204,16 @@ func (s *StructuredScriptService) StartRecording(name, description, terminalID s
 }
 
 func (s *StructuredScriptService) StopRecording() (*script.Script, error) {
-	return s.mgr.StopRecording()
+	status := s.mgr.GetRecordingStatus()
+	var sc *script.Script
+	write := func() error { var err error; sc, err = s.mgr.StopRecording(); return err }
+	var err error
+	if s.achievements != nil && status.ScriptID != "" {
+		err = s.achievements.Do(social.MedalScriptCreated, status.ScriptID, status.CommandCount > 0, write)
+	} else {
+		err = write()
+	}
+	return sc, err
 }
 
 func (s *StructuredScriptService) RecordingStatus() script.ScriptStatus {

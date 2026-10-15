@@ -1,3 +1,5 @@
+import { PersonaSettingsDisclosure, usePersonaSettings } from './PersonaSettingsPage';
+import type { AssistantSettingsHost } from '../../assistant/settings';
 import React, { useEffect, useRef, useState } from 'react';
 import { TbRobot, TbSun, TbPalette, TbKeyboard, TbSettings } from 'react-icons/tb';
 import type { TerminalConfig, HighlightRule } from '../Terminal/highlightTypes';
@@ -9,10 +11,12 @@ import { ProductShellSettingsPage } from './ProductShellSettingsPage';
 import type { SkinChoice } from './SkinChoiceCard';
 import { ProductLLMSettings, type ProductLLMConfig } from './ProductLLMSettings';
 import { CompletionDelayCard } from './CompletionDelayCard';
-import GardenExperimentCard from './GardenExperimentCard';
+import type { SocialHost } from '../../companion/socialHost';
+import CompanionPage, { CompanionEnable } from '../companion/CompanionPage';
+import type { CompanionHost } from '../../companion/types';
 
 export interface ShellSettings {
-    gardenEnabled?: boolean;
+    companionEnabled?: boolean;
     revision?: string;
     theme: Theme;
     terminal: TerminalConfig;
@@ -28,6 +32,10 @@ export interface ShellSettingsRuntime {
 }
 
 export interface ShellSettingsModalProps {
+    assistantSettings?: AssistantSettingsHost;
+	companionHost?: CompanionHost;
+	initialTab?: 'appearance' | 'achievements';
+	socialHost?: SocialHost;
     hostSettings?: React.ReactNode;
     isOpen: boolean;
     embedded?: boolean;
@@ -44,10 +52,11 @@ export interface ShellSettingsModalProps {
 }
 
 
-type Tab = 'host' | 'llm' | 'appearance' | 'highlight' | 'shortcuts' | 'experimental';
+type Tab = 'host' | 'llm' | 'appearance' | 'highlight' | 'shortcuts' | 'experimental' | 'achievements';
 const emptyLLM: ProductLLMConfig = { APIKey: '', BaseURL: '', FastModel: '', ComplexModel: '' };
 /** Host persistence adapter; all rendered pages and chrome come from the desktop product. */
-export default function ShellSettingsModal({ hostSettings, isOpen, embedded, onClose, runtime, onApply, initial, aiRuntime, skin }: ShellSettingsModalProps) {
+export default function ShellSettingsModal({ assistantSettings, socialHost, companionHost, initialTab, hostSettings, isOpen, embedded, onClose, runtime, onApply, initial, aiRuntime, skin }: ShellSettingsModalProps) {
+ const persona = usePersonaSettings(assistantSettings, isOpen);
  const [settings, setSettings] = useState<ShellSettings | null>(null);
  const [saved, setSaved] = useState<ShellSettings | null>(null);
  const [llm, setLLM] = useState(emptyLLM);
@@ -74,13 +83,19 @@ export default function ShellSettingsModal({ hostSettings, isOpen, embedded, onC
    // Initial values are captured only when the dialog opens, not on live preview.
    // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [isOpen, runtime, aiRuntime]);
- const dirty = JSON.stringify(settings) !== JSON.stringify(saved) || JSON.stringify(llm) !== JSON.stringify(savedLLM);
+ const configDirty = JSON.stringify(settings) !== JSON.stringify(saved) || JSON.stringify(llm) !== JSON.stringify(savedLLM);
+ const dirty = configDirty || persona.dirty;
  const discard = () => { if (saved) onApply(saved); onClose(); };
  const handleClose = () => { if (dirty) setShowUnsavedConfirm(true); else onClose(); };
  const persistConfig = async (close: boolean) => {
    if (!settings || loadError) return;
    setLoading(true); setMsg('');
    try {
+     if (persona.dirty) {
+       await persona.save();
+       if (!configDirty) {setMsg('人设已保存，下次问答生效'); if (close) onClose(); return;}
+     }
+     if (activeTab === 'achievements' && !configDirty) return;
      if (aiRuntime && JSON.stringify(llm) !== JSON.stringify(savedLLM)) {
        const ai = await aiRuntime.save({apiKey: llm.APIKey, baseURL: llm.BaseURL, fastModel: llm.FastModel, complexModel: llm.ComplexModel});
        const model = {APIKey:'',BaseURL:ai.baseURL,FastModel:ai.fastModel,ComplexModel:ai.complexModel};
@@ -93,7 +108,7 @@ export default function ShellSettingsModal({ hostSettings, isOpen, embedded, onC
  useEffect(() => {
    if (!isOpen) return;
    const keydown = (e: KeyboardEvent) => {
-     if ((e.ctrlKey || e.metaKey) && e.key === 's') {e.preventDefault(); if (activeTab !== 'host') void persistConfig(false);}
+     if ((e.ctrlKey || e.metaKey) && e.key === 's') {e.preventDefault(); if (activeTab !== 'host' && (activeTab !== 'achievements' || dirty)) void persistConfig(false);}
      if (e.key === 'Escape') handleClose();
      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {e.preventDefault(); searchInputRef.current?.focus();}
    };
@@ -101,6 +116,7 @@ export default function ShellSettingsModal({ hostSettings, isOpen, embedded, onC
    return () => window.removeEventListener('keydown', keydown);
  });
  const nav = [
+   ...(assistantSettings || (saved?.companionEnabled && socialHost && companionHost) ? [{id:'achievements' as Tab,label:'伙伴与奖章',icon:TbSettings({}),category:'个人',keywords:['排名','进度','功能奖章','养成','伙伴人设','提示词','性格','语气','persona']}] : []),
    ...(aiRuntime ? [{id:'llm' as Tab,label:'模型服务',icon:TbRobot({}),category:'AI',keywords:[]}] : []),
    {id:'appearance' as Tab,label:'外观',icon:TbSun({}),category:'终端',keywords:['终端外观','终端','字体','字号','theme','主题']},
    {id:'highlight' as Tab,label:'突出显示',icon:TbPalette({}),category:'终端',keywords:[]},
@@ -109,6 +125,7 @@ export default function ShellSettingsModal({ hostSettings, isOpen, embedded, onC
    ...(hostSettings ? [{id:'host' as Tab,label:'本地 Ops',icon:TbSettings({}),category:'系统',keywords:['安装','路径','程序']}] : []),
  ].filter(item => [item.label,item.category,item.id,...item.keywords].some(text => text.toLowerCase().includes(searchQuery.trim().toLowerCase())));
  useEffect(() => { if (isOpen && searchQuery && nav.length && !nav.some(item=>item.id===activeTab)) setActiveTab(nav[0].id); }, [isOpen,searchQuery,activeTab]);
+ useEffect(() => { if (isOpen && initialTab) setActiveTab(initialTab); }, [isOpen,initialTab]);
  useEffect(() => { if (isOpen) searchInputRef.current?.focus(); }, [isOpen,activeTab]);
  if (!isOpen) return null;
  const highlightIssues = (settings?.highlightRules || []).flatMap(rule => {
@@ -122,8 +139,8 @@ export default function ShellSettingsModal({ hostSettings, isOpen, embedded, onC
    const last = groups[groups.length-1];
    if (last?.category===item.category) last.items.push(next); else groups.push({category:item.category,items:[next]});
  }
- const update = (next: ShellSettings) => {setSettings(next);onApply({...next,gardenEnabled:saved?.gardenEnabled});};
- return <ProductSettingsFrame<Tab> embedded={embedded} showSaveAction={activeTab !== 'host'} handleClose={handleClose} searchInputRef={searchInputRef}
+ const update = (next: ShellSettings) => {setSettings(next);onApply({...next,companionEnabled:saved?.companionEnabled});};
+ return <ProductSettingsFrame<Tab> embedded={embedded} showSaveAction={activeTab !== 'host' && (activeTab !== 'achievements' || dirty)} handleClose={handleClose} searchInputRef={searchInputRef}
    searchQuery={searchQuery} setSearchQuery={setSearchQuery} groupedNavItems={groups} activeTab={activeTab} setActiveTab={setActiveTab}
    msg={msg} handleSave={()=>void persistConfig(false)} loading={loading || !settings || loadError}
    showUnsavedConfirm={showUnsavedConfirm} setShowUnsavedConfirm={setShowUnsavedConfirm} onClose={discard} persistConfig={persistConfig}>
@@ -131,7 +148,8 @@ export default function ShellSettingsModal({ hostSettings, isOpen, embedded, onC
      activeTab === 'llm' ? <ProductLLMSettings value={llm} onChange={setLLM} keyDescription={aiRuntime?.persistence==='session'
        ? '仅用于本次运行时，不写入配置文件；留空保留现有密钥。仅发送你主动提交给 AI 的内容。'
        : '密钥保存在本地后台，读取不回明文；留空保留现有密钥。'}/> :
-     activeTab === 'experimental' ? <><CompletionDelayCard value={settings.completionDelay} onChange={completionDelay=>update({...settings,completionDelay})}/><GardenExperimentCard enabled={settings.gardenEnabled === true} onChange={gardenEnabled=>setSettings({...settings,gardenEnabled})}/></> :
+     activeTab === 'achievements' ? (socialHost && companionHost && saved?.companionEnabled ? <CompanionPage host={companionHost} socialHost={socialHost} preferences={assistantSettings && <PersonaSettingsDisclosure state={persona} disabled={loading}/>}/> : <div className="oc-companion-page"><header className="oc-companion-page-heading"><h2>伙伴与奖章</h2>{assistantSettings && <PersonaSettingsDisclosure state={persona} disabled={loading}/>}</header></div>) :
+     activeTab === 'experimental' ? <><CompletionDelayCard value={settings.completionDelay} onChange={completionDelay=>update({...settings,completionDelay})}/>{companionHost && <CompanionEnable enabled={settings.companionEnabled === true} onChange={companionEnabled => update({ ...settings, companionEnabled })}/>}</> :
      <ProductShellSettingsPage activeTab={activeTab} config={{terminal:settings.terminal,highlight_rules:settings.highlightRules,command_query_shortcut:settings.commandQueryShortcut || 'Ctrl+K'}}
        setConfig={next=>update({...settings,terminal:next.terminal!,highlightRules:next.highlight_rules!,commandQueryShortcut:next.command_query_shortcut})}
        theme={settings.theme} onThemeChange={theme=>update({...settings,theme})} highlightIssues={highlightIssues} skin={skin}/>}

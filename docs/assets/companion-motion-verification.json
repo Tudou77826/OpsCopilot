@@ -1,0 +1,22 @@
+{
+  "loads": [
+    {
+      "action": "greet",
+      "readyMs": 18.200000047683716
+    },
+    {
+      "action": "happy",
+      "readyMs": 24.399999976158142
+    },
+    {
+      "action": "greet",
+      "readyMs": 0.3999999761581421
+    }
+  ],
+  "warmNetworkBytes": 0,
+  "finiteCompletion": true,
+  "offscreenPause": true,
+  "resume": true,
+  "preservedPet": true,
+  "pageErrors": []
+}

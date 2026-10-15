@@ -82,7 +82,7 @@ func NewFTService(svc *TerminalService, dataDir string) *FTService {
 
 func (s *FTService) SetNotify(fn func(method string, params any)) { s.notify = fn }
 
-// SetTransferDoneHook 注入传输完成回调（养成系统事件源；见 pkg/garden）。
+// SetTransferDoneHook 注入传输完成回调（养成系统事件源；见 pkg/companion）。
 func (s *FTService) SetTransferDoneHook(fn func(taskID string)) { s.onTransferDone = fn }
 
 // ---- 工具 ----

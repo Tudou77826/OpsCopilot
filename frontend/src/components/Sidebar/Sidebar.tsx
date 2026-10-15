@@ -1,4 +1,8 @@
 import React, { useState, useRef } from 'react';
+import { CompanionAssistantHeader } from '../../../../frontend-shell/src/ui/companion/CompanionEntry';
+import type { SocialHost } from '../../../../frontend-shell/src/companion/socialHost';
+import type { CompanionHost } from '../../../../frontend-shell/src/companion/types';
+import type { ProductTab } from '../../../../frontend-shell/src/ui/product/ProductChrome';
 import { ProductSidebar } from '../../../../frontend-shell/src/ui/product/ProductSidebar';
 import SessionManager from './SessionManager';
 import TroubleshootingPanel from './TroubleshootingPanel';
@@ -12,7 +16,7 @@ import { useToast } from '../Toast/Toast';
 import { confirmDialog } from '../ConfirmDialog/ConfirmDialog';
 import { KnowledgeTarget } from '../AI';
 
-type SidebarTab = 'sessions' | 'troubleshoot' | 'chat' | 'script' | 'knowledge';
+type SidebarTab = ProductTab;
 
 interface TerminalSessionLite {
     id: string;
@@ -20,6 +24,10 @@ interface TerminalSessionLite {
 }
 
 interface SidebarProps {
+    companionHost: CompanionHost;
+    socialHost: SocialHost;
+    companionEnabled: boolean;
+    onManageCompanion(): void;
     isOpen: boolean;
     activeTab: SidebarTab;
     onToggle: () => void;
@@ -33,7 +41,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({
     isOpen, activeTab, onToggle, onConnect, activeTerminalId, terminals,
-    onTypeCommand, onOpenKnowledgeSource, knowledgeTarget,
+    onTypeCommand, onOpenKnowledgeSource, knowledgeTarget, companionHost, socialHost, companionEnabled, onManageCompanion,
 }) => {
     const [editingScriptId, setEditingScriptId] = useState<string | null>(null);
     const scriptListRef = useRef<any>(null);
@@ -102,6 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         </div>
 
                         <div style={{ display: activeTab === 'chat' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+                            <CompanionAssistantHeader socialHost={socialHost} host={companionHost} enabled={companionEnabled} visible={isOpen && activeTab === 'chat'} onManage={onManageCompanion}/>
                             <AIChatPanel
                                 activeTerminalTitle={terminals.find(terminal => terminal.id === activeTerminalId)?.title}
                                 onOpenSource={onOpenKnowledgeSource}

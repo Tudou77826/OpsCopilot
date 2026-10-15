@@ -316,10 +316,13 @@ func (s *TerminalService) WriteInput(terminalID string, data []byte) error {
 	if !ok {
 		return fmt.Errorf("终端不存在: %s", terminalID)
 	}
-	if recorder != nil {
+	n, err := t.stdin.Write(data)
+	if err == nil && n != len(data) {
+		err = io.ErrShortWrite
+	}
+	if err == nil && recorder != nil {
 		recorder(terminalID, data)
 	}
-	_, err := t.stdin.Write(data)
 	return err
 }
 

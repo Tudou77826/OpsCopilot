@@ -32,7 +32,7 @@ describe('CommandGrid', () => {
         render(<CommandGrid {...defaultProps} onExecute={onExecute} />);
 
         fireEvent.click(screen.getByText('List Files'));
-        expect(onExecute).toHaveBeenCalledWith('ls -la');
+        expect(onExecute).toHaveBeenCalledWith('ls -la', '1');
     });
 
     it('shows context menu on right-click', () => {

@@ -1,0 +1,78 @@
+{
+  "samples": [
+    {
+      "name": "idle",
+      "wallMs": 8508.216,
+      "taskMs": 82.05799999999996,
+      "scriptMs": 19.86099999999999,
+      "layouts": 4,
+      "styleRecalculations": 32,
+      "networkBytes": 0,
+      "poseChanges": 14,
+      "heapBytes": 8391244
+    },
+    {
+      "name": "interaction",
+      "wallMs": 3839.597099999999,
+      "taskMs": 142.83800000000002,
+      "scriptMs": 39.00200000000001,
+      "layouts": 4,
+      "styleRecalculations": 40,
+      "networkBytes": 1322435,
+      "poseChanges": 33,
+      "heapBytes": 7717492
+    },
+    {
+      "name": "walking",
+      "wallMs": 1009.902399999999,
+      "taskMs": 28.581999999999887,
+      "scriptMs": 9.09500000000002,
+      "layouts": 0,
+      "styleRecalculations": 16,
+      "networkBytes": 0,
+      "poseChanges": 16,
+      "heapBytes": 7274544
+    },
+    {
+      "name": "typing",
+      "wallMs": 219.47290000000066,
+      "taskMs": 128.4479999999999,
+      "scriptMs": 14.195999999999987,
+      "layouts": 60,
+      "styleRecalculations": 62,
+      "networkBytes": 0,
+      "poseChanges": 4,
+      "heapBytes": 7645400
+    },
+    {
+      "name": "gallery",
+      "wallMs": 887.9263000000064,
+      "taskMs": 481.28100000000006,
+      "scriptMs": 177.074,
+      "layouts": 18,
+      "styleRecalculations": 56,
+      "networkBytes": 597076,
+      "poseChanges": 6,
+      "heapBytes": 9206780
+    },
+    {
+      "name": "collapsed",
+      "wallMs": 3018.4960999999967,
+      "taskMs": 5.878999999999968,
+      "scriptMs": 1.1849999999999916,
+      "layouts": 0,
+      "styleRecalculations": 3,
+      "networkBytes": 0,
+      "poseChanges": 0,
+      "heapBytes": 8975428
+    }
+  ],
+  "inputMedianMs": 10.8495000000039,
+  "inputP95Ms": 16.06149999999616,
+  "longTasks": [
+    72,
+    59,
+    122
+  ],
+  "pageErrors": []
+}

@@ -1,19 +1,28 @@
 import React from 'react';
 import { render, screen, fireEvent, within, cleanup } from '@testing-library/react';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { ProductFrame, ProductNavigation, ProductToolbar } from './ProductChrome';
 import CommandGrid from '../quickcmd/CommandGrid';
 import QuickCommandPanel from '../quickcmd/QuickCommandPanel';
+import { ToastProvider } from '../feedback/Toast';
 
-afterEach(cleanup);
+beforeEach(() => vi.stubGlobal('matchMedia', () => ({matches:false,addEventListener:vi.fn(),removeEventListener:vi.fn()})));
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 describe('desktop product reuse', () => {
- it('hides the garden entry when the experiment is not enabled', () => {
-   render(<ProductNavigation isSidebarOpen={false} sidebarTab="sessions" toggleSidebar={vi.fn()} isQuickCommandOpen={false} onToggleQuickCommands={vi.fn()}/>);
-   expect(screen.queryByTestId('nav-icon-garden')).toBeNull();
+ it('places the unified assistant beside quick commands and preserves navigation state', () => {
+   const toggle=vi.fn();
+   const view=render(<ProductNavigation isSidebarOpen sidebarTab="chat" toggleSidebar={toggle} isQuickCommandOpen={false} onToggleQuickCommands={vi.fn()}/>);
+   const entry=screen.getByRole('button',{name:'伙伴助手'});
+   expect(entry.nextElementSibling).toBe(screen.getByTestId('nav-icon-quickcommands'));
+   expect(entry).toHaveAttribute('aria-pressed','true');
+   expect(screen.queryByTitle('AI 问答')).toBeNull();
+   fireEvent.click(entry); expect(toggle).toHaveBeenCalledWith('chat');
+   view.rerender(<ProductNavigation isSidebarOpen={false} sidebarTab="chat" toggleSidebar={toggle} isQuickCommandOpen={false} onToggleQuickCommands={vi.fn()}/>);
+   expect(entry).toHaveAttribute('aria-pressed','false');
  });
  it('uses theme border colors for the quick-command panel and group dividers', async () => {
    const host={execute:vi.fn(),storage:{load:vi.fn(async()=>[{id:'one',name:'测试命令',content:'pwd',group:'default'}]),add:vi.fn(),update:vi.fn(),remove:vi.fn(),reorder:vi.fn()}};
-   render(<QuickCommandPanel host={host} isOpen onExecute={host.execute}/>);
+   render(<ToastProvider><QuickCommandPanel host={host} isOpen onExecute={host.execute}/></ToastProvider>);
    await screen.findByText('测试命令');
    expect(screen.getByTestId('quick-command-panel').style.borderTop).toBe('1px solid var(--border-strong)');
    expect(screen.getByTestId('group-strip').style.borderLeft).toBe('1px solid var(--border)');
@@ -46,11 +55,5 @@ describe('desktop product reuse', () => {
    expect(within(mount).getByText('编辑',{exact:true})).toBeTruthy();
    fireEvent.click(item); expect(edit).toHaveBeenCalledOnce();
    view.unmount();host.remove();
- });
- it('uses a transient class for garden attention without a badge or count', () => {
-   render(<ProductNavigation isSidebarOpen={false} sidebarTab="sessions" toggleSidebar={vi.fn()} isQuickCommandOpen={false} onToggleQuickCommands={vi.fn()} gardenActive={false} gardenAttention onToggleGarden={vi.fn()}/>);
-   const entry=screen.getByTestId('nav-icon-garden');
-   expect(entry).toHaveClass('product-garden-attention');
-   expect(entry.textContent).toBe('');
  });
 });

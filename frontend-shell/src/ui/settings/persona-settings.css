@@ -1,0 +1,20 @@
+.oc-persona-settings { display: grid; gap: var(--space-8); color: var(--text-primary); }
+.oc-persona-heading { display: flex; justify-content: space-between; align-items: center; gap: var(--space-8); }
+.oc-persona-heading > span { color: var(--text-secondary); font-size: var(--font-size-sm); }
+.oc-persona-settings p { margin: 0; color: var(--text-secondary); font-size: var(--font-size-sm); line-height: 1.6; }
+.oc-persona-settings label { margin-top: var(--space-8); font-size: var(--font-size-base); font-weight: 500; }
+.oc-persona-settings textarea { box-sizing: border-box; width: 100%; min-height: 128px; max-height: 280px; resize: vertical; padding: var(--space-8); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text-primary); font: inherit; font-size: var(--font-size-base); line-height: 1.6; }
+.oc-persona-settings textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.oc-persona-footer { text-align: right; color: var(--text-secondary); font-size: var(--font-size-xs); }
+.oc-persona-templates { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-8); }
+.oc-persona-templates label { margin: 0; }
+.oc-persona-templates select { max-width: 100%; padding: var(--space-6); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-input); color: var(--text-primary); font: inherit; font-size: var(--font-size-sm); }
+.oc-persona-settings [role="alert"] { color: var(--danger); display: flex; gap: var(--space-8); align-items: center; }
+.oc-persona-disclosure { font-size: var(--font-size-sm); }
+.oc-persona-disclosure > summary { width: fit-content; padding: var(--space-4) 0; cursor: pointer; color: var(--text-secondary); }
+.oc-persona-disclosure > summary small { margin-left: var(--space-8); font-size: var(--font-size-xs); }
+.oc-persona-disclosure > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.oc-persona-disclosure[open] > .oc-persona-settings { padding: var(--space-12); margin-top: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.oc-companion-page-heading { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: var(--space-8); }
+.oc-companion-page-heading > .oc-persona-disclosure:not([open]) { grid-column: 2; grid-row: 1; }
+.oc-companion-page-heading > .oc-persona-disclosure[open] { grid-column: 1 / -1; }

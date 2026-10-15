@@ -13,6 +13,7 @@ import (
 type PlaybackContext struct {
 	Variables map[string]string
 	Cancelled bool
+	Sent      int
 }
 
 // NewPlaybackContext 创建运行时上下文
@@ -57,11 +58,15 @@ func ExecuteSteps(steps []ScriptStep, ctx *PlaybackContext, sender CommandSender
 		}
 
 		command := SubstituteVariables(step.Command, ctx.Variables)
+		if strings.TrimSpace(command) == "" {
+			continue
+		}
 		slog.Debug("engine Executing command", "detail", command)
 
 		if err := sender.SendCommand(sessionID, command+"\n"); err != nil {
 			return fmt.Errorf("failed to execute command '%s': %w", step.Command, err)
 		}
+		ctx.Sent++
 
 		time.Sleep(500 * time.Millisecond)
 	}

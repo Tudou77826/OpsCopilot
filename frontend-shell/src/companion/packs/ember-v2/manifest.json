@@ -1,0 +1,598 @@
+{
+  "contractVersion": 1,
+  "id": "ember-v2",
+  "speciesId": "ember",
+  "style": "pixel",
+  "palette": [
+    "#f07818",
+    "#ffd8a8",
+    "#180000",
+    "#481818",
+    "#f06018",
+    "#a83018",
+    "#301818",
+    "#d86018",
+    "#c04818",
+    "#f07848",
+    "#301800",
+    "#603018",
+    "#f0d8a8",
+    "#783018",
+    "#300000",
+    "#481800",
+    "#f0a860",
+    "#f0a878",
+    "#483018",
+    "#903018",
+    "#a84818",
+    "#904830",
+    "#f07830",
+    "#d84818",
+    "#601800",
+    "#f0c090",
+    "#784830",
+    "#f07860",
+    "#903000",
+    "#f09060",
+    "#a83000",
+    "#601818"
+  ],
+  "palettes": {
+    "mint": [
+      "#f07818",
+      "#ffd8a8",
+      "#180000",
+      "#481818",
+      "#f06018",
+      "#a83018",
+      "#301818",
+      "#d86018",
+      "#c04818",
+      "#f07848",
+      "#301800",
+      "#603018",
+      "#f0d8a8",
+      "#783018",
+      "#300000",
+      "#481800",
+      "#f0a860",
+      "#f0a878",
+      "#483018",
+      "#903018",
+      "#a84818",
+      "#904830",
+      "#f07830",
+      "#d84818",
+      "#601800",
+      "#f0c090",
+      "#784830",
+      "#f07860",
+      "#903000",
+      "#f09060",
+      "#a83000",
+      "#601818"
+    ],
+    "amber": [
+      "#f0a118",
+      "#ffdfa8",
+      "#180000",
+      "#483618",
+      "#f0a119",
+      "#a87318",
+      "#301818",
+      "#d89218",
+      "#c08218",
+      "#f0b248",
+      "#301800",
+      "#604618",
+      "#f0d6a8",
+      "#785518",
+      "#300000",
+      "#482e00",
+      "#f0bb60",
+      "#f0c478",
+      "#483619",
+      "#906418",
+      "#a87319",
+      "#906d30",
+      "#f0aa30",
+      "#d89219",
+      "#603d00",
+      "#f0cd90",
+      "#785e30",
+      "#f0bb61",
+      "#905b00",
+      "#f0bb62",
+      "#a86a00",
+      "#604619"
+    ],
+    "lavender": [
+      "#8b18f0",
+      "#d6a8ff",
+      "#180000",
+      "#321848",
+      "#8b18f1",
+      "#6518a8",
+      "#301818",
+      "#7e18d8",
+      "#7218c0",
+      "#a248f0",
+      "#301800",
+      "#3e1860",
+      "#cea8f0",
+      "#4b1878",
+      "#300000",
+      "#260048",
+      "#ad60f0",
+      "#b878f0",
+      "#321849",
+      "#581890",
+      "#6518a9",
+      "#633090",
+      "#9630f0",
+      "#7e18d9",
+      "#330060",
+      "#c390f0",
+      "#563078",
+      "#ad60f1",
+      "#4d0090",
+      "#ad60f2",
+      "#5a00a8",
+      "#3e1861"
+    ]
+  },
+  "assets": {
+    "ember-child-idle-0": {
+      "path": "ember-child-idle-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-child-idle-1": {
+      "path": "ember-child-idle-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-child-idle-2": {
+      "path": "ember-child-idle-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-child-idle-3": {
+      "path": "ember-child-idle-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-child-greet-0": {
+      "path": "ember-child-greet-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-child-greet-1": {
+      "path": "ember-child-greet-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-child-greet-2": {
+      "path": "ember-child-greet-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-child-greet-3": {
+      "path": "ember-child-greet-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-child-happy-0": {
+      "path": "ember-child-happy-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-child-happy-1": {
+      "path": "ember-child-happy-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-child-happy-2": {
+      "path": "ember-child-happy-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-child-happy-3": {
+      "path": "ember-child-happy-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-child-sleep-0": {
+      "path": "ember-child-sleep-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-child-sleep-1": {
+      "path": "ember-child-sleep-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-child-sleep-2": {
+      "path": "ember-child-sleep-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-child-sleep-3": {
+      "path": "ember-child-sleep-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-growing-idle-0": {
+      "path": "ember-growing-idle-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-growing-idle-1": {
+      "path": "ember-growing-idle-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-growing-idle-2": {
+      "path": "ember-growing-idle-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-growing-idle-3": {
+      "path": "ember-growing-idle-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-growing-greet-0": {
+      "path": "ember-growing-greet-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-growing-greet-1": {
+      "path": "ember-growing-greet-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-growing-greet-2": {
+      "path": "ember-growing-greet-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-growing-greet-3": {
+      "path": "ember-growing-greet-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-growing-happy-0": {
+      "path": "ember-growing-happy-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-growing-happy-1": {
+      "path": "ember-growing-happy-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-growing-happy-2": {
+      "path": "ember-growing-happy-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-growing-happy-3": {
+      "path": "ember-growing-happy-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-growing-sleep-0": {
+      "path": "ember-growing-sleep-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-growing-sleep-1": {
+      "path": "ember-growing-sleep-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-growing-sleep-2": {
+      "path": "ember-growing-sleep-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-growing-sleep-3": {
+      "path": "ember-growing-sleep-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-adult-idle-0": {
+      "path": "ember-adult-idle-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-adult-idle-1": {
+      "path": "ember-adult-idle-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-adult-idle-2": {
+      "path": "ember-adult-idle-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-adult-idle-3": {
+      "path": "ember-adult-idle-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-adult-greet-0": {
+      "path": "ember-adult-greet-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-adult-greet-1": {
+      "path": "ember-adult-greet-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-adult-greet-2": {
+      "path": "ember-adult-greet-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-adult-greet-3": {
+      "path": "ember-adult-greet-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-adult-happy-0": {
+      "path": "ember-adult-happy-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-adult-happy-1": {
+      "path": "ember-adult-happy-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-adult-happy-2": {
+      "path": "ember-adult-happy-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-adult-happy-3": {
+      "path": "ember-adult-happy-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-adult-sleep-0": {
+      "path": "ember-adult-sleep-0.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-adult-sleep-1": {
+      "path": "ember-adult-sleep-1.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-adult-sleep-2": {
+      "path": "ember-adult-sleep-2.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    },
+    "ember-adult-sleep-3": {
+      "path": "ember-adult-sleep-3.png",
+      "role": "character",
+      "width": 64,
+      "height": 64
+    }
+  },
+  "stages": {
+    "child": {
+      "idle": {
+        "frames": [
+          "ember-child-idle-0",
+          "ember-child-idle-1",
+          "ember-child-idle-2",
+          "ember-child-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "greet": {
+        "frames": [
+          "ember-child-greet-0",
+          "ember-child-greet-1",
+          "ember-child-greet-2",
+          "ember-child-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "happy": {
+        "frames": [
+          "ember-child-happy-0",
+          "ember-child-happy-1",
+          "ember-child-happy-2",
+          "ember-child-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "sleep": {
+        "frames": [
+          "ember-child-sleep-0",
+          "ember-child-sleep-1",
+          "ember-child-sleep-2",
+          "ember-child-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      }
+    },
+    "growing": {
+      "idle": {
+        "frames": [
+          "ember-growing-idle-0",
+          "ember-growing-idle-1",
+          "ember-growing-idle-2",
+          "ember-growing-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "greet": {
+        "frames": [
+          "ember-growing-greet-0",
+          "ember-growing-greet-1",
+          "ember-growing-greet-2",
+          "ember-growing-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "happy": {
+        "frames": [
+          "ember-growing-happy-0",
+          "ember-growing-happy-1",
+          "ember-growing-happy-2",
+          "ember-growing-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "sleep": {
+        "frames": [
+          "ember-growing-sleep-0",
+          "ember-growing-sleep-1",
+          "ember-growing-sleep-2",
+          "ember-growing-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      }
+    },
+    "adult": {
+      "idle": {
+        "frames": [
+          "ember-adult-idle-0",
+          "ember-adult-idle-1",
+          "ember-adult-idle-2",
+          "ember-adult-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "greet": {
+        "frames": [
+          "ember-adult-greet-0",
+          "ember-adult-greet-1",
+          "ember-adult-greet-2",
+          "ember-adult-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "happy": {
+        "frames": [
+          "ember-adult-happy-0",
+          "ember-adult-happy-1",
+          "ember-adult-happy-2",
+          "ember-adult-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      },
+      "sleep": {
+        "frames": [
+          "ember-adult-sleep-0",
+          "ember-adult-sleep-1",
+          "ember-adult-sleep-2",
+          "ember-adult-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 32,
+          "y": 56
+        }
+      }
+    }
+  }
+}

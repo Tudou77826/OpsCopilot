@@ -1,0 +1,88 @@
+{
+  "assetsVersion": "v7",
+  "ambientWaitOnlyAcceleratedAfterIdle": true,
+  "character": {
+    "speciesId": "astra",
+    "stage": "child",
+    "paletteId": "mint"
+  },
+  "storedPetPreserved": true,
+  "samples": [
+    {
+      "name": "idle",
+      "wallMs": 8503.2461,
+      "taskMs": 87.37299999999998,
+      "scriptMs": 24.676000000000002,
+      "layouts": 4,
+      "styleRecalculations": 30,
+      "networkBytes": 0,
+      "poseChanges": 14,
+      "heapBytes": 7491404
+    },
+    {
+      "name": "interaction",
+      "wallMs": 3776.4174000000003,
+      "taskMs": 122.38099999999996,
+      "scriptMs": 37.28000000000001,
+      "layouts": 4,
+      "styleRecalculations": 36,
+      "networkBytes": 1098102,
+      "poseChanges": 36,
+      "heapBytes": 7794120
+    },
+    {
+      "name": "walking",
+      "wallMs": 1011.3209000000061,
+      "taskMs": 24.990999999999875,
+      "scriptMs": 8.994000000000002,
+      "layouts": 0,
+      "styleRecalculations": 13,
+      "networkBytes": 0,
+      "poseChanges": 12,
+      "heapBytes": 7281940
+    },
+    {
+      "name": "typing",
+      "wallMs": 124.04769999999553,
+      "taskMs": 74.84599999999998,
+      "scriptMs": 9.151999999999994,
+      "layouts": 60,
+      "styleRecalculations": 55,
+      "networkBytes": 0,
+      "poseChanges": 1,
+      "heapBytes": 7670512
+    },
+    {
+      "name": "gallery",
+      "wallMs": 676.984000000004,
+      "taskMs": 295.552,
+      "scriptMs": 99.165,
+      "layouts": 17,
+      "styleRecalculations": 56,
+      "networkBytes": 724315,
+      "poseChanges": 6,
+      "heapBytes": 9053312
+    },
+    {
+      "name": "collapsed",
+      "wallMs": 3006.6011,
+      "taskMs": 7.66700000000009,
+      "scriptMs": 1.6530000000000156,
+      "layouts": 0,
+      "styleRecalculations": 3,
+      "networkBytes": 0,
+      "poseChanges": 0,
+      "heapBytes": 8858712
+    }
+  ],
+  "inputMedianMs": 5.57560000000376,
+  "inputP95Ms": 11.021099999998114,
+  "longTasks": [
+    {
+      "duration": 61,
+      "startTime": 45175.59999990463,
+      "phase": "gallery"
+    }
+  ],
+  "pageErrors": []
+}

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"opscopilot/pkg/filetxn"
 	"opscopilot/pkg/terminal"
 )
 
@@ -30,6 +31,8 @@ func NewRecorder(storagePath string) *Recorder {
 	}
 }
 
+func (r *Recorder) StorageDirectory() string { return r.storagePath }
+
 // Start 开始录制
 func (r *Recorder) Start(recType RecordingType, sessionID, host, user string) (*RecordingSession, error) {
 	r.mu.Lock()
@@ -40,16 +43,16 @@ func (r *Recorder) Start(recType RecordingType, sessionID, host, user string) (*
 	}
 
 	session := &RecordingSession{
-		ID:         uuid.New().String(),
-		Type:       recType,
-		StartTime:  time.Now(),
-		SessionID:  sessionID,
-		Host:       host,
-		User:       user,
-		Commands:   make([]RecordedCommand, 0),
-		Metadata:   make(map[string]interface{}),
-		Timeline:   make([]TimelineEvent, 0),
-		Context:    make([]string, 0),
+		ID:          uuid.New().String(),
+		Type:        recType,
+		StartTime:   time.Now(),
+		SessionID:   sessionID,
+		Host:        host,
+		User:        user,
+		Commands:    make([]RecordedCommand, 0),
+		Metadata:    make(map[string]interface{}),
+		Timeline:    make([]TimelineEvent, 0),
+		Context:     make([]string, 0),
 		Suggestions: make([]string, 0),
 	}
 
@@ -322,8 +325,8 @@ func (r *Recorder) AddCommandFromOutput(sessionID string, commandLine string) bo
 
 	// 添加时间线事件
 	r.addTimelineEventLocked("terminal_input", commandLine, map[string]interface{}{
-		"session_id":         sessionID,
-		"history_navigation": true,
+		"session_id":            sessionID,
+		"history_navigation":    true,
 		"extracted_from_output": true,
 	})
 
@@ -474,8 +477,13 @@ func (r *Recorder) save(session *RecordingSession) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal session: %w", err)
 	}
+	release, err := filetxn.Lock(filename)
+	if err != nil {
+		return err
+	}
+	defer release()
 
-	if err := os.WriteFile(filename, data, 0644); err != nil {
+	if err := filetxn.Write(filename, data); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
@@ -569,7 +577,7 @@ func ScanDirForID[T any](dir string, id string) (string, *T, error) {
 			continue
 		}
 
-	 fullPath := filepath.Join(dir, entry.Name())
+		fullPath := filepath.Join(dir, entry.Name())
 		data, err := os.ReadFile(fullPath)
 		if err != nil {
 			continue

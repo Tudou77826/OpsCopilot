@@ -1,0 +1,755 @@
+{
+  "contractVersion": 2,
+  "id": "bolt-v3",
+  "speciesId": "bolt",
+  "style": "pixel",
+  "frameSize": 256,
+  "colorMode": "rgba",
+  "paletteHues": {
+    "mint": null,
+    "amber": 38,
+    "lavender": 272
+  },
+  "assets": {
+    "bolt-child-idle-0": {
+      "path": "bolt-child-idle-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-child-idle-1": {
+      "path": "bolt-child-idle-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-child-idle-2": {
+      "path": "bolt-child-idle-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-child-idle-3": {
+      "path": "bolt-child-idle-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-child-greet-0": {
+      "path": "bolt-child-greet-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-child-greet-1": {
+      "path": "bolt-child-greet-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-child-greet-2": {
+      "path": "bolt-child-greet-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-child-greet-3": {
+      "path": "bolt-child-greet-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-child-happy-0": {
+      "path": "bolt-child-happy-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-child-happy-1": {
+      "path": "bolt-child-happy-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-child-happy-2": {
+      "path": "bolt-child-happy-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-child-happy-3": {
+      "path": "bolt-child-happy-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-child-sleep-0": {
+      "path": "bolt-child-sleep-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-child-sleep-1": {
+      "path": "bolt-child-sleep-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-child-sleep-2": {
+      "path": "bolt-child-sleep-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-child-sleep-3": {
+      "path": "bolt-child-sleep-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-growing-idle-0": {
+      "path": "bolt-growing-idle-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-growing-idle-1": {
+      "path": "bolt-growing-idle-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-growing-idle-2": {
+      "path": "bolt-growing-idle-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-growing-idle-3": {
+      "path": "bolt-growing-idle-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-growing-greet-0": {
+      "path": "bolt-growing-greet-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-growing-greet-1": {
+      "path": "bolt-growing-greet-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-growing-greet-2": {
+      "path": "bolt-growing-greet-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-growing-greet-3": {
+      "path": "bolt-growing-greet-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-growing-happy-0": {
+      "path": "bolt-growing-happy-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-growing-happy-1": {
+      "path": "bolt-growing-happy-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-growing-happy-2": {
+      "path": "bolt-growing-happy-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-growing-happy-3": {
+      "path": "bolt-growing-happy-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-growing-sleep-0": {
+      "path": "bolt-growing-sleep-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-growing-sleep-1": {
+      "path": "bolt-growing-sleep-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-growing-sleep-2": {
+      "path": "bolt-growing-sleep-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-growing-sleep-3": {
+      "path": "bolt-growing-sleep-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-adult-idle-0": {
+      "path": "bolt-adult-idle-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-adult-idle-1": {
+      "path": "bolt-adult-idle-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-adult-idle-2": {
+      "path": "bolt-adult-idle-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-adult-idle-3": {
+      "path": "bolt-adult-idle-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-adult-greet-0": {
+      "path": "bolt-adult-greet-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-adult-greet-1": {
+      "path": "bolt-adult-greet-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-adult-greet-2": {
+      "path": "bolt-adult-greet-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-adult-greet-3": {
+      "path": "bolt-adult-greet-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-adult-happy-0": {
+      "path": "bolt-adult-happy-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-adult-happy-1": {
+      "path": "bolt-adult-happy-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-adult-happy-2": {
+      "path": "bolt-adult-happy-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-adult-happy-3": {
+      "path": "bolt-adult-happy-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-adult-sleep-0": {
+      "path": "bolt-adult-sleep-0.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-adult-sleep-1": {
+      "path": "bolt-adult-sleep-1.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-adult-sleep-2": {
+      "path": "bolt-adult-sleep-2.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    },
+    "bolt-adult-sleep-3": {
+      "path": "bolt-adult-sleep-3.png",
+      "role": "character",
+      "width": 256,
+      "height": 256
+    }
+  },
+  "stages": {
+    "child": {
+      "idle": {
+        "frames": [
+          "bolt-child-idle-0",
+          "bolt-child-idle-1",
+          "bolt-child-idle-2",
+          "bolt-child-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3600
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          }
+        ]
+      },
+      "greet": {
+        "frames": [
+          "bolt-child-greet-0",
+          "bolt-child-greet-1",
+          "bolt-child-greet-2",
+          "bolt-child-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 130
+          },
+          {
+            "frame": 2,
+            "durationMs": 220
+          },
+          {
+            "frame": 1,
+            "durationMs": 150
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 3,
+            "durationMs": 240
+          },
+          {
+            "frame": 0,
+            "durationMs": 250
+          }
+        ]
+      },
+      "happy": {
+        "frames": [
+          "bolt-child-happy-0",
+          "bolt-child-happy-1",
+          "bolt-child-happy-2",
+          "bolt-child-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 160
+          },
+          {
+            "frame": 1,
+            "durationMs": 180
+          },
+          {
+            "frame": 2,
+            "durationMs": 160
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 160
+          },
+          {
+            "frame": 0,
+            "durationMs": 280
+          }
+        ]
+      },
+      "sleep": {
+        "frames": [
+          "bolt-child-sleep-0",
+          "bolt-child-sleep-1",
+          "bolt-child-sleep-2",
+          "bolt-child-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 1100
+          },
+          {
+            "frame": 1,
+            "durationMs": 1200
+          },
+          {
+            "frame": 2,
+            "durationMs": 1300
+          },
+          {
+            "frame": 3,
+            "durationMs": 1200
+          }
+        ]
+      }
+    },
+    "growing": {
+      "idle": {
+        "frames": [
+          "bolt-growing-idle-0",
+          "bolt-growing-idle-1",
+          "bolt-growing-idle-2",
+          "bolt-growing-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3600
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          }
+        ]
+      },
+      "greet": {
+        "frames": [
+          "bolt-growing-greet-0",
+          "bolt-growing-greet-1",
+          "bolt-growing-greet-2",
+          "bolt-growing-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 130
+          },
+          {
+            "frame": 2,
+            "durationMs": 220
+          },
+          {
+            "frame": 1,
+            "durationMs": 150
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 3,
+            "durationMs": 240
+          },
+          {
+            "frame": 0,
+            "durationMs": 250
+          }
+        ]
+      },
+      "happy": {
+        "frames": [
+          "bolt-growing-happy-0",
+          "bolt-growing-happy-1",
+          "bolt-growing-happy-2",
+          "bolt-growing-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 160
+          },
+          {
+            "frame": 1,
+            "durationMs": 180
+          },
+          {
+            "frame": 2,
+            "durationMs": 160
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 160
+          },
+          {
+            "frame": 0,
+            "durationMs": 280
+          }
+        ]
+      },
+      "sleep": {
+        "frames": [
+          "bolt-growing-sleep-0",
+          "bolt-growing-sleep-1",
+          "bolt-growing-sleep-2",
+          "bolt-growing-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 1100
+          },
+          {
+            "frame": 1,
+            "durationMs": 1200
+          },
+          {
+            "frame": 2,
+            "durationMs": 1300
+          },
+          {
+            "frame": 3,
+            "durationMs": 1200
+          }
+        ]
+      }
+    },
+    "adult": {
+      "idle": {
+        "frames": [
+          "bolt-adult-idle-0",
+          "bolt-adult-idle-1",
+          "bolt-adult-idle-2",
+          "bolt-adult-idle-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 3600
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 100
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          }
+        ]
+      },
+      "greet": {
+        "frames": [
+          "bolt-adult-greet-0",
+          "bolt-adult-greet-1",
+          "bolt-adult-greet-2",
+          "bolt-adult-greet-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 180
+          },
+          {
+            "frame": 1,
+            "durationMs": 130
+          },
+          {
+            "frame": 2,
+            "durationMs": 220
+          },
+          {
+            "frame": 1,
+            "durationMs": 150
+          },
+          {
+            "frame": 2,
+            "durationMs": 200
+          },
+          {
+            "frame": 3,
+            "durationMs": 240
+          },
+          {
+            "frame": 0,
+            "durationMs": 250
+          }
+        ]
+      },
+      "happy": {
+        "frames": [
+          "bolt-adult-happy-0",
+          "bolt-adult-happy-1",
+          "bolt-adult-happy-2",
+          "bolt-adult-happy-3"
+        ],
+        "fps": 5,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 160
+          },
+          {
+            "frame": 1,
+            "durationMs": 180
+          },
+          {
+            "frame": 2,
+            "durationMs": 160
+          },
+          {
+            "frame": 3,
+            "durationMs": 200
+          },
+          {
+            "frame": 1,
+            "durationMs": 160
+          },
+          {
+            "frame": 0,
+            "durationMs": 280
+          }
+        ]
+      },
+      "sleep": {
+        "frames": [
+          "bolt-adult-sleep-0",
+          "bolt-adult-sleep-1",
+          "bolt-adult-sleep-2",
+          "bolt-adult-sleep-3"
+        ],
+        "fps": 2,
+        "anchor": {
+          "x": 128,
+          "y": 224
+        },
+        "sequence": [
+          {
+            "frame": 0,
+            "durationMs": 1100
+          },
+          {
+            "frame": 1,
+            "durationMs": 1200
+          },
+          {
+            "frame": 2,
+            "durationMs": 1300
+          },
+          {
+            "frame": 3,
+            "durationMs": 1200
+          }
+        ]
+      }
+    }
+  }
+}

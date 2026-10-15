@@ -1,0 +1,44 @@
+[
+  {
+    "species": "lumen",
+    "fit": 0.9811488134841428,
+    "assets": 96,
+    "bytes": 4920467
+  },
+  {
+    "species": "ember",
+    "fit": 0.9272403560830861,
+    "assets": 96,
+    "bytes": 5622032
+  },
+  {
+    "species": "moss",
+    "fit": 1,
+    "assets": 96,
+    "bytes": 5224330
+  },
+  {
+    "species": "bolt",
+    "fit": 0.9648674114954906,
+    "assets": 96,
+    "bytes": 4976903
+  },
+  {
+    "species": "astra",
+    "fit": 0.9874838152783773,
+    "assets": 96,
+    "bytes": 5953900
+  },
+  {
+    "species": "tide",
+    "fit": 0.968876823856985,
+    "assets": 96,
+    "bytes": 4426168
+  },
+  {
+    "species": "sage",
+    "fit": 0.8311001622303671,
+    "assets": 96,
+    "bytes": 4794559
+  }
+]

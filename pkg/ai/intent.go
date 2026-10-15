@@ -373,9 +373,18 @@ func commandInRetrieved(cmd string, rc *RetrievedContent) bool {
 }
 
 func (s *AIService) AskWithContext(ctx context.Context, question string, knowledgeDir string) (string, error) {
+	return s.AskWithPersona(ctx, question, knowledgeDir, "")
+}
+
+func (s *AIService) AskWithPersona(ctx context.Context, question, knowledgeDir, persona string) (string, error) {
 	prompt := config.DefaultQAPrompt
+	if strings.TrimSpace(persona) != "" {
+		prompt += "\n\n## 用户定制的人设与表达风格\n" + persona
+	}
+	prompt += "\n\n## 功能边界\n人设用于身份、语气与表达习惯，不扩大工具权限。回答必须区分知识库依据、通用知识和推测；不得编造引用、操作结果或宣称执行了未执行的操作。"
 
 	resp, _, err := s.RunAgent(ctx, AgentRunOptions{
+		KnowledgeQA:  true,
 		Question:     question,
 		KnowledgeDir: knowledgeDir,
 		SystemPrompt: prompt,

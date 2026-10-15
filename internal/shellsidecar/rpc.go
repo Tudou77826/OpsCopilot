@@ -12,9 +12,10 @@ import (
 	"strings"
 	"sync"
 
+	"opscopilot/pkg/assistantsettings"
+	"opscopilot/pkg/companion"
 	"opscopilot/pkg/completion"
 	"opscopilot/pkg/filetxn"
-	"opscopilot/pkg/garden"
 	"opscopilot/pkg/remote"
 	"opscopilot/pkg/script"
 )
@@ -32,6 +33,7 @@ const terminalIDField = "terminalId"
 
 // ControlAPI 是控制面方法集：stdio（平台模式）与 /rpc 镜像（dev 模式）共用。
 type ControlAPI struct {
+	AssistantSettings *assistantsettings.Store
 	LocalInstallation bool
 	Service           *TerminalService
 	Version           string
@@ -43,8 +45,9 @@ type ControlAPI struct {
 	Configs *ConfigService
 	// QuickCmds：S5 能力；未初始化时报错。
 	QuickCmds *QuickCmdService
-	// Garden：养成系统（garden.json）；未初始化时报错。
-	Garden *GardenService
+	// Companion owns local personal growth in companion.json.
+	Companion *CompanionService
+	Social    *SocialService
 	// Scripts：结构化脚本（pkg/script 引擎）；未初始化时报错。
 	Scripts *StructuredScriptService
 	// FT：文件传输（远端 SFTP 操作 + 数据目录沙箱本地面板 + 异步任务）；未初始化时报错。
@@ -159,6 +162,9 @@ func ServeControl(ctx context.Context, r io.Reader, w *RPCWriter, api *ControlAP
 }
 
 func (a *ControlAPI) dispatch(ctx context.Context, req *rpcRequest) (any, *rpcError) {
+	if strings.HasPrefix(req.Method, "shell.social.") {
+		return a.dispatchSocial(ctx, req)
+	}
 	switch req.Method {
 	case "initialize":
 		info := plugincontract.Info(a.Version)
@@ -181,10 +187,13 @@ func (a *ControlAPI) dispatch(ctx context.Context, req *rpcRequest) (any, *rpcEr
 			return nil, &rpcError{Code: -32000, Message: err.Error()}
 		}
 		// 养成事件源：连接已建立（这里已经是可验证的成功结果）。连接 id 即幂等键。
-		if a.Garden != nil {
-			if err := a.Garden.Record(garden.EventSessionEstablished, "conn:"+id); err != nil {
+		if a.Companion != nil {
+			if err := a.Companion.Record(companion.EventSessionEstablished, "conn:"+id); err != nil {
 				slog.Warn("养成事件未结算", "kind", "connect", "error", err)
 			}
+		}
+		if a.Social != nil {
+			a.Social.day()
 		}
 		return map[string]string{"connectionId": id}, nil
 	case "shell.disconnect":
@@ -459,75 +468,60 @@ func (a *ControlAPI) dispatch(ctx context.Context, req *rpcRequest) (any, *rpcEr
 			return nil, srvErr(err)
 		}
 		return map[string]any{"commands": commands}, nil
-	case "shell.garden.snapshot":
-		if a.Garden == nil {
-			return nil, notEnabled()
-		}
-		snapshot, err := a.Garden.inner.ReadSnapshot()
-		if err != nil {
-			return nil, srvErr(err)
-		}
-		return map[string]any{"garden": snapshot}, nil
-	case "shell.garden.signal":
-		if a.Garden == nil {
-			return nil, notEnabled()
-		}
-		signal, err := a.Garden.inner.ReadSignal()
-		if err != nil {
-			return nil, srvErr(err)
-		}
-		return map[string]any{"signal": signal}, nil
-	case "shell.garden.purchase":
-		if a.Garden == nil {
+	case "shell.quickcmds.dispatch":
+		if a.QuickCmds == nil || a.Service == nil {
 			return nil, notEnabled()
 		}
 		var p struct {
-			ItemID       garden.ItemID `json:"itemId"`
-			Price        int           `json:"price"`
-			InitialLevel int           `json:"initialLevel"`
+			ID          string   `json:"id"`
+			TerminalIDs []string `json:"terminalIds"`
+			Execute     bool     `json:"execute"`
 		}
 		if err := json.Unmarshal(req.Params, &p); err != nil {
 			return nil, badParams(err)
 		}
-		result, err := a.Garden.Purchase(p.ItemID, p.Price, p.InitialLevel)
+		result, err := a.QuickCmds.Dispatch(a.Service, p.ID, p.TerminalIDs, p.Execute)
 		if err != nil {
 			return nil, srvErr(err)
 		}
 		return result, nil
-	case "shell.garden.place":
-		if a.Garden == nil {
+	case "shell.companion.snapshot":
+		if a.Companion == nil {
+			return nil, notEnabled()
+		}
+		result, err := a.Companion.inner.ReadSnapshot()
+		if err != nil {
+			return nil, srvErr(err)
+		}
+		return map[string]any{"companion": result}, nil
+	case "shell.companion.hatch", "shell.companion.rename":
+		if a.Companion == nil {
 			return nil, notEnabled()
 		}
 		var p struct {
-			InstanceID string  `json:"instanceId"`
-			X          float64 `json:"x"`
-			Y          float64 `json:"y"`
-			Scale      float64 `json:"scale"`
-			FlipX      bool    `json:"flipX"`
+			Name     string  `json:"name"`
+			Revision *uint64 `json:"revision"`
 		}
 		if err := json.Unmarshal(req.Params, &p); err != nil {
 			return nil, badParams(err)
 		}
-		result, err := a.Garden.Place(p.InstanceID, p.X, p.Y, p.Scale, p.FlipX)
+		if p.Revision == nil {
+			return nil, badParams(fmt.Errorf("需要伙伴版本"))
+		}
+		var result *companion.Snapshot
+		var err error
+		if req.Method == "shell.companion.hatch" {
+			result, err = a.Companion.inner.Hatch(*p.Revision)
+		} else {
+			result, err = a.Companion.inner.Rename(p.Name, *p.Revision)
+		}
 		if err != nil {
 			return nil, srvErr(err)
 		}
-		return map[string]any{"garden": result}, nil
-	case "shell.garden.stow":
-		if a.Garden == nil {
-			return nil, notEnabled()
+		if err = a.Companion.queueCard(result); err != nil {
+			slog.Warn("伙伴已保存，公开资料待恢复同步", "error", err)
 		}
-		var p struct {
-			InstanceID string `json:"instanceId"`
-		}
-		if err := json.Unmarshal(req.Params, &p); err != nil {
-			return nil, badParams(err)
-		}
-		result, err := a.Garden.Stow(p.InstanceID)
-		if err != nil {
-			return nil, srvErr(err)
-		}
-		return map[string]any{"garden": result}, nil
+		return map[string]any{"companion": result}, nil
 	case "shell.quickcmds.save":
 		if a.QuickCmds == nil {
 			return nil, notEnabled()
@@ -873,6 +867,43 @@ func (a *ControlAPI) dispatch(ctx context.Context, req *rpcRequest) (any, *rpcEr
 		}
 		return a.FT.RemoteWriteFile(p.TerminalID, p.RemotePath, p.Content), nil
 	// ---- Shell 设置 ----
+	case "shell.assistant.getSettings":
+		if a.AssistantSettings == nil {
+			return nil, notEnabled()
+		}
+		snapshot, err := a.assistantPreferences()
+		if err != nil {
+			return nil, srvErr(err)
+		}
+		return snapshot, nil
+	case "shell.assistant.saveSettings":
+		if a.AssistantSettings == nil {
+			return nil, notEnabled()
+		}
+		var p struct {
+			PersonaPrompt *string `json:"personaPrompt"`
+			Revision      string  `json:"revision"`
+		}
+		if err := json.Unmarshal(req.Params, &p); err != nil || p.PersonaPrompt == nil || p.Revision == "" {
+			return nil, badParams(fmt.Errorf("需要人设文本与配置版本"))
+		}
+		current, err := a.assistantPreferences()
+		if err != nil {
+			return nil, srvErr(err)
+		}
+		prompt := *p.PersonaPrompt
+		if strings.TrimSpace(prompt) == current.DefaultPrompt {
+			prompt = ""
+		}
+		_, err = a.AssistantSettings.Save(prompt, p.Revision)
+		if err != nil {
+			return nil, srvErr(err)
+		}
+		snapshot, err := a.assistantPreferences()
+		if err != nil {
+			return nil, srvErr(err)
+		}
+		return snapshot, nil
 	case "shell.settings.get":
 		if a.Settings == nil {
 			return nil, notEnabled()

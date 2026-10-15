@@ -1,0 +1,51 @@
+{
+  "testedAt": "2026-10-15T08:23:01.724Z",
+  "results": [
+    {
+      "theme": "light",
+      "width": 1440,
+      "overflow": false,
+      "brokenImages": 0
+    },
+    {
+      "theme": "light",
+      "width": 960,
+      "overflow": false,
+      "brokenImages": 0
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "overflow": false,
+      "brokenImages": 0
+    },
+    {
+      "theme": "dark",
+      "width": 960,
+      "overflow": false,
+      "brokenImages": 0
+    }
+  ],
+  "originalPalettePreserved": true,
+  "reducedMotion": true,
+  "sidebarEntry": true,
+  "quickCommandAdjacent": true,
+  "unifiedAssistant": true,
+  "largePartner": true,
+  "directMedals": true,
+  "compactShowcase": true,
+  "medalsOnBackground": true,
+  "rightVerticalMedals": true,
+  "expandedScene": true,
+  "continuousMotion": true,
+  "integratedIdentityAndXP": true,
+  "iconFold": true,
+  "promotionRemoved": true,
+  "keyboardMedalDetails": true,
+  "collapsibleDisplay": true,
+  "commentViewport794x833": true,
+  "realUnconfiguredAIResponse": true,
+  "conversationAndDraftPreserved": true,
+  "otherMemberProfile": true,
+  "browserErrors": []
+}

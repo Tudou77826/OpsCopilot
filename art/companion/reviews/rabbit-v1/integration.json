@@ -1,0 +1,26 @@
+{
+  "status": "integrated",
+  "tool": "built-in imagegen",
+  "runtimePack": "frontend-shell/src/companion/packs/lumen-v8",
+  "runtimeBackgrounds": "frontend-shell/src/companion/scenes/v2",
+  "promptFiles": [
+    "prompts.json",
+    "dark-prompt.json",
+    "revisions.json",
+    "walk-clean-prompt.json",
+    "runtime-sources.json"
+  ],
+  "sourceSHA256": {
+    "background-dark-source.png": "7f9d3c715b490a4034240209c411392f8782c32af1cc22ea72de75940c52fc4b",
+    "background-source.png": "87b830c85850c4dd60a0c29890fd43a6821fb651c2fbcd9cdb413c03d8ccffd8",
+    "greet-source.png": "8ceb0c1954a0e6637a5cc4e6b62fa737df2cc816be7170db0a6f197735567ff5",
+    "idle-source.png": "6c5a95b587ebeb7a1455b03893935d956ac64bd476300b59e8f6b38063374899",
+    "look-source.png": "d7942385a93db54333eae110ecb25fd6fe00b902274695f5d13774a83e562024",
+    "seated-source.png": "f8b47a491b14c4a7ca733258113893abf07d1a908299765c7ca3cf56702da52a",
+    "sleep-source.png": "58815005d171105548d554ff7c1db24f36048fae1f2a8a82dcc40854f9b9f7ee",
+    "stretch-source.png": "83541925cbc6358e41a4b843196d61813c9f79f9b8b8ac871f37b9e086952067",
+    "turn-source.png": "5f532766dfb3f0bb7f961029b5967dab9870fbaa29b16ee605fdac13302bcd04",
+    "walk-source.png": "27e7556a8ced96b77c186f168d90a2fcc27bbb2c651daab47d89d74ffc07596f"
+  },
+  "behaviorEvidence": "docs/assets/companion-rabbit-v8/result.json"
+}

@@ -1,3 +1,6 @@
+import { makeAssistantSettingsHost } from '../../../frontend-shell/src/assistant/settings'
+import { makeSocialHost } from '../../../frontend-shell/src/companion/socialHost'
+import { makeCompanionHost } from '../../../frontend-shell/src/companion/host'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ProductFrame, ProductToolbar, ProductNavigation } from '../../../frontend-shell/src/ui/product/ProductChrome'
 import { useProductNavigation } from '../../../frontend-shell/src/ui/product/useProductNavigation'
@@ -19,8 +22,7 @@ import ScriptEditorModal from '../../../frontend-shell/src/ui/script/ScriptEdito
 import type { ScriptRuntime } from '../../../frontend-shell/src/ui/script/types'
 import QuickCommandPanel from '../../../frontend-shell/src/ui/quickcmd/QuickCommandPanel'
 import SessionManager from '../../../frontend-shell/src/ui/session/SessionManager'
-import type { SessionManagerRuntime, SessionNode, GardenSnapshotPort } from '../../../frontend-shell/src/ui/ports'
-import { useGardenAttention } from '../../../frontend-shell/src/ui/garden/useGardenAttention'
+import type { SessionManagerRuntime, SessionNode } from '../../../frontend-shell/src/ui/ports'
 import type { ConnectionConfig } from '../../../frontend-shell/src/ui/types'
 import type { QuickCommandHost } from '../../../frontend-shell/src/ui/ports'
 import { confirmDialog } from '../../../frontend-shell/src/ui/feedback/ConfirmDialog'
@@ -38,15 +40,12 @@ type Snapshot = { state: string; terminals: Terminal[]; recording: { is_recordin
 const flatten = (nodes: Saved[]): Saved[] => nodes.flatMap(node => [node, ...flatten(node.children ?? [])])
 const initialSettings: ShellSettings = { theme: 'light', terminal: normalizeTerminalConfig(), completionDelay: 150, highlightRules: [], commandQueryShortcut: 'Ctrl+K' }
 const runLabels: Record<string, string> = { running: '发送中', stopping: '正在停止', dispatched: '已发送（不代表执行成功）', stopped: '已停止发送', failed: '发送失败', unknown: '结果不明，仍保护终端', interrupted: '运行时中断' }
-const GardenPanel = React.lazy(() => import('../../../frontend-shell/src/ui/garden/GardenPanel'))
 
 export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClient; surface: HTMLElement; hostSettings?: React.ReactNode }) {
   const [sessions, setSessions] = useState<Saved[]>([]), [snapshot, setSnapshot] = useState<Snapshot>({ state: 'starting', terminals: [], recording: { is_recording: false }, replays: [] })
   const [active, setActive] = useState<string | null>(null)
   const { sidebarOpen, setSidebarOpen, tab:section, quickOpen, setQuickOpen, settingsOpen:showSettings, setSettingsOpen:setShowSettings, toggleSidebar } = useProductNavigation({sidebarOpen:true,quickOpen:true})
   const [connectModal, setConnectModal] = useState(false), [connectSeed, setConnectSeed] = useState<ConnectionConfig[]>([])
-  // 花园与快捷命令共用同一处停靠槽位：两者切换显示，不叠加（garden-design.md §5.2）。
-  const [gardenOpen, setGardenOpen] = useState(false)
   const [connectingSavedId, setConnectingSavedId] = useState<string>()
   const terminalRefs = useRef(new Map<string, TerminalRef>())
   const toast = useToast()
@@ -71,6 +70,10 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
   }, active, settings.commandQueryShortcut || 'Ctrl+K')
 
   const senders = useRef(new Map<string, (text: string) => void>())
+  const assistantSettings = useMemo(()=>makeAssistantSettingsHost((method,params)=>client.call(`assistant.${method}`,params)),[client])
+  const socialHost = useMemo(()=>makeSocialHost((method,params)=>client.call(`social.${method}`,params)),[client])
+  const companionHost = useMemo(()=>makeCompanionHost((method,params)=>client.call(`companion.${method}`,params)),[client])
+  const [settingsInitialTab, setSettingsInitialTab] = useState<'appearance' | 'achievements'>('appearance')
   const fileHost = useMemo(() => new TeamsFileHost(client), [client])
   const register = useCallback((id: string, sender?: (text: string) => void) => { if (sender) senders.current.set(id, sender); else senders.current.delete(id) }, [])
   const act = async (action: () => Promise<unknown>) => { setBusy(true); setError(''); try { await action() } catch (e) { setError((e as Error).message) } finally { setBusy(false) } }
@@ -146,7 +149,12 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
   }, [client, refresh, titles])
   const send = (content: string) => { const writer = active && senders.current.get(active); if (!writer) throw new Error('请选择并附着一个终端'); writer(content) }
   const quickHost = useMemo<QuickCommandHost>(() => ({
-    execute: content => { try { send(content.replace(/[\r\n]+$/, '') + '\r') } catch (e) { setError((e as Error).message) } },
+    execute: (content, commandId) => {
+      if(commandId) { void act(async()=>{ if(!active || !senders.current.has(active)) throw new Error('请选择并附着一个终端');
+        const result = await client.call<{warning?:string}>('quickCommands.dispatch',{id:commandId,terminalId:active});if(result.warning)toast.warning(result.warning);
+      }); return }
+      try { send(content.replace(/[\r\n]+$/, '') + '\r') } catch (e) { setError((e as Error).message) }
+    },
     storage: { load: async () => (await client.call('quickCommands.list')).commands ?? [],
       add: command => { void act(() => client.call('quickCommands.save', command)) },
       update: (id, changes) => { void act(async () => { const old = (await client.call('quickCommands.list')).commands.find((v: any) => v.id === id); await client.call('quickCommands.save', { ...old, ...changes, id }) }) },
@@ -196,17 +204,7 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
     }
     setSettings(next)
   };
-  // 养成宿主适配：展开时取快照，关闭时只取轻量变化 revision。
-  const gardenHost = useMemo(() => ({
-    snapshot: () => client.call<{ garden: GardenSnapshotPort }>('garden.snapshot').then(result => result.garden),
-    signal: () => client.call<{ signal: GardenSnapshotPort['changeSignal'] }>('garden.signal').then(result => result.signal),
-    purchase: (itemId: string, price: number, initialLevel: number) => client.call<{ balance: number; specimen: NonNullable<GardenSnapshotPort['specimens']>[number] }>('garden.purchase', { itemId, price, initialLevel }),
-    place: (instanceId: string, x: number, y: number, scale: number, flipX: boolean) => client.call<{ garden: GardenSnapshotPort }>('garden.place', { instanceId, x, y, scale, flipX }).then(result => result.garden),
-    stow: (instanceId: string) => client.call<{ garden: GardenSnapshotPort }>('garden.stow', { instanceId }).then(result => result.garden),
-  }), [client])
-  const gardenEnabled = settings.gardenEnabled === true
-  const gardenAttention = useGardenAttention(gardenEnabled ? gardenHost : undefined, gardenOpen)
-  useEffect(() => { if (!gardenEnabled) setGardenOpen(false) }, [gardenEnabled])
+
   // 皮肤与明暗是两个轴，但**宿主映射型皮肤（teams）把明暗也映射了**：它的颜色取自宿主变量，
   // 而宿主是按自己的模式换那批变量的。所以选 teams 就等于"明暗跟随宿主"，
   // 否则会出现"映射过的令牌是宿主暗色、没映射的仍是插件亮色"的半暗半亮。
@@ -220,7 +218,7 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
   return <ProductFrame
     toolbar={<ProductToolbar status={connected ? '就绪' : '连接中…'} theme={settings.theme}
       onNewConnection={() => { setConnectingSavedId(undefined); setConnectSeed([]); setConnectModal(true) }}
-      onThemeToggle={toggleTheme} onSettings={() => setShowSettings(true)}
+      onThemeToggle={toggleTheme} onSettings={() => {setSettingsInitialTab('appearance');setShowSettings(true)}}
       hostThemeFollow={{ following: themeFollow === 'host', onResume: resumeHostTheme }} />}
     terminal={<FlexLayoutAdapter
       terminals={snapshot.terminals.map(t => ({ id:t.terminalId, title:titles[t.terminalId] || `终端 ${t.terminalId.slice(0,8)}`, status:connected ? SessionStatus.CONNECTED : SessionStatus.DISCONNECTED }))}
@@ -231,9 +229,7 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
       terminalRuntime={{resize:() => {}}} theme={settings.theme} terminalConfig={settings.terminal} completionDelay={settings.completionDelay} highlightRules={settings.highlightRules}
       renderTerminal={(id,attachRef) => <TeamsTerminal client={client} id={id} settings={settings} attachRef={attachRef} register={register}/>}
       renderFileTransfer={(activeTerminalId,terminals) => <FilesPanel host={fileHost} activeTerminalId={activeTerminalId} terminals={terminals}/>} />}
-    quickCommands={gardenEnabled && gardenOpen
-      ? <React.Suspense fallback={null}><GardenPanel host={gardenHost} isOpen={gardenOpen} height={320}/></React.Suspense>
-      : <QuickCommandPanel host={quickHost} isOpen={quickOpen} onExecute={quickHost.execute}/>}
+    quickCommands={<QuickCommandPanel host={quickHost} isOpen={quickOpen} onExecute={quickHost.execute}/>}
     sidebar={<ProductSidebar isOpen={sidebarOpen} activeTab={section} onToggle={() => setSidebarOpen(v => !v)}>
       <div style={{display:section === 'sessions' ? 'flex':'none',flex:1,flexDirection:'column',height:'100%',overflow:'hidden'}}>
         <SessionManager runtime={sessionRuntime} onConnect={config => {
@@ -249,14 +245,13 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
         {snapshot.replays.length > 0 && <div role="status">{snapshot.replays.map(run => <div key={run.id}>{runLabels[run.state]} · {run.sent}/{run.total}{['running','stopping','unknown'].includes(run.state) && <button onClick={() => void act(() => client.call('scripts.replay.stop',{runId:run.id}))}>停止后续发送</button>}</div>)}</div>}
       </div>
     </ProductSidebar>}
-    navigation={<ProductNavigation isSidebarOpen={sidebarOpen} sidebarTab={section} toggleSidebar={toggleSidebar}
-      tabs={['sessions','script']} isQuickCommandOpen={quickOpen} onToggleQuickCommands={() => setQuickOpen(v => !v)}
-      gardenActive={gardenEnabled && gardenOpen} gardenAttention={gardenAttention} onToggleGarden={gardenEnabled ? () => { setGardenOpen(v => !v); if (!gardenOpen) setQuickOpen(false) } : undefined} />}
+    navigation={<ProductNavigation companionHost={companionHost} companionEnabled={settings.companionEnabled} onOpenCompanion={()=>{setSettingsInitialTab('achievements');setShowSettings(true)}} isSidebarOpen={sidebarOpen} sidebarTab={section} toggleSidebar={toggleSidebar}
+      tabs={['sessions','script']} isQuickCommandOpen={quickOpen} onToggleQuickCommands={() => setQuickOpen(v => !v)} />}
     footer={<BottomBar tips={BOTTOM_BAR_TIPS.filter(t => !/Telnet|广播/.test(t))}/>}
   >
     <SmartConnectModal isOpen={connectModal} initialConfigs={connectSeed} onClose={() => setConnectModal(false)} onConnect={connectBatch}
       onParse={async input => (await client.call('ai.parse',{input})).configs ?? []}/>
-    <ShellSettingsModal hostSettings={hostSettings} embedded isOpen={showSettings} onClose={() => setShowSettings(false)} runtime={settingsRuntime} initial={settings} onApply={applySettings} aiRuntime={aiRuntime}
+    <ShellSettingsModal assistantSettings={assistantSettings} companionHost={companionHost} initialTab={settingsInitialTab} socialHost={socialHost} hostSettings={hostSettings} embedded isOpen={showSettings} onClose={() => setShowSettings(false)} runtime={settingsRuntime} initial={settings} onApply={applySettings} aiRuntime={aiRuntime}
       skin={{ value: skin, onChange: changeSkin, options: availableSkins(), previewRoot: surface }}/>
     <CommandQueryOverlay visible={commandQuery.visible} query={commandQuery.query} onQueryChange={commandQuery.setQuery} loading={commandQuery.loading} result={commandQuery.result} error={commandQuery.error}
       onGenerate={() => void commandQuery.generate()} onRegenerate={() => void commandQuery.generate()} onCopy={() => void commandQuery.copy()}

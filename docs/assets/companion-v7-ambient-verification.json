@@ -1,0 +1,219 @@
+{
+  "assetsVersion": "v7",
+  "waitOnlyAccelerated": true,
+  "ambientWaits": [
+    50053.72110223454,
+    56440.27916906444,
+    48267.767082145605,
+    61989.97545406226,
+    55772.9734108743,
+    54664.81046770304,
+    63966.238179113694,
+    50884.164048614504,
+    59535.158492424955,
+    62407.06742267011,
+    47320.006697187484,
+    71825.23184733008,
+    66422.21192174315,
+    53245.870065790354
+  ],
+  "stableIdle": true,
+  "look": true,
+  "stretch": true,
+  "rightMovement": 33.34161376953125,
+  "leftMovement": 34.02508544921875,
+  "frontIdleRestored": true,
+  "interactionPositionPreserved": true,
+  "reducedMotion": true,
+  "foldPreservesDraft": true,
+  "storedPetPreserved": true,
+  "phases": [
+    {
+      "action": "look",
+      "facing": "front",
+      "time": 7083.899999976158,
+      "x": 600
+    },
+    {
+      "action": "idle",
+      "facing": "front",
+      "time": 11345.699999928474,
+      "x": 600
+    },
+    {
+      "action": "look",
+      "facing": "front",
+      "time": 17849.599999904633,
+      "x": 600
+    },
+    {
+      "action": "idle",
+      "facing": "front",
+      "time": 22053.699999928474,
+      "x": 600
+    },
+    {
+      "action": "stretch",
+      "facing": "front",
+      "time": 28565.199999928474,
+      "x": 600
+    },
+    {
+      "action": "idle",
+      "facing": "front",
+      "time": 29882.099999904633,
+      "x": 600
+    },
+    {
+      "action": "look",
+      "facing": "front",
+      "time": 36400.799999952316,
+      "x": 600
+    },
+    {
+      "action": "idle",
+      "facing": "front",
+      "time": 40607.299999952316,
+      "x": 600
+    },
+    {
+      "action": "turnOut",
+      "facing": "right",
+      "time": 47116.09999990463,
+      "x": 600
+    },
+    {
+      "action": "walkStart",
+      "facing": "right",
+      "time": 47652,
+      "x": 600
+    },
+    {
+      "action": "walk",
+      "facing": "right",
+      "time": 48010.699999928474,
+      "x": 600
+    },
+    {
+      "action": "walkStop",
+      "facing": "right",
+      "time": 49401.299999952316,
+      "x": 655.5555419921875
+    },
+    {
+      "action": "turnIn",
+      "facing": "right",
+      "time": 49767.799999952316,
+      "x": 655.5555419921875
+    },
+    {
+      "action": "idle",
+      "facing": "front",
+      "time": 50299.199999928474,
+      "x": 655.5555419921875
+    },
+    {
+      "action": "look",
+      "facing": "front",
+      "time": 56802.89999997616,
+      "x": 655.5555419921875
+    },
+    {
+      "action": "idle",
+      "facing": "front",
+      "time": 61017.5,
+      "x": 655.5555419921875
+    },
+    {
+      "action": "look",
+      "facing": "front",
+      "time": 67533.89999997616,
+      "x": 655.5555419921875
+    },
+    {
+      "action": "idle",
+      "facing": "front",
+      "time": 71750.59999990463,
+      "x": 655.5555419921875
+    },
+    {
+      "action": "look",
+      "facing": "front",
+      "time": 78266.29999995232,
+      "x": 655.5555419921875
+    },
+    {
+      "action": "idle",
+      "facing": "front",
+      "time": 82481.19999992847,
+      "x": 655.5555419921875
+    },
+    {
+      "action": "stretch",
+      "facing": "front",
+      "time": 88984.69999992847,
+      "x": 655.5555419921875
+    },
+    {
+      "action": "idle",
+      "facing": "front",
+      "time": 90258.09999990463,
+      "x": 655.5555419921875
+    },
+    {
+      "action": "look",
+      "facing": "front",
+      "time": 96768.29999995232,
+      "x": 655.5555419921875
+    },
+    {
+      "action": "idle",
+      "facing": "front",
+      "time": 100983.19999992847,
+      "x": 655.5555419921875
+    },
+    {
+      "action": "turnOut",
+      "facing": "left",
+      "time": 107498.39999997616,
+      "x": 655.5555419921875
+    },
+    {
+      "action": "walkStart",
+      "facing": "left",
+      "time": 108002.39999997616,
+      "x": 655.5555419921875
+    },
+    {
+      "action": "walk",
+      "facing": "left",
+      "time": 108338.59999990463,
+      "x": 655.5555419921875
+    },
+    {
+      "action": "walkStop",
+      "facing": "left",
+      "time": 109683.39999997616,
+      "x": 600.1950073242188
+    },
+    {
+      "action": "turnIn",
+      "facing": "left",
+      "time": 110018.89999997616,
+      "x": 600.1950073242188
+    },
+    {
+      "action": "greet",
+      "facing": "front",
+      "time": 110536.79999995232,
+      "x": 600.1950073242188
+    },
+    {
+      "action": "idle",
+      "facing": "front",
+      "time": 111719.39999997616,
+      "x": 600.1950073242188
+    }
+  ],
+  "errors": []
+}

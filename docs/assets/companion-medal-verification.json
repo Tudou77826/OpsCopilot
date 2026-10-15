@@ -1,0 +1,86 @@
+{
+  "measurements": [
+    {
+      "width": 1041,
+      "medals": [
+        {
+          "width": 48,
+          "x": 941,
+          "y": 140,
+          "right": 11,
+          "bottom": 222.21875,
+          "rendering": "auto",
+          "native": 128
+        },
+        {
+          "width": 48,
+          "x": 941,
+          "y": 196,
+          "right": 11,
+          "bottom": 166.21875,
+          "rendering": "auto",
+          "native": 128
+        },
+        {
+          "width": 48,
+          "x": 941,
+          "y": 252,
+          "right": 11,
+          "bottom": 110.21875,
+          "rendering": "auto",
+          "native": 128
+        }
+      ]
+    },
+    {
+      "width": 794,
+      "medals": [
+        {
+          "width": 48,
+          "x": 694,
+          "y": 140,
+          "right": 11,
+          "bottom": 222.21875,
+          "rendering": "auto",
+          "native": 128
+        },
+        {
+          "width": 48,
+          "x": 694,
+          "y": 196,
+          "right": 11,
+          "bottom": 166.21875,
+          "rendering": "auto",
+          "native": 128
+        },
+        {
+          "width": 48,
+          "x": 694,
+          "y": 252,
+          "right": 11,
+          "bottom": 110.21875,
+          "rendering": "auto",
+          "native": 128
+        }
+      ]
+    },
+    {
+      "width": 1351,
+      "settings": {
+        "height": 636,
+        "overflow": false
+      }
+    },
+    {
+      "width": 960,
+      "settings": {
+        "height": 692,
+        "overflow": false
+      }
+    }
+  ],
+  "keyboardDetails": true,
+  "reducedMotion": true,
+  "preservedPreferences": true,
+  "errors": []
+}

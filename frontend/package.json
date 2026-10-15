@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "npm run lint:companion-assets && tsc && vite build",
     "preview": "vite preview",
     "test": "vitest",
-    "lint:style": "node ../tools/checks/check-style-tokens.mjs frontend/src"
+    "lint:style": "node ../tools/checks/check-style-tokens.mjs frontend/src",
+    "lint:companion-assets": "node ../tools/checks/check-companion-assets.mjs"
   },
   "dependencies": {
     "@opscopilot/shell-terminal": "file:../frontend-shell",

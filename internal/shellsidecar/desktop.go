@@ -58,7 +58,7 @@ func (d *desktopSettings) get() (ShellSettingsJSON, error) {
 	out.Theme = c.Appearance.Theme
 	out.CompletionDelay = c.CompletionDelay
 	out.CommandQueryShortcut = c.CommandQueryShortcut
-	out.GardenEnabled = c.Experimental.GardenEnabled
+	out.CompanionEnabled = c.Experimental.CompanionEnabled
 	b, _ := json.Marshal(c.Terminal)
 	if err := json.Unmarshal(b, &out.Terminal); err != nil {
 		return out, err
@@ -83,7 +83,7 @@ func (d *desktopSettings) save(next ShellSettingsJSON) error {
 	m.Config.Appearance.Theme = next.Theme
 	m.Config.CompletionDelay = next.CompletionDelay
 	m.Config.CommandQueryShortcut = next.CommandQueryShortcut
-	m.Config.Experimental.GardenEnabled = next.GardenEnabled
+	m.Config.Experimental.CompanionEnabled = next.CompanionEnabled
 	b, _ := json.Marshal(next.Terminal)
 	if err := json.Unmarshal(b, &m.Config.Terminal); err != nil {
 		return err

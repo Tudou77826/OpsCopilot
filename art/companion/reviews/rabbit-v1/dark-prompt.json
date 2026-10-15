@@ -1,0 +1,7 @@
+{
+  "prompt": "Use case: style-transfer (palette variant only). Image1 is the exact LIGHT background edit target. Create its DARK-THEME companion while preserving the same3:2 layout, low horizon, flat walking strip across bottom25%, plants/stones at exactly the same edge positions and sparse grass. Keep it SIMPLE and very low contrast, appropriate for app backgrounds #1e1e1e/#202020. Upper75%mostly flat neutral charcoal #202221; faint horizon/cloud-layer shapes #272b28. Lower25%one flat dim grey-olive grass strip #343d35, restrained plant accents #53604b and mutedgrey stones. NO additional scenery, forest, mountains, moon, stars, lanterns, glow, characters, UI, text, border or dramatic lighting. No bright focal points and no blue/purple fantasy scene. Same minimal 2D pixel edges and restrained details as input. Fully opaque backdrop, simple theme-color variant.",
+  "reference": "background-source.png",
+  "output": "background-dark-source.png",
+  "theme": "dark",
+  "status": "draft-awaiting-user-approval"
+}

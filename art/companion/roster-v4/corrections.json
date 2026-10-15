@@ -1,0 +1,13 @@
+{
+  "references": "frontend-shell/src/companion/packs/<species>-v5/<species>-idle-0.png; walk also uses <species>-walk-0.png",
+  "lumen": {
+    "actions": ["idle", "greet", "happy", "sleep", "look", "stretch"],
+    "replacePrompt": ["sparks,hearts", "unrelated effect sparks,hearts"],
+    "append": "CRITICAL IDENTITY DETAIL: the reference has TWO GOLD STAR CLUSTERS attached above the left and right ears. These are permanent character ornaments, NOT particles or effects. Preserve BOTH clusters visibly in EVERY frame, including blink/sleep/stretch. Same count, golden color, relative head attachment and scale, with their tiny red-orange accent. Do not erase them under the no-particles rule. Keep character, ears AND both stars inside the central65% of each cell. This correction replaces a failed version that lost both stars.",
+    "happyFinalAppendInstead": "CRITICAL: BOTH permanent gold star clusters above the ears must remain in EVERY frame. They are part of identity, not forbidden particles. Generous padding is essential: draw the entire widest outstretched ears INSIDE central50% of EVERY cell; leave25% transparent blank gutters on every side. Small sprites on a spacious4x3 grid. No ears touching neighboring cells. Preserve the jump trajectory with clear anticipation, airtime and soft landing."
+  },
+  "tide": {
+    "actions": ["walk"],
+    "append": "DIRECTIONAL CORRECTION: This is RIGHT only. Both row2 AND row3, all sixteen frames8 through23 MUST face RIGHT, beak points to the right side of every cell. DO NOT mirror the third row. Frame16 is opposite FOOT contact, NEVER opposite FACING. Scarf knot always stays behind head on left side. All row4 standing frames24-28 still RIGHT. Frame0 and31 front. No left-facing frame anywhere in this atlas."
+  }
+}

@@ -4,11 +4,37 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"opscopilot/pkg/recorder"
 )
+
+func TestConcurrentSameModuleArchivesPreserveAllRecords(t *testing.T) {
+	dir := t.TempDir()
+	var wg sync.WaitGroup
+	for _, id := range []string{"first", "second"} {
+		wg.Add(1)
+		go func(id string) {
+			defer wg.Done()
+			_, err := AppendRecord(dir, &ArchiveInput{Service: "service", Module: "module", Session: &recorder.RecordingSession{ID: id}, Conclusion: "有效结论", Record: "\n会话ID: " + id + "\n"})
+			if err != nil {
+				t.Error(err)
+			}
+		}(id)
+	}
+	wg.Wait()
+	data, err := os.ReadFile(filepath.Join(dir, "archive", "service_module.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"first", "second"} {
+		if strings.Count(string(data), "会话ID: "+id) != 1 {
+			t.Fatal(string(data))
+		}
+	}
+}
 
 func TestExtractSection(t *testing.T) {
 	md := `## 关键词
