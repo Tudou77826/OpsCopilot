@@ -807,6 +807,441 @@ export namespace config {
 
 }
 
+export namespace dbworkspace {
+
+	export class Column {
+	    name: string;
+	    type: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Column(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.type = source["type"];
+	    }
+	}
+	export class JDBCJar {
+	    name: string;
+	    sha256: string;
+
+	    static createFrom(source: any = {}) {
+	        return new JDBCJar(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.sha256 = source["sha256"];
+	    }
+	}
+	export class JDBCDriver {
+	    id: string;
+	    name: string;
+	    className: string;
+	    urlTemplate: string;
+	    dialect: string;
+	    version: string;
+	    jars: JDBCJar[];
+
+	    static createFrom(source: any = {}) {
+	        return new JDBCDriver(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.className = source["className"];
+	        this.urlTemplate = source["urlTemplate"];
+	        this.dialect = source["dialect"];
+	        this.version = source["version"];
+	        this.jars = this.convertValues(source["jars"], JDBCJar);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class JDBCImport {
+	    name: string;
+	    className: string;
+	    urlTemplate: string;
+	    dialect: string;
+	    paths: string[];
+
+	    static createFrom(source: any = {}) {
+	        return new JDBCImport(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.className = source["className"];
+	        this.urlTemplate = source["urlTemplate"];
+	        this.dialect = source["dialect"];
+	        this.paths = source["paths"];
+	    }
+	}
+
+	export class JDBCStatus {
+	    available: boolean;
+	    message: string;
+	    drivers: JDBCDriver[];
+
+	    static createFrom(source: any = {}) {
+	        return new JDBCStatus(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.available = source["available"];
+	        this.message = source["message"];
+	        this.drivers = this.convertValues(source["drivers"], JDBCDriver);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Profile {
+	    id: string;
+	    revision: number;
+	    name: string;
+	    environment: string;
+	    group?: string;
+	    engine: string;
+	    driverId?: string;
+	    jdbcAllowPublicKeyRetrieval?: boolean;
+	    host: string;
+	    port: number;
+	    user: string;
+	    database: string;
+	    tls: string;
+	    readOnly: boolean;
+	    gatewayId: string;
+	    gatewayMode?: string;
+	    passwordSet: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new Profile(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.revision = source["revision"];
+	        this.name = source["name"];
+	        this.environment = source["environment"];
+	        this.group = source["group"];
+	        this.engine = source["engine"];
+	        this.driverId = source["driverId"];
+	        this.jdbcAllowPublicKeyRetrieval = source["jdbcAllowPublicKeyRetrieval"];
+	        this.host = source["host"];
+	        this.port = source["port"];
+	        this.user = source["user"];
+	        this.database = source["database"];
+	        this.tls = source["tls"];
+	        this.readOnly = source["readOnly"];
+	        this.gatewayId = source["gatewayId"];
+	        this.gatewayMode = source["gatewayMode"];
+	        this.passwordSet = source["passwordSet"];
+	    }
+	}
+	export class ProfileInput {
+	    id: string;
+	    revision: number;
+	    name: string;
+	    environment: string;
+	    group?: string;
+	    engine: string;
+	    driverId?: string;
+	    jdbcAllowPublicKeyRetrieval?: boolean;
+	    host: string;
+	    port: number;
+	    user: string;
+	    database: string;
+	    tls: string;
+	    readOnly: boolean;
+	    gatewayId: string;
+	    gatewayMode?: string;
+	    passwordSet: boolean;
+	    password?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new ProfileInput(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.revision = source["revision"];
+	        this.name = source["name"];
+	        this.environment = source["environment"];
+	        this.group = source["group"];
+	        this.engine = source["engine"];
+	        this.driverId = source["driverId"];
+	        this.jdbcAllowPublicKeyRetrieval = source["jdbcAllowPublicKeyRetrieval"];
+	        this.host = source["host"];
+	        this.port = source["port"];
+	        this.user = source["user"];
+	        this.database = source["database"];
+	        this.tls = source["tls"];
+	        this.readOnly = source["readOnly"];
+	        this.gatewayId = source["gatewayId"];
+	        this.gatewayMode = source["gatewayMode"];
+	        this.passwordSet = source["passwordSet"];
+	        this.password = source["password"];
+	    }
+	}
+	export class QueryRequest {
+	    database: string;
+	    sessionId: string;
+	    requestId: string;
+	    sql: string;
+	    mode?: string;
+	    cursorOffset?: number;
+	    limit: number;
+	    timeoutSeconds: number;
+
+	    static createFrom(source: any = {}) {
+	        return new QueryRequest(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.database = source["database"];
+	        this.sessionId = source["sessionId"];
+	        this.requestId = source["requestId"];
+	        this.sql = source["sql"];
+	        this.mode = source["mode"];
+	        this.cursorOffset = source["cursorOffset"];
+	        this.limit = source["limit"];
+	        this.timeoutSeconds = source["timeoutSeconds"];
+	    }
+	}
+	export class ResultSet {
+	    statement: string;
+	    columns: Column[];
+	    rows: string[][];
+	    affectedRows: number;
+	    truncated: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new ResultSet(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.statement = source["statement"];
+	        this.columns = this.convertValues(source["columns"], Column);
+	        this.rows = source["rows"];
+	        this.affectedRows = source["affectedRows"];
+	        this.truncated = source["truncated"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class QueryResult {
+	    sets: ResultSet[];
+	    durationMs: number;
+	    error: string;
+	    cancelled: boolean;
+	    disconnected: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new QueryResult(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sets = this.convertValues(source["sets"], ResultSet);
+	        this.durationMs = source["durationMs"];
+	        this.error = source["error"];
+	        this.cancelled = source["cancelled"];
+	        this.disconnected = source["disconnected"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+	export class SQLTemplateRequest {
+	    sessionId: string;
+	    database: string;
+	    table: string;
+	    kind: string;
+	    column?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new SQLTemplateRequest(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.database = source["database"];
+	        this.table = source["table"];
+	        this.kind = source["kind"];
+	        this.column = source["column"];
+	    }
+	}
+	export class SessionInfo {
+	    id: string;
+	    profileId: string;
+	    version: string;
+	    database: string;
+	    readOnly: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new SessionInfo(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.profileId = source["profileId"];
+	        this.version = source["version"];
+	        this.database = source["database"];
+	        this.readOnly = source["readOnly"];
+	    }
+	}
+	export class Structure {
+	    columns: ResultSet;
+	    indexes: ResultSet;
+	    ddl: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Structure(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.columns = this.convertValues(source["columns"], ResultSet);
+	        this.indexes = this.convertValues(source["indexes"], ResultSet);
+	        this.ddl = source["ddl"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Table {
+	    name: string;
+	    type: string;
+	    comment: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Table(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.type = source["type"];
+	        this.comment = source["comment"];
+	    }
+	}
+	export class TableRequest {
+	    requestId: string;
+	    sessionId: string;
+	    database: string;
+	    table: string;
+	    offset: number;
+	    limit: number;
+
+	    static createFrom(source: any = {}) {
+	        return new TableRequest(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.requestId = source["requestId"];
+	        this.sessionId = source["sessionId"];
+	        this.database = source["database"];
+	        this.table = source["table"];
+	        this.offset = source["offset"];
+	        this.limit = source["limit"];
+	    }
+	}
+
+}
+
 export namespace main {
 
 	export class ConnectConfig {
@@ -871,6 +1306,22 @@ export namespace main {
 	        this.success = source["success"];
 	        this.sessionId = source["sessionId"];
 	        this.message = source["message"];
+	    }
+	}
+	export class DatabaseGateway {
+	    id: string;
+	    name: string;
+	    host: string;
+
+	    static createFrom(source: any = {}) {
+	        return new DatabaseGateway(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.host = source["host"];
 	    }
 	}
 	export class ImportAnalysis {

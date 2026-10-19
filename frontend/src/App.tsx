@@ -33,6 +33,9 @@ import { writeTerminalModeReset } from './terminalModeReset';
 import { flushTerminalInitialOutput } from './terminalOutputFlush';
 import { KnowledgeTarget } from './components/AI';
 import type { main } from '../wailsjs/go/models';
+import { wailsDatabaseRuntime } from './shell-adapter/wailsDatabaseRuntime';
+
+const DatabaseWorkspace = lazy(() => import('../../frontend-shell/src/ui/database/DatabaseWorkspace').then(module => ({ default: module.DatabaseWorkspace })));
 
 interface TerminalSession {
     id: string;
@@ -55,6 +58,10 @@ const getDelayUntilNextDailyUpdateCheck = (now = new Date()) => {
 };
 
 function App() {
+    const [databaseRequest, setDatabaseRequest] = useState(0);
+    const [workspaceKind, setWorkspaceKind] = useState<string | null>('terminal');
+    const workspaceKindRef = useRef(workspaceKind); workspaceKindRef.current = workspaceKind;
+    const databaseWorkspaces = useMemo(() => [{ id: 'database', title: '数据库', request: databaseRequest, render: () => <Suspense fallback={<div style={{ padding: 20, color: 'var(--text-muted)' }}>正在打开数据库…</div>}><DatabaseWorkspace runtime={wailsDatabaseRuntime} /></Suspense> }], [databaseRequest]);
     const [settingsInitialTab, setSettingsInitialTab] = useState<'llm' | 'servicecenter' | 'achievements' | 'experimental'>('llm');
     const [companionEnabled, setCompanionEnabled] = useState(false);
     const toast = useToast();
@@ -567,6 +574,7 @@ function App() {
     };
 
     const handleQuickCommand = (command: string, commandId?: string) => {
+        if (workspaceKindRef.current !== 'terminal') { toast.warning('请先切换到目标终端'); return; }
         const targetTerminalId = activeTerminalId;
         if (!targetTerminalId) {
             toast.warning("请先选择一个激活的终端");
@@ -706,6 +714,8 @@ function App() {
         <ProductFrame id="app"
             toolbar={<ProductToolbar status={status} theme={theme} onNewConnection={() => setIsSmartModalOpen(true)} onThemeToggle={handleThemeToggle} onSettings={() => { setSettingsInitialTab('llm'); setIsSettingsOpen(true); }} updateAvailable={updateAvailable} highlightNeedsAttention={highlightNeedsAttention} parsedTimestamp={parsedTimestamp} />}
             terminal={<FlexLayoutAdapter
+                            workspaces={databaseWorkspaces}
+                            onWorkspaceFocusChange={setWorkspaceKind}
                             terminals={terminals}
                             onTerminalData={handleTerminalData}
                             terminalRefs={terminalRefs}
@@ -746,7 +756,7 @@ function App() {
                     onOpenKnowledgeSource={handleOpenKnowledgeSource}
                     knowledgeTarget={knowledgeTarget}
                 />}
-            navigation={<ProductNavigation companionHost={wailsCompanionHost} companionEnabled={companionEnabled} isSidebarOpen={isSidebarOpen} sidebarTab={sidebarTab} toggleSidebar={toggleSidebar} isQuickCommandOpen={isQuickCommandOpen} onToggleQuickCommands={() => setIsQuickCommandOpen(!isQuickCommandOpen)} />}
+            navigation={<ProductNavigation onOpenDatabase={() => { setDatabaseRequest(v => v + 1); setIsSidebarOpen(false); }} databaseSelected={workspaceKind === 'database'} companionHost={wailsCompanionHost} companionEnabled={companionEnabled} isSidebarOpen={isSidebarOpen} sidebarTab={sidebarTab} toggleSidebar={toggleSidebar} isQuickCommandOpen={isQuickCommandOpen} onToggleQuickCommands={() => setIsQuickCommandOpen(!isQuickCommandOpen)} />}
             footer={<BottomBar onOpenServiceSettings={() => {
                 setSettingsInitialTab('servicecenter');
                 setIsSettingsOpen(true);

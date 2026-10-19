@@ -7,6 +7,7 @@ import {main} from '../models';
 import {companion} from '../models';
 import {servicecenter} from '../models';
 import {script} from '../models';
+import {dbworkspace} from '../models';
 import {assistantsettings} from '../models';
 import {security} from '../models';
 import {recorder} from '../models';
@@ -64,6 +65,50 @@ export function CreateSavedConnection(arg1:main.ConnectConfig,arg2:string):Promi
 export function CreateSavedFolder(arg1:string,arg2:string):Promise<main.SessionTreeNode>;
 
 export function CreateScript(arg1:string,arg2:string):Promise<script.Script>;
+
+export function DatabaseBrowse(arg1:dbworkspace.TableRequest):Promise<dbworkspace.QueryResult>;
+
+export function DatabaseCancel(arg1:string):Promise<boolean>;
+
+export function DatabaseChooseJDBCJars():Promise<Array<string>>;
+
+export function DatabaseConnect(arg1:string):Promise<dbworkspace.SessionInfo>;
+
+export function DatabaseCreateGroup(arg1:string):Promise<void>;
+
+export function DatabaseDelete(arg1:string,arg2:number):Promise<void>;
+
+export function DatabaseDeleteGroup(arg1:string):Promise<void>;
+
+export function DatabaseDeleteJDBC(arg1:string):Promise<void>;
+
+export function DatabaseDisconnect(arg1:string):Promise<void>;
+
+export function DatabaseGateways():Promise<Array<main.DatabaseGateway>>;
+
+export function DatabaseGenerateSQL(arg1:dbworkspace.SQLTemplateRequest):Promise<string>;
+
+export function DatabaseGroups():Promise<Array<string>>;
+
+export function DatabaseImportJDBC(arg1:dbworkspace.JDBCImport):Promise<dbworkspace.JDBCDriver>;
+
+export function DatabaseJDBCStatus():Promise<dbworkspace.JDBCStatus>;
+
+export function DatabaseProfiles():Promise<Array<dbworkspace.Profile>>;
+
+export function DatabaseQuery(arg1:dbworkspace.QueryRequest):Promise<dbworkspace.QueryResult>;
+
+export function DatabaseRenameGroup(arg1:string,arg2:string):Promise<void>;
+
+export function DatabaseSave(arg1:dbworkspace.ProfileInput):Promise<dbworkspace.Profile>;
+
+export function DatabaseSchemas(arg1:string):Promise<Array<string>>;
+
+export function DatabaseStructure(arg1:dbworkspace.TableRequest):Promise<dbworkspace.Structure>;
+
+export function DatabaseTables(arg1:string,arg2:string):Promise<Array<dbworkspace.Table>>;
+
+export function DatabaseTest(arg1:dbworkspace.ProfileInput):Promise<string>;
 
 export function DeleteQuickCommand(arg1:string):Promise<string>;
 

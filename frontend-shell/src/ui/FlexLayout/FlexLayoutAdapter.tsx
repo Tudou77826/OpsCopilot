@@ -19,6 +19,8 @@ export interface TerminalSession {
 }
 
 export interface FlexLayoutAdapterProps {
+	workspaces?: { id: string; title: string; request: number; render(): React.ReactNode }[];
+	onWorkspaceFocusChange?: (kind: string | null) => void;
     terminals: TerminalSession[];
     onTerminalData: (id: string, data: string) => void;
     terminalRefs: React.MutableRefObject<Map<string, TerminalRef>>;
@@ -70,7 +72,11 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
     renderFileTransfer,
     onDetachTerminal,
     filePanelRequest,
+    workspaces,
+    onWorkspaceFocusChange,
 }) => {
+    const [layoutHasContent, setLayoutHasContent] = useState(false);
+    const handledWorkspaceRequests = useRef(new Map<string, number>());
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; id: string } | null>(null);
 
     // Tab 条拖拽边缘自动滚动（Issue #66）：标签超出一屏时，flexlayout 0.9 的
@@ -157,6 +163,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
     }, [model]);
 
     const openFileTransferTab = useCallback((terminalId?: string | null) => {
+        setLayoutHasContent(true);
         if (terminalId) {
             onActiveTerminalChange?.(terminalId);
         }
@@ -184,9 +191,24 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
 
     useEffect(() => { if (filePanelRequest) openFileTransferTab(activeTerminalId); }, [filePanelRequest]);
 
+    useEffect(() => {
+        for (const workspace of workspaces ?? []) {
+            if (!workspace.request || workspace.request === handledWorkspaceRequests.current.get(workspace.id)) continue;
+            handledWorkspaceRequests.current.set(workspace.id, workspace.request);
+            if (model.getNodeById(workspace.id)) model.doAction(Actions.selectTab(workspace.id));
+            else {
+                const target = findFirstTabsetId();
+                model.doAction(Actions.addTab({ type: 'tab', id: workspace.id, name: workspace.title, component: 'workspace', enableRename: false }, target || model.getRootRow().getId(), DockLocation.CENTER, -1, true));
+            }
+            setLayoutHasContent(true);
+            onWorkspaceFocusChange?.(workspace.id);
+        }
+    }, [workspaces, model, findFirstTabsetId, onWorkspaceFocusChange]);
+
     // --- Sync terminals[] → flexlayout Model ---
     useEffect(() => {
         const currentIds = new Set(terminals.map(t => t.id));
+        if (terminals.length) setLayoutHasContent(true);
         const prevIds = prevTerminalIdsRef.current;
 
         // Add missing terminals. A tab can disappear from the layout model while
@@ -262,7 +284,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
     const handleAction = useCallback((action: any): any => {
         if (action.type === Actions.DELETE_TAB) {
             const tabId = action.data.node;
-            if (tabId === FILE_TRANSFER_TAB_ID) {
+            if (tabId === FILE_TRANSFER_TAB_ID || (model.getNodeById(tabId) instanceof TabNode && (model.getNodeById(tabId) as TabNode).getComponent() === 'workspace')) {
                 return action;
             }
             onCloseTerminal(tabId);
@@ -270,7 +292,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
         }
         if (action.type === Actions.RENAME_TAB) {
             const tabId = action.data.node;
-            if (tabId === FILE_TRANSFER_TAB_ID) {
+            if (tabId === FILE_TRANSFER_TAB_ID || (model.getNodeById(tabId) instanceof TabNode && (model.getNodeById(tabId) as TabNode).getComponent() === 'workspace')) {
                 return undefined;
             }
             const newName = action.data.text;
@@ -280,10 +302,11 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
             return action;
         }
         return action;
-    }, [onCloseTerminal, onRenameTerminal]);
+    }, [onCloseTerminal, onRenameTerminal, model]);
 
     // --- Factory: render Terminal in each tab ---
     const factory = useCallback((node: TabNode) => {
+        if (node.getComponent() === 'workspace') return workspaces?.find(w => w.id === node.getId())?.render() ?? null;
         if (node.getComponent() === 'fileTransfer') {
             return renderFileTransfer?.(activeTerminalId || null, terminals) ?? null;
         }
@@ -311,10 +334,11 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                 onToggleTerminalBroadcast={onToggleTerminalBroadcast}
             />
         );
-    }, [activeTerminalId, terminals, onTerminalData, terminalRefs, completionDelay, terminalConfig, onTerminalFontSizeChange, highlightRules, theme, onSelectionParsed, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast, terminalRuntime, renderTerminal, renderFileTransfer]);
+    }, [activeTerminalId, terminals, onTerminalData, terminalRefs, completionDelay, terminalConfig, onTerminalFontSizeChange, highlightRules, theme, onSelectionParsed, isBroadcastMode, broadcastIds, onToggleTerminalBroadcast, terminalRuntime, renderTerminal, renderFileTransfer, workspaces]);
 
     // --- Custom tab rendering ---
     const handleRenderTab = useCallback((node: TabNode, renderValues: ITabRenderValues) => {
+        if (node.getComponent() === 'workspace') return;
         if (node.getComponent() === 'fileTransfer') {
             renderValues.leading = (
                 <span style={{
@@ -473,6 +497,11 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
 
     // --- Track active terminal ---
     const handleModelChange = useCallback((_model: Model, action: any) => {
+        let hasTabs = false;
+        _model.visitNodes(n => { if (n.getType() === 'tab') hasTabs = true; });
+        setLayoutHasContent(hasTabs);
+        const focused = _model.getActiveTabset()?.getSelectedNode() as TabNode | undefined;
+        onWorkspaceFocusChange?.(focused ? (focused.getComponent() === 'workspace' ? focused.getId() : focused.getComponent() ?? null) : null);
         const trackActions = [Actions.SELECT_TAB, Actions.SET_ACTIVE_TABSET, Actions.MOVE_NODE, Actions.ADD_TAB];
         if (trackActions.includes(action.type)) {
             let activeId: string | null = null;
@@ -518,11 +547,11 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                 }
             });
         }, 100);
-    }, [onActiveTerminalChange, terminalRefs]);
+    }, [onActiveTerminalChange, terminalRefs, onWorkspaceFocusChange]);
 
     // --- Context menu handler from right-click on tabs ---
     const handleContextMenu = useCallback((node: TabNode | TabSetNode | BorderNode, event: React.MouseEvent<HTMLElement>) => {
-        if (node instanceof TabNode && node.getId() !== FILE_TRANSFER_TAB_ID) {
+        if (node instanceof TabNode && node.getComponent() === 'terminal') {
             event.preventDefault();
             setContextMenu({ x: event.clientX, y: event.clientY, id: node.getId() });
         }
@@ -539,7 +568,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                 setContextMenu(null);
             }}
         >
-            {terminals.length === 0 ? (
+            {!layoutHasContent && terminals.length === 0 ? (
                 <div style={{
                     height: '100%',
                     display: 'flex',

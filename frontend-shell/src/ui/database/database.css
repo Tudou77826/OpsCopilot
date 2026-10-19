@@ -1,0 +1,1255 @@
+.oc-db-workspace {
+  --oc-db-sql-keyword: #8050a6;
+  --oc-db-sql-string: #a24524;
+  --oc-db-sql-number: #146b65;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+[data-theme='dark'] .oc-db-workspace {
+  --oc-db-sql-keyword: #c2a0ef;
+  --oc-db-sql-string: #e4b68c;
+  --oc-db-sql-number: #9acdad;
+}
+.oc-db-workspace * {
+  box-sizing: border-box;
+}
+.oc-db-workspace button,
+.oc-db-workspace input,
+.oc-db-workspace select,
+.oc-db-workspace textarea {
+  font: inherit;
+}
+.oc-db-workspace button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.oc-db-workspace button:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+.oc-db-workspace button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.oc-db-workspace button:focus-visible,
+.oc-db-workspace select:focus-visible,
+.oc-db-workspace input:focus-visible,
+.oc-db-workspace [role='separator']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.oc-db-workspace input,
+.oc-db-workspace select {
+  min-width: 0;
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-input);
+  padding: 6px 8px;
+}
+.oc-db-workspace .oc-db-primary {
+  background: var(--accent);
+  color: var(--text-on-accent, #fff);
+  padding: 7px 14px;
+}
+.oc-db-workspace .oc-db-primary:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.08);
+  color: var(--text-on-accent, #fff);
+}
+.oc-db-explorer {
+  width: 228px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+.oc-db-explorer > header {
+  height: 42px;
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+.oc-db-explorer > header strong {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-right: auto;
+  font-size: 12px;
+}
+.oc-db-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 9px 8px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  background: var(--bg-input);
+}
+.oc-db-search input {
+  border: 0;
+  background: transparent;
+  width: 100%;
+  height: 29px;
+  padding: 0;
+  font-size: 11px;
+}
+.oc-db-tree {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 5px;
+}
+.oc-db-tree .oc-db-connection {
+  display: flex;
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  gap: 8px;
+  padding: 9px 7px;
+  margin: 2px 0;
+}
+.oc-db-connection > span {
+  flex: 1;
+  min-width: 0;
+}
+.oc-db-connection strong {
+  font-weight: 500;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.oc-db-connection small {
+  display: block;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.oc-db-connection i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+  opacity: 0.4;
+}
+.oc-db-workspace .is-online {
+  color: var(--success, #45a46f);
+}
+.oc-db-connection i.is-online {
+  background: var(--success, #45a46f);
+  opacity: 1;
+}
+.oc-db-connection i.is-connecting,
+.oc-db-running-dot {
+  background: var(--accent);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+.oc-db-workspace .is-selected {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+.oc-db-tree .oc-db-schema {
+  width: 100%;
+  padding: 4px 6px 4px 18px;
+  gap: 5px;
+  justify-content: flex-start;
+}
+.oc-db-schema span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.oc-db-tables > button {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 7px;
+  padding: 4px 8px 4px 39px;
+  font-size: 11px;
+}
+.oc-db-tables > button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.oc-db-tables > button small {
+  margin-left: auto;
+  font-size: 9px;
+  color: var(--text-muted);
+}
+.oc-db-tables > .oc-db-muted {
+  display: block;
+  padding: 6px 0 6px 40px;
+}
+.oc-db-explorer > footer {
+  padding: 8px;
+  border-top: 1px solid var(--border);
+}
+.oc-db-explorer-empty {
+  padding: 20px 8px;
+  text-align: center;
+  color: var(--text-muted);
+  line-height: 2;
+}
+.oc-db-explorer-empty button {
+  display: flex;
+  margin: auto;
+  color: var(--accent);
+}
+.oc-db-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.oc-db-context {
+  height: 42px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+  gap: 8px;
+}
+.oc-db-context > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.oc-db-context > div:last-child {
+  gap: 1px;
+}
+.oc-db-context strong {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oc-db-context small {
+  color: var(--text-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.oc-db-env {
+  font-size: 10px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+.oc-db-env.is-production {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+.oc-db-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-muted);
+  padding: 20px;
+}
+.oc-db-empty h3 {
+  color: var(--text-primary);
+  font-size: 16px;
+  margin: 0;
+  font-weight: 500;
+}
+.oc-db-empty p {
+  margin: 0 0 4px;
+  font-size: 12px;
+  text-align: center;
+}
+.oc-db-connection-failure {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  container-type: inline-size;
+}
+.oc-db-connection-failure > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.oc-db-failure-title,
+.oc-db-failure-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.oc-db-failure-title > svg {
+  color: var(--danger);
+  flex-shrink: 0;
+}
+.oc-db-failure-title h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+.oc-db-failure-context {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 24px;
+  padding: 0 0 20px;
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+}
+.oc-db-failure-context dt {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-bottom: 5px;
+}
+.oc-db-failure-context dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.oc-db-failure-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.oc-db-failure-details h4 {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+.oc-db-failure-details .oc-db-error-detail {
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-family: var(--font-mono, Consolas, monospace);
+  line-height: 1.8;
+}
+.oc-db-failure-details .oc-db-error-detail > button {
+  position: sticky;
+  top: 0;
+}
+@container (max-width: 360px) {
+  .oc-db-failure-context {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.oc-db-tabs {
+  display: flex;
+  flex-shrink: 0;
+  overflow-x: auto;
+  align-items: stretch;
+  min-height: 34px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+.oc-db-tabs > div {
+  display: flex;
+  align-items: center;
+  border-right: 1px solid var(--border);
+  border-top: 2px solid transparent;
+}
+.oc-db-tabs > div.is-selected {
+  border-top-color: var(--accent);
+  background: var(--bg-primary);
+}
+.oc-db-tabs > div > button:first-child {
+  padding: 6px 10px;
+  font-size: 11px;
+}
+.oc-db-tabs > div > button:last-child {
+  padding: 4px;
+  margin-right: 3px;
+}
+.oc-db-query-toolbar {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 40px;
+  padding: 5px 9px;
+  border-bottom: 1px solid var(--border);
+}
+.oc-db-query-toolbar > select {
+  max-width: 180px;
+  font-size: 11px;
+  padding: 4px 6px;
+}
+.oc-db-query-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.oc-db-query-toolbar label select {
+  font-size: 10px;
+  padding: 3px;
+}
+.oc-db-toolbar-spacer {
+  flex: 1;
+}
+.oc-db-workspace .oc-db-run {
+  color: var(--accent);
+}
+.oc-db-view-tabs {
+  display: flex;
+  gap: 2px;
+}
+.oc-db-view-tabs > button {
+  font-size: 11px;
+}
+.oc-db-query-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.oc-db-query-content > div:has(> .oc-db-editor) {
+  flex-shrink: 0;
+}
+.oc-db-editor {
+  height: 100%;
+  overflow: hidden;
+}
+.oc-db-splitter {
+  height: 5px;
+  flex-shrink: 0;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  cursor: row-resize;
+  touch-action: none;
+}
+.oc-db-splitter:hover {
+  background: var(--accent);
+}
+.oc-db-results {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.oc-db-result-toolbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  min-height: 32px;
+  gap: 8px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  font-size: 11px;
+}
+.oc-db-result-toolbar > div {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.oc-db-result-toolbar small {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.oc-db-result-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.oc-db-grid-wrap {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.oc-db-grid {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  font-size: 11px;
+}
+.oc-db-grid-head {
+  display: flex;
+  height: 39px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+}
+.oc-db-grid-head > div {
+  display: flex;
+  align-items: center;
+  position: relative;
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+  padding: 3px 9px;
+  overflow: hidden;
+  font-weight: 500;
+}
+.oc-db-grid-head > div > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oc-db-grid-head small {
+  display: block;
+  font-size: 9px;
+  line-height: 1.3;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.oc-db-resizer {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 5px;
+  cursor: col-resize;
+  user-select: none;
+  touch-action: none;
+}
+.oc-db-resizer:hover {
+  background: var(--accent);
+}
+.oc-db-grid-row {
+  display: flex;
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+}
+.oc-db-grid-row:nth-child(even) {
+  background: color-mix(in srgb, var(--bg-secondary) 35%, transparent);
+}
+.oc-db-grid-row:hover {
+  background: var(--bg-hover);
+}
+.oc-db-grid-row > button {
+  display: block;
+  text-align: left;
+  font-family: var(--font-mono, Consolas, monospace);
+  font-size: 11px;
+  min-height: 0;
+  height: 100%;
+  padding: 5px 9px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  border-radius: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+  flex-shrink: 0;
+  user-select: text;
+}
+.oc-db-grid-row em {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.oc-db-row-number {
+  display: flex;
+  width: 48px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--text-muted);
+  border-right: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+.oc-db-grid-empty {
+  padding: 30px;
+  color: var(--text-muted);
+}
+.oc-db-cell-detail {
+  position: absolute;
+  inset: 15px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  box-shadow: 0 8px 24px #0003;
+  border-radius: 5px;
+  padding: 10px;
+}
+.oc-db-cell-detail > header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.oc-db-cell-detail strong {
+  margin-right: auto;
+}
+.oc-db-cell-detail textarea {
+  flex: 1;
+  resize: none;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  padding: 10px;
+  font-family: var(--font-mono, Consolas, monospace);
+}
+.oc-db-copy-notice {
+  position: absolute;
+  bottom: 8px;
+  right: 12px;
+  padding: 5px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.oc-db-ddl {
+  margin: 0;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
+  font: 12px/1.7 var(--font-mono, Consolas, monospace);
+}
+.oc-db-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 5px 10px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.oc-db-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 25px;
+  padding: 0 10px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  font-size: 10px;
+}
+.oc-db-muted {
+  color: var(--text-muted);
+}
+.oc-db-error {
+  color: var(--danger);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.oc-db-error-detail {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  margin-top: 10px;
+}
+.oc-db-banner .oc-db-error-detail {
+  margin-top: 0;
+}
+.oc-db-error-detail > span {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  user-select: text;
+}
+.oc-db-error-detail > span > small {
+  display: block;
+  margin-top: 6px;
+}
+.oc-db-error-detail > button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+}
+.oc-db-banner {
+  margin: 0;
+  padding: 8px 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  background: color-mix(in srgb, var(--danger) 7%, var(--bg-primary));
+  border-bottom: 1px solid var(--border);
+  max-height: 110px;
+  overflow: auto;
+  flex-shrink: 0;
+}
+
+/* One modal frame for database workflows; only its body scrolls. */
+.oc-db-dialog {
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  max-height: min(690px, calc(100dvh - 32px));
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  box-shadow: 0 20px 70px #0005;
+  font-size: 12px;
+}
+.oc-db-dialog::backdrop {
+  background: #0008;
+}
+.oc-db-modal-compact {
+  width: 410px;
+}
+.oc-db-modal[hidden],
+.oc-db-modal [hidden] {
+  display: none;
+}
+.oc-db-modal > form {
+  display: flex;
+  flex-direction: column;
+  max-height: inherit;
+  min-height: 0;
+  padding: 0;
+}
+.oc-db-modal-header {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px 14px;
+}
+.oc-db-modal-header > div {
+  min-width: 0;
+}
+.oc-db-modal h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.oc-db-modal p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.oc-db-modal-header p {
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+.oc-db-modal-header > button {
+  margin: -3px -6px 0 0;
+  flex: none;
+}
+.oc-db-modal-tabs {
+  flex: none;
+  display: flex;
+  gap: 18px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+}
+.oc-db-modal-tabs > button {
+  min-height: 39px;
+  padding: 8px 0;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+}
+.oc-db-modal-tabs > button[aria-selected='true'] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.oc-db-modal-tabs i {
+  width: 5px;
+  height: 5px;
+  background: var(--accent);
+  border-radius: 50%;
+}
+.oc-db-modal-body {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 18px 20px 20px;
+}
+.oc-db-modal fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.oc-db-connection-fields > section:not([hidden]),
+.oc-db-import-fields {
+  display: grid;
+  gap: 14px;
+}
+.oc-db-modal label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  min-width: 0;
+}
+.oc-db-modal label input,
+.oc-db-modal label select {
+  width: 100%;
+  min-height: 33px;
+}
+.oc-db-form-grid,
+.oc-db-target-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
+.oc-db-target-fields {
+  grid-template-columns: minmax(0, 1fr) 108px;
+}
+.oc-db-driver-choice {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+}
+.oc-db-driver-choice label {
+  flex: 1;
+  min-width: 0;
+}
+.oc-db-driver-choice > button {
+  flex: none;
+  min-height: 33px;
+}
+.oc-db-route {
+  display: flex;
+  flex: none;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0 20px 10px;
+  padding: 9px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.oc-db-route > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.oc-db-route svg {
+  flex: none;
+}
+.oc-db-connection-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.oc-db-connection-note > span {
+  overflow-wrap: anywhere;
+}
+.oc-db-connection-note > button {
+  color: var(--accent);
+}
+.oc-db-section-heading h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.oc-db-section-heading p,
+.oc-db-help {
+  color: var(--text-muted);
+}
+.oc-db-modal .oc-db-help {
+  margin-top: 12px;
+}
+.oc-db-modal section > .oc-db-help {
+  margin: 0;
+}
+.oc-db-route-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.oc-db-modal .oc-db-route-switch label {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.oc-db-route-switch label:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+.oc-db-modal .oc-db-route-switch input,
+.oc-db-modal .oc-db-checkbox input {
+  width: 14px;
+  min-height: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  flex: none;
+  margin: 0;
+}
+.oc-db-modal .oc-db-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+.oc-db-password-field {
+  min-width: 0;
+}
+.oc-db-password-help {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 5px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.oc-db-password-help > button {
+  color: var(--accent);
+  padding: 0;
+  min-height: 20px;
+  font-size: 10px;
+}
+.oc-db-option-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: end;
+  gap: 14px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.oc-db-labeled-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.oc-db-labeled-field > input {
+  width: 100%;
+  min-height: 33px;
+}
+.oc-db-field-label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 14px;
+}
+.oc-db-readonly-option {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 33px;
+}
+.oc-db-readonly-option > small {
+  margin-left: 22px;
+  font-size: 10px;
+}
+.oc-db-option-wide {
+  grid-column: 1 / -1;
+}
+.oc-db-field-help {
+  display: inline-flex;
+  flex: none;
+}
+.oc-db-field-help > button {
+  min-height: 16px;
+  width: 16px;
+  padding: 0;
+  color: var(--text-muted);
+}
+.oc-db-field-help > [role='tooltip'] {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 2;
+  width: 235px;
+  max-width: calc(100vw - 80px);
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  box-shadow: 0 4px 14px #0003;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.6;
+  visibility: hidden;
+  pointer-events: none;
+}
+.oc-db-field-help-above > [role='tooltip'] {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+.oc-db-field-help:hover > [role='tooltip'],
+.oc-db-field-help:focus-within > [role='tooltip'] {
+  visibility: visible;
+}
+.oc-db-write-note {
+  color: var(--danger);
+}
+.oc-db-modal .oc-db-modal-footer {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+.oc-db-modal-feedback {
+  max-height: min(160px, 23dvh);
+  overflow: auto;
+  min-height: 0;
+}
+.oc-db-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.oc-db-modal-actions > button {
+  min-height: 32px;
+  border-color: var(--border);
+}
+.oc-db-modal-actions .oc-db-test-button {
+  margin-right: auto;
+}
+.oc-db-test-success {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--success, var(--accent));
+  font-size: 11px;
+}
+.oc-db-modal .oc-db-danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.oc-db-modal .oc-db-runtime-status {
+  padding-bottom: 14px;
+}
+.oc-db-driver-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.oc-db-driver-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.oc-db-driver-list li:last-child {
+  border-bottom: 0;
+}
+.oc-db-driver-list li > span {
+  flex: 1;
+  min-width: 0;
+}
+.oc-db-driver-list small {
+  display: block;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  margin-top: 5px;
+}
+.oc-db-driver-actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.oc-db-driver-actions button:first-child {
+  color: var(--accent);
+}
+.oc-db-driver-empty {
+  padding: 22px 0;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.6;
+}
+.oc-db-file-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.oc-db-file-picker strong {
+  font-size: 11px;
+  font-weight: 500;
+}
+.oc-db-file-picker span {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 5px;
+}
+.oc-db-file-picker > button {
+  flex: none;
+  border-color: var(--border);
+}
+.oc-db-jar-list {
+  list-style: none;
+  padding: 8px 10px;
+  margin: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  max-height: 100px;
+  overflow: auto;
+}
+.oc-db-jar-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  overflow-wrap: anywhere;
+}
+.oc-db-jar-list svg {
+  flex: none;
+  color: var(--text-muted);
+}
+.oc-db-manual-paths summary {
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+}
+.oc-db-manual-paths label {
+  margin-top: 10px;
+}
+.oc-db-modal textarea {
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+  resize: vertical;
+  width: 100%;
+}
+.oc-db-modal textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+@media (max-width: 480px) {
+  .oc-db-modal-header {
+    padding: 14px 16px;
+  }
+  .oc-db-modal-body {
+    padding: 14px 16px;
+  }
+  .oc-db-modal-tabs {
+    padding: 0 16px;
+    gap: 14px;
+  }
+  .oc-db-route {
+    margin-inline: 16px;
+  }
+  .oc-db-modal .oc-db-modal-footer {
+    padding: 12px 16px;
+  }
+  .oc-db-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .oc-db-option-section {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .oc-db-modal-actions .oc-db-test-button {
+    margin-right: 0;
+  }
+}
+@media (max-width: 900px) {
+  .oc-db-explorer {
+    width: 190px;
+  }
+  .oc-db-context small {
+    display: none;
+  }
+  .oc-db-query-toolbar label {
+    font-size: 0;
+  }
+  .oc-db-query-toolbar > select {
+    max-width: 140px;
+  }
+}
+@media (max-width: 600px) {
+  .oc-db-explorer {
+    width: 155px;
+  }
+  .oc-db-context {
+    padding: 0 7px;
+  }
+  .oc-db-context > div {
+    gap: 4px;
+  }
+  .oc-db-env {
+    display: none;
+  }
+  .oc-db-query-toolbar {
+    gap: 1px;
+  }
+  .oc-db-query-toolbar label {
+    display: none;
+  }
+  .oc-db-result-toolbar {
+    gap: 3px;
+    padding: 0 5px;
+  }
+}

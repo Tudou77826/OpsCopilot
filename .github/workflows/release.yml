@@ -44,6 +44,35 @@ jobs:
       - name: Create ZIP package
         run: Compress-Archive -Path build/bin/* -Destination opscopilot-windows.zip
 
+      - name: Setup Java for optional JDBC component
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: jdbc-helper/pom.xml
+
+      - name: Build optional JDBC runtime and offline bundle
+        shell: pwsh
+        run: |
+          ./build/jdbc/build.ps1
+          # Older clients select the first ZIP. A component-only archive must
+          # not be eligible as an application update for those clients either.
+          tar -czf opscopilot-jdbc-runtime-windows.tar.gz -C build/jdbc-output jdbc-runtime
+          if ($LASTEXITCODE -ne 0) { throw 'JDBC runtime archive failed' }
+          New-Item -ItemType Directory -Path build/jdbc-output/offline | Out-Null
+          Copy-Item -Path build/bin/* -Destination build/jdbc-output/offline -Recurse
+          Copy-Item -LiteralPath build/jdbc-output/jdbc-runtime -Destination build/jdbc-output/offline -Recurse
+          Compress-Archive -Path build/jdbc-output/offline/* -Destination opscopilot-windows-jdbc.zip
+
+      - name: Upload optional JDBC packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: opscopilot-jdbc-packages
+          path: |
+            opscopilot-jdbc-runtime-windows.tar.gz
+            opscopilot-windows-jdbc.zip
+
       - name: Upload artifact (ZIP)
         uses: actions/upload-artifact@v4
         with:
@@ -105,6 +134,8 @@ jobs:
         with:
           files: |
             release/opscopilot-windows.zip
+            release/opscopilot-windows-jdbc.zip
+            release/opscopilot-jdbc-runtime-windows.tar.gz
             release/opscopilot.exe
             release/opscopilot-service-center-linux-amd64
             release/opscopilot-service-center-linux-arm64

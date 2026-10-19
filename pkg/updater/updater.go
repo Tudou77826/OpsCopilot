@@ -230,8 +230,14 @@ func cumulativeChangelog(currentVer string, latestRelease *ReleaseInfo, allRelea
 }
 
 func selectDownloadURL(assets []Asset) string {
+	// Optional runtime archives are release assets too; never treat one as an app update.
 	for _, a := range assets {
-		if strings.HasSuffix(strings.ToLower(a.Name), ".zip") {
+		if strings.EqualFold(a.Name, "opscopilot-windows.zip") {
+			return a.BrowserDownloadURL
+		}
+	}
+	for _, a := range assets {
+		if strings.HasSuffix(strings.ToLower(a.Name), ".zip") && !strings.Contains(strings.ToLower(a.Name), "jdbc") {
 			return a.BrowserDownloadURL
 		}
 	}

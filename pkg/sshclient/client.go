@@ -3,6 +3,7 @@ package sshclient
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
+	"opscopilot/pkg/connectiondiag"
 	"opscopilot/pkg/filetransfer"
 	"opscopilot/pkg/remote"
 )
@@ -46,7 +48,8 @@ var (
 )
 
 type Client struct {
-	client *ssh.Client
+	client  *ssh.Client
+	bastion *Client
 
 	// lastSessionMu 保护 lastSession:StartShell 写入,Resize 读取,
 	// 这两个调用可能来自不同 goroutine(app.go 的 read loop 与
@@ -60,24 +63,49 @@ func (c *Client) SSHClient() *ssh.Client {
 }
 
 func NewClient(config *ConnectConfig) (*Client, error) {
+	return NewClientWithTrace(context.Background(), config)
+}
+
+// NewClientWithTrace retains the existing connection/fallback behavior and adds
+// per-attempt evidence. ctx carries the observer, not the SSH session lifetime.
+func NewClientWithTrace(ctx context.Context, config *ConnectConfig) (*Client, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	connectiondiag.AddSecrets(ctx, config.Password, config.RootPassword)
+	connectiondiag.Event(ctx, "ssh.node.config", "SSH节点=%s SSH端口=%d SSH账号=%q 上一跳=%t 配置认证=password,keyboard-interactive 密钥认证=未配置 固定主机密钥=%t", config.Host, config.Port, config.User, config.Bastion != nil, config.HostKey != "")
 	slog.Info("ssh connecting", "host", config.Host, "port", config.Port, "user", config.User, "bastion", config.Bastion != nil)
 
 	// 递归建立 Bastion 连接
 	var bastionClient *Client // Change type to *Client to use dialViaNetcat
+	created := false
+	defer func() {
+		if !created && bastionClient != nil {
+			_ = bastionClient.Close()
+		}
+	}()
 	if config.Bastion != nil {
-		bastion, err := NewClient(config.Bastion)
+		bastion, err := NewClientWithTrace(ctx, config.Bastion)
 		if err != nil {
 			slog.Error("ssh bastion connect failed", "host", config.Bastion.Host, "error", err)
 			return nil, fmt.Errorf("failed to connect to bastion: %w", err)
 		}
 		bastionClient = bastion
+		// Only connection setup is context-bound. Returned sessions have their
+		// own lifetime; cancellation during setup closes pending SSH channels.
+		stopSetup := context.AfterFunc(ctx, func() { _ = bastion.Close() })
+		defer stopSetup()
 	}
 
 	authMethods := []ssh.AuthMethod{}
 	if config.Password != "" {
-		authMethods = append(authMethods, ssh.Password(config.Password))
+		authMethods = append(authMethods, ssh.PasswordCallback(func() (string, error) {
+			connectiondiag.Event(ctx, "ssh.auth.password", "节点=%s SSH账号=%q 提交 password 认证；密码不记录", config.Host, config.User)
+			return config.Password, nil
+		}))
 		authMethods = append(authMethods, ssh.KeyboardInteractive(
 			func(user, instruction string, questions []string, echos []bool) (answers []string, err error) {
+				connectiondiag.Event(ctx, "ssh.auth.keyboard-interactive", "节点=%s SSH账号=%q 问题数=%d；问题和回答不记录", config.Host, config.User, len(questions))
 				answers = make([]string, len(questions))
 				for i := range questions {
 					answers[i] = config.Password
@@ -100,6 +128,12 @@ func NewClient(config *ConnectConfig) (*Client, error) {
 		}
 		sshConfig.HostKeyCallback = ssh.FixedHostKey(key)
 	}
+	verifyHost := sshConfig.HostKeyCallback
+	sshConfig.HostKeyCallback = func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		err := verifyHost(hostname, remote, key)
+		connectiondiag.Event(ctx, "ssh.host-key", "节点=%s 主机密钥类型=%s 指纹=%s 固定密钥校验=%t 校验错误=%v", hostname, key.Type(), ssh.FingerprintSHA256(key), config.HostKey != "", err)
+		return err
+	}
 
 	// Handle IPv6 brackets if present
 	host := config.Host
@@ -114,36 +148,96 @@ func NewClient(config *ConnectConfig) (*Client, error) {
 	if bastionClient != nil {
 		// 通过 Bastion 建立连接
 		// 优先尝试 TCP Forwarding (Dial)
-		conn, err := bastionClient.client.Dial("tcp", addr)
+		connectiondiag.Event(ctx, "ssh.hop.channel.start", "来源SSH=%s:%d 目标SSH=%s 类型=direct-tcpip", config.Bastion.Host, config.Bastion.Port, addr)
+		conn, err := bastionClient.client.DialContext(ctx, "tcp", addr)
 		if err != nil {
+			RecordChannelFailure(ctx, "ssh.hop.channel", err)
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			// 如果 Dial 失败（可能是 AllowTcpForwarding=no），尝试 netcat 模式
 			// fmt.Printf("Bastion dial failed: %v. Retrying with netcat...\n", err)
+			connectiondiag.Event(ctx, "ssh.hop.exec.start", "触发现有远程命令备用路径 来源SSH=%s 目标SSH=%s；候选链=nc/ncat/netcat/bash/python3，具体生效工具未知；不记录命令输出", config.Bastion.Host, addr)
 			conn, err = bastionClient.dialViaConsole("tcp", addr)
 			if err != nil {
+				connectiondiag.Event(ctx, "ssh.hop.exec.failed", "%v", err)
 				return nil, fmt.Errorf("failed to dial via bastion: %w", err)
 			}
+			connectiondiag.Event(ctx, "ssh.hop.exec.started", "备用 SSH exec 请求已启动；尚不代表目标 SSH 握手成功")
+		} else {
+			connectiondiag.Event(ctx, "ssh.hop.channel.ok", "目标SSH=%s direct-tcpip 已确认", addr)
 		}
 
-		ncc, chans, reqs, err := ssh.NewClientConn(conn, addr, sshConfig)
+		connectiondiag.Event(ctx, "ssh.handshake.start", "目标SSH=%s；开始 SSH 握手和认证", addr)
+		ncc, chans, reqs, err := newClientConnContext(ctx, conn, addr, sshConfig)
 		if err != nil {
+			connectiondiag.Event(ctx, "ssh.handshake.failed", "目标SSH=%s 错误=%v", addr, err)
 			conn.Close()
 			return nil, fmt.Errorf("failed to create client conn: %w", err)
 		}
 		client = ssh.NewClient(ncc, chans, reqs)
 	} else {
 		// 直连
-		client, err = ssh.Dial("tcp", addr, sshConfig)
+		connectiondiag.Event(ctx, "ssh.handshake.start", "本机直接连接SSH=%s；开始 TCP、SSH 握手和认证", addr)
+		var raw net.Conn
+		raw, err = (&net.Dialer{Timeout: sshConfig.Timeout}).DialContext(ctx, "tcp", addr)
+		if err == nil {
+			var ncc ssh.Conn
+			var channels <-chan ssh.NewChannel
+			var requests <-chan *ssh.Request
+			ncc, channels, requests, err = newClientConnContext(ctx, raw, addr, sshConfig)
+			if err == nil {
+				client = ssh.NewClient(ncc, channels, requests)
+			} else {
+				raw.Close()
+			}
+		}
 		if err != nil {
+			connectiondiag.Event(ctx, "ssh.handshake.failed", "目标SSH=%s 错误=%v", addr, err)
 			slog.Error("ssh direct connect failed", "host", config.Host, "error", err)
 			return nil, fmt.Errorf("failed to dial: %w", err)
 		}
 	}
 
+	connectiondiag.Event(ctx, "ssh.handshake.ok", "SSH节点=%s SSH账号=%q SSH服务版本=%q 远端地址=%s；SSH认证完成，不代表数据库端口转发被允许", addr, config.User, string(client.ServerVersion()), client.RemoteAddr())
 	slog.Info("ssh connected", "host", config.Host, "user", config.User, "bastion", config.Bastion != nil)
-	return &Client{client: client}, nil
+	created = true
+	return &Client{client: client, bastion: bastionClient}, nil
+}
+
+// The setup context must not become the lifetime of a successfully connected client.
+func newClientConnContext(ctx context.Context, raw net.Conn, addr string, config *ssh.ClientConfig) (ssh.Conn, <-chan ssh.NewChannel, <-chan *ssh.Request, error) {
+	stop := context.AfterFunc(ctx, func() { raw.Close() })
+	defer stop()
+	conn, channels, requests, err := ssh.NewClientConn(raw, addr, config)
+	if ctx.Err() != nil {
+		if conn != nil {
+			conn.Close()
+		}
+		return nil, nil, nil, ctx.Err()
+	}
+	return conn, channels, requests, err
+}
+
+// RecordChannelFailure distinguishes a policy rejection from an unreachable TCP
+// destination. Neither reason identifies a specific sshd configuration setting.
+func RecordChannelFailure(ctx context.Context, stage string, err error) {
+	var channel *ssh.OpenChannelError
+	if errors.As(err, &channel) {
+		code := stage + ".failed"
+		if channel.Reason == ssh.Prohibited {
+			code = stage + ".rejected"
+		}
+		connectiondiag.Event(ctx, code, "SSH channel-open-failure 原因码=%d 原因=%s 原始错误=%v", channel.Reason, channel.Reason.String(), err)
+		return
+	}
+	connectiondiag.Event(ctx, stage+".failed", "非 SSH 原因码错误 类型=%T 原始错误=%v", err, err)
 }
 
 func (c *Client) Close() error {
+	if c.bastion != nil {
+		defer c.bastion.Close()
+	}
 	if c.client != nil {
 		return c.client.Close()
 	}

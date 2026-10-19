@@ -1,0 +1,22 @@
+OpsCopilot JDBC helper
+
+The helper uses Gson 2.13.2 (Apache License 2.0).
+https://github.com/google/gson
+License: https://www.apache.org/licenses/LICENSE-2.0
+
+Legacy Java 8 driver compatibility:
+Jakarta XML Binding API 2.3.3 and Jakarta Activation API 1.2.2
+(javax.xml.bind / javax.activation packages).
+https://github.com/jakartaee/jaxb-api
+https://github.com/jakartaee/jaf-api
+These components are distributed under Eclipse Distribution License 1.0.
+Their complete license and notices are retained in jdbc-helper.jar under
+META-INF/LICENSE.md and META-INF/NOTICE.md, and in the runtime component
+as LICENSE-jaxb-activation.txt.
+
+Java runtime distribution and notices are preserved under runtime/legal.
+Distribute this runtime with the notices of the chosen OpenJDK vendor.
+
+Vendor JDBC drivers are imported separately by the user. They are executable
+code and run with the permissions of the current OS user. Only import trusted
+vendor distributions. Driver redistribution terms are independent of OpsCopilot.

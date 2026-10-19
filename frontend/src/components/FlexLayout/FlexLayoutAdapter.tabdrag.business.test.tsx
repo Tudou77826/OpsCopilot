@@ -6,7 +6,7 @@
  * 时按距离加速横向滚动，drop/dragend 后停止。
  */
 import React from 'react';
-import { render, fireEvent, createEvent, act } from '@testing-library/react';
+import { render, fireEvent, createEvent, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import '@testing-library/jest-dom';
 import { FlexLayoutAdapter, SessionStatus } from '@opscopilot/shell-terminal/ui';
@@ -79,6 +79,26 @@ function renderAdapter() {
         />
     );
 }
+
+describe('主工作区标签类型隔离', () => {
+    it('没有终端时可以打开数据库，关闭数据库不会断开终端', async () => {
+        const closeTerminal = vi.fn();
+        const focused = vi.fn();
+        const props = { terminals: [], onTerminalData: vi.fn(), terminalRefs: { current: new Map() }, onCloseTerminal: closeTerminal, onRenameTerminal: vi.fn(), terminalRuntime: {} as any, onWorkspaceFocusChange: focused };
+        const renderDatabase = () => <div>数据库内容</div>;
+        const view = render(<FlexLayoutAdapter {...props} workspaces={[{ id: 'database', title: '数据库', request: 1, render: renderDatabase }]} />);
+        await waitFor(() => expect(document.querySelector('[data-layout-path]')).toBeTruthy());
+        expect(focused).toHaveBeenCalledWith('database');
+        const title = document.querySelector('.flexlayout__tab_button_content')!;
+        expect(title.textContent).toBe('数据库');
+        const close = document.querySelector('.flexlayout__tab_button_trailing')!;
+        fireEvent.click(close);
+        expect(closeTerminal).not.toHaveBeenCalled();
+        view.rerender(<FlexLayoutAdapter {...props} workspaces={[{ id: 'database', title: '数据库', request: 2, render: renderDatabase }]} />);
+        await waitFor(() => expect(document.querySelector('.flexlayout__tab_button_content')?.textContent).toBe('数据库'));
+        view.unmount();
+    });
+});
 
 function tabStrip(): HTMLElement {
     const strip = document.querySelector('.flexlayout__tabset_tabbar_inner') as HTMLElement | null;

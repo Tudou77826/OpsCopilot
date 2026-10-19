@@ -30,6 +30,7 @@ import (
 	"opscopilot/pkg/config"
 	"opscopilot/pkg/connectionstore"
 	"opscopilot/pkg/core/security"
+	"opscopilot/pkg/dbworkspace"
 	"opscopilot/pkg/filetransfer"
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/knowledge/patchstore"
@@ -95,6 +96,8 @@ type App struct {
 	companion            *companion.Store     // 单伙伴成长存储，默认休眠；绑定见 app_companion.go
 	achievements         *achievements.Store
 	social               *achievements.Client
+	databaseMu           sync.Mutex
+	database             *dbworkspace.Service
 }
 
 // NewApp creates a new App application struct

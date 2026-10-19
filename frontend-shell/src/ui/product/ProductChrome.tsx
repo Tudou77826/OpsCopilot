@@ -1,5 +1,5 @@
 import React from 'react';
-import { TbClock, TbScreenShare, TbStethoscope, TbCode, TbBolt, TbBook } from 'react-icons/tb';
+import { TbClock, TbScreenShare, TbStethoscope, TbCode, TbBolt, TbBook, TbDatabase } from 'react-icons/tb';
 import logo from '../assets/logo-universal.png';
 import { CompanionEntry } from '../companion/CompanionEntry';
 import type { CompanionHost } from '../../companion/types';
@@ -99,10 +99,11 @@ export function ProductToolbar({ status = '就绪', theme, onNewConnection, onTh
             </div>);
 }
 
-export function ProductNavigation({ isSidebarOpen, sidebarTab, toggleSidebar, isQuickCommandOpen, onToggleQuickCommands, tabs = ['sessions','troubleshoot','chat','knowledge','script'], companionHost, companionEnabled, onOpenCompanion }: {
+export function ProductNavigation({ isSidebarOpen, sidebarTab, toggleSidebar, isQuickCommandOpen, onToggleQuickCommands, tabs = ['sessions','troubleshoot','chat','knowledge','script'], companionHost, companionEnabled, onOpenCompanion, onOpenDatabase, databaseSelected }: {
   isSidebarOpen: boolean; sidebarTab: ProductTab; toggleSidebar(tab: ProductTab): void;
   isQuickCommandOpen: boolean; onToggleQuickCommands(): void; tabs?: ProductTab[];
   companionHost?: CompanionHost; companionEnabled?: boolean; onOpenCompanion?(): void;
+  onOpenDatabase?(): void; databaseSelected?: boolean;
 }) {
   const setIsQuickCommandOpen = (_value: boolean) => onToggleQuickCommands();
   return (<div style={styles.rightNav}>
@@ -158,6 +159,7 @@ export function ProductNavigation({ isSidebarOpen, sidebarTab, toggleSidebar, is
                         {TbCode({ size: 20 })}
                     </div>
                     )}
+                    {onOpenDatabase && <button aria-label="数据库" title="数据库" onClick={onOpenDatabase} style={{ ...styles.navIcon, border: 0, color: databaseSelected ? 'var(--accent)' : 'var(--text-secondary)', background: databaseSelected ? 'var(--bg-elevated)' : 'transparent', borderRight: databaseSelected ? '2px solid var(--accent)' : '2px solid transparent' }}><TbDatabase size={20} /></button>}
                     <div style={{ flex: 1 }} />
                     {(tabs.includes('chat') || (companionEnabled && onOpenCompanion)) && <CompanionEntry label={tabs.includes('chat') ? '伙伴助手' : '伙伴与奖章'} host={companionHost} enabled={companionEnabled} selected={isSidebarOpen && sidebarTab === 'chat'} onOpen={onOpenCompanion ?? (() => toggleSidebar('chat'))}/>}
                     <div

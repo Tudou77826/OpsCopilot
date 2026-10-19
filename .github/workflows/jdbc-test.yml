@@ -1,0 +1,45 @@
+name: JDBC integration
+on:
+  push:
+    paths: ['pkg/dbworkspace/**', 'pkg/connectiondiag/**', 'pkg/sshclient/**', 'internal/sshtest/**', 'jdbc-helper/**', 'build/jdbc/**', '.github/workflows/jdbc-test.yml']
+  pull_request:
+    paths: ['pkg/dbworkspace/**', 'pkg/connectiondiag/**', 'pkg/sshclient/**', 'internal/sshtest/**', 'jdbc-helper/**', 'build/jdbc/**', '.github/workflows/jdbc-test.yml']
+jobs:
+  mysql-jdbc:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: jdbc-ci-local-only
+        ports: ['33306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pjdbc-ci-local-only"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: jdbc-helper/pom.xml
+      - name: Build isolated runtime
+        shell: pwsh
+        run: ./build/jdbc/build.ps1
+      - name: Test driver error handling and legacy Java compatibility
+        run: mvn -f jdbc-helper/pom.xml --batch-mode --no-transfer-progress test
+      - name: Fetch official MySQL driver for import testing
+        run: mvn --batch-mode --no-transfer-progress org.apache.maven.plugins:maven-dependency-plugin:3.8.1:get -Dartifact=com.mysql:mysql-connector-j:9.7.0 -Dtransitive=false
+      - name: Test JDBC connections, legacy fixtures and SSH transport
+        env:
+          OPSCOPILOT_TEST_MYSQL_PORT: '33306'
+          OPSCOPILOT_TEST_MYSQL_PASSWORD: jdbc-ci-local-only
+        run: |
+          export OPSCOPILOT_TEST_JDBC_RUNTIME="$GITHUB_WORKSPACE/build/jdbc-output/jdbc-runtime"
+          export OPSCOPILOT_TEST_JDBC_JAR="$HOME/.m2/repository/com/mysql/mysql-connector-j/9.7.0/mysql-connector-j-9.7.0.jar"
+          go test -race ./pkg/dbworkspace ./pkg/connectiondiag -count=1 -v
+          go test -race ./pkg/sshclient -run 'TestCommand|TestAutomatic|TestDiagnosticSSH' -count=1 -v

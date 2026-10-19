@@ -6,6 +6,16 @@ import (
 	"testing"
 )
 
+func TestSelectDownloadURLSkipsJDBCComponents(t *testing.T) {
+	assets := []Asset{{Name: "opscopilot-jdbc-runtime-windows.zip", BrowserDownloadURL: "component"}, {Name: "opscopilot-windows-jdbc.zip", BrowserDownloadURL: "offline"}, {Name: "opscopilot-windows.zip", BrowserDownloadURL: "base"}}
+	if got := selectDownloadURL(assets); got != "base" {
+		t.Fatalf("selected %q", got)
+	}
+	if got := selectDownloadURL(assets[:2]); got != "" {
+		t.Fatalf("component selected as update: %q", got)
+	}
+}
+
 func TestCompareVersions(t *testing.T) {
 	tests := []struct {
 		a, b string

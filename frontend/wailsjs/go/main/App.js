@@ -110,6 +110,94 @@ export function CreateScript(arg1, arg2) {
   return window['go']['main']['App']['CreateScript'](arg1, arg2);
 }
 
+export function DatabaseBrowse(arg1) {
+  return window['go']['main']['App']['DatabaseBrowse'](arg1);
+}
+
+export function DatabaseCancel(arg1) {
+  return window['go']['main']['App']['DatabaseCancel'](arg1);
+}
+
+export function DatabaseChooseJDBCJars() {
+  return window['go']['main']['App']['DatabaseChooseJDBCJars']();
+}
+
+export function DatabaseConnect(arg1) {
+  return window['go']['main']['App']['DatabaseConnect'](arg1);
+}
+
+export function DatabaseCreateGroup(arg1) {
+  return window['go']['main']['App']['DatabaseCreateGroup'](arg1);
+}
+
+export function DatabaseDelete(arg1, arg2) {
+  return window['go']['main']['App']['DatabaseDelete'](arg1, arg2);
+}
+
+export function DatabaseDeleteGroup(arg1) {
+  return window['go']['main']['App']['DatabaseDeleteGroup'](arg1);
+}
+
+export function DatabaseDeleteJDBC(arg1) {
+  return window['go']['main']['App']['DatabaseDeleteJDBC'](arg1);
+}
+
+export function DatabaseDisconnect(arg1) {
+  return window['go']['main']['App']['DatabaseDisconnect'](arg1);
+}
+
+export function DatabaseGateways() {
+  return window['go']['main']['App']['DatabaseGateways']();
+}
+
+export function DatabaseGenerateSQL(arg1) {
+  return window['go']['main']['App']['DatabaseGenerateSQL'](arg1);
+}
+
+export function DatabaseGroups() {
+  return window['go']['main']['App']['DatabaseGroups']();
+}
+
+export function DatabaseImportJDBC(arg1) {
+  return window['go']['main']['App']['DatabaseImportJDBC'](arg1);
+}
+
+export function DatabaseJDBCStatus() {
+  return window['go']['main']['App']['DatabaseJDBCStatus']();
+}
+
+export function DatabaseProfiles() {
+  return window['go']['main']['App']['DatabaseProfiles']();
+}
+
+export function DatabaseQuery(arg1) {
+  return window['go']['main']['App']['DatabaseQuery'](arg1);
+}
+
+export function DatabaseRenameGroup(arg1, arg2) {
+  return window['go']['main']['App']['DatabaseRenameGroup'](arg1, arg2);
+}
+
+export function DatabaseSave(arg1) {
+  return window['go']['main']['App']['DatabaseSave'](arg1);
+}
+
+export function DatabaseSchemas(arg1) {
+  return window['go']['main']['App']['DatabaseSchemas'](arg1);
+}
+
+export function DatabaseStructure(arg1) {
+  return window['go']['main']['App']['DatabaseStructure'](arg1);
+}
+
+export function DatabaseTables(arg1, arg2) {
+  return window['go']['main']['App']['DatabaseTables'](arg1, arg2);
+}
+
+export function DatabaseTest(arg1) {
+  return window['go']['main']['App']['DatabaseTest'](arg1);
+}
+
 export function DeleteQuickCommand(arg1) {
   return window['go']['main']['App']['DeleteQuickCommand'](arg1);
 }

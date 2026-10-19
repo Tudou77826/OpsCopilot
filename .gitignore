@@ -125,3 +125,12 @@ plugins/teams-opscopilot/dist/
 # E2E runtime state (isolated app instance, ssh sandbox, playwright report)
 e2e/.runtime/
 e2e/playwright-report/
+
+# Local database connection metadata; passwords live in the OS credential store.
+/database-connections.json
+/database-connections.json.*
+/jdbc-drivers/
+/jdbc-runtime/
+/jdbc-helper/target/
+/build/jdbc-output/
+/database-diagnostics/
