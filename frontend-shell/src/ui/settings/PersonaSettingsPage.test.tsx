@@ -1,8 +1,10 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
 import { afterEach, it, expect, vi } from 'vitest';
 import ShellSettingsModal from './ShellSettingsModal';
 import { normalizeTerminalConfig } from '../Terminal/terminalAppearance';
+import type { CompanionHost } from '../../companion/types';
+import type { SocialHost } from '../../companion/socialHost';
 afterEach(cleanup);
 function setup() {
   const assistantSettings={load:vi.fn(async()=>({personaPrompt:'',defaultPrompt:'温和、可靠的运维伙伴',revision:'v1'})),save:vi.fn(async (personaPrompt:string)=>({personaPrompt,defaultPrompt:'温和、可靠的运维伙伴',revision:'v2'}))};
@@ -73,4 +75,33 @@ it('retains a collapsed draft and saves it with Ctrl+S while growth is disabled'
   await waitFor(()=>expect(assistantSettings.save).toHaveBeenCalledWith('保留折叠草稿','v1'));
   expect(runtime.save).not.toHaveBeenCalled();
   await waitFor(()=>expect(screen.queryByRole('button',{name:'保存更改'})).toBeNull());
+});
+
+it('hides disabled growth until successfully re-enabled and hides it again after saving off',async()=>{
+  const snapshot=vi.fn(),status=vi.fn();
+  const companionHost: CompanionHost={snapshot,hatch:vi.fn(),rename:vi.fn()};
+  const socialHost: SocialHost={status,catalog:vi.fn(),connect:vi.fn(),sync:vi.fn(),participation:vi.fn(),showcase:vi.fn(),rankings:vi.fn(),profile:vi.fn()};
+  const runtime={load:vi.fn(async()=>({theme:'light' as const,terminal:normalizeTerminalConfig(),completionDelay:150,highlightRules:[],companionEnabled:false})),save:vi.fn(async()=>{})};
+  const assistantSettings={load:vi.fn(async()=>({personaPrompt:'',defaultPrompt:'默认人设',revision:'v1'})),save:vi.fn()};
+  render(<ShellSettingsModal isOpen initialTab="achievements" runtime={runtime} assistantSettings={assistantSettings} companionHost={companionHost} socialHost={socialHost} onApply={()=>{}} onClose={()=>{}}/>);
+  const toggle=await screen.findByLabelText('启用伙伴养成与功能奖章');
+  const nav=within(screen.getByRole('navigation'));
+  expect(nav.queryByText('伙伴与奖章')).toBeNull();
+  expect(snapshot).not.toHaveBeenCalled();expect(status).not.toHaveBeenCalled();
+  expect(toggle).not.toBeChecked();
+  fireEvent.click(toggle);
+  expect(nav.queryByText('伙伴与奖章')).toBeNull();
+  expect(runtime.save).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button',{name:'保存更改'}));
+  await waitFor(()=>expect(nav.getByText('伙伴与奖章')).toBeVisible());
+  expect(runtime.save).toHaveBeenLastCalledWith(expect.objectContaining({companionEnabled:true}));
+  fireEvent.click(toggle);
+  runtime.save.mockRejectedValueOnce(new Error('写入失败'));
+  fireEvent.click(screen.getByRole('button',{name:'保存更改'}));
+  await screen.findByText(/写入失败/);
+  expect(nav.getByText('伙伴与奖章')).toBeVisible();
+  fireEvent.click(screen.getByRole('button',{name:'保存更改'}));
+  await waitFor(()=>expect(nav.queryByText('伙伴与奖章')).toBeNull());
+  expect(runtime.save).toHaveBeenLastCalledWith(expect.objectContaining({companionEnabled:false}));
+  expect(snapshot).not.toHaveBeenCalled();expect(status).not.toHaveBeenCalled();
 });

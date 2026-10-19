@@ -264,11 +264,14 @@ func (c *Client) Showcase(ctx context.Context, update social.ProfileUpdate) (Sta
 	}
 	return c.syncShowcase(ctx)
 }
-func (c *Client) ShowcaseSelection(ctx context.Context, selected []social.MedalKind) (Status, error) {
+
+// ShowcaseSelection commits the local display immediately. Explicit organization
+// synchronization may publish the queued selection later, independently of UI saves.
+func (c *Client) ShowcaseSelection(_ context.Context, selected []social.MedalKind) (Status, error) {
 	if err := c.store.QueueSelection(selected); err != nil {
 		return Status{}, err
 	}
-	return c.syncShowcase(ctx)
+	return c.store.Status()
 }
 func (c *Client) syncShowcase(ctx context.Context) (Status, error) {
 	st, err := c.store.Read()

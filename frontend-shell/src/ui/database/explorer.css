@@ -1,5 +1,5 @@
 .oc-db-workspace .oc-db-explorer {
-  width: 270px;
+  width: var(--oc-db-explorer-width, 270px);
   --oc-db-tree-indent: 14px;
 }
 .oc-db-tree .oc-db-tree-branch {
@@ -208,7 +208,7 @@
 }
 @media (max-width: 900px) {
   .oc-db-workspace .oc-db-explorer {
-    width: 225px;
+    width: var(--oc-db-explorer-width, 225px);
   }
   .oc-db-tabs > div > button > small {
     max-width: 80px;
@@ -216,10 +216,29 @@
 }
 @media (max-width: 600px) {
   .oc-db-workspace .oc-db-explorer {
-    width: 180px;
+    width: var(--oc-db-explorer-width, 180px);
     --oc-db-tree-indent: 12px;
   }
   .oc-db-tabs > div > button > small {
     display: none;
   }
+}
+
+.oc-db-explorer-splitter {
+  flex: 0 0 5px;
+  position: relative;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+.oc-db-explorer-splitter::after {
+  content: '';
+  position: absolute;
+  inset: 0 1px;
+  background: transparent;
+}
+.oc-db-explorer-splitter:hover::after,
+.oc-db-explorer-splitter:focus-visible::after,
+.oc-db-explorer-splitter:active::after {
+  background: var(--accent);
 }

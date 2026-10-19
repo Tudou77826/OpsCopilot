@@ -19,6 +19,7 @@
 .oc-companion-page { display: grid; gap: var(--space-8); color: var(--text-primary); container: companion-settings / inline-size; }
 .oc-companion-page h2, .oc-companion-page h3 { margin: 0; }
 .oc-companion-page-heading h2 { font-size: var(--font-size-lg); }
+.oc-companion-entry[data-state="quiet"] > svg { width: 24px; height: 24px; color: var(--text-secondary); }
 .oc-companion-eyebrow { font-family: var(--font-mono, monospace); font-size: var(--font-size-xs); letter-spacing: .12em; color: var(--text-secondary); }
 .oc-companion-home { display: grid; grid-template-columns: 208px minmax(0, 1fr); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; background: var(--bg-primary); }
 .oc-companion-scene { position: relative; min-height: 208px; display: grid; place-content: center; overflow: hidden; background-size: cover; background-position: center; image-rendering: auto; }
@@ -104,6 +105,14 @@
 .oc-companion-eggshell { transform-origin: 60px 122px; }
 .oc-egg-top, .oc-egg-bottom { transform-origin: 60px 74px; }
 .oc-egg-shadow { transform-origin: 60px 133px; }
+.oc-egg-core, .oc-egg-fragments, .oc-egg-crack { opacity: 0; pointer-events: none; }
+.oc-egg-core { transform-origin: 60px 79px; }
+.oc-egg-crack { stroke-dasharray: 1; stroke-dashoffset: 1; }
+.oc-companion-egg[data-shaking="true"] .oc-egg-crack { animation: oc-egg-crack var(--oc-hatch-duration) ease-in both; }
+.oc-companion-egg[data-shaking="true"] .oc-egg-core { animation: oc-egg-core var(--oc-hatch-duration) ease-out both; }
+.oc-companion-egg[data-shaking="true"] .oc-egg-fragments { animation: oc-egg-fragments var(--oc-hatch-duration) cubic-bezier(.16, .8, .3, 1) both; transform-origin: 60px 78px; }
+.oc-companion-egg[data-shaking="true"] .oc-egg-whole { animation: oc-egg-whole var(--oc-hatch-duration) linear both; }
+@keyframes oc-egg-whole { 0%, 83% { opacity: 1; } 84%, 100% { opacity: 0; } }
 .oc-companion-egg[data-shaking="true"] .oc-companion-eggshell { animation: oc-egg-open var(--oc-hatch-duration) cubic-bezier(.45, 0, .22, 1) both; }
 .oc-companion-egg[data-shaking="true"] .oc-egg-top { animation: oc-egg-part-top var(--oc-hatch-duration) cubic-bezier(.2, .8, .2, 1) both; }
 .oc-companion-egg[data-shaking="true"] .oc-egg-bottom { animation: oc-egg-part-bottom var(--oc-hatch-duration) cubic-bezier(.2, .8, .2, 1) both; }
@@ -137,6 +146,9 @@
   87% { transform: scaleX(1.12); opacity: .18; }
   100% { transform: scaleX(.8); opacity: 0; }
 }
+@keyframes oc-egg-crack { 0%, 24% { opacity: 0; stroke-dashoffset: 1; } 35% { opacity: .5; stroke-dashoffset: .75; } 58% { opacity: .9; stroke-dashoffset: .35; } 80%, 88% { opacity: 1; stroke-dashoffset: 0; } 100% { opacity: 0; stroke-dashoffset: 0; } }
+@keyframes oc-egg-core { 0%, 65% { opacity: 0; transform: scale(.5); } 84% { opacity: .25; } 91% { opacity: .9; transform: scale(1.1); } 100% { opacity: 0; transform: scale(1.55); } }
+@keyframes oc-egg-fragments { 0%, 83% { opacity: 0; transform: scale(.8) translateY(0); } 88% { opacity: 1; } 100% { opacity: 0; transform: scale(1.6) translateY(-13px) rotate(12deg); } }
 .oc-companion-hatch-intro p { margin: var(--space-8) 0; }
 .oc-companion-rename { display: flex; align-items: end; gap: var(--space-8); flex-wrap: wrap; }
 .oc-companion-rename .oc-companion-actions { margin: 0 0 var(--space-8); }
@@ -150,19 +162,32 @@
 .oc-hatch-entry-tooltip { position: absolute; z-index: 2; right: 0; bottom: calc(100% + var(--space-8)); box-sizing: border-box; width: 240px; padding: var(--space-8) var(--space-10); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-elevated); color: var(--text-primary); box-shadow: var(--shadow-dialog); font-size: var(--font-size-xs); line-height: 1.6; pointer-events: none; visibility: hidden; }
 .oc-hatch-entry:hover .oc-hatch-entry-tooltip, .oc-hatch-entry:focus-within .oc-hatch-entry-tooltip { visibility: visible; }
 .oc-hatch-dialog { box-sizing: border-box; position: fixed; width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid var(--border); border-radius: 12px; overflow-x: hidden; overflow-y: auto; background: var(--bg-primary); color: var(--text-primary); box-shadow: var(--shadow-dialog); text-align: center; }
-.oc-hatch-dialog::backdrop { background: var(--scrim-soft); }
+.oc-hatch-dialog::backdrop { background: var(--scrim-strong); backdrop-filter: blur(5px); }
 .oc-hatch-dialog button { font: inherit; cursor: pointer; }
 .oc-hatch-dialog button:disabled { cursor: default; }
 .oc-hatch-dialog .oc-hatch-close { position: absolute; top: var(--space-12); right: var(--space-12); z-index: 1; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; background: transparent; color: var(--text-secondary); border: 0; }
 .oc-hatch-close svg { width: 20px; height: 20px; }
 .oc-hatch-close:disabled { opacity: .3; }
-.oc-hatch-visual { position: relative; display: grid; place-items: center; height: 192px; margin-top: var(--space-16); overflow: hidden; }
-.oc-hatch-visual > .oc-companion-egg { position: relative; width: 116px; height: 140px; overflow: visible; }
+.oc-hatch-visual { position: relative; display: grid; place-items: center; height: 248px; margin-top: var(--space-20); overflow: hidden; }
+.oc-hatch-trigger, .oc-hatch-egg-frame { position: relative; display: grid; place-items: center; width: 164px; height: 196px; }
+.oc-hatch-trigger { padding: 0; border: 0; border-radius: 50%; background: transparent; transition: filter 180ms ease; }
+.oc-hatch-trigger:hover { filter: drop-shadow(0 0 16px color-mix(in srgb, var(--accent) 25%, transparent)); }
+.oc-hatch-trigger > .oc-companion-egg, .oc-hatch-egg-frame > .oc-companion-egg { width: 156px; height: 188px; overflow: visible; }
+.oc-hatch-visual[data-phase="offer"] .oc-hatch-trigger > .oc-companion-egg { animation: oc-hatch-suspension 3.6s ease-in-out infinite; }
+.oc-hatch-visual[data-phase="waiting"] .oc-hatch-egg-frame { animation: oc-hatch-suspension 2.2s ease-in-out infinite; }
+@keyframes oc-hatch-suspension { 0%, 100% { translate: 0 2px; } 50% { translate: 0 -5px; } }
 .oc-hatch-visual > .oc-pixel-sprite { position: absolute; width: var(--oc-portrait-frame); height: var(--oc-portrait-frame); left: calc(50% - var(--oc-portrait-frame) / 2); bottom: var(--oc-portrait-bottom); }
-.oc-hatch-orbit { position: absolute; width: 156px; height: 156px; border: 1px solid var(--border); border-radius: 50%; }
+.oc-hatch-orbit { position: absolute; width: 204px; height: 204px; border: 1px solid var(--border); border-radius: 50%; pointer-events: none; }
 .oc-hatch-orbit::before, .oc-hatch-orbit::after { content: ''; position: absolute; width: 5px; height: 5px; left: calc(50% - 3px); top: -3px; background: var(--accent); transform: rotate(45deg); }
 .oc-hatch-orbit::after { top: auto; bottom: -3px; opacity: .4; }
-.oc-hatch-halo { position: absolute; width: 220px; height: 184px; border-radius: 50%; background: radial-gradient(ellipse, var(--accent), transparent 68%); opacity: .055; pointer-events: none; }
+.oc-hatch-halo { position: absolute; width: 300px; height: 248px; border-radius: 50%; background: radial-gradient(ellipse, var(--accent), transparent 68%); opacity: .09; pointer-events: none; }
+.oc-hatch-flash { position: absolute; inset: 0; background: radial-gradient(ellipse, var(--text-primary), transparent 65%); opacity: 0; pointer-events: none; z-index: 1; }
+.oc-hatch-visual[data-phase="cracking"] .oc-hatch-flash { animation: oc-hatch-flash var(--oc-hatch-duration) ease-out both; }
+@keyframes oc-hatch-flash { 0%, 84% { opacity: 0; scale: .6; } 91% { opacity: .22; scale: 1; } 100% { opacity: 0; scale: 1.35; } }
+.oc-hatch-touch-hint { font-size: var(--font-size-xs); color: var(--text-secondary); letter-spacing: .08em; }
+.oc-hatch-progress::after { content: ''; display: block; width: 80px; height: 2px; margin: var(--space-12) auto 0; background: var(--accent); transform-origin: left; scale: 0 1; }
+.oc-hatch-progress[data-ready="true"]::after { animation: oc-hatch-progress var(--oc-hatch-duration) cubic-bezier(.2, .5, .3, 1) both; }
+@keyframes oc-hatch-progress { from { scale: 0 1; opacity: .3; } to { scale: 1 1; opacity: .8; } }
 .oc-hatch-ripple { position: absolute; width: 132px; height: 132px; border: 1px solid var(--accent); border-radius: 50%; opacity: 0; pointer-events: none; }
 .oc-hatch-sparks { position: absolute; inset: 0; pointer-events: none; color: var(--accent); }
 .oc-hatch-sparks i { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; border-radius: 1px; background: currentColor; opacity: 0; }
@@ -203,9 +228,21 @@
 .oc-hatch-primary:disabled { border-color: var(--border); background: var(--bg-secondary); color: var(--text-secondary); }
 .oc-hatch-cancel { margin-top: var(--space-8); min-height: 32px; padding: var(--space-4) var(--space-12); border: 0; background: transparent; color: var(--text-secondary); font-size: var(--font-size-sm); }
 .oc-hatch-dialog button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.oc-hatch-visual[data-result="true"] > .oc-pixel-sprite { animation: oc-hatch-reveal 520ms cubic-bezier(.16, 1, .3, 1) both; }
+.oc-hatch-visual[data-result="true"] > .oc-pixel-sprite { animation: oc-hatch-reveal 820ms cubic-bezier(.16, 1, .3, 1) both; }
+.oc-hatch-dialog:has(.oc-hatch-visual[data-result="true"]) .oc-hatch-dialog-content, .oc-hatch-dialog:has(.oc-hatch-visual[data-result="true"]) .oc-hatch-dialog-footer { animation: oc-hatch-copy-reveal 520ms 180ms ease-out both; }
+@keyframes oc-hatch-copy-reveal { from { opacity: 0; translate: 0 6px; } to { opacity: 1; translate: 0 0; } }
 @keyframes oc-hatch-reveal { 0% { opacity: 0; translate: 0 12px; } 70% { opacity: 1; translate: 0 -2px; } 100% { opacity: 1; translate: 0 0; } }
 @media (prefers-reduced-motion: reduce) {
+  .oc-hatch-visual[data-phase] .oc-hatch-trigger > .oc-companion-egg,
+  .oc-hatch-visual[data-phase] .oc-hatch-egg-frame,
+  .oc-hatch-visual[data-phase] .oc-hatch-flash,
+  .oc-hatch-progress[data-ready]::after,
+  .oc-hatch-dialog:has(.oc-hatch-visual[data-result="true"]) .oc-hatch-dialog-content,
+  .oc-hatch-dialog:has(.oc-hatch-visual[data-result="true"]) .oc-hatch-dialog-footer,
+  .oc-companion-egg[data-shaking="true"] .oc-egg-crack,
+  .oc-companion-egg[data-shaking="true"] .oc-egg-whole,
+  .oc-companion-egg[data-shaking="true"] .oc-egg-core,
+  .oc-companion-egg[data-shaking="true"] .oc-egg-fragments,
   .oc-companion-egg[data-shaking="true"] .oc-companion-eggshell,
   .oc-companion-egg[data-shaking="true"] .oc-egg-top,
   .oc-companion-egg[data-shaking="true"] .oc-egg-bottom,

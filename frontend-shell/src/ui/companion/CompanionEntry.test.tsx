@@ -43,6 +43,11 @@ it('does not read medals while disabled or hidden and distinguishes load errors 
  const runtime=host(), ledger=social();
  const view=render(<CompanionAssistantHeader host={runtime} socialHost={ledger} enabled={false} visible onManage={vi.fn()}/>);
  expect(ledger.status).not.toHaveBeenCalled(); expect(ledger.catalog).not.toHaveBeenCalled();
+ expect(screen.queryByText('勿打扰')).toBeNull();
+ expect(screen.queryByLabelText('伙伴展示')).toBeNull();
+ expect(screen.queryByRole('button',{name:'收起伙伴展示'})).toBeNull();
+ expect(document.querySelector('.oc-companion-roaming')).toBeNull();
+ expect(runtime.snapshot).not.toHaveBeenCalled();
  view.rerender(<CompanionAssistantHeader host={runtime} socialHost={ledger} enabled visible={false} onManage={vi.fn()}/>);
  expect(ledger.status).not.toHaveBeenCalled();
  vi.mocked(ledger.status).mockRejectedValue(new Error('read failed'));
@@ -54,7 +59,7 @@ it('does not read medals while disabled or hidden and distinguishes load errors 
 it('keeps the AI entry available without reading disabled pet data and stops reads after disabling', async () => {
  const runtime=host(), open=vi.fn();
  const view=render(<CompanionEntry host={runtime} enabled={false} selected={false} onOpen={open}/>);
- fireEvent.click(screen.getByRole('button',{name:'伙伴助手'})); expect(open).toHaveBeenCalledOnce();
+ fireEvent.click(screen.getByRole('button',{name:'AI 助手'})); expect(open).toHaveBeenCalledOnce();
  expect(runtime.snapshot).not.toHaveBeenCalled();
  view.rerender(<CompanionEntry host={runtime} enabled selected onOpen={open}/>);
  await waitFor(()=>expect(screen.getByRole('img')).toHaveAttribute('data-palette','amber'));
@@ -63,7 +68,9 @@ it('keeps the AI entry available without reading disabled pet data and stops rea
  const calls=vi.mocked(runtime.snapshot).mock.calls.length;
  document.dispatchEvent(new Event('visibilitychange'));
  expect(runtime.snapshot).toHaveBeenCalledTimes(calls);
- expect(screen.getByRole('button',{name:'伙伴助手'})).toBeVisible();
+ expect(screen.getByRole('button',{name:'AI 助手'})).toBeVisible();
+ expect(screen.queryByRole('img')).toBeNull();
+ expect(screen.getByRole('button',{name:'AI 助手'})).toHaveAttribute('title','AI 助手');
 });
 it('reads header identity only while visible and exposes the correct management action', async () => {
  const runtime=host(), manage=vi.fn();
@@ -73,7 +80,15 @@ it('reads header identity only while visible and exposes the correct management 
  await screen.findByText('灯灯'); fireEvent.click(screen.getByRole('button',{name:'养成与奖章'}));
  expect(manage).toHaveBeenCalledOnce();
  view.rerender(<CompanionAssistantHeader host={runtime} enabled={false} visible onManage={manage}/>);
- expect(screen.getByRole('button',{name:'开启养成'})).toBeVisible();
+ expect(screen.queryByText('勿打扰')).toBeNull();
+ expect(screen.queryByLabelText('伙伴展示')).toBeNull();
+ expect(screen.queryByText('灯灯')).toBeNull();
+ const calls=vi.mocked(runtime.snapshot).mock.calls.length;
+ document.dispatchEvent(new Event('visibilitychange'));
+ expect(runtime.snapshot).toHaveBeenCalledTimes(calls);
+ expect(screen.queryByRole('button',{name:'伙伴设置'})).toBeNull();
+ expect(screen.queryByRole('button',{name:'开启养成'})).toBeNull();
+ expect(manage).toHaveBeenCalledTimes(1);
 });
 
 it('respects selected medal order, hides revoked selections and never saves an automatic preview', async () => {

@@ -36,10 +36,8 @@ it('does not silently disable readonly when selecting a generic driver', async (
       onSaved={vi.fn()}
     />,
   );
-  await screen.findByRole('option', { name: 'Vendor · JDBC' });
-  fireEvent.change(screen.getByLabelText('连接驱动'), {
-    target: { value: 'generic' },
-  });
+  await screen.findByText('Vendor');
+  expect(screen.queryByLabelText('连接驱动')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
   await screen.findByRole('alert');
   expect(runtime.test).not.toHaveBeenCalled();
@@ -87,9 +85,8 @@ it('imports a driver and selects it without losing connection fields or password
       onSaved={vi.fn()}
     />,
   );
-  fireEvent.change(screen.getByLabelText('密码'), {
-    target: { value: 'test-secret' },
-  });
+  await screen.findByText('先导入数据库驱动');
+  expect(screen.queryByLabelText('数据库地址')).toBeNull();
   screen.getByRole('button', { name: '导入驱动…' }).focus();
   fireEvent.click(screen.getByRole('button', { name: '导入驱动…' }));
   const manager = screen.getByRole('dialog', { name: '驱动管理' });
@@ -98,7 +95,7 @@ it('imports a driver and selects it without losing connection fields or password
   fireEvent.click(within(manager).getByRole('button', { name: '选择 JAR…' }));
   await within(manager).findByText('mysql.jar');
   fireEvent.click(within(manager).getByRole('button', { name: '导入并验证' }));
-  await screen.findByRole('button', { name: '管理驱动…' });
+  await screen.findByText('MySQL Connector/J');
   expect(runtime.importJDBC).toHaveBeenCalledWith(
     expect.objectContaining({
       paths: ['D:/drivers/mysql.jar'],
@@ -106,8 +103,14 @@ it('imports a driver and selects it without losing connection fields or password
     }),
   );
   expect(screen.getAllByRole('dialog')).toHaveLength(1);
-  expect(screen.getAllByRole('dialog')).toHaveLength(1);
-  expect(screen.getByLabelText('连接驱动')).toHaveValue(driver.id);
+  expect(screen.queryByLabelText('连接驱动')).toBeNull();
+  expect(screen.getByLabelText('数据库地址')).toHaveValue('db.internal');
+  fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'test-secret' } });
+  fireEvent.click(screen.getByRole('button', {name: '更换／管理'}));
+  fireEvent.click(screen.getByRole('button', {name: '管理驱动…'}));
+  await screen.findByRole('button', {name: '使用驱动'});
+  fireEvent.click(screen.getByRole('button', {name: '使用驱动'}));
+  expect(screen.getByLabelText('密码')).toHaveValue('test-secret');
   fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
   await screen.findByText('连接成功 · MySQL 8.4.8');
   expect(runtime.test).toHaveBeenCalledWith(
@@ -138,11 +141,12 @@ it('keeps import disabled when the optional runtime is missing', async () => {
       onSaved={vi.fn()}
     />,
   );
+  await screen.findByText('先导入数据库驱动');
   screen.getByRole('button', { name: '导入驱动…' }).focus();
   fireEvent.click(screen.getByRole('button', { name: '导入驱动…' }));
   await screen.findByText('未安装 JDBC 运行组件');
   expect(screen.getByRole('button', { name: '导入并验证' })).toBeDisabled();
-  expect(screen.getByLabelText('连接驱动')).toHaveValue('');
+  expect(screen.queryByLabelText('连接驱动')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: '完成' }));
   expect(screen.getByRole('button', { name: '导入驱动…' })).toHaveFocus();
   expect(screen.getAllByRole('dialog')).toHaveLength(1);
@@ -155,10 +159,12 @@ it('requires an imported driver and never offers built-in MySQL', async () => {
     save: vi.fn(), test: vi.fn(),
   } as unknown as DatabaseRuntime;
   render(<ConnectionDialog profile={{...emptyProfile(), port: 32063, user: 'ops'}} runtime={runtime} onClose={vi.fn()} onSaved={vi.fn()} />);
-  await screen.findByRole('option', {name: '请先导入驱动'});
-  expect(screen.queryByRole('option', {name: /内置/})).toBeNull();
-  fireEvent.click(screen.getByRole('button', {name: '保存并连接'}));
-  await screen.findByText('请先导入并选择数据库驱动。');
+  await screen.findByText('先导入数据库驱动');
+  expect(screen.queryByRole('combobox')).toBeNull();
+  expect(screen.queryByRole('button', {name: '保存并连接'})).toBeNull();
+  expect(screen.queryByRole('button', {name: '测试连接'})).toBeNull();
+  expect(screen.queryByRole('tab')).toBeNull();
+  expect(screen.getByRole('button', {name: '导入驱动…'})).toHaveClass('oc-db-primary');
   expect(runtime.save).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', {name: '导入驱动…'}));
   await screen.findByRole('button', {name: '选择 JAR…'});
@@ -180,4 +186,39 @@ it('does not silently bind a legacy MySQL connection to the only imported Gauss 
   fireEvent.click(screen.getByRole('button', {name:'测试连接'}));
   await screen.findByText('请先导入并选择数据库驱动。');
   expect(runtime.test).not.toHaveBeenCalled();
+});
+
+it('asks for an explicit choice with multiple drivers, then collapses the choice after selection', async () => {
+  const mysql = {id:'mysql',name:'MySQL Connector/J',dialect:'mysql'};
+  const gauss = {id:'gauss',name:'Gauss 100',dialect:'generic'};
+  const runtime = {
+    gateways: vi.fn(async () => []),
+    jdbcStatus: vi.fn(async () => ({available:true,message:'',drivers:[mysql,gauss]})),
+    test:vi.fn(async () => 'Gauss test'),
+  } as unknown as DatabaseRuntime;
+  render(<ConnectionDialog profile={{...emptyProfile(),host:'db.internal',port:32063,user:'ops'}} runtime={runtime} onClose={vi.fn()} onSaved={vi.fn()} />);
+  await screen.findByLabelText('连接驱动');
+  expect(screen.getByLabelText('连接驱动')).toHaveValue('');
+  fireEvent.change(screen.getByLabelText('连接驱动'), {target:{value:'gauss'}});
+  expect(screen.queryByLabelText('连接驱动')).toBeNull();
+  expect(screen.getByText('Gauss 100')).toBeVisible();
+  fireEvent.click(screen.getByRole('button',{name:'更换／管理'}));
+  expect(screen.getByLabelText('连接驱动')).toHaveValue('gauss');
+  expect(screen.getByLabelText('数据库地址')).toHaveValue('db.internal');
+  fireEvent.click(screen.getByRole('button',{name:'完成更换'}));
+  fireEvent.click(screen.getByRole('button',{name:'测试连接'}));
+  await screen.findByText('连接成功 · Gauss test');
+  expect(runtime.test).toHaveBeenCalledWith(expect.objectContaining({driverId:'gauss',host:'db.internal',port:32063}));
+});
+it('offers retry instead of a false empty-driver state when loading fails', async () => {
+  const runtime = {
+    gateways:vi.fn(async () => []),
+    jdbcStatus:vi.fn().mockRejectedValueOnce(new Error('read failed')).mockResolvedValue({available:true,message:'',drivers:[]}),
+  } as unknown as DatabaseRuntime;
+  render(<ConnectionDialog profile={emptyProfile()} runtime={runtime} onClose={vi.fn()} onSaved={vi.fn()} />);
+  await screen.findByRole('button',{name:'重新加载'});
+  expect(screen.queryByRole('button',{name:'导入驱动…'})).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:'重新加载'}));
+  await screen.findByText('先导入数据库驱动');
+  expect(screen.getByRole('button',{name:'导入驱动…'})).toHaveFocus();
 });

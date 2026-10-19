@@ -12,7 +12,7 @@ describe('desktop product reuse', () => {
  it('places the unified assistant beside quick commands and preserves navigation state', () => {
    const toggle=vi.fn();
    const view=render(<ProductNavigation isSidebarOpen sidebarTab="chat" toggleSidebar={toggle} isQuickCommandOpen={false} onToggleQuickCommands={vi.fn()}/>);
-   const entry=screen.getByRole('button',{name:'伙伴助手'});
+   const entry=screen.getByRole('button',{name:'AI 助手'});
    expect(entry.nextElementSibling).toBe(screen.getByTestId('nav-icon-quickcommands'));
    expect(entry).toHaveAttribute('aria-pressed','true');
    expect(screen.queryByTitle('AI 问答')).toBeNull();

@@ -221,32 +221,32 @@ export function JDBCDriverDialog({
             className="oc-db-import-fields"
             disabled={busy || !status?.available}
           >
-            <label>
-              驱动类型
-              <select
-                value={preset}
-                onChange={(e) => {
-                  setError('');
-                  setPreset(e.target.value);
-                  setDraft(
-                    e.target.value === 'gauss' ? gaussPreset : e.target.value === 'mysql'
-                      ? mysqlPreset
-                      : {
-                          name: '',
-                          className: '',
-                          urlTemplate: 'jdbc:zenith:@{host}:{port}',
-                          dialect: 'generic',
-                          paths: [],
-                        },
-                  );
-                }}
-              >
-                <option value="gauss">Gauss 100</option>
-                <option value="mysql">MySQL（需导入 Connector/J）</option>
-                <option value="generic">其他 JDBC 驱动（通用能力）</option>
-              </select>
-            </label>
             <div className="oc-db-form-grid">
+              <label>
+                驱动类型
+                <select
+                  value={preset}
+                  onChange={(e) => {
+                    setError('');
+                    setPreset(e.target.value);
+                    setDraft(
+                      e.target.value === 'gauss' ? gaussPreset : e.target.value === 'mysql'
+                        ? mysqlPreset
+                        : {
+                            name: '',
+                            className: '',
+                            urlTemplate: 'jdbc:zenith:@{host}:{port}',
+                            dialect: 'generic',
+                            paths: [],
+                          },
+                    );
+                  }}
+                >
+                  <option value="gauss">Gauss 100</option>
+                  <option value="mysql">MySQL（需导入 Connector/J）</option>
+                  <option value="generic">其他 JDBC 驱动（通用能力）</option>
+                </select>
+              </label>
               <label>
                 驱动名称
                 <input

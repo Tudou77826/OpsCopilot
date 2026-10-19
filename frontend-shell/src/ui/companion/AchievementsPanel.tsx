@@ -13,7 +13,7 @@ const facts: Record<MedalKind, string> = {
   'quick-command-used': '成功派发的不同快捷指令', 'active-day': '发生有效业务操作的累计日期（UTC）',
 };
 
-export default function AchievementsPanel({ host }: { host: SocialHost }) {
+export default function AchievementsPanel({ host, organizationEnabled = false }: { host: SocialHost; organizationEnabled?: boolean }) {
   const [status, setStatus] = useState<AchievementStatus>();
   const [catalog, setCatalog] = useState<MedalDefinition[]>([]);
   const [selected, setSelected] = useState<MedalKind[]>([]);
@@ -22,38 +22,82 @@ export default function AchievementsPanel({ host }: { host: SocialHost }) {
   const [kind, setKind] = useState<MedalKind>('knowledge-archive');
   const [ranking, setRanking] = useState<RankingPage>(), [profile, setProfile] = useState<PublicCompanionProfile>();
   const rankRequest = useRef(0), live = useRef(true);
-  const accept = (next: AchievementStatus) => { if(!live.current)return; setStatus(next); setSelected(next.selected ?? []); if(next.binding)setBaseUrl(next.binding.baseUrl); };
+  const dirty = useRef(false), saving = useRef(false), pending = useRef<MedalKind[]>();
+  const selectedRef = useRef<MedalKind[]>([]);
+  const readSequence = useRef(0);
+  const [saveNotice, setSaveNotice] = useState('');
+  const [organizationError, setOrganizationError] = useState('');
+  const accept = (next: AchievementStatus) => { if(!live.current)return; setStatus(next); if (!dirty.current) { selectedRef.current = next.selected ?? []; setSelected(selectedRef.current); } if(next.binding)setBaseUrl(next.binding.baseUrl); };
   const action = async (run: () => Promise<void>) => {
     setBusy(true); setError(''); try { await run(); } catch(e) { if(live.current)setError(String(e instanceof Error ? e.message : e)); }
     finally { if(live.current)setBusy(false); }
   };
-  const load = async () => { const [next, definitions] = await Promise.all([host.status(), host.catalog()]); accept(next); if(live.current)setCatalog(definitions); };
-  useEffect(() => { live.current=true; void action(load); return () => {live.current=false;rankRequest.current++;}; }, [host]);
+  const load = async () => { const request = ++readSequence.current; const [next, definitions] = await Promise.all([host.status(), host.catalog()]); if(live.current && request === readSequence.current) {accept(next);setCatalog(definitions);} };
+  useEffect(() => {
+    live.current=true; void action(load);
+    const refresh = () => { if (!document.hidden) void load().catch(() => {}); };
+    const timer = setInterval(refresh, 5000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {live.current=false;rankRequest.current++;readSequence.current++;clearInterval(timer);document.removeEventListener('visibilitychange', refresh);};
+  }, [host]);
   const ranks = async (offset = 0, snapshotId?: string) => {
     const request = ++rankRequest.current;
     try { const next = await host.rankings({kind,offset,limit:20,snapshotId}); if(live.current&&request===rankRequest.current)setRanking(next); }
-    catch(e){ if(live.current&&request===rankRequest.current){setRanking(undefined);setError(String(e instanceof Error?e.message:e));} }
+    catch(e){ if(live.current&&request===rankRequest.current){setRanking(undefined);setOrganizationError(String(e instanceof Error?e.message:e));} }
   };
-  useEffect(() => { setRanking(undefined);setProfile(undefined);rankRequest.current++;if(status?.binding)void ranks(); }, [kind,status?.binding?.member.userId]);
-  const toggle = (value: MedalKind) => { if(selected.includes(value))setSelected(selected.filter(v=>v!==value));else if(selected.length<3)setSelected([...selected,value]); };
+  useEffect(() => { setRanking(undefined);setProfile(undefined);rankRequest.current++;if(organizationEnabled && status?.binding)void ranks(); }, [organizationEnabled,kind,status?.binding?.member.userId]);
+  async function saveSelection() {
+    if (saving.current) return;
+    saving.current = true;
+    try {
+      // Serialize user choices so an older disk write cannot replace the latest selection.
+      while (pending.current) {
+        const choice = pending.current; pending.current = undefined;
+        try {
+          const next = await host.showcase(choice);
+          readSequence.current++;
+          if (live.current) {
+            setStatus(next); setError('');
+            if (!pending.current) {
+              dirty.current = false; selectedRef.current = next.selected ?? choice;
+              setSelected(selectedRef.current); setSaveNotice('已保存');
+            }
+          }
+        } catch (cause) {
+          pending.current = pending.current ?? choice;
+          if (live.current) {setError(`展示选择未保存：${cause instanceof Error ? cause.message : String(cause)}`);setSaveNotice('');}
+          break;
+        }
+      }
+    } finally { saving.current = false; }
+  }
+  const toggle = (value: MedalKind) => {
+    const current = selectedRef.current;
+    if (!current.includes(value) && current.length >= 3) return;
+    const next = current.includes(value) ? current.filter(item => item !== value) : [...current, value];
+    selectedRef.current = next; dirty.current = true; pending.current = next;
+    readSequence.current++;
+    setSelected(next); setSaveNotice('正在保存…'); void saveSelection();
+  };
   const definition = catalog.find(v=>v.kind===kind);
   const progress = status?.summary.progress ?? [];
   const pendingVisibility = status?.participationPending !== undefined;
 
   return <div className="oc-achievements" aria-busy={busy}>
-    {error && <div role="alert" className="oc-achievements-error">{error}</div>}
+    {error && <div role="alert" className="oc-achievements-error">{error}<button type="button" style={btnSmall} onClick={()=>void (dirty.current ? saveSelection() : action(load))}>重试</button></div>}
     <section className="oc-achievements-card">
-      <div className="oc-achievements-heading"><h3>功能奖章 <small>展示 {selected.length}/3</small></h3><div className="oc-achievements-actions"><button type="button" style={btnSmall} disabled={busy} onClick={()=>void action(load)}>刷新进度</button><button type="button" style={btnSmall} disabled={busy||!status} onClick={()=>void action(async()=>{try{accept(await host.showcase(selected));}catch(error){try{accept(await host.status());}catch{}throw error;}})}>保存展示选择</button></div></div>
+      <div className="oc-achievements-heading"><h3>功能奖章 <small>展示 {selected.length}/3</small></h3>{saveNotice && <small className="oc-achievements-save-state" role="status">{saveNotice}</small>}</div>
       <div className="oc-achievements-grid">{catalog.map(item=>{
         const entry=progress.find(v=>v.kind===item.kind), medal=entry?.medal;
-        return <button type="button" key={item.kind} className="oc-achievements-medal" title={`${facts[item.kind]}；${entry?.nextThreshold ? `下一级 ${entry.nextThreshold} ${item.unit}` : '已达到最高等级'}`} aria-pressed={selected.includes(item.kind)} disabled={busy || (!selected.includes(item.kind)&&selected.length===3)} onClick={()=>toggle(item.kind)}>
+        return <button type="button" key={item.kind} className="oc-achievements-medal" title={`${facts[item.kind]}；${entry?.nextThreshold ? `下一级 ${entry.nextThreshold} ${item.unit}` : '已达到最高等级'}`} aria-pressed={selected.includes(item.kind)} disabled={busy || !status || (!medal && !selected.includes(item.kind)) || (!selected.includes(item.kind)&&selected.length===3)} onClick={()=>toggle(item.kind)}>
           <PixelMedal kind={item.kind} tier={medal?.tier??'locked'} small/>
           <span><strong>{item.name}</strong><span className="oc-achievements-quantity">{entry?.count??0} <small>{item.unit}</small> · {medal?labels[medal.tier]:'尚未获章'}</span></span>
         </button>;
       })}</div>
-      <details className="oc-achievements-rules"><summary>计数说明</summary><p>选择最多三枚奖章展示。派发成功不代表远端执行成功；制作数量不等于团队共享贡献；导入与旧资料不会自动归为本人制作。</p><dl>{catalog.map(item=>{const next=progress.find(entry=>entry.kind===item.kind)?.nextThreshold;return <div key={item.kind}><dt>{item.name}</dt><dd><span>{facts[item.kind]}</span><span className="oc-achievements-caption">{next?`下一级 ${next} ${item.unit}`:'已达到最高等级'}</span></dd></div>;})}</dl></details>
+      <details className="oc-achievements-rules"><summary>计数说明</summary><p>选择最多三枚奖章展示。派发成功不代表远端执行成功；导入与旧资料不会自动归为本人制作。</p><dl>{catalog.map(item=>{const next=progress.find(entry=>entry.kind===item.kind)?.nextThreshold;return <div key={item.kind}><dt>{item.name}</dt><dd><span>{facts[item.kind]}</span><span className="oc-achievements-caption">{next?`下一级 ${next} ${item.unit}`:'已达到最高等级'}</span></dd></div>;})}</dl></details>
     </section>
-    <section className="oc-achievements-card oc-achievements-social">
+    {organizationEnabled && <section className="oc-achievements-card oc-achievements-social">
+      {organizationError && <p role="alert">{organizationError}</p>}
       <div className="oc-achievements-heading"><h3>组织内查看与排名</h3>{status?.binding && <details><summary>重新连接成员凭据</summary><div className="oc-achievements-form">
           <p>服务地址：{status.binding.baseUrl}。这份存档继续使用原成员账号。</p>
           <label>新的成员凭据<input style={inputStyle} type="password" autoComplete="off" value={credential} onChange={e=>setCredential(e.target.value)}/></label>
@@ -80,8 +124,8 @@ export default function AchievementsPanel({ host }: { host: SocialHost }) {
         <div className="oc-achievements-actions oc-achievements-pagination"><button type="button" style={btnSmall} disabled={busy||ranking.offset===0} onClick={()=>void action(()=>ranks(Math.max(0,ranking.offset-20),ranking.snapshotId))}>上一页</button><span>{ranking.total?`${ranking.offset+1}–${Math.min(ranking.offset+20,ranking.total)} / ${ranking.total}`:'0 位成员'}</span><button type="button" style={btnSmall} disabled={busy||ranking.offset+20>=ranking.total} onClick={()=>void action(()=>ranks(ranking.offset+20,ranking.snapshotId))}>下一页</button></div>
       </>}
     </div>}
-    </section>
-    {profile && <section className="oc-achievements-card oc-achievements-member" aria-label="成员资料"><div className="oc-achievements-heading"><h3>{profile.displayName}</h3><button type="button" style={btnSmall} onClick={()=>setProfile(undefined)}>收起资料</button></div>
+    </section>}
+    {organizationEnabled && profile && <section className="oc-achievements-card oc-achievements-member" aria-label="成员资料"><div className="oc-achievements-heading"><h3>{profile.displayName}</h3><button type="button" style={btnSmall} onClick={()=>setProfile(undefined)}>收起资料</button></div>
       {profile.companion ? <><div className="oc-companion-public-scene"><PixelSprite species={profile.companion.speciesId} palette={profile.companion.paletteId} name={profile.companion.name} action="greet" scale={2}/></div><p>伙伴：{profile.companion.name} · {profile.companion.level ? `Lv.${profile.companion.level}` : '等级待更新'}</p></> : <p>尚未领养伙伴</p>}
       <div className="oc-companion-public-medals">{profile.medals.map(m=><span key={m.kind}><PixelMedal kind={m.kind} tier={m.tier} small/><span>{catalog.find(c=>c.kind===m.kind)?.name??m.kind} · {labels[m.tier]}</span></span>)}{!profile.medals.length && '尚未展示奖章'}</div>
       <dl className="oc-achievements-profile">{profile.achievements.progress.map(item=><div key={item.kind}><dt>{catalog.find(c=>c.kind===item.kind)?.name}</dt><dd>{item.count} {catalog.find(c=>c.kind===item.kind)?.unit}{item.nextThreshold && <small className="oc-achievements-caption">下一个目标：{item.nextThreshold} {catalog.find(c=>c.kind===item.kind)?.unit}</small>}</dd></div>)}</dl>

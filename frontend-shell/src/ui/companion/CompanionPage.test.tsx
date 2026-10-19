@@ -34,12 +34,21 @@ function hosts(initial = empty) {
   const social: SocialHost = {status:vi.fn(async () => ({summary:{ruleVersion:1 as const,progress:[]},pending:0,repairs:0,selected:[],profilePending:false})),catalog:vi.fn(async () => []),connect:vi.fn(),sync:vi.fn(),participation:vi.fn(),showcase:vi.fn(),rankings:vi.fn(),profile:vi.fn()};
   return {host,social};
 }
+it('waits for a deliberate touch and permits leaving the first ritual without drawing',async()=>{
+  const {host,social}=hosts();render(<CompanionPage host={host} socialHost={social}/>);
+  const entry=await screen.findByRole('button',{name:'开蛋'});entry.focus();fireEvent.click(entry);
+  expect(screen.getByRole('button',{name:'开启伙伴蛋'})).toHaveFocus();
+  expect(screen.getByRole('heading',{name:'一枚蛋，一次相遇'})).toBeVisible();
+  expect(host.hatch).not.toHaveBeenCalled();
+  fireEvent.keyDown(screen.getByRole('dialog'),{key:'Escape'});
+  expect(host.hatch).not.toHaveBeenCalled();expect(entry).toHaveFocus();
+});
 it('opens the free first egg with no species/palette picker or automatic social opt-in', async () => {
   const {host,social} = hosts(); render(<CompanionPage host={host} socialHost={social}/>);
-  await screen.findByRole('button',{name:'免费开蛋'});
+  await screen.findByRole('button',{name:'开蛋'});
   expect(screen.getByRole('img',{name:'伙伴蛋'})).toBeVisible();
   expect(screen.queryByRole('radiogroup')).toBeNull();
-  fireEvent.click(screen.getByRole('button',{name:'免费开蛋'}));
+  fireEvent.click(screen.getByRole('button',{name:'开蛋'}));fireEvent.click(screen.getByRole('button',{name:'开启伙伴蛋'}));
   await screen.findByRole('button',{name:'修改名字'});
   const input=screen.getByRole('textbox',{name:'给伙伴起个名字'});
   expect(input).toHaveFocus();
@@ -59,7 +68,7 @@ it('opens the free first egg with no species/palette picker or automatic social 
 it('can keep the default first name and never draws again after leaving the encounter',async()=>{
   const {host,social}=hosts();
   const view=render(<CompanionPage host={host} socialHost={social}/>);
-  fireEvent.click(await screen.findByRole('button',{name:'免费开蛋'}));
+  fireEvent.click(await screen.findByRole('button',{name:'开蛋'}));fireEvent.click(screen.getByRole('button',{name:'开启伙伴蛋'}));
   const input=await screen.findByRole('textbox',{name:'给伙伴起个名字'});
   fireEvent.change(input,{target:{value:'未提交的新名字'}});
   fireEvent.click(screen.getByRole('button',{name:'关闭开蛋仪式'}));
@@ -70,7 +79,7 @@ it('can keep the default first name and never draws again after leaving the enco
 });
 it('confirms the visible prefilled name and rejects a blank or whitespace-only name',async()=>{
   const {host,social}=hosts();render(<CompanionPage host={host} socialHost={social}/>);
-  fireEvent.click(await screen.findByRole('button',{name:'免费开蛋'}));
+  fireEvent.click(await screen.findByRole('button',{name:'开蛋'}));fireEvent.click(screen.getByRole('button',{name:'开启伙伴蛋'}));
   const input=await screen.findByRole('textbox',{name:'给伙伴起个名字'});
   const confirm=screen.getByRole('button',{name:'就叫这个名字'});
   expect(input).toHaveValue('原名');
@@ -85,8 +94,8 @@ it.each([false,true])('retains the naming draft on failure and blocks duplicate 
   let reject!: (cause:Error)=>void;
   host.rename=vi.fn(()=>new Promise<CompanionSnapshot>((_resolve,fail)=>{reject=fail;}));
   render(<CompanionPage host={host} socialHost={social}/>);
-  fireEvent.click(await screen.findByRole('button',{name:paid ? '重新开蛋' : '免费开蛋'}));
-  if(paid)fireEvent.click(screen.getByRole('button',{name:'确认消耗 50 点并开蛋'}));
+  fireEvent.click(await screen.findByRole('button',{name:paid ? '重新开蛋' : '开蛋'}));
+  if(paid)fireEvent.click(screen.getByRole('button',{name:'确认消耗 50 点并开蛋'}));else fireEvent.click(screen.getByRole('button',{name:'开启伙伴蛋'}));
   const input=await screen.findByRole('textbox',{name:'给伙伴起个名字'});
   fireEvent.change(input,{target:{value:'团团'}});
   fireEvent.submit(input.closest('form')!);fireEvent.submit(input.closest('form')!);
@@ -181,7 +190,9 @@ it('keeps the committed result behind a short reveal and cancels visual timers o
   try {
     const view=render(<CompanionPage host={host} socialHost={social}/>);
     await act(async()=>{});
-    await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'免费开蛋'}));});
+    await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'开蛋'}));});
+    expect(host.hatch).not.toHaveBeenCalled();
+    await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'开启伙伴蛋'}));});
     expect(screen.getByRole('img',{name:'正在打开的伙伴蛋'})).toBeVisible();
     expect(host.hatch).toHaveBeenCalledOnce();
     expect(document.querySelector('.oc-hatch-visual')).toHaveAttribute('data-phase','waiting');

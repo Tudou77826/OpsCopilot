@@ -2,13 +2,13 @@ import React, { useRef, useState } from 'react';
 import type { ProductTab } from './ProductChrome';
 
 /** Desktop sidebar frame, with bounds measured within the current host. */
-export function ProductSidebar({ isOpen, activeTab, onToggle, children }: {
- isOpen: boolean; activeTab: ProductTab; onToggle(): void; children: React.ReactNode;
+export function ProductSidebar({ isOpen, activeTab, onToggle, children, chatTitle = '伙伴助手' }: {
+ isOpen: boolean; activeTab: ProductTab; onToggle(): void; children: React.ReactNode; chatTitle?: string;
 }) {
  const container = useRef<HTMLDivElement>(null);
  const [widths, setWidths] = useState<Partial<Record<ProductTab, number>>>({});
  const width = widths[activeTab] ?? (activeTab === 'knowledge' ? 500 : activeTab === 'chat' || activeTab === 'troubleshoot' ? 420 : 300);
- const titles: Record<ProductTab,string> = { sessions: '会话管理', troubleshoot: '定位助手', chat: '伙伴助手', knowledge: '知识库', script: '脚本录制' };
+ const titles: Record<ProductTab,string> = { sessions: '会话管理', troubleshoot: '定位助手', chat: chatTitle, knowledge: '知识库', script: '脚本录制' };
  const drag = useRef<{x:number;width:number}>();
  return <div ref={container} className={`sidebar-shell sidebar-${activeTab}`} style={{
    ...styles.container, width: isOpen ? width : 0, flexShrink: 0, minWidth: 0, position: 'relative',

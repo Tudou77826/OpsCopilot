@@ -40,6 +40,14 @@ export default defineConfig({
   server: {
     port: 5174,
     strictPort: true,
+    // Shared UI styles reference sibling assets (including companion scenes).
+    // CSS URLs need an explicit serving boundary as well as module imports.
+    fs: {
+      allow: [
+        fileURLToPath(new URL('.', import.meta.url)),
+        fileURLToPath(new URL('../frontend-shell/src', import.meta.url)),
+      ],
+    },
   },
   // @xterm/xterm 6 can stop parsing full-screen TUI control sequences after
   // esbuild minification in the packaged WebView2 runtime. The same production

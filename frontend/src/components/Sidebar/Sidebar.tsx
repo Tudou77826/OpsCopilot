@@ -94,7 +94,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     return (
         <>
-        <ProductSidebar isOpen={isOpen} activeTab={activeTab} onToggle={onToggle}>
+        <ProductSidebar isOpen={isOpen} activeTab={activeTab} onToggle={onToggle} chatTitle={companionEnabled ? '伙伴助手' : 'AI 助手'}>
                         {/* SessionManager might not need persistence, but we can keep it consistent */}
                         <div style={{ display: activeTab === 'sessions' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
                              <SessionManager onConnect={onConnect} />

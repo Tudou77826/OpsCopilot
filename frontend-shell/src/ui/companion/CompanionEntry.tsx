@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
+import { TbMessageChatbot } from 'react-icons/tb';
 import type { CompanionHost, CompanionSnapshot } from '../../companion/types';
 import type { SocialHost } from '../../companion/socialHost';
 import { packForSpecies } from '../../companion/assets';
@@ -19,8 +20,9 @@ export function CompanionEntry({ host, enabled = false, selected, onOpen, label 
   host?: CompanionHost; enabled?: boolean; selected: boolean; onOpen(): void; label?: string;
 }) {
   const content = (snapshot?: CompanionSnapshot) => enabled && !snapshot?.pet ? <CompanionEgg/> : <CompanionAvatar species={snapshot?.pet?.speciesId} level={snapshot?.level} palette={snapshot?.pet?.paletteId} name={snapshot?.pet?.name ?? '伙伴助手'}/>;
-  return <button type="button" className="oc-companion-entry" title={label} aria-label={label} aria-pressed={selected} data-testid="nav-icon-companion" onClick={onOpen}>
-    {enabled && host ? <PersonalIdentity host={host}>{content}</PersonalIdentity> : content()}
+  const entryLabel = enabled ? label : 'AI 助手';
+  return <button type="button" className="oc-companion-entry" title={entryLabel} aria-label={entryLabel} aria-pressed={selected} data-state={enabled ? 'active' : 'quiet'} data-testid="nav-icon-companion" onClick={onOpen}>
+    {enabled ? (host ? <PersonalIdentity host={host}>{content}</PersonalIdentity> : content()) : <TbMessageChatbot aria-hidden="true"/>}
   </button>;
 }
 
@@ -30,10 +32,11 @@ export function CompanionAssistantHeader({ host, socialHost, enabled, visible, o
   const [expanded, setExpanded] = useState(true);
   const [action, setAction] = useState<CompanionAction>('idle');
   const timer = useRef<ReturnType<typeof setTimeout>>(), touches = useRef(0);
-  useEffect(() => { if (!visible || !expanded) { if (timer.current) clearTimeout(timer.current); setAction('idle'); } return () => { if (timer.current) clearTimeout(timer.current); }; }, [visible, expanded]);
+  useEffect(() => { if (!enabled || !visible || !expanded) { if (timer.current) clearTimeout(timer.current); setAction('idle'); } return () => { if (timer.current) clearTimeout(timer.current); }; }, [enabled, visible, expanded]);
   const interact = () => { touches.current++; setAction(touches.current % 2 ? 'greet' : 'happy'); if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => setAction('idle'), 6000); };
   const finishInteraction = () => { if (timer.current) clearTimeout(timer.current); setAction('idle'); };
   const bodyId = useId();
+  if (!enabled) return null;
   const content = (snapshot?: CompanionSnapshot) => {
     const pet = snapshot?.pet, stage = 'child' as const;
     const fit=visibleFrameHeightRatio(packForSpecies(pet?.speciesId),stage);

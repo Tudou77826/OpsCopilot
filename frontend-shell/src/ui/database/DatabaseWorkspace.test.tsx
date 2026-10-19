@@ -80,9 +80,9 @@ const profile: DatabaseProfile = {
 function runtime(): DatabaseRuntime {
   return {
     jdbcStatus: vi.fn(async () => ({
-      available: false,
-      message: '未安装 JDBC 运行组件',
-      drivers: [],
+      available: true,
+      message: '',
+      drivers: [{id:'mysql-jdbc',name:'MySQL Connector/J',className:'com.mysql.cj.jdbc.Driver',urlTemplate:'jdbc:mysql://{host}:{port}/{database}',dialect:'mysql',version:'9.7',jars:[]}],
     })),
     importJDBC: vi.fn(),
     deleteJDBC: vi.fn(),
@@ -766,6 +766,7 @@ describe('database workbench', () => {
     );
     fireEvent.click(screen.getByRole('menuitem', { name: '复制连接配置' }));
     await screen.findByRole('dialog', { name: '添加数据库连接' });
+    await screen.findByLabelText('密码');
     expect(
       (screen.getByLabelText('密码') as HTMLInputElement).placeholder,
     ).toBe('数据库密码');

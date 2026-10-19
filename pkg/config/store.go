@@ -228,7 +228,7 @@ func newManagerWithDir(dir string) *Manager {
 		QuickCommands:        []QuickCommand{},
 		CompletionDelay:      150, // Default 150ms
 		CommandQueryShortcut: "Ctrl+K",
-		Experimental:         ExperimentalConfig{},
+		Experimental:         ExperimentalConfig{CompanionEnabled: true},
 		Terminal: TerminalConfig{
 			Scrollback:       5000,
 			SearchEnabled:    true,

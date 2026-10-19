@@ -44,6 +44,10 @@ func TestSettingsRuleFailureCannotEnableCompanion(t *testing.T) {
 	if err := manager.Load(); err != nil {
 		t.Fatal(err)
 	}
+	manager.Config.Experimental.CompanionEnabled = false
+	if err := manager.Save(); err != nil {
+		t.Fatal(err)
+	}
 	app := &App{configMgr: manager, companion: companion.NewDormant(filepath.Join(dir, "companion.json"))}
 	rulesPath := filepath.Join(dir, "highlight_rules.json")
 	if err := os.Remove(rulesPath); err != nil && !os.IsNotExist(err) {

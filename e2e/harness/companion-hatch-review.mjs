@@ -60,7 +60,7 @@ try {
     const reroll=page.getByRole('button',{name:'重新开蛋',exact:true});
     await expect(reroll).toBeEnabled();
     expect(existing.hatchCost).toBe(50);
-  } else {await expect(page.getByRole('button',{name:'免费开蛋',exact:true})).toBeVisible();}
+  } else {await expect(page.getByRole('button',{name:'开蛋',exact:true})).toBeVisible();}
   await expect(page.locator('.oc-companion-scene img')).toHaveAttribute('data-ready','true');
   const portrait=await page.locator('.oc-companion-scene img').evaluate(image=>{
     const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;
@@ -89,7 +89,8 @@ try {
   await expect(page.getByRole('region',{name:'我的伙伴'}).getByRole('img',{name:'伙伴蛋',exact:true})).toBeVisible();
   await expect(page.getByRole('radiogroup',{name:'伙伴形象'})).toHaveCount(0);
   await page.screenshot({path:path.join(out,'first-egg.png')});
-  await page.getByRole('button',{name:'免费开蛋',exact:true}).click();
+  await page.getByRole('button',{name:'开蛋',exact:true}).click();
+  await page.getByRole('button',{name:'开启伙伴蛋',exact:true}).click();
   await expect(page.getByRole('img',{name:'正在打开的伙伴蛋'})).toBeVisible();
   await page.screenshot({path:path.join(out,'opening.png')});
   await expect(page.getByRole('button',{name:'修改名字',exact:true})).toBeVisible();
@@ -148,7 +149,7 @@ try {
     swing.currentTime=original;swing.play();
     return {duration:timing.duration,easing:getComputedStyle(effect.target).animationTimingFunction,segmentEasings:[...new Set(frames.map(frame=>frame.easing))],iterations:timing.iterations,offsets:frames.map(frame=>frame.computedOffset),samples,finiteEffects:animations.every(animation=>animation.effect.getTiming().iterations===1)};
   });
-  expect(motion.duration).toBe(2200);expect(motion.iterations).toBe(1);expect(motion.finiteEffects).toBe(true);
+  expect(motion.duration).toBe(3400);expect(motion.iterations).toBe(1);expect(motion.finiteEffects).toBe(true);
   expect(motion.easing).toContain('cubic-bezier');
   expect(motion.offsets).toContain(.83);expect(new Set(motion.samples.map(sample=>sample.transform)).size).toBeGreaterThan(3);
   await writeFile(path.join(out,'motion.json'),JSON.stringify(motion,null,2));

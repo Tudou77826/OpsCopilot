@@ -59,6 +59,7 @@ export default function ShellSettingsModal({ assistantSettings, socialHost, comp
  const persona = usePersonaSettings(assistantSettings, isOpen);
  const [settings, setSettings] = useState<ShellSettings | null>(null);
  const [saved, setSaved] = useState<ShellSettings | null>(null);
+ const companionEnabled = saved !== null && saved.companionEnabled !== false;
  const [llm, setLLM] = useState(emptyLLM);
  const [savedLLM, setSavedLLM] = useState(emptyLLM);
  const [activeTab, setActiveTab] = useState<Tab>('llm');
@@ -116,7 +117,7 @@ export default function ShellSettingsModal({ assistantSettings, socialHost, comp
    return () => window.removeEventListener('keydown', keydown);
  });
  const nav = [
-   ...(assistantSettings || (saved?.companionEnabled && socialHost && companionHost) ? [{id:'achievements' as Tab,label:'伙伴与奖章',icon:TbSettings({}),category:'个人',keywords:['排名','进度','功能奖章','养成','伙伴人设','提示词','性格','语气','persona']}] : []),
+   ...(companionEnabled && (assistantSettings || (socialHost && companionHost)) ? [{id:'achievements' as Tab,label:'伙伴与奖章',icon:TbSettings({}),category:'个人',keywords:['排名','进度','功能奖章','养成','伙伴人设','提示词','性格','语气','persona']}] : []),
    ...(aiRuntime ? [{id:'llm' as Tab,label:'模型服务',icon:TbRobot({}),category:'AI',keywords:[]}] : []),
    {id:'appearance' as Tab,label:'外观',icon:TbSun({}),category:'终端',keywords:['终端外观','终端','字体','字号','theme','主题']},
    {id:'highlight' as Tab,label:'突出显示',icon:TbPalette({}),category:'终端',keywords:[]},
@@ -126,6 +127,7 @@ export default function ShellSettingsModal({ assistantSettings, socialHost, comp
  ].filter(item => [item.label,item.category,item.id,...item.keywords].some(text => text.toLowerCase().includes(searchQuery.trim().toLowerCase())));
  useEffect(() => { if (isOpen && searchQuery && nav.length && !nav.some(item=>item.id===activeTab)) setActiveTab(nav[0].id); }, [isOpen,searchQuery,activeTab]);
  useEffect(() => { if (isOpen && initialTab) setActiveTab(initialTab); }, [isOpen,initialTab]);
+ useEffect(() => { if (isOpen && saved && !companionEnabled && activeTab === 'achievements') setActiveTab('experimental'); }, [isOpen,saved,companionEnabled,activeTab]);
  useEffect(() => { if (isOpen) searchInputRef.current?.focus(); }, [isOpen,activeTab]);
  if (!isOpen) return null;
  const highlightIssues = (settings?.highlightRules || []).flatMap(rule => {
@@ -148,8 +150,8 @@ export default function ShellSettingsModal({ assistantSettings, socialHost, comp
      activeTab === 'llm' ? <ProductLLMSettings value={llm} onChange={setLLM} keyDescription={aiRuntime?.persistence==='session'
        ? '仅用于本次运行时，不写入配置文件；留空保留现有密钥。仅发送你主动提交给 AI 的内容。'
        : '密钥保存在本地后台，读取不回明文；留空保留现有密钥。'}/> :
-     activeTab === 'achievements' ? (socialHost && companionHost && saved?.companionEnabled ? <CompanionPage host={companionHost} socialHost={socialHost} preferences={assistantSettings && <PersonaSettingsDisclosure state={persona} disabled={loading}/>}/> : <div className="oc-companion-page"><header className="oc-companion-page-heading"><h2>伙伴与奖章</h2>{assistantSettings && <PersonaSettingsDisclosure state={persona} disabled={loading}/>}</header></div>) :
-     activeTab === 'experimental' ? <><CompletionDelayCard value={settings.completionDelay} onChange={completionDelay=>update({...settings,completionDelay})}/>{companionHost && <CompanionEnable enabled={settings.companionEnabled === true} onChange={companionEnabled => update({ ...settings, companionEnabled })}/>}</> :
+     activeTab === 'achievements' ? (companionEnabled && (socialHost && companionHost ? <CompanionPage host={companionHost} socialHost={socialHost} preferences={assistantSettings && <PersonaSettingsDisclosure state={persona} disabled={loading}/>}/> : <div className="oc-companion-page"><header className="oc-companion-page-heading"><h2>伙伴与奖章</h2>{assistantSettings && <PersonaSettingsDisclosure state={persona} disabled={loading}/>}</header></div>)) :
+     activeTab === 'experimental' ? <><CompletionDelayCard value={settings.completionDelay} onChange={completionDelay=>update({...settings,completionDelay})}/>{companionHost && <CompanionEnable enabled={settings.companionEnabled !== false} onChange={companionEnabled => update({ ...settings, companionEnabled })}/>}</> :
      <ProductShellSettingsPage activeTab={activeTab} config={{terminal:settings.terminal,highlight_rules:settings.highlightRules,command_query_shortcut:settings.commandQueryShortcut || 'Ctrl+K'}}
        setConfig={next=>update({...settings,terminal:next.terminal!,highlightRules:next.highlight_rules!,commandQueryShortcut:next.command_query_shortcut})}
        theme={settings.theme} onThemeChange={theme=>update({...settings,theme})} highlightIssues={highlightIssues} skin={skin}/>}

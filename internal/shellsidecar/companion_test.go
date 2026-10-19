@@ -23,8 +23,8 @@ func TestCompanionSettingsApplyOnlyAfterSuccessfulSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if next.CompanionEnabled || store.Enabled() {
-		t.Fatal("must default off")
+	if !next.CompanionEnabled || store.Enabled() {
+		t.Fatal("settings must default on; dormant store awaits successful save")
 	}
 	next.CompanionEnabled = true
 	if err := settings.Save(next); err != nil {
@@ -44,6 +44,35 @@ func TestCompanionSettingsApplyOnlyAfterSuccessfulSave(t *testing.T) {
 	}
 	if store.Enabled() {
 		t.Fatal("failed save enabled store")
+	}
+}
+
+func TestCompanionSettingsDefaultAndExplicitOff(t *testing.T) {
+	for _, data := range []string{`{}`, `{"companionEnabled":false}`} {
+		t.Run(data, func(t *testing.T) {
+			service, err := NewSettingsService(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(service.path, []byte(data), 0600); err != nil {
+				t.Fatal(err)
+			}
+			settings, err := service.Get()
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := data == `{}`
+			if settings.CompanionEnabled != want {
+				t.Fatal("unexpected companion state")
+			}
+			if err := service.Save(settings); err != nil {
+				t.Fatal(err)
+			}
+			next, err := service.Get()
+			if err != nil || next.CompanionEnabled != want {
+				t.Fatal("saved companion choice not retained", err)
+			}
+		})
 	}
 }
 

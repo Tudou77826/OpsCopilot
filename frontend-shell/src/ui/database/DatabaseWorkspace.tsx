@@ -24,6 +24,7 @@ import { ConnectionFailurePanel } from './ConnectionFailurePanel';
 import { ResultGrid, resultCSV } from './ResultGrid';
 import { emptyProfile } from './ConnectionDialog';
 import { DatabaseExplorer } from './DatabaseExplorer';
+import { ExplorerSplitter } from './ExplorerSplitter';
 import { useDatabaseWorkspace } from './useDatabaseWorkspace';
 import { objectKey, type QueryTab } from './workspaceModel';
 import type { DatabaseProfile, DatabaseRuntime } from './types';
@@ -31,6 +32,7 @@ import './database.css';
 import './explorer.css';
 
 export function DatabaseWorkspace({ runtime }: { runtime: DatabaseRuntime }) {
+  const workspace = useRef<HTMLElement>(null);
   const model = useDatabaseWorkspace(runtime);
   const {
     profiles,
@@ -174,6 +176,7 @@ export function DatabaseWorkspace({ runtime }: { runtime: DatabaseRuntime }) {
 
   return (
     <section
+      ref={workspace}
       className="oc-db-workspace"
       aria-label="数据库工作区"
       onKeyDown={(e) => {
@@ -200,6 +203,7 @@ export function DatabaseWorkspace({ runtime }: { runtime: DatabaseRuntime }) {
           } else model.newQuery(pid, database, text);
         }}
       />
+      <ExplorerSplitter container={workspace} />
       <main className="oc-db-main">
         <header className="oc-db-context">
           <div>

@@ -11,7 +11,7 @@ import { companionSpecies, speciesInfo } from '../../companion/species';
 import './companion.css';
 
 export function CompanionEnable({ enabled, onChange }: { enabled: boolean; onChange(enabled: boolean): void }) {
-  return <section className="oc-companion-enable"><label><input type="checkbox" checked={enabled} onChange={e => onChange(e.target.checked)} />启用伙伴养成与功能奖章</label><p>通过日常实践陪伴伙伴成长，记录自己的功能积累。关闭后暂停采集，保留存档。加入组织排名需要另行确认。</p></section>;
+  return <section className="oc-companion-enable"><label><input type="checkbox" checked={enabled} onChange={e => onChange(e.target.checked)} />启用伙伴养成与功能奖章</label><p>通过日常实践陪伴伙伴成长，记录自己的功能积累。关闭后暂停采集，保留存档。</p></section>;
 }
 
 export default function CompanionPage({ host, socialHost, preferences }: { host: CompanionHost; socialHost: SocialHost; preferences?: React.ReactNode }) {
@@ -123,8 +123,8 @@ export default function CompanionPage({ host, socialHost, preferences }: { host:
       </div>
       <div className="oc-companion-details">
         {opening ? <div className="oc-companion-hatch-intro"><h3>正在开蛋…</h3><p>即将见到新的伙伴</p></div> : !pet ? <div className="oc-companion-hatch-intro">
-          <h3>遇见你的伙伴</h3><p>首次开蛋免费，{companionSpecies.length} 种伙伴等概率出现。形象与默认性格随开蛋确定。</p>
-          <div className="oc-companion-actions"><button type="button" disabled={busy || !!readError || !snapshot.canHatch} onClick={() => void hatch(snapshot)}>免费开蛋</button></div>
+          <h3>遇见你的伙伴</h3><p>首次开蛋不消耗经验，{companionSpecies.length} 种伙伴等概率出现。形象与默认性格随开蛋确定。</p>
+          <div className="oc-companion-actions"><button type="button" disabled={busy || !!readError || !snapshot.canHatch} onClick={() => { setOffer(snapshot); setHatchResult(undefined); setError(''); }}>开蛋</button></div>
         </div> : <>
           <div className="oc-companion-overview"><h3 ref={resultHeading} tabIndex={-1}>{pet.name}</h3><span>Lv.{level} · {pet.name !== speciesInfo(pet.speciesId).name && `${speciesInfo(pet.speciesId).name} · `}{speciesInfo(pet.speciesId).character}</span><small title={`初次相遇于 ${new Date(pet.adoptedAt).toLocaleDateString('zh-CN')}`}>今日经验 {snapshot.todayXP ?? 0}/{snapshot.dailyXPMax ?? 12}</small></div>
           <div className="oc-companion-xp"><span>成长经验 <strong>{pet.xp}</strong></span><span>{level < 100 ? `${levelXP} / ${required} · 升至 Lv.${level + 1} 还需 ${Math.max(0, required - levelXP)} 点` : 'Lv.100 · 已满级'}</span></div>
@@ -139,7 +139,7 @@ export default function CompanionPage({ host, socialHost, preferences }: { host:
             <CompanionHatchInvitation snapshot={snapshot} disabled={busy || !!readError} onOpen={() => { setOffer(snapshot); setHatchResult(undefined); setError(''); }}/>
           </div>}
         </>}
-        <details className="oc-companion-rules"><summary>开蛋与成长规则</summary><p>首次免费开蛋，重新开蛋会消耗成长经验，费用在确认前展示，等概率获得当前之外的伙伴。等级由剩余成长经验计算：每 10 点一级，最高 Lv.100；形象和体型不随等级改变。成功建立连接 +2，完成文件传输 +3，脚本全部命令完成派发 +4。每类每天最多计两次，每日总上限 12，以 UTC 日期结算。派发完成不代表远端执行成功。未开蛋时不累积经验；满级后继续积累经验，奖章统计独立。</p></details>
+        <details className="oc-companion-rules"><summary>开蛋与成长规则</summary><p>首次开蛋不消耗经验；重新开蛋会消耗成长经验，消耗点数在确认前展示，等概率获得当前之外的伙伴。等级由剩余成长经验计算：每 10 点一级，最高 Lv.100；形象和体型不随等级改变。成功建立连接 +2，完成文件传输 +3，脚本全部命令完成派发 +4。每类每天最多计两次，每日总上限 12，以 UTC 日期结算。派发完成不代表远端执行成功。未开蛋时不累积经验；满级后继续积累经验，奖章统计独立。</p></details>
         <p className="oc-companion-notice" role="status" aria-live="polite">{opening ? '正在开蛋…' : notice}</p>
       </div>
     </section>}

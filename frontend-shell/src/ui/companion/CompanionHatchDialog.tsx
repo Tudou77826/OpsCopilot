@@ -12,7 +12,7 @@ export function CompanionHatchInvitation({ snapshot, disabled, onOpen }: {
   const description = `重新开蛋：消耗 ${snapshot.hatchCost} 点经验，随机获得另一种伙伴。${remaining ? `当前 ${snapshot.pet?.xp ?? 0} 点，还差 ${remaining} 点。` : '名字、奖章和功能统计保留。'}`;
   return <span className="oc-hatch-entry">
     <button type="button" className="oc-hatch-invitation" aria-label="重新开蛋" aria-describedby={tooltipId} aria-haspopup="dialog" disabled={disabled} onClick={onOpen}>
-      <span aria-hidden="true"><CompanionEgg/></span>
+      <span aria-hidden="true"><CompanionEgg compact/></span>
     </button>
     <span id={tooltipId} role="tooltip" className="oc-hatch-entry-tooltip">{description}</span>
   </span>;
@@ -72,18 +72,19 @@ export function CompanionHatchDialog({ quote, opening, ready, result, onConfirm,
       }
     }}>
     <button type="button" className="oc-hatch-close" aria-label="关闭开蛋仪式" title={pet ? `放弃修改，保留名字「${pet.name}」` : '关闭开蛋仪式'} disabled={opening || saving} onClick={dismiss}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button>
-    <div className="oc-hatch-visual" data-result={!!pet} data-phase={pet ? 'revealed' : opening ? ready ? 'cracking' : 'waiting' : 'offer'} style={{'--oc-hatch-duration': `${HATCH_OPEN_DURATION_MS}ms`} as React.CSSProperties} aria-hidden="true">
+    <div className="oc-hatch-visual" data-result={!!pet} data-phase={pet ? 'revealed' : opening ? ready ? 'cracking' : 'waiting' : 'offer'} style={{'--oc-hatch-duration': `${HATCH_OPEN_DURATION_MS}ms`} as React.CSSProperties}>
       <span className="oc-hatch-halo"/>
       <span className="oc-hatch-orbit"/>
       <span className="oc-hatch-ripple"/>
+      <span className="oc-hatch-flash" aria-hidden="true"/>
       <span className="oc-hatch-sparks">{[[-78,-45],[4,-76],[77,-39],[88,24],[44,70],[-12,74],[-73,49],[-92,3]].map(([x,y],index) => <i key={index} style={{'--spark-x': `${x}px`, '--spark-y': `${y}px`, '--spark-delay': `${index % 3 * 55}ms`} as React.CSSProperties}/>)}</span>
-      {pet ? <PixelSprite species={pet.speciesId} palette={pet.paletteId} name={pet.name} scale={3}/> : <CompanionEgg opening={opening} shaking={ready}/>}
+      {pet ? <PixelSprite species={pet.speciesId} palette={pet.paletteId} name={pet.name} scale={3}/> : firstMeeting && !opening ? <button ref={cancel} type="button" className="oc-hatch-trigger" aria-label="开启伙伴蛋" onClick={onConfirm}><CompanionEgg/></button> : <span className="oc-hatch-egg-frame" aria-hidden="true"><CompanionEgg opening={opening} shaking={ready}/></span>}
     </div>
     <div className="oc-hatch-dialog-content">
-      <span className="oc-hatch-caption">{pet ? firstMeeting ? '初次相遇' : '新的伙伴' : opening ? '正在开蛋' : '重新开蛋'}</span>
-      <h2 ref={heading} tabIndex={-1}>{pet ? `遇见了${info!.name}` : opening ? '新的相遇，即将到来' : '另一次相遇'}</h2>
-      <p id={descriptionId}>{pet ? `${info!.type} · ${info!.character}` : opening ? '正在打开这枚伙伴蛋…' : '蛋里会是另一种伙伴。开启后，新的形象将替换当前形象。'}</p>
-      {pet ? !firstMeeting && <p className="oc-hatch-settlement">已消耗 {quote.hatchCost} 点经验 · 剩余 {pet.xp} 点 · Lv.{result!.level}</p> : !opening && <>
+      <span className="oc-hatch-caption">{pet ? firstMeeting ? '初次相遇' : '新的伙伴' : opening ? '正在相遇' : firstMeeting ? '初次相遇' : '重新开蛋'}</span>
+      <h2 ref={heading} tabIndex={-1}>{pet ? `遇见了${info!.name}` : opening ? '有什么，正在悄悄醒来' : firstMeeting ? '一枚蛋，一次相遇' : '另一次相遇'}</h2>
+      <p id={descriptionId}>{pet ? `${info!.type} · ${info!.character}` : opening ? '让这份小小的惊喜，慢慢靠近。' : firstMeeting ? '轻触这枚蛋，和里面的小家伙打个招呼。' : '蛋里会是另一种伙伴。开启后，新的形象将替换当前形象。'}</p>
+      {pet ? !firstMeeting && <p className="oc-hatch-settlement">已消耗 {quote.hatchCost} 点经验 · 剩余 {pet.xp} 点 · Lv.{result!.level}</p> : !opening && !firstMeeting && <>
         <div className="oc-hatch-cost"><span>本次相遇</span><strong>{quote.hatchCost}<small>点经验</small></strong></div>
         <p className="oc-hatch-balance">{remaining ? `当前 ${quote.pet!.xp} 点，还差 ${remaining} 点经验` : `成长经验 ${quote.pet!.xp} → ${quote.pet!.xp - quote.hatchCost} 点，等级按剩余经验重新计算`}</p>
         <p className="oc-hatch-keeps">名字、奖章和功能统计保留。</p>
@@ -100,7 +101,7 @@ export function CompanionHatchDialog({ quote, opening, ready, result, onConfirm,
         </div>
         <p>{saving ? '正在保存名字…' : '1–24 个字，以后也可以修改。'}</p>
         {error && <p role="alert">{error}</p>}
-      </form> : opening ? <p role="status">正在开启，请稍候…</p> : <>
+      </form> : opening ? <p className="oc-hatch-progress" data-ready={ready} role="status">正在开启，请稍候…</p> : firstMeeting ? <p className="oc-hatch-touch-hint">点击伙伴蛋，开始相遇</p> : <>
         <button type="button" className="oc-hatch-primary" disabled={!quote.canHatch} aria-label={`确认消耗 ${quote.hatchCost} 点并开蛋`} onClick={onConfirm}>{remaining ? `还需 ${remaining} 点经验` : `消耗 ${quote.hatchCost} 点经验，开启新蛋`}</button>
         <button ref={cancel} type="button" className="oc-hatch-cancel" onClick={onClose}>保留当前伙伴</button>
       </>}

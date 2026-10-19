@@ -20,7 +20,7 @@ beforeAll(() => {
 afterEach(cleanup);
 const driver = { id: 'mysql-jdbc', name: 'MySQL Connector/J', className: 'com.mysql.cj.jdbc.Driver', urlTemplate: 'jdbc:mysql://{host}:{port}/{database}', dialect: 'mysql', version: '9.7', jars: [] };
 const jdbcStatus = vi.fn(async () => ({ available: true, message: '运行组件已就绪', drivers: [driver] }));
-function setup(saved = false) {
+async function setup(saved = false) {
   const profile = {
     ...emptyProfile(), driverId: driver.id, port: 3306,
     host: 'db.internal',
@@ -42,11 +42,21 @@ function setup(saved = false) {
       onClose={vi.fn()}
     />,
   );
+  await screen.findByText(driver.name,{exact:true});
   return { runtime, onSaved };
 }
 describe('connection dialog', () => {
+  it('rejects a saved connection whose imported driver no longer exists', async () => {
+    const runtime = {jdbcStatus, gateways:vi.fn(async()=>[]),test:vi.fn(),save:vi.fn()} as unknown as DatabaseRuntime;
+    render(<ConnectionDialog profile={{...emptyProfile(),id:'saved',driverId:'removed-driver',host:'db.internal',user:'ops',port:3306}} runtime={runtime} onSaved={vi.fn()} onClose={vi.fn()}/>);
+    await screen.findByRole('combobox',{name:'连接驱动'});
+    fireEvent.click(screen.getByRole('button',{name:'测试连接'}));
+    expect(await screen.findByRole('alert')).toHaveTextContent('请先导入并选择数据库驱动');
+    fireEvent.click(screen.getByRole('button',{name:'仅保存'}));
+    expect(runtime.test).not.toHaveBeenCalled();expect(runtime.save).not.toHaveBeenCalled();
+  });
   it('tests an unsaved draft without saving and clears stale success on edits', async () => {
-    const { runtime } = setup();
+    const { runtime } = await setup();
     expect(
       screen.getByRole('tab', { name: '数据库', selected: true }),
     ).toBeVisible();
@@ -71,7 +81,7 @@ describe('connection dialog', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
   it('preserves an existing password unless explicitly cleared', async () => {
-    const { runtime } = setup(true);
+    const { runtime } = await setup(true);
     fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
     await screen.findByRole('status');
     expect(runtime.test).toHaveBeenLastCalledWith(
@@ -96,7 +106,7 @@ describe('connection dialog', () => {
     expect(runtime.save).not.toHaveBeenCalled();
   });
   it('shows failures and keeps the draft editable', async () => {
-    const { runtime } = setup();
+    const { runtime } = await setup();
     vi.mocked(runtime.test).mockRejectedValueOnce(
       new Error('connection refused'),
     );
@@ -115,7 +125,7 @@ describe('connection dialog', () => {
       configurable: true,
       value: { writeText },
     });
-    const { runtime } = setup();
+    const { runtime } = await setup();
     const detail =
       'JDBC 操作失败 · 建立连接／握手认证（SQLState 08001，代码 0）\nConnectException: Connection refused';
     vi.mocked(runtime.test).mockRejectedValueOnce(new Error(detail));
@@ -132,7 +142,7 @@ describe('connection dialog', () => {
     );
   });
   it('distinguishes save-only from save-and-connect without stale click state', async () => {
-    const { runtime, onSaved } = setup();
+    const { runtime, onSaved } = await setup();
     fireEvent.click(screen.getByRole('button', { name: '仅保存' }));
     await waitFor(() =>
       expect(onSaved).toHaveBeenCalledWith(expect.anything(), false),
@@ -142,7 +152,7 @@ describe('connection dialog', () => {
     );
   });
   it('saves and connects by default', async () => {
-    const { onSaved } = setup();
+    const { onSaved } = await setup();
     fireEvent.click(screen.getByRole('button', { name: '保存并连接' }));
     await waitFor(() =>
       expect(onSaved).toHaveBeenCalledWith(expect.anything(), true),
@@ -151,7 +161,7 @@ describe('connection dialog', () => {
 });
 
 it('returns to the invalid database field from another section without testing', async () => {
-  const { runtime } = setup();
+  const { runtime } = await setup();
   fireEvent.change(screen.getByLabelText('用户名'), { target: { value: '' } });
   fireEvent.click(screen.getByRole('tab', { name: '更多设置' }));
   fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
@@ -162,8 +172,8 @@ it('returns to the invalid database field from another section without testing',
   expect(runtime.test).not.toHaveBeenCalled();
 });
 it('requires an SSH node and returns to its section when testing', async () => {
-  const { runtime } = setup();
-  fireEvent.click(screen.getByRole('tab', { name: 'SSH 隧道' }));
+  const { runtime } = await setup();
+  fireEvent.click(await screen.findByRole('tab', { name: 'SSH 隧道' }));
   fireEvent.click(screen.getByLabelText('使用 SSH 隧道'));
   fireEvent.click(screen.getByRole('tab', { name: '数据库' }));
   fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
@@ -180,7 +190,7 @@ it('keeps transport choices internal and submits automatic SSH handling', async 
     test: vi.fn(async () => 'Gauss test'),
   } as unknown as DatabaseRuntime;
   render(<ConnectionDialog profile={{ ...emptyProfile(), driverId: driver.id, port: 32063, user: 'ops', gatewayId: 'final55' }} runtime={runtime} onSaved={vi.fn()} onClose={vi.fn()} />);
-  fireEvent.click(screen.getByRole('tab', { name: 'SSH 隧道' }));
+  fireEvent.click(await screen.findByRole('tab', { name: 'SSH 隧道' }));
   await screen.findByRole('option', { name: '55 经 50 · 10.0.0.55' });
   expect(screen.queryByLabelText('通道模式')).toBeNull();
   expect(screen.queryByLabelText('连接路径')).toBeNull();
@@ -214,7 +224,7 @@ it('refreshes failed gateway loading and distinguishes gateway from target', asy
       onClose={vi.fn()}
     />,
   );
-  fireEvent.click(screen.getByRole('tab', { name: 'SSH 隧道' }));
+  fireEvent.click(await screen.findByRole('tab', { name: 'SSH 隧道' }));
   await screen.findByText('SSH 连接列表加载失败，请重试。');
   fireEvent.click(screen.getByRole('button', { name: '刷新 SSH 连接列表' }));
   await screen.findByRole('option', { name: 'Jump 51 · 10.0.0.51' });
@@ -241,7 +251,7 @@ it('supports keyboard section navigation and blocks closing while a test is pend
       onClose={onClose}
     />,
   );
-  fireEvent.keyDown(screen.getByRole('tab', { name: '数据库' }), {
+  fireEvent.keyDown(await screen.findByRole('tab', { name: '数据库' }), {
     key: 'ArrowRight',
   });
   expect(screen.getByRole('tab', { name: 'SSH 隧道' })).toHaveAttribute(
@@ -263,9 +273,9 @@ it('supports keyboard section navigation and blocks closing while a test is pend
 });
 
 it('makes readonly an explicit opt-in for supported drivers', async () => {
-  const { runtime } = setup();
+  const { runtime } = await setup();
   fireEvent.click(screen.getByRole('tab', { name: '更多设置' }));
-  await screen.findByRole('option', { name: 'MySQL Connector/J · JDBC', hidden: true });
+  await screen.findByText('MySQL Connector/J');
   const readonly = screen.getByLabelText('限制为只读（可选）');
   expect(readonly).not.toBeChecked();
   fireEvent.click(readonly);
@@ -280,7 +290,7 @@ it('makes readonly an explicit opt-in for supported drivers', async () => {
   expect(screen.queryByLabelText('清空已保存的密码')).toBeNull();
 });
 it('replaces a saved password only when a new value is supplied', async () => {
-  const { runtime } = setup(true);
+  const { runtime } = await setup(true);
   fireEvent.change(screen.getByLabelText('密码'), {
     target: { value: 'replacement-secret' },
   });

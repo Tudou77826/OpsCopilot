@@ -5,6 +5,7 @@
 .oc-achievements-card { padding: var(--space-10); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-primary); }
 .oc-achievements-heading, .oc-achievements-actions, .oc-achievements-account { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-8); }
 .oc-achievements-caption { display: block; margin: 0; color: var(--text-secondary); font-size: var(--font-size-xs); font-weight: normal; }
+.oc-achievements-save-state { color: var(--text-secondary); font-size: var(--font-size-xs); }
 .oc-achievements-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-6); margin: var(--space-8) 0; }
 .oc-achievements-medal { display: flex; min-width: 0; text-align: left; align-items: center; gap: var(--space-8); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text-primary); padding: var(--space-6) var(--space-8); cursor: pointer; font: inherit; line-height: 1.5; }
 .oc-achievements-medal strong { font-weight: 500; }

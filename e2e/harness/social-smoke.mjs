@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { startSocialReview } from './social-launch.mjs';
-import { captureCompanionReview } from './companion-review.mjs';
 
 const environment = await startSocialReview({port:Number(process.env.SOCIAL_TEST_PORT || 34115)});
 const ep = environment.endpoint;
@@ -26,9 +25,7 @@ try {
     await expect.poll(async () => (await go('GetServiceCenterSettings')).choice, { timeout: 20000 }).toBe('disabled');
     await page.reload();
     await expect(page.locator('.sc-overlay')).toHaveCount(0);
-    await page.getByTestId('nav-icon-companion').click();
-    await expect(page.getByRole('heading', { name: '伙伴助手', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: /^(开启养成|养成与奖章)$/ }).click();
+    await page.getByRole('button', { name: '设置', exact: true }).click();
     if (!(await go('GetSettings')).experimental?.companion_enabled) {
       await page.getByText('高级选项', { exact: true }).click();
       await page.getByLabel('启用伙伴养成与功能奖章', { exact: true }).check();
@@ -47,8 +44,10 @@ try {
   await openMedals();
   assert.equal(Object.values(stats(await go('AchievementStatus'))).reduce((a, b) => a + b, 0), 0);
   check('真实桌面设置中显示八类奖章，新存档计数为零');
-  await page.getByRole('button', { name: '免费开蛋', exact: true }).click();
+  await page.getByRole('button', { name: '开蛋', exact: true }).click();
+  await page.getByRole('button', { name: '开启伙伴蛋', exact: true }).click();
   await expect(page.getByRole('button', { name: '修改名字', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '就叫这个名字', exact: true }).click();
   const adopted = await go('CompanionSnapshot');
   assert.equal(adopted.pet.xp, 0); assert.equal(adopted.pet.paletteId, 'mint');
   await page.getByRole('button', { name: '休息一会', exact: true }).click();
@@ -61,7 +60,7 @@ try {
   await expect(page.locator('.oc-companion-overview')).toContainText('本地微光二号');
   await assert.rejects(go('CompanionRename', '过期修改', adopted.revision));
   await assert.rejects(go('CompanionHatch', (await go('CompanionSnapshot')).revision));
-  check('免费开蛋、改名与本地回应通过正式接口；陈旧编辑和不足50点的重开被拒绝，操作不赠送经验');
+  check('首次开蛋、改名与本地回应通过正式接口；陈旧编辑和不足50点的重开被拒绝，操作不赠送经验');
 
   const scripts = [];
   for (let i = 0; i < 3; i++) {
@@ -112,24 +111,23 @@ try {
   assert.ok(archive.includes('归档结论 1') && archive.includes('归档结论 2'));
   check('八类业务结果真实采集；重复保存、查阅、派发不重复计数，失败派发不计数，同文件归档保留两条记录');
 
-  await page.getByRole('button', { name: '刷新进度', exact: true }).click();
-  await expect(page.locator('.oc-achievements')).toHaveAttribute('aria-busy', 'false');
-  await page.getByLabel('排名服务地址', { exact: true }).fill(ep.serviceURL);
-  await page.getByLabel('成员凭据', { exact: true }).fill(ep.members.self.token);
-  await page.getByRole('button', { name: '连接成员账号', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('归属');
-  await page.getByLabel('将这份本地使用记录归属到我的成员账号').check();
-  await page.getByLabel('成员凭据', { exact: true }).fill(ep.members.self.token);
-  await page.getByRole('button', { name: '连接成员账号', exact: true }).click();
-  await expect(page.getByRole('button', { name: '同意公开八项统计并参与', exact: true })).toBeVisible();
-  check('已有本地成果需明确认领，连接凭据后仍未自动参与排名');
-  await page.getByRole('button', { name: '同意公开八项统计并参与', exact: true }).click();
-  await expect(page.getByRole('button', { name: '退出排名', exact: true })).toBeEnabled();
+  await expect(page.getByLabel('排名服务地址', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: '组织内查看与排名', exact: true })).toHaveCount(0);
+  await expect(page.locator('.oc-achievements-medal').filter({ hasText: '脚本工匠' })).toContainText('3 个');
   for (const label of ['知识沉淀者', '脚本工匠', '知识探索者']) await page.locator('.oc-achievements-medal').filter({ hasText: label }).click();
   await expect(page.locator('.oc-achievements-medal[aria-pressed="true"]')).toHaveCount(3);
-  await expect(page.locator('.oc-achievements-medal').filter({ hasText: '指令工匠' })).toBeDisabled();
-  await page.getByRole('button', { name: '保存展示选择', exact: true }).click();
-  await expect(page.locator('.oc-achievements')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.locator('.oc-achievements-save-state')).toHaveText('已保存');
+  await expect.poll(async () => (await go('AchievementStatus')).selected.length).toBe(3);
+  check('本地页面隐藏组织接入和同步状态，奖章展示选择自动保存');
+
+  // Preserve dormant organization contracts through explicit fixture RPC calls.
+  // No organization UI is enabled by this test.
+  await assert.rejects(go('SocialConnect', ep.serviceURL, ep.members.self.token, false));
+  let state = await go('SocialConnect', ep.serviceURL, ep.members.self.token, true);
+  assert.equal(state.binding.member.participating, false);
+  await go('SocialParticipation', true);
+  await go('SocialSync');
+  check('组织协议仍要求明确归属与参与；本地选择不自动发起组织同步');
   const peerURL = await environment.startPeerApp();
   const peerPage = await browser.newPage();
   peerPage.on('pageerror', error => errors.push(error.message));
@@ -149,6 +147,7 @@ try {
   await peerGo('SocialConnect', ep.serviceURL, ep.members.peer.token, true);
   await peerGo('SocialParticipation', true);
   await peerGo('SocialShowcase', ['script-created']);
+  await peerGo('SocialSync');
   const visible = await api(ep.members.peer, 'GET', `/api/v1/social/profiles/${ep.members.self.member.userId}`);
   assert.deepEqual(stats({ summary: visible.achievements }), counts);
   assert.equal(visible.medals.length, 3);
@@ -156,23 +155,18 @@ try {
   assert.deepEqual(Object.keys(visible.companion).sort(), ['level', 'name', 'paletteId', 'speciesId']);
   for (const forbidden of ['objectId', 'sourceId', 'reference', 'password', 'echo social-script-', ep.appDir]) assert.ok(!JSON.stringify(visible).includes(forbidden));
   await api(ep.members.outsider, 'GET', `/api/v1/social/profiles/${ep.members.self.member.userId}`, undefined, 404);
-  await page.getByRole('button', { name: '刷新排名', exact: true }).click();
-  await expect(page.locator('.oc-achievements-table tbody tr')).toHaveCount(1);
-  await page.locator('.oc-achievements-table').getByRole('button', { name: '本地实测成员', exact: true }).click();
-  await expect(page.getByRole('region', { name: '成员资料' })).toBeVisible();
-  await page.getByLabel('分类榜').selectOption('script-created');
-  await expect(page.locator('.oc-achievements-table tbody tr')).toHaveCount(2);
-  await expect(page.locator('.oc-achievements-table tbody tr').first()).toContainText('3 个');
-  await page.locator('.oc-achievements-table').getByRole('button', { name: '同组织实测成员', exact: true }).click();
-  await expect(page.getByRole('region', { name: '成员资料' })).toContainText('同组织实测成员');
-  await expect(page.getByRole('region', { name: '成员资料' })).toContainText('同伴琥珀');
-  await expect(page.locator('.oc-companion-public-scene img')).toHaveAttribute('data-palette', 'mint');
-  assert.equal((await go('SocialRankings', 'script-created', 0, 20, '')).entries[1].count, 1);
-  check('两个独立桌面真实保存并同步；三枚精选上限、分类排名和他人资料可查看；跨组织不可见，公开资料无业务明细');
+  const ranking = await go('SocialRankings', 'script-created', 0, 20, '');
+  assert.equal(ranking.entries.length, 2);
+  assert.equal(ranking.entries[0].count, 3);
+  assert.equal(ranking.entries[1].count, 1);
+  const peerProfile = await go('SocialProfile', ep.members.peer.member.userId);
+  assert.equal(peerProfile.companion.name, '同伴琥珀');
+  await expect(page.locator('.oc-achievements-social')).toHaveCount(0);
+  check('组织排名与成员资料后端协议保留，客户端默认不展示组织功能');
 
   await go('DeleteScript', scripts[2].id);
   assert.equal(await go('DeleteQuickCommand', commands[2].id), '');
-  let state = await go('SocialSync');
+  state = await go('SocialSync');
   assert.equal(stats(state)['script-created'], 2); assert.equal(stats(state)['quick-command-created'], 2);
   assert.equal(stats(state)['script-used'], 3); assert.equal(stats(state)['quick-command-used'], 3);
   const afterDelete = await api(ep.members.peer, 'GET', `/api/v1/social/profiles/${ep.members.self.member.userId}`);
@@ -183,8 +177,11 @@ try {
 
   const oldPage = await api(ep.members.peer, 'GET', '/api/v1/social/rankings?kind=script-created&offset=0&limit=20');
   environment.stopService();
-  await page.getByRole('button', { name: '退出排名', exact: true }).click();
-  await expect(page.locator('.oc-achievements').getByRole('status')).toContainText('公开资料可能仍可见');
+  const localSelection = (await go('AchievementStatus')).selected;
+  await go('SocialShowcase', localSelection);
+  assert.deepEqual((await go('AchievementStatus')).selected, localSelection);
+  check('已绑定用户在组织服务停止后仍可保存本地展示选择');
+  await assert.rejects(go('SocialParticipation', false));
   state = await go('AchievementStatus'); assert.equal(state.participationPending, false);
   const queued = { id: 'social-local-offline', name: '离线保存实测', content: 'echo offline', group: 'default' };
   assert.equal(await go('AddQuickCommand', queued), '');
@@ -195,14 +192,12 @@ try {
   await expect(page.locator('.oc-achievements-medal[aria-pressed="true"]')).toHaveCount(3);
   state = await go('AchievementStatus'); assert.equal(state.participationPending, false); assert.equal(stats(state)['quick-command-created'], 3);
   await environment.startService();
-  await page.getByRole('button', { name: '立即同步', exact: true }).click();
-  await expect(page.getByRole('button', { name: '同意公开八项统计并参与', exact: true })).toBeEnabled();
+  await go('SocialSync');
   state = await go('AchievementStatus'); assert.equal(state.participationPending, undefined); assert.ok(state.pending > 0);
   await api(ep.members.peer, 'GET', `/api/v1/social/profiles/${ep.members.self.member.userId}`, undefined, 404);
   await api(ep.members.peer, 'GET', `/api/v1/social/rankings?kind=script-created&offset=0&limit=20&snapshotId=${oldPage.snapshotId}`, undefined, 409);
-  check('离线退出持久化并明确提示；应用与服务重启后先确认退出，暂停成果上传，旧榜单快照失效');
-  await page.getByRole('button', { name: '同意公开八项统计并参与', exact: true }).click();
-  await expect(page.getByRole('button', { name: '退出排名', exact: true })).toBeEnabled();
+  check('离线退出持久化；应用与服务重启后先确认退出，暂停成果上传，旧榜单快照失效');
+  await go('SocialParticipation', true);
   state = await go('AchievementStatus'); assert.equal(state.pending, 0);
   await go('SocialSync');
   assert.deepEqual(stats(await go('AchievementStatus')), stats(state));
@@ -211,7 +206,7 @@ try {
   await page.getByLabel('启用伙伴养成与功能奖章', { exact: true }).uncheck();
   await page.getByRole('button', { name: '保存更改', exact: true }).click();
   await expect(page.getByTestId('nav-icon-companion')).toHaveCount(1);
-  await expect(page.getByRole('navigation').getByText('伙伴与奖章', { exact: true })).toHaveCount(1);
+  await expect(page.getByRole('navigation').getByText('伙伴与奖章', { exact: true })).toHaveCount(0);
   const companionFile = path.join(ep.appDir, 'companion.json');
   const disabledPet = await readFile(companionFile, 'utf8');
   const disabledLedger = await readFile(path.join(ep.appDir, 'achievements.json'), 'utf8');
@@ -228,16 +223,10 @@ try {
   const enabledAgain = await go('CompanionSnapshot');
   assert.equal(enabledAgain.pet.id, adopted.pet.id); assert.equal(enabledAgain.pet.xp, 12);
   check('设置关闭保留助手入口、暂停养成采集且存档逐字保留；重新启用恢复同一伙伴和进度');
-  await page.getByRole('button', { name: '刷新进度', exact: true }).click();
-  await page.getByLabel('分类榜').selectOption('script-created');
-  await expect(page.locator('.oc-achievements-table tbody tr')).toHaveCount(2);
-  await page.getByRole('button', { name: '查看我的资料', exact: true }).click();
-  await expect(page.getByRole('region', { name: '成员资料' })).toBeVisible();
+  await expect(page.locator('.oc-achievements-social')).toHaveCount(0);
   assert.deepEqual(errors, []);
   const evidence = path.join(ep.runDir, 'evidence'); await mkdir(evidence);
   await page.screenshot({ path: path.join(evidence, 'social-live-desktop.png'), fullPage: true });
-  await captureCompanionReview(page, evidence, ep.appURL);
-  check('侧栏伙伴承接真实问答，切换保留对话与草稿；养成页明暗主题与两种窗口宽度无溢出，改名和减少动态效果生效，他人资料使用正式素材');
   await writeFile(path.join(evidence, 'result.json'), JSON.stringify({ testedAt: new Date().toISOString(), appURL: ep.appURL, checks, counts: stats(state), browserErrors: errors }, null, 2));
   process.stdout.write(`[social-test] 全部 ${checks.length} 组实测通过。证据 ${evidence}\n`);
   await browser.close(); browser = undefined;

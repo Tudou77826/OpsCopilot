@@ -296,7 +296,7 @@ function App() {
                 if (window.go && window.go.main && window.go.main.App && window.go.main.App.GetSettings) {
                     // @ts-ignore
                     const cfg = await window.go.main.App.GetSettings();
-                    setCompanionEnabled(cfg?.experimental?.companion_enabled === true);
+                    setCompanionEnabled(cfg?.experimental?.companion_enabled !== false);
                     if (cfg && cfg.completion_delay !== undefined) {
                         setCompletionDelay(cfg.completion_delay);
                     }

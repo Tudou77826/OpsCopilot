@@ -308,10 +308,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const [sessionShareStatus, setSessionShareStatus] = useState<SessionShareStatus>(defaultSessionShareStatus);
     const [sessionShareLoading, setSessionShareLoading] = useState(false);
     const searchInputRef = useRef<HTMLInputElement>(null);
+    const savedCompanionEnabled = savedConfigJson !== null && JSON.parse(savedConfigJson).experimental?.companion_enabled !== false;
+
+    useEffect(() => {
+        if (isOpen && savedConfigJson !== null && !savedCompanionEnabled && activeTab === 'achievements') setActiveTab('experimental');
+    }, [isOpen, savedConfigJson, savedCompanionEnabled, activeTab]);
 
     // Navigation items structure
     const navItems: NavItem[] = [
-        {id:'achievements' as TabId,label:'伙伴与奖章',icon:TbUsers({}),category:'个人',keywords:['排名','功能奖章','伙伴','养成','进度','伙伴人设','提示词','性格','语气','persona']},
+        ...(savedCompanionEnabled ? [{id:'achievements' as TabId,label:'伙伴与奖章',icon:TbUsers({}),category:'个人',keywords:['排名','功能奖章','伙伴','养成','进度','伙伴人设','提示词','性格','语气','persona']}] : []),
         { id: 'llm', label: '模型服务', icon: TbRobot({}), category: 'AI' },
         { id: 'appearance', label: '外观', icon: TbSun({}), category: '终端', keywords: ['终端外观', '终端', '字体', '字号', 'theme', '主题'] },
         { id: 'highlight', label: '突出显示', icon: TbPalette({}), category: '终端' },
@@ -472,7 +477,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         FastModel: fastModel,
                         ComplexModel: complexModel,
                     },
-                    experimental: cfg.experimental || {},
+                    experimental: { companion_enabled: true, ...cfg.experimental },
                     cli: normalizeCliConfig(cfg.cli),
                     terminal,
                     highlight_rules,
@@ -586,7 +591,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             if (onCompletionDelayChange && nextConfig.completion_delay !== undefined) {
                 onCompletionDelayChange(nextConfig.completion_delay);
             }
-            onCompanionEnabledChange?.(nextConfig.experimental?.companion_enabled === true);
+            onCompanionEnabledChange?.(nextConfig.experimental?.companion_enabled !== false);
             if (onHighlightRulesChange) {
                 onHighlightRulesChange(nextConfig.highlight_rules || []);
             }
@@ -1654,7 +1659,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 return <FileAccessPanel />;
 
             case 'achievements':
-                return savedConfigJson && JSON.parse(savedConfigJson).experimental?.companion_enabled ? <CompanionPage host={wailsCompanionHost} socialHost={wailsSocialHost} preferences={<PersonaSettingsDisclosure state={persona} disabled={loading}/>}/> : <div className="oc-companion-page"><header className="oc-companion-page-heading"><h2>伙伴与奖章</h2><PersonaSettingsDisclosure state={persona} disabled={loading}/></header></div>;
+                return savedCompanionEnabled ? <CompanionPage host={wailsCompanionHost} socialHost={wailsSocialHost} preferences={<PersonaSettingsDisclosure state={persona} disabled={loading}/>}/> : null;
 
             case 'experimental':
                 return (
@@ -1692,7 +1697,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
                         <div style={styles.card}>
                             <div style={styles.cardTitle}>高级功能</div>
-                            <CompanionEnable enabled={config.experimental?.companion_enabled === true} onChange={enabled => setConfig({ ...config, experimental: { ...config.experimental, companion_enabled: enabled } })}/>
+                            <CompanionEnable enabled={config.experimental?.companion_enabled !== false} onChange={enabled => setConfig({ ...config, experimental: { ...config.experimental, companion_enabled: enabled } })}/>
                             <div style={styles.row}>
                                 <div style={styles.rowLeft}>
                                     <div style={styles.rowLabel}>命令补全延迟时间 (毫秒)</div>

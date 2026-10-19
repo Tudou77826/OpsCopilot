@@ -60,7 +60,8 @@ type ShellSettingsJSON struct {
 
 func defaultShellSettings() ShellSettingsJSON {
 	return ShellSettingsJSON{
-		Theme: "dark",
+		CompanionEnabled: true,
+		Theme:            "dark",
 		Terminal: TerminalConfigJSON{
 			Scrollback:      5000,
 			SearchEnabled:   true,
@@ -93,7 +94,7 @@ func (s *SettingsService) Get() (ShellSettingsJSON, error) {
 		}
 		return defaultShellSettings(), err
 	}
-	var out ShellSettingsJSON
+	out := ShellSettingsJSON{CompanionEnabled: true}
 	if err := json.Unmarshal(data, &out); err != nil {
 		return ShellSettingsJSON{}, fmt.Errorf("读取设置失败，请保留原文件: %w", err)
 	}
