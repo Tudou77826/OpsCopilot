@@ -158,7 +158,7 @@ export async function captureCompanionReview(page, evidence, appURL = 'http://12
   await page.getByRole('button',{name:'关闭',exact:true}).click();
   await expect(input).toHaveValue('切换入口后保留的草稿');
   await expect(page.locator('.ai-user-message')).toContainText('伙伴入口的真实问答验证');
-  await page.getByRole('button',{name:'+ 新建对话',exact:true}).click();
+  await page.getByRole('button',{name:'新建对话',exact:true}).click();
   await expect(page.locator('.ai-user-message')).toHaveCount(0);
   await expect(input).toHaveValue('');
   await expect(page.locator('.oc-companion-assistant-header strong')).toHaveText('本地微光二号');

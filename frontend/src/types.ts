@@ -38,6 +38,7 @@ export enum SessionStatus {
 
 export interface SessionDisconnectedEvent {
     sessionId: string;
+    connectionId?: string;
     reason: string;
     message: string;
     timestamp: number;

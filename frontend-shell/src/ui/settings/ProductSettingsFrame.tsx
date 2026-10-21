@@ -1,5 +1,6 @@
 import React from 'react';
-import { TbSearch } from 'react-icons/tb';
+import { TbSearch, TbArrowLeft, TbX } from 'react-icons/tb';
+import { IconButton } from '../controls/IconButton';
 import { navGroupTitle, navItem, navItemActive } from './settingsStyles';
 import { productSettingsStyles as styles } from './productSettingsStyles';
 
@@ -17,19 +18,16 @@ export function ProductSettingsFrame<T extends string>({ embedded = false, showS
             <div style={{ ...styles.modal, ...(embedded ? { width: '100%', height: '100%' } : {}) }}>
                 {/* Header */}
                 <div style={styles.header}>
-                    {/* 左上角返回入口：把标题做成可点击的「← 系统设置」，
-                        贴近视口左上角、贴近用户高频的左侧导航区。
-                        右上 × 与右下「取消」保留不动，这里只是新增更顺手的入口。 */}
                     <button
                         onClick={handleClose}
                         style={styles.backTitle}
                         title="返回"
                         className="settings-back-title"
                     >
-                        <span style={styles.backArrow} className="settings-back-arrow">←</span>
+                        <TbArrowLeft size={18} aria-hidden="true" />
                         <span>系统设置</span>
                     </button>
-                    <button onClick={handleClose} style={styles.closeBtn}>×</button>
+                    <IconButton onClick={handleClose} label="关闭系统设置"><TbX size={18} /></IconButton>
                 </div>
 
                 {/* Main Content Area */}

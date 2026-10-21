@@ -17,7 +17,7 @@ const ConfirmCloseModal: React.FC<ConfirmCloseModalProps> = ({ isOpen, message, 
                 onCancel();
             }
         }}>
-            <div style={styles.modal}>
+            <div className="oc-confirm-close-modal" style={styles.modal}>
                 <div style={styles.header}>
                     <div style={styles.iconContainer}>
                         <span style={styles.warningIcon}>⚠️</span>
@@ -157,11 +157,11 @@ styleSheet.textContent = `
         }
     }
     
-    button:hover {
+    .oc-confirm-close-modal button:hover {
         filter: brightness(1.1);
     }
     
-    button:active {
+    .oc-confirm-close-modal button:active {
         transform: scale(0.98);
     }
 `;

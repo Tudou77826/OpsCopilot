@@ -45,7 +45,7 @@ func (m *Manager) Add(conn remote.Connection, stdin io.WriteCloser) string {
 }
 
 // AddWithID 以指定 ID 注册会话(用于重连复用同一 sessionID)。
-func (m *Manager) AddWithID(id string, conn remote.Connection, stdin io.WriteCloser) {
+func (m *Manager) AddWithID(id string, conn remote.Connection, stdin io.WriteCloser) *Session {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -54,6 +54,7 @@ func (m *Manager) AddWithID(id string, conn remote.Connection, stdin io.WriteClo
 		Conn:  conn,
 		Stdin: stdin,
 	}
+	return m.sessions[id]
 }
 
 func (m *Manager) Get(id string) (*Session, bool) {
@@ -64,16 +65,28 @@ func (m *Manager) Get(id string) (*Session, bool) {
 }
 
 func (m *Manager) Remove(id string) {
+	m.RemoveIf(id, nil)
+}
+
+// RemoveIf prevents an old reader from closing a replacement after reconnect.
+func (m *Manager) RemoveIf(id string, expected *Session) {
+	if sess := m.TakeIf(id, expected); sess != nil && sess.Conn != nil {
+		// Closing a slow remote endpoint must not hold the registry lock.
+		_ = sess.Conn.Close()
+	}
+}
+
+// TakeIf removes the matching instance without performing resource I/O. The
+// caller can invalidate related state first, then dispose outside its locks.
+func (m *Manager) TakeIf(id string, expected *Session) *Session {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if sess, ok := m.sessions[id]; ok {
-		// 关闭底层连接资源
-		if sess.Conn != nil {
-			sess.Conn.Close()
-		}
+	if sess, ok := m.sessions[id]; ok && (expected == nil || sess == expected) {
 		delete(m.sessions, id)
+		return sess
 	}
+	return nil
 }
 
 func (m *Manager) List() []*Session {
@@ -88,22 +101,40 @@ func (m *Manager) List() []*Session {
 }
 
 func (m *Manager) Broadcast(ids []string, data string) {
+	m.BroadcastAccepted(ids, data)
+}
+
+// BroadcastAccepted records only inputs that passed the endpoint's input gate.
+// A controlled terminal may reject broadcast input while other tabs accept it.
+func (m *Manager) BroadcastAccepted(ids []string, data string) []string {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
+	targets := make([]*Session, 0, len(ids))
+	for _, id := range ids {
+		if sess, ok := m.sessions[id]; ok && sess.Stdin != nil {
+			targets = append(targets, sess)
+		}
+	}
+	m.mu.RUnlock()
 
 	var wg sync.WaitGroup
 	payload := []byte(data)
+	var accepted []string
+	var acceptedMu sync.Mutex
 
-	for _, id := range ids {
-		if sess, ok := m.sessions[id]; ok && sess.Stdin != nil {
-			wg.Add(1)
-			go func(w io.Writer, sid string) {
-				defer wg.Done()
-				w.Write(payload)
-			}(sess.Stdin, id)
-		}
+	for _, sess := range targets {
+		wg.Add(1)
+		go func(w io.Writer, sid string) {
+			defer wg.Done()
+			n, err := w.Write(payload)
+			if err == nil && n == len(payload) {
+				acceptedMu.Lock()
+				accepted = append(accepted, sid)
+				acceptedMu.Unlock()
+			}
+		}(sess.Stdin, sess.ID)
 	}
 	wg.Wait()
+	return accepted
 }
 
 // Resize 调整指定会话的远端终端尺寸。

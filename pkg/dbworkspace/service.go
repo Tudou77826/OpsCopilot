@@ -3,6 +3,7 @@ package dbworkspace
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"sync"
@@ -15,6 +16,7 @@ import (
 )
 
 type session struct {
+	owner     string
 	info      SessionInfo
 	db        *sql.DB
 	conn      *sql.Conn
@@ -32,6 +34,7 @@ func (v *session) close() {
 }
 
 type Service struct {
+	policyMu   sync.Mutex
 	path       string
 	secrets    secretstore.SecretStore
 	connectors map[string]Connector
@@ -52,6 +55,12 @@ func New(path string, secrets secretstore.SecretStore) *Service {
 }
 
 func (s *Service) Connect(ctx context.Context, id string) (info SessionInfo, err error) {
+	return s.ConnectRevision(ctx, id, 0)
+}
+
+// ConnectRevision fixes the approved saved configuration before dialing. A
+// concurrent edit cannot redirect a confirmation to a different endpoint.
+func (s *Service) ConnectRevision(ctx context.Context, id string, revision int) (info SessionInfo, err error) {
 	if err := s.reserveOpening(); err != nil {
 		return SessionInfo{}, err
 	}
@@ -59,6 +68,9 @@ func (s *Service) Connect(ctx context.Context, id string) (info SessionInfo, err
 	p, password, err := s.profile(id)
 	if err != nil {
 		return SessionInfo{}, err
+	}
+	if revision > 0 && p.Revision != revision {
+		return SessionInfo{}, errors.New("数据库连接配置已改变，请重新确认后连接")
 	}
 	ctx, diagnostic := s.beginDiagnostic(ctx, "连接", p, password)
 	defer func() { err = s.finishDiagnostic(ctx, diagnostic, err) }()
@@ -205,14 +217,46 @@ func (s *Service) open(ctx context.Context, adapter Connector, p Profile, passwo
 }
 
 func (s *Service) Disconnect(id string) error {
+	return s.DisconnectContext(context.Background(), id)
+}
+func (s *Service) DisconnectContext(ctx context.Context, id string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.policyMu.Lock()
+	defer s.policyMu.Unlock()
 	s.mu.Lock()
 	v := s.sessions[id]
+	if err := ctx.Err(); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+	owner, _ := ctx.Value(ownershipKey{}).(string)
+	if v != nil && v.owner != owner {
+		s.mu.Unlock()
+		return ErrOwned
+	}
 	delete(s.sessions, id)
 	s.mu.Unlock()
 	if v != nil {
 		v.close()
 	}
 	return nil
+}
+
+// discardSession is internal cleanup of a broken physical connection, not an
+// authorized user action. Cancellation must not leave it registered as usable.
+func (s *Service) discardSession(id string, expected *session) {
+	s.policyMu.Lock()
+	defer s.policyMu.Unlock()
+	s.mu.Lock()
+	if s.sessions[id] != expected {
+		s.mu.Unlock()
+		return
+	}
+	delete(s.sessions, id)
+	s.mu.Unlock()
+	expected.close()
 }
 
 func (s *Service) disconnectProfile(id string) {
@@ -242,11 +286,24 @@ func (s *Service) Close() {
 }
 
 func (s *Service) acquire(id string) (*session, func(), error) {
+	return s.acquireContext(context.Background(), id)
+}
+func (s *Service) acquireContext(ctx context.Context, id string) (*session, func(), error) {
+	if ctx.Err() != nil {
+		return nil, nil, ctx.Err()
+	}
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
 	v := s.sessions[id]
-	s.mu.Unlock()
 	if v == nil {
 		return nil, nil, fmt.Errorf("数据库尚未连接，请重新连接")
+	}
+	owner, _ := ctx.Value(ownershipKey{}).(string)
+	if v.owner != owner {
+		return nil, nil, ErrOwned
 	}
 	select {
 	case v.gate <- struct{}{}:
@@ -257,33 +314,51 @@ func (s *Service) acquire(id string) (*session, func(), error) {
 }
 
 func (s *Service) Schemas(id string) ([]string, error) {
-	v, release, err := s.acquire(id)
+	return s.SchemasContext(context.Background(), id)
+}
+func (s *Service) SchemasContext(parent context.Context, id string) ([]string, error) {
+	v, release, err := s.acquireContext(parent, id)
 	if err != nil {
 		return nil, err
 	}
 	defer release()
-	ctx, cancel := context.WithTimeout(v.ctx, 15*time.Second)
+	base, finish := sessionContext(parent, v)
+	defer finish()
+	ctx, cancel := context.WithTimeout(base, 15*time.Second)
 	defer cancel()
+	defer s.retireInterruptedSession(ctx, id, v)
 	return v.connector.Schemas(ctx, v.conn)
 }
 func (s *Service) Tables(id, schema string) ([]Table, error) {
-	v, release, err := s.acquire(id)
+	return s.TablesContext(context.Background(), id, schema)
+}
+func (s *Service) TablesContext(parent context.Context, id, schema string) ([]Table, error) {
+	v, release, err := s.acquireContext(parent, id)
 	if err != nil {
 		return nil, err
 	}
 	defer release()
-	ctx, cancel := context.WithTimeout(v.ctx, 15*time.Second)
+	base, finish := sessionContext(parent, v)
+	defer finish()
+	ctx, cancel := context.WithTimeout(base, 15*time.Second)
 	defer cancel()
+	defer s.retireInterruptedSession(ctx, id, v)
 	return v.connector.Tables(ctx, v.conn, schema)
 }
 func (s *Service) Structure(req TableRequest) (Structure, error) {
-	v, release, err := s.acquire(req.SessionID)
+	return s.StructureContext(context.Background(), req)
+}
+func (s *Service) StructureContext(parent context.Context, req TableRequest) (Structure, error) {
+	v, release, err := s.acquireContext(parent, req.SessionID)
 	if err != nil {
 		return Structure{}, err
 	}
 	defer release()
-	ctx, cancel := context.WithTimeout(v.ctx, 15*time.Second)
+	base, finish := sessionContext(parent, v)
+	defer finish()
+	ctx, cancel := context.WithTimeout(base, 15*time.Second)
 	defer cancel()
+	defer s.retireInterruptedSession(ctx, req.SessionID, v)
 	return v.connector.Structure(ctx, v.conn, req.Database, req.Table)
 }
 
@@ -299,6 +374,7 @@ func (s *Service) GenerateSQL(req SQLTemplateRequest) (string, error) {
 	}
 	ctx, cancel := context.WithTimeout(v.ctx, 15*time.Second)
 	defer cancel()
+	defer s.retireInterruptedSession(ctx, req.SessionID, v)
 	return generator.GenerateSQL(ctx, v.conn, req)
 }
 
@@ -333,10 +409,13 @@ func (s *Service) Browse(req TableRequest) (QueryResult, error) {
 }
 
 func (s *Service) Run(req QueryRequest) (QueryResult, error) {
+	return s.RunContext(context.Background(), req)
+}
+func (s *Service) RunContext(parent context.Context, req QueryRequest) (out QueryResult, returnErr error) {
 	if _, err := uuid.Parse(req.RequestID); err != nil {
 		return QueryResult{}, fmt.Errorf("查询标识无效")
 	}
-	v, release, err := s.acquire(req.SessionID)
+	v, release, err := s.acquireContext(parent, req.SessionID)
 	if err != nil {
 		return QueryResult{}, err
 	}
@@ -362,7 +441,9 @@ func (s *Service) Run(req QueryRequest) (QueryResult, error) {
 	if req.TimeoutSeconds < 1 || req.TimeoutSeconds > 120 {
 		req.TimeoutSeconds = 30
 	}
-	ctx, cancel := context.WithTimeout(v.ctx, time.Duration(req.TimeoutSeconds)*time.Second)
+	base, finish := sessionContext(parent, v)
+	defer finish()
+	ctx, cancel := context.WithTimeout(base, time.Duration(req.TimeoutSeconds)*time.Second)
 	defer cancel()
 	var interrupted atomic.Bool
 	var stopOnce sync.Once
@@ -386,7 +467,25 @@ func (s *Service) Run(req QueryRequest) (QueryResult, error) {
 	s.mu.Unlock()
 	defer func() { s.mu.Lock(); delete(s.requests, req.RequestID); s.mu.Unlock() }()
 	start := time.Now()
-	out := QueryResult{Sets: []ResultSet{}}
+	out = QueryResult{Sets: []ResultSet{}}
+	defer func() {
+		if ctx.Err() != nil || interrupted.Load() {
+			stopQuery()
+			out.Cancelled = true
+			out.Error = "已停止查询并关闭连接；已提交的写入不会撤销，请重连后核实结果"
+			out.Disconnected = true
+		}
+		if errors.Is(err, sql.ErrConnDone) || errors.Is(err, driver.ErrBadConn) {
+			out.Disconnected = true
+		}
+		if health, ok := v.connector.(interface{ Disconnected(*sql.Conn) bool }); ok && health.Disconnected(v.conn) {
+			out.Disconnected = true
+		}
+		if out.Disconnected {
+			s.discardSession(req.SessionID, v)
+		}
+		out.DurationMS = time.Since(start).Milliseconds()
+	}()
 	if req.Database != "" {
 		if len(req.Database) > 64 {
 			return out, fmt.Errorf("数据库名称过长")
@@ -397,14 +496,16 @@ func (s *Service) Run(req QueryRequest) (QueryResult, error) {
 			_, err = v.conn.ExecContext(ctx, "USE "+quoteIdentifier(req.Database))
 		}
 		if err != nil {
-			return out, err
+			out.Error = fmt.Sprintf("选择数据库失败：%s", err.Error())
+			return out, nil
 		}
 	}
 	var tx *sql.Tx
 	if v.info.ReadOnly {
 		tx, err = v.conn.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 		if err != nil {
-			return out, err
+			out.Error = fmt.Sprintf("开始只读事务失败：%s", err.Error())
+			return out, nil
 		}
 		defer tx.Rollback()
 	}
@@ -436,22 +537,6 @@ func (s *Service) Run(req QueryRequest) (QueryResult, error) {
 		}
 		out.Sets = append(out.Sets, result)
 	}
-	if ctx.Err() != nil || interrupted.Load() {
-		stopQuery()
-		out.Cancelled = true
-		out.Error = "已停止查询并关闭连接；已提交的写入不会撤销，请重连后核实结果"
-		out.Disconnected = true
-	}
-	if errors.Is(err, sql.ErrConnDone) {
-		out.Disconnected = true
-	}
-	if health, ok := v.connector.(interface{ Disconnected(*sql.Conn) bool }); ok && health.Disconnected(v.conn) {
-		out.Disconnected = true
-	}
-	if out.Disconnected {
-		_ = s.Disconnect(req.SessionID)
-	}
-	out.DurationMS = time.Since(start).Milliseconds()
 	return out, nil
 }
 

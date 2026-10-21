@@ -5,10 +5,11 @@ import './App.css';
 import { ProductFrame, ProductToolbar, ProductNavigation } from '../../frontend-shell/src/ui/product/ProductChrome';
 import { TerminalRef } from './components/Terminal/Terminal';
 import FlexLayoutAdapter from './components/FlexLayout/FlexLayoutAdapter';
+import { useTerminalReconnect } from './components/TerminalHandoff/useTerminalReconnect';
 import QuickCommandPanel from './components/QuickCommandPanel/QuickCommandPanel';
 import BottomBar from './components/BottomBar/BottomBar';
 import { StartupConsent } from './components/ServiceCenter/ServiceCenter';
-import { CountServiceUsage } from '../wailsjs/go/main/App';
+import { CountServiceUsage, WorkspaceDiscard } from '../wailsjs/go/main/App';
 import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal';
 import Sidebar from './components/Sidebar/Sidebar';
 import SettingsModal from './components/SettingsModal/SettingsModal';
@@ -31,14 +32,21 @@ import { applySkin, persistSkin, readPersistedSkinChoice } from '../../frontend-
 import { TimestampResult } from './utils/timestampParser';
 import { writeTerminalModeReset } from './terminalModeReset';
 import { flushTerminalInitialOutput } from './terminalOutputFlush';
+import { isTerminalStatusReply } from '../../frontend-shell/src/ui/Terminal/statusReplies';
 import { KnowledgeTarget } from './components/AI';
 import type { main } from '../wailsjs/go/models';
 import { wailsDatabaseRuntime } from './shell-adapter/wailsDatabaseRuntime';
+import { useAssistantDatabaseWorkspaces } from './components/Sidebar/useAssistantDatabaseWorkspaces';
+import { AssistantDatabaseWorkspaceView } from './components/Sidebar/AssistantDatabaseWorkspace';
+import { DatabaseWorkspaceDismiss, DatabaseWorkspaceTakeover } from '../wailsjs/go/main/App';
+import { useWorkspaceBridge } from './components/Sidebar/useWorkspaceBridge';
+import type { TerminalWorkspaceController, WorkspaceTab } from '../../frontend-shell/src/workspace/controller';
 
 const DatabaseWorkspace = lazy(() => import('../../frontend-shell/src/ui/database/DatabaseWorkspace').then(module => ({ default: module.DatabaseWorkspace })));
 
 interface TerminalSession {
     id: string;
+    connectionId?: string;
     title: string;
     status: SessionStatus;
     config?: ConnectionConfig;
@@ -61,7 +69,6 @@ function App() {
     const [databaseRequest, setDatabaseRequest] = useState(0);
     const [workspaceKind, setWorkspaceKind] = useState<string | null>('terminal');
     const workspaceKindRef = useRef(workspaceKind); workspaceKindRef.current = workspaceKind;
-    const databaseWorkspaces = useMemo(() => [{ id: 'database', title: '数据库', request: databaseRequest, render: () => <Suspense fallback={<div style={{ padding: 20, color: 'var(--text-muted)' }}>正在打开数据库…</div>}><DatabaseWorkspace runtime={wailsDatabaseRuntime} /></Suspense> }], [databaseRequest]);
     const [settingsInitialTab, setSettingsInitialTab] = useState<'llm' | 'servicecenter' | 'achievements' | 'experimental'>('llm');
     const [companionEnabled, setCompanionEnabled] = useState(false);
     const toast = useToast();
@@ -71,6 +78,16 @@ function App() {
         tab:sidebarTab, setTab:setSidebarTab, quickOpen:isQuickCommandOpen, setQuickOpen:setIsQuickCommandOpen, toggleSidebar } = useProductNavigation({sidebarOpen:false,quickOpen:false});
     const [terminals, setTerminals] = useState<TerminalSession[]>([]);
     const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
+    const [workspaceController, setWorkspaceController] = useState<TerminalWorkspaceController>();
+    const [workspaceClient,setWorkspaceClient]=useState('');
+    const assistantDatabase=useAssistantDatabaseWorkspaces(workspaceClient,workspaceController);
+    const databaseWorkspaces=useMemo(()=>[
+        {id:'database',title:'数据库',request:databaseRequest,render:()=> <Suspense fallback={<div style={{padding:20,color:'var(--text-muted)'}}>正在打开数据库…</div>}><DatabaseWorkspace runtime={wailsDatabaseRuntime}/></Suspense>},
+        ...assistantDatabase.items.map(w=>({id:w.id,title:`${w.profile.name} · AI`,request:w.pending?w.revision:0,onClose:()=>{
+            if(w.ownerTurn){if(window.confirm('AI 正在使用此页签，先停止并接回？'))void DatabaseWorkspaceTakeover(w.id);return;}
+            if(window.confirm('关闭数据库页签？未提交事务可能回滚，保存的连接配置不会删除。'))void DatabaseWorkspaceDismiss(w.id).catch(error=>setStatus(String(error)));
+        },render:()=> <AssistantDatabaseWorkspaceView workspace={w} ready={assistantDatabase.ready}/>})),
+    ],[databaseRequest,assistantDatabase.items,assistantDatabase.ready]);
     const [knowledgeTarget, setKnowledgeTarget] = useState<KnowledgeTarget | null>(null);
     const [isBroadcastMode, setIsBroadcastMode] = useState(false);
     const [broadcastIds, setBroadcastIds] = useState<string[]>([]);
@@ -209,7 +226,7 @@ function App() {
         handleThemeChange(theme === 'dark' ? 'light' : 'dark');
     }, [theme, handleThemeChange]);
     // Store unlisten functions for events
-    const unlisteners = useRef(new Map<string, () => void>());
+    const unlisteners = useRef(new Map<string, {connectionId:string;cancel:()=>void}>());
     const activeConnectError = connectErrors.length > 0 ? connectErrors[0] : null;
 
     const enqueueConnectError = (
@@ -245,6 +262,7 @@ function App() {
     useEffect(() => {
         // Listen for session closed events from backend
         let cancelClose: (() => void) | undefined;
+        let cancelWorkspaceClose: (()=>void)|undefined;
         let cancelDisconnected: (() => void) | undefined;
         let cancelConfirmClose: (() => void) | undefined;
 
@@ -254,13 +272,16 @@ function App() {
             cancelClose = window.runtime.EventsOn("session-closed", (id: string) => {
                 removeTerminal(id);
             });
+            cancelWorkspaceClose=window.runtime.EventsOn("workspace-session-closed",(target:{tabId:string;connectionId:string})=>{
+                removeTerminal(target.tabId,target.connectionId);
+            });
 
             // Listen for session-disconnected events (保留会话，不关闭tab)
             // @ts-ignore
             cancelDisconnected = window.runtime.EventsOn("session-disconnected", (event: SessionDisconnectedEvent) => {
                 console.debug("[App] Session disconnected:", event);
                 setTerminals(prev => prev.map(t =>
-                    t.id === event.sessionId
+                    t.id === event.sessionId && (!event.connectionId || !t.connectionId || t.connectionId === event.connectionId)
                         ? { ...t, status: SessionStatus.DISCONNECTED, disconnectReason: event.message }
                         : t
                 ));
@@ -280,10 +301,11 @@ function App() {
                 statusResetTimerRef.current = null;
             }
             if (cancelClose) cancelClose();
+            cancelWorkspaceClose?.();
             if (cancelDisconnected) cancelDisconnected();
             if (cancelConfirmClose) cancelConfirmClose();
             // Cleanup all terminal listeners
-            unlisteners.current.forEach(u => u());
+            unlisteners.current.forEach(listener => listener.cancel());
             unlisteners.current.clear();
         };
     }, []);
@@ -357,16 +379,19 @@ function App() {
         };
     }, []);
 
-    const removeTerminal = useCallback((id: string) => {
-        setTerminals(prev => prev.filter(t => t.id !== id));
+    const reconnect = useTerminalReconnect();
+    const removeTerminal = useCallback((id: string, expectedConnection?: string) => {
+        setTerminals(prev => prev.filter(t => t.id !== id || !!expectedConnection && t.connectionId !== expectedConnection));
+        if (expectedConnection && unlisteners.current.get(id)?.connectionId !== expectedConnection) return;
+        reconnect.cancel(id);
         setBroadcastIds(prev => prev.filter(bid => bid !== id));
         // Remove listener
         if (unlisteners.current.has(id)) {
-            unlisteners.current.get(id)?.();
+            unlisteners.current.get(id)?.cancel();
             unlisteners.current.delete(id);
         }
         terminalRefs.current.delete(id);
-    }, []);
+    }, [reconnect.cancel]);
 
     const handleConnect = async (config: any) => {
         setStatus("正在连接...");
@@ -378,24 +403,7 @@ function App() {
 
                 if (result.success) {
                     setStatus("已连接");
-                    const newSessionId = result.sessionId;
-                    const newTerminal: TerminalSession = {
-                        id: newSessionId,
-                        title: config.name || `${config.user}@${config.host}`,
-                        status: SessionStatus.CONNECTED,
-                        config: config,  // 保存配置用于重连
-                    };
-
-                    setTerminals(prev => [...prev, newTerminal]);
-
-                    // Listen for data for this specific session
-                    // @ts-ignore
-                    const cancel = window.runtime.EventsOn(`terminal-data:${newSessionId}`, (data: string) => {
-                        terminalRefs.current.get(newSessionId)?.write(data);
-                    });
-                    unlisteners.current.set(newSessionId, cancel);
-                    // 冲刷连接建立瞬间暂存的首段输出（终端挂载后触发）
-                    flushTerminalInitialOutputFor(newSessionId);
+                    publishTerminal(result.sessionId, result.connectionId, config.name || `${config.user}@${config.host}`, config);
 
                 } else {
                     setStatus("就绪");
@@ -423,63 +431,81 @@ function App() {
         }
     };
 
+    function publishTerminal(id: string, connectionId: string | undefined, title: string, config?: ConnectionConfig) {
+        setTerminals(previous => previous.some(tab => tab.id === id) ? previous : [...previous, { id, connectionId, title, config, status: SessionStatus.CONNECTED }]);
+        if (!unlisteners.current.has(id)) {
+            const cancel = window.runtime.EventsOn(`terminal-data:${id}`, (data: string) => terminalRefs.current.get(id)?.write(data));
+            unlisteners.current.set(id, {connectionId:connectionId || '',cancel});
+        }
+        flushTerminalInitialOutputFor(id);
+    }
+    useWorkspaceBridge({
+        snapshot() {
+            const presented = workspaceController?.presentedTerminal();
+            const tabs = terminals.map(tab => ({ tabId: tab.id, connectionId: tab.connectionId || '', title: tab.title, status: tab.status, ready: tab.id === presented }));
+            return { tabs, active: tabs.find(tab => tab.tabId === presented) || { tabId: '', connectionId: '' } };
+        },
+        open(tab: WorkspaceTab) { publishTerminal(tab.tabId, tab.connectionId, tab.title); },
+        select: id => workspaceController?.selectTerminal(id) || false,
+        discard(tab) {
+            const current = terminals.find(item => item.id === tab.tabId);
+            if (current && current.connectionId !== tab.connectionId) return;
+            void WorkspaceDiscard(tab.tabId,tab.connectionId);
+            removeTerminal(tab.tabId,tab.connectionId);
+        },
+    },setWorkspaceClient);
+
     const handleReconnect = async (sessionId: string) => {
         const term = terminals.find(t => t.id === sessionId);
-        if (!term || !term.config) {
+        if (!term) {
             enqueueConnectError("重连失败", "会话配置不存在");
             return;
         }
 
         setStatus("正在重连...");
-        try {
-            // @ts-ignore
-            if (window.go && window.go.main && window.go.main.App && window.go.main.App.ReconnectSession) {
-                // @ts-ignore
-                const result = await window.go.main.App.ReconnectSession(sessionId);
+        await reconnect.run(sessionId, async () => {
+            if (!window.go?.main?.App?.ReconnectSession) throw Error('运行时未就绪');
+            return window.go.main.App.ReconnectSession(sessionId);
+        }, result => {
+            if (result.success) {
+                // 重连复用同一个 xterm 实例：上一条会话若在全屏程序（vim/less/top）
+                // 运行中断线，备用屏(1049)/应用光标键(DECCKM)/鼠标上报/括号粘贴等
+                // 模式会残留在实例上，新会话的输出会被画进残留屏——滚动条消失、
+                // 滚轮被翻译成 ^[OA/^[OB、提示符卡在屏中部无法滚到底（Issue #65/#67）。
+                // 必须在新会话数据到达前（注册监听之前）先写入复位序列。
+                writeTerminalModeReset(terminalRefs.current.get(sessionId));
 
-                if (result.success) {
-                    // 重连复用同一个 xterm 实例：上一条会话若在全屏程序（vim/less/top）
-                    // 运行中断线，备用屏(1049)/应用光标键(DECCKM)/鼠标上报/括号粘贴等
-                    // 模式会残留在实例上，新会话的输出会被画进残留屏——滚动条消失、
-                    // 滚轮被翻译成 ^[OA/^[OB、提示符卡在屏中部无法滚到底（Issue #65/#67）。
-                    // 必须在新会话数据到达前（注册监听之前）先写入复位序列。
-                    writeTerminalModeReset(terminalRefs.current.get(sessionId));
+                setStatus("已重连");
+                // 更新状态为已连接
+                setTerminals(prev => prev.map(t =>
+                    t.id === sessionId
+                        ? { ...t, status: SessionStatus.CONNECTED, connectionId: result.connectionId }
+                        : t
+                ));
 
-                    setStatus("已重连");
-                    // 更新状态为已连接
-                    setTerminals(prev => prev.map(t =>
-                        t.id === sessionId
-                            ? { ...t, status: SessionStatus.CONNECTED }
-                            : t
-                    ));
-
-                    // 移除旧的监听器，避免重复接收数据
-                    const oldCancel = unlisteners.current.get(sessionId);
-                    if (oldCancel) {
-                        oldCancel();
-                    }
-
-                    // 重新监听终端数据（使用原sessionId）
-                    // @ts-ignore
-                    const cancel = window.runtime.EventsOn(`terminal-data:${sessionId}`, (data: string) => {
-                        terminalRefs.current.get(sessionId)?.write(data);
-                    });
-                    unlisteners.current.set(sessionId, cancel);
-                    // 冲刷重连瞬间暂存的首段输出（终端已挂载，ref 立即可用）
-                    flushTerminalInitialOutputFor(sessionId);
-                } else {
-                    setStatus("重连失败");
-                    enqueueConnectError("重连失败", result.message || '未知错误');
+                // 移除旧的监听器，避免重复接收数据
+                const oldCancel = unlisteners.current.get(sessionId);
+                if (oldCancel) {
+                    oldCancel.cancel();
                 }
+
+                // 重新监听终端数据（使用原sessionId）
+                // @ts-ignore
+                const cancel = window.runtime.EventsOn(`terminal-data:${sessionId}`, (data: string) => {
+                    terminalRefs.current.get(sessionId)?.write(data);
+                });
+                unlisteners.current.set(sessionId, {connectionId:result.connectionId,cancel});
+                // 冲刷重连瞬间暂存的首段输出（终端已挂载，ref 立即可用）
+                flushTerminalInitialOutputFor(sessionId);
             } else {
                 setStatus("重连失败");
-                enqueueConnectError("重连失败", "运行时未就绪");
+                enqueueConnectError("重连失败", result.message || '未知错误');
             }
-        } catch (e) {
+        }, error => {
             setStatus("重连失败");
-            const errMsg = (e as any)?.message ? String((e as any).message) : String(e);
-            enqueueConnectError("重连失败", errMsg || '未知错误');
-        }
+            const message = error instanceof Error ? error.message : String(error);
+            enqueueConnectError("重连失败", message || '未知错误');
+        });
     };
 
     const handleBatchConnect = (configs: ConnectionConfig[]) => {
@@ -496,6 +522,12 @@ function App() {
     };
 
     const handleTerminalData = useCallback((id: string, data: string) => {
+        // A response to this terminal's cursor/status query belongs only to
+        // this PTY; it must never be broadcast as user input to other nodes.
+        if (isTerminalStatusReply(data)) {
+            window.go?.main?.App?.Write(id, data);
+            return;
+        }
         // Use Refs to get latest state inside callback closure
         const currentBroadcastMode = isBroadcastModeRef.current;
         const currentBroadcastIds = broadcastIdsRef.current;
@@ -659,22 +691,7 @@ function App() {
         if (window.go?.main?.App?.DuplicateTerminalSession) {
             window.go.main.App.DuplicateTerminalSession(id).then((result: main.ConnectResult) => {
                 if (result.success) {
-                    const newTerminal: TerminalSession = {
-                        id: result.sessionId,
-                        title: `${term.title} (Copy)`,
-                        status: SessionStatus.CONNECTED,
-                        config: term.config
-                    };
-                    setTerminals(prev => [...prev, newTerminal]);
-
-                    // Listen
-                    // @ts-ignore
-                    const cancel = window.runtime.EventsOn(`terminal-data:${result.sessionId}`, (data: string) => {
-                        terminalRefs.current.get(result.sessionId)?.write(data);
-                    });
-                    unlisteners.current.set(result.sessionId, cancel);
-                    // 冲刷复制会话连接建立瞬间暂存的首段输出
-                    flushTerminalInitialOutputFor(result.sessionId);
+                    publishTerminal(result.sessionId, result.connectionId, `${term.title} (Copy)`, term.config);
                 } else {
                     toast.error("复制失败: " + result.message);
                 }
@@ -714,6 +731,8 @@ function App() {
         <ProductFrame id="app"
             toolbar={<ProductToolbar status={status} theme={theme} onNewConnection={() => setIsSmartModalOpen(true)} onThemeToggle={handleThemeToggle} onSettings={() => { setSettingsInitialTab('llm'); setIsSettingsOpen(true); }} updateAvailable={updateAvailable} highlightNeedsAttention={highlightNeedsAttention} parsedTimestamp={parsedTimestamp} />}
             terminal={<FlexLayoutAdapter
+                            onWorkspaceController={setWorkspaceController}
+                            terminalBadges={Object.fromEntries(assistantDatabase.items.filter(w=>w.ownerTurn).map(w=>[w.id,'AI 操作中']))}
                             workspaces={databaseWorkspaces}
                             onWorkspaceFocusChange={setWorkspaceKind}
                             terminals={terminals}
@@ -750,7 +769,7 @@ function App() {
                     activeTab={sidebarTab}
                     onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
                     onConnect={(config) => handleBatchConnect([config])}
-                    activeTerminalId={activeTerminalId}
+                    activeTerminalId={workspaceKind === 'terminal' ? activeTerminalId : null}
                     terminals={terminals}
                     onTypeCommand={handleQuickCommand}
                     onOpenKnowledgeSource={handleOpenKnowledgeSource}

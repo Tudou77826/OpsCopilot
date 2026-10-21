@@ -30,6 +30,7 @@ vi.mock('./SQLEditor', () => ({
     ) => {
       const element = React.useRef<HTMLTextAreaElement>(null);
       React.useImperativeHandle(ref, () => ({
+        value: () => value,
         selection: () =>
           value.slice(
             element.current?.selectionStart ?? 0,
@@ -804,5 +805,30 @@ describe('database workbench', () => {
     expect(csv).toContain('"12345678901234567890.1234567890"');
     expect(csv).toContain('"a,""b""\nnext"');
     expect(csv.endsWith('\r\n')).toBe(true);
+  });
+  it('AI 的完整页签保留多块 SQL 与结果，交还后可继续人工查询',async()=>{
+    const host=runtime();const onEdit=vi.fn();const onPresented=vi.fn();
+    const result={sets:[{statement:'SELECT 1;',columns:[{name:'n',type:'INTEGER'}],rows:[['1']],affectedRows:0,truncated:false}],durationMs:1,error:'',cancelled:false,disconnected:false};
+    const first={id:'ai-db',profile,session:{id:'independent',profileId:profile.id,version:'8.4',database:'orders',readOnly:false},schemas:['orders'],sql:'-- AI：核对连接\nSELECT 1;',blocks:[{id:'block1',purpose:'核对连接',sql:'SELECT 1;',at:'2026-10-21',status:'completed',result}],ownerTurn:'turn',pending:'receipt1',connected:true,dismissed:false,revision:1};
+    const renderManaged=(workspace:typeof first)=><DatabaseWorkspace runtime={host} managed={{workspace,editing:false,onEdit,onPresented}}/>;
+    const page=render(renderManaged(first));
+    await waitFor(()=>expect(onPresented).toHaveBeenCalledWith(first.sql));
+    expect(host.query).not.toHaveBeenCalled();expect(host.connect).not.toHaveBeenCalled();
+    const next={...first,revision:2,pending:'receipt2',sql:first.sql+'\n\n-- AI：检查下一项\nSELECT 2;',blocks:[...first.blocks,{...first.blocks[0],id:'block2',sql:'SELECT 2;',purpose:'检查下一项'}]};
+    page.rerender(renderManaged(next));
+    await waitFor(()=>expect((screen.getByRole('textbox',{name:'SQL 编辑器'}) as HTMLTextAreaElement).value).toBe(next.sql));
+    expect(host.query).not.toHaveBeenCalled();
+    page.rerender(renderManaged({...next,revision:3,pending:'',ownerTurn:''}));
+    const input=screen.getByRole('textbox',{name:'SQL 编辑器'}) as HTMLTextAreaElement;
+    fireEvent.change(input,{target:{value:next.sql+'\nSELECT 3;'}});
+    expect(onEdit).toHaveBeenCalledWith(next.sql+'\nSELECT 3;');
+    input.setSelectionRange(input.value.length,input.value.length);
+    fireEvent.click(screen.getByRole('button',{name:'执行 SQL'}));
+    await waitFor(()=>expect(host.query).toHaveBeenCalledOnce());
+    expect(host.query).toHaveBeenCalledWith(expect.objectContaining({sessionId:'independent',sql:next.sql+'\nSELECT 3;',mode:'statement'}));
+    await waitFor(()=>expect(screen.getByLabelText('查询结果').textContent).toContain('9007199254740993'));
+    page.rerender(renderManaged({...next,revision:4,pending:'',ownerTurn:'',blocks:[...next.blocks.slice(0,-1),{...next.blocks[1],status:'cancelled',result:{...result,sets:[]}}]}));
+    expect(screen.getByLabelText('查询结果').textContent).toContain('9007199254740993');
+    page.unmount();expect(host.disconnect).not.toHaveBeenCalled();
   });
 });

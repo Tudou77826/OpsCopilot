@@ -15,9 +15,13 @@ import {
   TbX,
   TbAlertCircle,
   TbFileCode,
+  TbChevronLeft,
+  TbChevronRight,
 } from 'react-icons/tb';
+import { IconButton } from '../controls/IconButton';
 import { SQLEditor, type SQLEditorRef } from './SQLEditor';
 import { DatabaseError } from './DatabaseError';
+import { DatabaseExecutionHistory } from './DatabaseExecutionHistory';
 import { DatabaseMenu } from './DatabaseMenu';
 import { RenameQueryDialog } from './RenameQueryDialog';
 import { ConnectionFailurePanel } from './ConnectionFailurePanel';
@@ -30,10 +34,11 @@ import { objectKey, type QueryTab } from './workspaceModel';
 import type { DatabaseProfile, DatabaseRuntime } from './types';
 import './database.css';
 import './explorer.css';
+import type { ManagedDatabase } from '../../workspace/database';
 
-export function DatabaseWorkspace({ runtime }: { runtime: DatabaseRuntime }) {
+export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntime;managed?:ManagedDatabase }) {
   const workspace = useRef<HTMLElement>(null);
-  const model = useDatabaseWorkspace(runtime);
+  const model = useDatabaseWorkspace(runtime,managed);
   const {
     profiles,
     connections,
@@ -88,6 +93,9 @@ export function DatabaseWorkspace({ runtime }: { runtime: DatabaseRuntime }) {
     });
   };
   const editor = useRef<SQLEditorRef>(null);
+  useEffect(()=>{
+    if(managed?.workspace.pending&&tab?.id===`ai-query-${managed.workspace.id}`&&editor.current?.value()===managed.workspace.sql){managed.onPresented(managed.workspace.sql);}
+  },[managed?.workspace.pending,tab?.sql,tab?.id]);
   const content = useRef<HTMLDivElement>(null);
   const tabStrip = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -266,9 +274,7 @@ export function DatabaseWorkspace({ runtime }: { runtime: DatabaseRuntime }) {
         {error && (
           <div className="oc-db-banner">
             <DatabaseError message={error} />
-            <button aria-label="关闭错误提示" onClick={() => setError('')}>
-              ×
-            </button>
+            <IconButton label="关闭错误提示" onClick={() => setError('')}><TbX size={18} /></IconButton>
           </div>
         )}
         <nav ref={tabStrip} className="oc-db-tabs" aria-label="数据库查询标签">
@@ -339,7 +345,7 @@ export function DatabaseWorkspace({ runtime }: { runtime: DatabaseRuntime }) {
             onRetry={() => void connect(profile)}
             onEdit={() => setEditing(profile)}
           />
-        ) : !connection ? (
+        ) : !connection && !(managed && tab) ? (
           <div className="oc-db-empty">
             <TbDatabase size={40} />
             <h3>
@@ -387,7 +393,7 @@ export function DatabaseWorkspace({ runtime }: { runtime: DatabaseRuntime }) {
                     onChange={(e) => update(tab.id, { schema: e.target.value })}
                   >
                     <option value="">选择数据库</option>
-                    {connection.schemas.map((s) => (
+                    {(connection?.schemas??managed?.workspace.schemas??[]).map((s) => (
                       <option key={s} value={s}>
                         {s}
                       </option>
@@ -435,7 +441,7 @@ export function DatabaseWorkspace({ runtime }: { runtime: DatabaseRuntime }) {
                     <>
                       <button
                         className="oc-db-run"
-                        disabled={profileRunning || !!metadataBusy}
+                        disabled={!connection || profileRunning || !!metadataBusy}
                         onClick={() => void execute(tab)}
                         title="执行选中内容；未选中时仅执行光标所在语句（Ctrl+Enter）"
                       >
@@ -444,7 +450,7 @@ export function DatabaseWorkspace({ runtime }: { runtime: DatabaseRuntime }) {
                       </button>
                       <button
                         className="oc-db-run-script"
-                        disabled={profileRunning || !!metadataBusy}
+                        disabled={!connection || profileRunning || !!metadataBusy}
                         title="执行整页脚本，忽略选区；遇错停止（Ctrl+Shift+Enter）"
                         onClick={() => void execute(tab, 'script')}
                       >
@@ -504,7 +510,7 @@ export function DatabaseWorkspace({ runtime }: { runtime: DatabaseRuntime }) {
                           key={tab.id}
                           ref={editor}
                           value={tab.sql}
-                          onChange={(sql) => update(tab.id, { sql })}
+                          onChange={(sql) => {update(tab.id, { sql });if(managed&&tab.id===`ai-query-${managed.workspace.id}`&&!managed.workspace.ownerTurn)managed.onEdit(sql);}}
                           onRun={() => {
                             void execute(
                               current.current.tabs.find(
@@ -547,6 +553,7 @@ export function DatabaseWorkspace({ runtime }: { runtime: DatabaseRuntime }) {
                       />
                     </>
                   )}
+                  {managed&&tab.id===`ai-query-${managed.workspace.id}`&&managed.workspace.blocks.length>0&&<DatabaseExecutionHistory blocks={managed.workspace.blocks} onSelect={block=>update(tab.id,{result:block.result,error:block.error,resultIndex:0})}/>}
                   {tab.error && (
                     <div className="oc-db-banner">
                       <DatabaseError message={tab.error} />
@@ -626,7 +633,7 @@ export function DatabaseWorkspace({ runtime }: { runtime: DatabaseRuntime }) {
                       )}
                       {tab.table && tab.view === 'data' && (
                         <div className="oc-db-pagination">
-                          <button
+                          <IconButton label="上一页"
                             disabled={profileRunning || tab.offset === 0}
                             onClick={() =>
                               void execute(
@@ -636,21 +643,21 @@ export function DatabaseWorkspace({ runtime }: { runtime: DatabaseRuntime }) {
                               )
                             }
                           >
-                            上一页
-                          </button>
+                            <TbChevronLeft size={18} />
+                          </IconButton>
                           <span>
                             {tab.offset + 1}–
                             {tab.offset + (result?.rows.length ?? 0)} · 每页 100
                             行
                           </span>
-                          <button
+                          <IconButton label="下一页"
                             disabled={profileRunning || !result?.truncated}
                             onClick={() =>
                               void execute(tab, undefined, tab.offset + 100)
                             }
                           >
-                            下一页
-                          </button>
+                            <TbChevronRight size={18} />
+                          </IconButton>
                         </div>
                       )}
                     </div>

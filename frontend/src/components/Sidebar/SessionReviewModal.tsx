@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { TbArrowLeft } from 'react-icons/tb';
+import { IconButton } from '@opscopilot/shell-terminal/ui';
 import { TimelineEvent, filterTimelineEvents, generateMarkdown } from '../../utils/timeline';
 import { EventsOn } from '../../../wailsjs/runtime/runtime';
 
@@ -476,10 +477,7 @@ const SessionReviewModal: React.FC<SessionReviewModalProps> = ({ isOpen, onClose
         <>
             <style>{SPINNER_ANIMATION}</style>
             <div style={styles.header}>
-                <button onClick={onClose} style={styles.backButton} aria-label="返回排查">
-                    {TbArrowLeft({ size: 15 })}
-                    <span>返回</span>
-                </button>
+                <IconButton onClick={onClose} label="返回排查"><TbArrowLeft size={18} /></IconButton>
                 <h3 style={styles.title}>
                     {view === 'timeline' ? '编辑排查记录' : '确认排查总结'}
                 </h3>

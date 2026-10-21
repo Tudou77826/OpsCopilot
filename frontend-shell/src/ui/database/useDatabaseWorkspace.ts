@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ManagedDatabase } from '../../workspace/database';
 import type {
   DatabaseProfile,
   DatabaseRuntime,
@@ -20,7 +21,7 @@ export interface ConnectionFailure {
   occurredAt: string;
 }
 
-export function useDatabaseWorkspace(runtime: DatabaseRuntime) {
+export function useDatabaseWorkspace(runtime: DatabaseRuntime,managed?: ManagedDatabase) {
   const [profiles, setProfiles] = useState<DatabaseProfile[]>([]);
   const [groups, setGroups] = useState<string[]>([]);
   const [connections, setConnections] = useState<
@@ -58,6 +59,11 @@ export function useDatabaseWorkspace(runtime: DatabaseRuntime) {
   );
   const metadata = useRef(new Map<string, Promise<unknown>>());
   const requests = useRef(new Set<string>());
+  const managedSeen = useRef('');
+  const managedSQL = useRef('');
+  const managedBlock = useRef('');
+  const managedOwner = useRef('');
+  const managedHumanQuery = useRef(false);
   const setConnection = (id: string, value?: ConnectionState) => {
     const next = { ...current.current.connections };
     if (value) next[id] = value;
@@ -72,6 +78,49 @@ export function useDatabaseWorkspace(runtime: DatabaseRuntime) {
   };
   const update = (id: string, patch: Partial<QueryTab>) =>
     changeTabs((all) => all.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  useEffect(() => {
+    if (!managed) return;
+    const w = managed.workspace;
+    if (w.ownerTurn && managedOwner.current !== w.ownerTurn) managedHumanQuery.current = false;
+    managedOwner.current = w.ownerTurn;
+    const primary = `ai-query-${w.id}`;
+    const fresh = managedSeen.current !== w.id;
+    const missing = !current.current.tabs.some(t => t.id === primary);
+    if (fresh || (w.pending && missing)) {
+      managedSeen.current = w.id;
+      changeTabs(all => [...all, {
+        id: primary, profileId: w.profile.id,
+        schema: w.session.database || w.schemas?.find(s => !systemDatabase(s)) || '',
+        title: 'AI 查询记录', sql: w.sql, offset: 0, view: 'query', resultIndex: 0,
+      }]);
+      setSelectedProfile(w.profile.id);
+      setActiveTab(primary);
+    }
+    if (w.connected && !current.current.connections[w.profile.id]) {
+      setConnection(w.profile.id, {
+        session: w.session,
+        schemas: w.schemas ?? (w.session.database ? [w.session.database] : []),
+        tables: {}, structures: {},
+      });
+    }
+    if (!w.connected && current.current.connections[w.profile.id]?.session.id === w.session.id) {
+      setConnection(w.profile.id);
+    }
+    if ((w.ownerTurn || !managed.editing) && (fresh || managedSQL.current !== w.sql)) {
+      update(primary, { sql: w.sql });
+      managedSQL.current = w.sql;
+    }
+    const last = w.blocks.at(-1);
+    const resultKey = last ? `${last.id}:${last.status}` : '';
+    if (last && managedBlock.current !== resultKey) {
+      managedBlock.current = resultKey;
+      if (!managedHumanQuery.current) update(primary, {
+        result: last.result, resultIndex: 0, error: last.error || last.result?.error,
+        pending: last.status === 'running' ? last.id : undefined,
+      });
+    }
+    if (w.pending) setActiveTab(primary);
+  }, [managed?.workspace.revision, managed?.editing]);
   const running = (pid: string) =>
     current.current.tabs.some((t) => t.profileId === pid && !!t.pending);
   const loadProfiles = useCallback(async () => {
@@ -97,7 +146,7 @@ export function useDatabaseWorkspace(runtime: DatabaseRuntime) {
       for (const id of requests.current)
         void runtime.cancel(id).catch(() => {});
       for (const c of Object.values(current.current.connections))
-        void runtime.disconnect(c.session.id).catch(() => {});
+        if(c.session.id!==managed?.workspace.session.id)void runtime.disconnect(c.session.id).catch(() => {});
     };
   }, [runtime, loadProfiles]);
 
@@ -159,14 +208,19 @@ export function useDatabaseWorkspace(runtime: DatabaseRuntime) {
     openings.current.set(p.id, task);
     return task;
   }
-  async function disconnect(pid: string) {
+  async function disconnect(pid: string): Promise<boolean> {
     const c = current.current.connections[pid];
-    if (!c) return;
+    if (!c) return true;
     try {
       await runtime.disconnect(c.session.id);
-      setConnection(pid);
+      if (current.current.connections[pid]?.session.id === c.session.id) {
+        setConnection(pid);
+        changeTabs(all => all.map(t => t.profileId === pid ? {...t,pending:undefined} : t));
+      }
+      return true;
     } catch (e) {
       setError(errorText(e));
+      return false;
     }
   }
   async function reconnect(p: DatabaseProfile) {
@@ -176,7 +230,7 @@ export function useDatabaseWorkspace(runtime: DatabaseRuntime) {
       metadata.current.has(p.id)
     )
       return;
-    await disconnect(p.id);
+    if (!await disconnect(p.id)) return;
     await connect(p);
   }
   async function openConnection(p: DatabaseProfile) {
@@ -320,6 +374,7 @@ export function useDatabaseWorkspace(runtime: DatabaseRuntime) {
     const sql = execution?.sql ?? target.sql;
     if (!target.table && !sql.trim()) return;
     const requestId = crypto.randomUUID();
+    if (managed && target.id === `ai-query-${managed.workspace.id}`) managedHumanQuery.current = true;
     const gen = generation.current;
     requests.current.add(requestId);
     update(target.id, { pending: requestId, error: '', offset });
@@ -359,7 +414,9 @@ export function useDatabaseWorkspace(runtime: DatabaseRuntime) {
         });
       if (result.disconnected) setConnection(target.profileId);
     } catch (e) {
-      if (gen === generation.current)
+      if (gen === generation.current &&
+          current.current.connections[target.profileId]?.session.id === c.session.id &&
+          current.current.tabs.find(t => t.id === target.id)?.pending === requestId)
         update(target.id, { pending: undefined, error: errorText(e) });
     } finally {
       requests.current.delete(requestId);
@@ -435,13 +492,16 @@ export function useDatabaseWorkspace(runtime: DatabaseRuntime) {
   async function saved(p: DatabaseProfile, shouldConnect: boolean) {
     // An edited endpoint/credential must not be displayed as the old live session.
     // Moving a group uses moveProfile instead and preserves the connection.
+    if (!await disconnect(p.id)) {
+      setError('连接配置已保存，当前会话继续使用原配置；重新连接后新配置才会生效。');
+      return;
+    }
     setProfiles((all) => [...all.filter((v) => v.id !== p.id), p]);
     setGroups((all) =>
       p.group && !all.includes(p.group) ? [...all, p.group] : all,
     );
     setSelectedProfile(p.id);
     clearConnectionFailure(p.id);
-    await disconnect(p.id);
     if (shouldConnect) await openConnection(p);
   }
   async function moveProfile(p: DatabaseProfile, group: string) {

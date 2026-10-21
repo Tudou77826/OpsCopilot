@@ -130,6 +130,9 @@ func (p *jdbcProcess) read() {
 	}
 }
 func (p *jdbcProcess) call(ctx context.Context, request map[string]any, out any) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	id := p.next.Add(1)
 	request["id"] = id
 	b, err := json.Marshal(request)
@@ -149,6 +152,10 @@ func (p *jdbcProcess) call(ctx context.Context, request map[string]any, out any)
 	go func() {
 		p.write.Lock()
 		defer p.write.Unlock()
+		if err := ctx.Err(); err != nil {
+			finished <- err
+			return
+		}
 		err := binary.Write(p.input, binary.BigEndian, uint32(len(b)))
 		if err == nil {
 			_, err = p.input.Write(b)

@@ -1295,6 +1295,7 @@ export namespace main {
 	export class ConnectResult {
 	    success: boolean;
 	    sessionId: string;
+	    connectionId?: string;
 	    message: string;
 
 	    static createFrom(source: any = {}) {
@@ -1305,6 +1306,7 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.success = source["success"];
 	        this.sessionId = source["sessionId"];
+	        this.connectionId = source["connectionId"];
 	        this.message = source["message"];
 	    }
 	}
@@ -2275,4 +2277,44 @@ export namespace servicecenter {
 		}
 	}
 
+}
+
+export namespace terminalcontrol {
+
+	export class State {
+	    sessionId: string;
+	    connectionId: string;
+	    runId: string;
+	    phase: string;
+	    owned: boolean;
+	    ready: boolean;
+	    message: string;
+	    exitCode?: number;
+
+	    static createFrom(source: any = {}) {
+	        return new State(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.connectionId = source["connectionId"];
+	        this.runId = source["runId"];
+	        this.phase = source["phase"];
+	        this.owned = source["owned"];
+	        this.ready = source["ready"];
+	        this.message = source["message"];
+	        this.exitCode = source["exitCode"];
+	    }
+	}
+
+}
+
+export namespace assistantcontrol {
+    export interface Target { tabId: string; connectionId: string; }
+    export interface Choice { id: string; label: string; }
+    export interface Detail { label: string; value: string; }
+    export interface Prompt { id: string; kind: string; title: string; description: string; command?: string; details?: Detail[]; choices?: Choice[]; multiple: boolean; expires: string; data?: unknown; }
+    export interface Answer { text: string; selected: string[]; }
+    export interface State { turnId: string; target: Target; phase: string; message: string; prompt?: Prompt; output?: string; source?: string; }
 }

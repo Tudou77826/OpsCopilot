@@ -1,0 +1,32 @@
+.oc-icon-button.oc-icon-button {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    vertical-align: middle;
+    transition: background-color .12s ease, color .12s ease, border-color .12s ease;
+}
+.oc-icon-button.oc-icon-button:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+.oc-icon-button.oc-icon-button:active { transform: none; }
+.oc-icon-button.oc-icon-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.oc-icon-button.oc-icon-button:disabled { opacity: .45; cursor: default; }
+.oc-icon-button.oc-icon-button.is-primary { background: var(--accent); color: var(--text-on-accent); }
+.oc-icon-button.oc-icon-button.is-primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
+.oc-icon-button.oc-icon-button.is-primary:disabled { background: var(--bg-hover); color: var(--text-disabled); opacity: 1; }
+.oc-icon-button.oc-icon-button.is-danger:hover:not(:disabled) { color: var(--severity-danger); background: color-mix(in srgb,var(--severity-danger) 9%,transparent); }
+.oc-icon-button svg { flex-shrink: 0; pointer-events: none; }
+@media(prefers-reduced-motion:reduce) { .oc-icon-button.oc-icon-button { transition: none; } }

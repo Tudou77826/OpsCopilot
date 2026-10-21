@@ -34,11 +34,13 @@ export function ConnectionDialog({
   runtime,
   onClose,
   onSaved,
+  assistantRequest = false,
 }: {
   profile: DatabaseProfile;
   runtime: DatabaseRuntime;
   onClose(): void;
   onSaved(profile: DatabaseProfile, connect: boolean): void;
+  assistantRequest?: boolean;
 }) {
   const form = useRef<HTMLFormElement>(null);
   const environmentHelpId = useId();
@@ -271,11 +273,11 @@ export function ConnectionDialog({
             <button type="button" disabled={!!busy} onClick={onClose}>
               取消
             </button>
-            <button type="submit" data-save-only="true" disabled={!!busy}>
+            {!assistantRequest && <button type="submit" data-save-only="true" disabled={!!busy}>
               仅保存
-            </button>
+            </button>}
             <button className="oc-db-primary" type="submit" disabled={!!busy}>
-              {busy === 'save' ? '正在保存…' : '保存并连接'}
+              {busy === 'save' ? '正在保存…' : assistantRequest ? '保存并继续' : '保存并连接'}
             </button>
           </>
         )}

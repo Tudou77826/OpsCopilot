@@ -42,6 +42,7 @@ export type {
 } from './ports';
 // 阶段 4：文件传输纵切
 export { default as FilesPanel } from './filetransfer/FilesPanel';
+export { IconButton, ResourceLibraryIcon } from './controls/IconButton';
 export type {
   FileTransferHost,
   FileTransferProgress,

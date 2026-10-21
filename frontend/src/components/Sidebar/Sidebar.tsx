@@ -21,6 +21,7 @@ type SidebarTab = ProductTab;
 interface TerminalSessionLite {
     id: string;
     title: string;
+    connectionId?: string;
 }
 
 interface SidebarProps {
@@ -94,7 +95,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     return (
         <>
-        <ProductSidebar isOpen={isOpen} activeTab={activeTab} onToggle={onToggle} chatTitle={companionEnabled ? '伙伴助手' : 'AI 助手'}>
+        <ProductSidebar isOpen={isOpen} activeTab={activeTab} onToggle={onToggle} chatTitle={companionEnabled ? '伙伴助手' : 'AI 助手'} showHeader={activeTab !== 'chat'}>
                         {/* SessionManager might not need persistence, but we can keep it consistent */}
                         <div style={{ display: activeTab === 'sessions' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
                              <SessionManager onConnect={onConnect} />
@@ -110,11 +111,15 @@ const Sidebar: React.FC<SidebarProps> = ({
                         </div>
 
                         <div style={{ display: activeTab === 'chat' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-                            <CompanionAssistantHeader socialHost={socialHost} host={companionHost} enabled={companionEnabled} visible={isOpen && activeTab === 'chat'} onManage={onManageCompanion}/>
                             <AIChatPanel
+                                terminalTabs={terminals}
+                                title={companionEnabled ? '伙伴助手' : 'AI 助手'}
+                                onClose={onToggle}
                                 activeTerminalTitle={terminals.find(terminal => terminal.id === activeTerminalId)?.title}
-                                onOpenSource={onOpenKnowledgeSource}
-                            />
+                                activeTerminalTarget={(() => {const terminal = terminals.find(terminal => terminal.id === activeTerminalId); return terminal?.connectionId ? {tabId: terminal.id, connectionId: terminal.connectionId} : undefined;})()}
+                            >
+                                <CompanionAssistantHeader socialHost={socialHost} host={companionHost} enabled={companionEnabled} visible={isOpen && activeTab === 'chat'} onManage={onManageCompanion}/>
+                            </AIChatPanel>
                         </div>
 
                         {/* Knowledge Browser */}

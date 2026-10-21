@@ -23,13 +23,16 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"opscopilot/pkg/achievements"
+	"opscopilot/pkg/agenttransport/acp"
 	"opscopilot/pkg/ai"
+	"opscopilot/pkg/assistantcontrol"
 	"opscopilot/pkg/companion"
 	social "opscopilot/pkg/companionsocial"
 	"opscopilot/pkg/completion"
 	"opscopilot/pkg/config"
 	"opscopilot/pkg/connectionstore"
 	"opscopilot/pkg/core/security"
+	"opscopilot/pkg/dbcontrol"
 	"opscopilot/pkg/dbworkspace"
 	"opscopilot/pkg/filetransfer"
 	"opscopilot/pkg/knowledge"
@@ -47,8 +50,10 @@ import (
 	// remote 包用注册表避免循环依赖,故需在入口处显式引入协议实现包。
 	_ "opscopilot/pkg/telnetclient"
 	"opscopilot/pkg/terminal"
+	"opscopilot/pkg/terminalcontrol"
 	"opscopilot/pkg/troubleshoot"
 	"opscopilot/pkg/updater"
+	"opscopilot/pkg/workspace"
 )
 
 // Version is set via -ldflags "-X main.Version=..." at build time.
@@ -80,24 +85,39 @@ type App struct {
 	shellTransports   map[string]*filetransfer.RootRelayTransport
 	// sftpUnsupportedCache 记录已确认 SFTP 不可用的会话（relayMu 保护），
 	// 避免每次路径级失败都重新做有界握手探测。
-	sftpUnsupportedCache map[string]bool
-	sessionStates        map[string]*SessionState // 会话状态追踪
-	sessionStateMu       sync.RWMutex
-	commandExtractors    map[string]*terminal.CommandExtractor // 命令提取器（Tab 补全修正）
-	extractorMu          sync.RWMutex                          // 命令提取器锁
-	patchStoreMu         sync.RWMutex
-	patchStore           patchstore.PatchStore    // 补丁存储（可选）
-	feedbackStore        patchstore.FeedbackStore // 反馈存储（可选）
-	patchSyncStatusMu    sync.RWMutex
-	patchSyncStatus      PatchSyncStatus
-	patchSyncing         atomic.Bool
-	sessionShareMu       sync.RWMutex         // protects sessionShare
-	sessionShare         *sessionShareRuntime // 会话共享运行时（nil = 未启用，逻辑见 app_sessionshare.go）
-	companion            *companion.Store     // 单伙伴成长存储，默认休眠；绑定见 app_companion.go
-	achievements         *achievements.Store
-	social               *achievements.Client
-	databaseMu           sync.Mutex
-	database             *dbworkspace.Service
+	sftpUnsupportedCache    map[string]bool
+	sessionStates           map[string]*SessionState // 会话状态追踪
+	sessionStateMu          sync.RWMutex
+	commandExtractors       map[string]*terminal.CommandExtractor // 命令提取器（Tab 补全修正）
+	extractorMu             sync.RWMutex                          // 命令提取器锁
+	patchStoreMu            sync.RWMutex
+	patchStore              patchstore.PatchStore    // 补丁存储（可选）
+	feedbackStore           patchstore.FeedbackStore // 反馈存储（可选）
+	patchSyncStatusMu       sync.RWMutex
+	patchSyncStatus         PatchSyncStatus
+	patchSyncing            atomic.Bool
+	sessionShareMu          sync.RWMutex         // protects sessionShare
+	sessionShare            *sessionShareRuntime // 会话共享运行时（nil = 未启用，逻辑见 app_sessionshare.go）
+	companion               *companion.Store     // 单伙伴成长存储，默认休眠；绑定见 app_companion.go
+	achievements            *achievements.Store
+	social                  *achievements.Client
+	databaseMu              sync.Mutex
+	database                *dbworkspace.Service
+	databaseControlOnce     sync.Once
+	databaseControl         *dbcontrol.Service
+	terminalControlOnce     sync.Once
+	terminalControl         *terminalcontrol.Service
+	assistantControlOnce    sync.Once
+	assistantControl        *assistantcontrol.Coordinator
+	assistantConversationMu sync.Mutex
+	assistantConversation   *acp.Conversation
+	assistantHistory        assistantcontrol.History
+	assistantRunning        bool
+	assistantDone           chan struct{}
+	workspaceOnce           sync.Once
+	workspace               *workspace.Service
+	terminalLifecycles      session.Lifecycle
+	pendingTerminals        sync.Map // tab ID -> *pendingTerminal, only before publication
 }
 
 // NewApp creates a new App application struct
@@ -233,6 +253,9 @@ func (a *App) getConfig(sessionID string) (ConnectConfig, bool) {
 // setConfig safely writes a session's ConnectConfig.
 func (a *App) setConfig(sessionID string, cfg ConnectConfig) {
 	a.activeConfigsMu.Lock()
+	if a.activeConfigs == nil {
+		a.activeConfigs = make(map[string]ConnectConfig)
+	}
 	a.activeConfigs[sessionID] = cfg
 	a.activeConfigsMu.Unlock()
 }
@@ -355,17 +378,26 @@ func (a *App) getRelayTransport(sessionID string) *filetransfer.RootRelayTranspo
 
 // closeRelayTransport closes and removes the cached relay transport for a session.
 func (a *App) closeRelayTransport(sessionID string) {
+	for _, transport := range a.takeRelayTransports(sessionID) {
+		transport.Close()
+	}
+}
+
+// Detach under the registry lock; dispose outside it and the terminal lifetime.
+func (a *App) takeRelayTransports(sessionID string) []*filetransfer.RootRelayTransport {
 	a.relayMu.Lock()
 	defer a.relayMu.Unlock()
+	var detached []*filetransfer.RootRelayTransport
 	if t, ok := a.relayTransports[sessionID]; ok {
-		t.Close()
+		detached = append(detached, t)
 		delete(a.relayTransports, sessionID)
 	}
 	if t, ok := a.shellTransports[sessionID]; ok {
-		t.Close()
+		detached = append(detached, t)
 		delete(a.shellTransports, sessionID)
 	}
 	delete(a.sftpUnsupportedCache, sessionID)
+	return detached
 }
 
 // getShellTransport returns a cached RootRelayTransport that executes shell
@@ -777,9 +809,10 @@ type SessionState struct {
 }
 
 type ConnectResult struct {
-	Success   bool   `json:"success"`
-	SessionID string `json:"sessionId"`
-	Message   string `json:"message"`
+	Success      bool   `json:"success"`
+	SessionID    string `json:"sessionId"`
+	ConnectionID string `json:"connectionId,omitempty"`
+	Message      string `json:"message"`
 }
 
 type PatchSyncStatus struct {
@@ -817,6 +850,47 @@ func (a *App) autoSaveConnection(config ConnectConfig) {
 
 // ConnectWithID connects with a specific sessionID (for reconnection)
 func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) (result ConnectResult) {
+	return a.connectTerminal(config, specifiedSessionID, remote.Dial, nil)
+}
+
+func (a *App) connectTerminal(config ConnectConfig, specifiedSessionID string, dial remote.Dialer, expected *SessionState) (result ConnectResult) {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return a.connectTerminalContext(ctx, config, specifiedSessionID, dial, expected)
+}
+
+func (a *App) connectTerminalContext(ctx context.Context, config ConnectConfig, specifiedSessionID string, dial remote.Dialer, expected *SessionState) (result ConnectResult) {
+	if ctx.Err() != nil {
+		return ConnectResult{Message: "连接已取消"}
+	}
+	sessionID := specifiedSessionID
+	if sessionID == "" {
+		sessionID = uuid.NewString()
+	}
+	lifetime, err := a.terminalLifecycles.Begin(sessionID)
+	if err != nil {
+		return ConnectResult{Message: err.Error()}
+	}
+	stopCancellation := context.AfterFunc(ctx, func() { a.closeSession(sessionID, lifetime, "") })
+	defer stopCancellation()
+	defer func() {
+		if !result.Success {
+			lifetime.Finish(nil)
+		}
+	}()
+	if expected != nil {
+		valid := false
+		lifetime.Apply(func() {
+			a.sessionStateMu.RLock()
+			defer a.sessionStateMu.RUnlock()
+			valid = a.sessionStates[sessionID] == expected && expected.Status == "disconnected"
+		})
+		if !valid {
+			return ConnectResult{Message: "会话已关闭或状态已改变，重连已取消"}
+		}
+	}
 	// ReconnectSession reuses a nonempty session ID; only deliberate new connections count.
 	if specifiedSessionID == "" && a.serviceCenter != nil {
 		complete := a.serviceCenter.BeginConnection()
@@ -838,10 +912,16 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) (re
 	// 通过统一工厂分派:Protocol=="ssh"(或空)走 SSH,"telnet" 走 Telnet。
 	// remote 包用注册表,app.go 不直接 import 协议实现包(除类型断言需用
 	// *sshclient.Client 的 SSH 路径外)。
-	conn, err := remote.Dial(&clientConfig)
+	conn, err := dial(&clientConfig)
 	if err != nil {
 		return ConnectResult{Success: false, Message: fmt.Sprintf("Error connecting: %v", err)}
 	}
+	pending := &pendingTerminal{close: sync.OnceFunc(func() { _ = conn.Close() })}
+	if !lifetime.Apply(func() { a.pendingTerminals.Store(sessionID, pending) }) {
+		pending.close()
+		return ConnectResult{Message: "页签已关闭，本次连接已取消"}
+	}
+	defer a.pendingTerminals.CompareAndDelete(sessionID, pending)
 
 	// 启动交互式 shell。按协议与凭据选择启动方式:
 	//   - SSH + rootPassword  → StartShellWithSudo(SSH 专属,类型断言到 *sshclient.Client)
@@ -873,32 +953,15 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) (re
 	}
 
 	if err != nil {
-		conn.Close()
+		pending.close()
 		return ConnectResult{Success: false, Message: fmt.Sprintf("Error starting shell: %v", err)}
 	}
 
-	// Add to session manager。session 现在持有 remote.Connection,
-	// Resize 由 Conn 自身提供,不再需要单独传 *ssh.Session。
-	var sessionID string
-	if specifiedSessionID != "" {
-		a.sessionMgr.AddWithID(specifiedSessionID, conn, stdin)
-		sessionID = specifiedSessionID
-	} else {
-		sessionID = a.sessionMgr.Add(conn, stdin)
+	target, err := a.installTerminal(lifetime, sessionID, config, conn, stdin)
+	if err != nil {
+		pending.close()
+		return ConnectResult{Message: err.Error()}
 	}
-
-	// Store config mapping for duplication
-	a.setConfig(sessionID, config)
-
-	// Store session state for reconnection
-	// 首段输出闸门：会话建立初期（前端监听尚未就绪）的输出先暂存，
-	// 待前端 TerminalOutputReady 后冲刷，避免 motd/banner 丢失。
-	gate := a.storeSessionState(sessionID, config).Output
-
-	// 创建命令提取器（用于 Tab 补全修正）
-	a.extractorMu.Lock()
-	a.commandExtractors[sessionID] = terminal.NewCommandExtractor()
-	a.extractorMu.Unlock()
 
 	// 自动落库到会话树（ensure 语义，详见 autoSaveConnection）
 	a.autoSaveConnection(config)
@@ -909,98 +972,11 @@ func (a *App) ConnectWithID(config ConnectConfig, specifiedSessionID string) (re
 	// 伙伴成长：会话建立事件与 sidecar 使用同一业务结果。
 	a.recordCompanion(companion.EventSessionEstablished, "conn:"+sessionID)
 
-	// Read loop
-	go func() {
-		buf := make([]byte, 32768)
-		for {
-			n, err := stdout.Read(buf)
-			if err != nil {
-				var reason DisconnectReason
-				var message string
+	go a.readTerminalSession(target, stdout, func(name string, data interface{}) {
+		runtime.EventsEmit(a.ctx, name, data)
+	})
 
-				if err == io.EOF {
-					reason = DisconnectEOF
-					message = "远程主机关闭了连接"
-				} else {
-					reason = DisconnectError
-					message = fmt.Sprintf("连接错误: %v", err)
-				}
-
-				// 发送错误消息到终端（经闸门统一出口：若仍有暂存段未冲刷，
-				// [断开] 必须排在它们之后，不能插队盖到旧输出上面）
-				disconnectMsg := "\r\n[断开] 连接已关闭\r\n"
-				if err != io.EOF {
-					disconnectMsg = fmt.Sprintf("\r\n[断开] %s\r\n", message)
-				}
-				if gate != nil {
-					gate.deliver(disconnectMsg, func(s string) {
-						runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, s)
-					})
-				} else {
-					runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, disconnectMsg)
-				}
-
-				// 发送断开事件（保留会话，不关闭tab）
-				runtime.EventsEmit(a.ctx, "session-disconnected", map[string]interface{}{
-					"sessionId": sessionID,
-					"reason":    string(reason),
-					"message":   message,
-					"timestamp": time.Now().Unix(),
-				})
-
-				// 更新会话状态
-				a.updateSessionState(sessionID, "disconnected", string(reason))
-
-				// 清理命令提取器
-				a.extractorMu.Lock()
-				delete(a.commandExtractors, sessionID)
-				a.extractorMu.Unlock()
-
-				// 从会话管理器移除（清理SSH资源）
-				a.sessionMgr.Remove(sessionID)
-				break
-			}
-			if n > 0 {
-				dataStr := readTerminalChunk(stdout, buf, n)
-
-				// Record output
-				if a.coreRecorder != nil {
-					a.coreRecorder.AddEvent("terminal_output", dataStr, map[string]interface{}{
-						"session_id": sessionID,
-					})
-				}
-
-				// 尝试从输出中提取命令（仅用于 Tab 补全修正）
-				a.extractorMu.RLock()
-				extractor, ok := a.commandExtractors[sessionID]
-				a.extractorMu.RUnlock()
-
-				if ok && extractor != nil {
-					if cmd, found := extractor.ProcessOutput(dataStr); found {
-						if a.coreRecorder != nil {
-							// 更新最后一条命令（Tab 补全场景）
-							if a.coreRecorder.UpdateLastCommand(sessionID, cmd) {
-								slog.Debug("recorder corrected command via output (tab completion)", "cmd", cmd)
-							}
-						}
-					}
-				}
-
-				// 首段输出闸门：监听未就绪时暂存（不丢首帧），就绪后经统一出口
-				// 锁内直通，与 TerminalOutputReady 的冲刷互斥、严格有序（#74）。
-				// 记录与命令提取不受影响（与用户可见顺序无关）。
-				if gate != nil {
-					gate.deliver(dataStr, func(s string) {
-						runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, s)
-					})
-					continue
-				}
-				runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, dataStr)
-			}
-		}
-	}()
-
-	return ConnectResult{Success: true, SessionID: sessionID, Message: "Connected"}
+	return ConnectResult{Success: true, SessionID: sessionID, ConnectionID: target.connectionID, Message: "Connected"}
 }
 
 // ResizeTerminal resizes the PTY for a given session
@@ -1011,16 +987,7 @@ func (a *App) ResizeTerminal(sessionID string, cols int, rows int) {
 }
 
 func (a *App) Write(sessionID string, data string) {
-	sess, ok := a.sessionMgr.Get(sessionID)
-	if ok && sess.Stdin != nil {
-		_, err := sess.Stdin.Write([]byte(data))
-		if err != nil {
-			runtime.EventsEmit(a.ctx, "terminal-data:"+sessionID, fmt.Sprintf("\r\nWrite Error: %v\r\n", err))
-		}
-
-		// 记录输入到录制器（内部使用 LineBuffer 处理）
-		a.recordInput(sessionID, data)
-	}
+	a.writeTerminal(sessionID, data, func(name string, value interface{}) { runtime.EventsEmit(a.ctx, name, value) })
 }
 
 // recordInput 记录终端输入到录制器
@@ -1052,7 +1019,7 @@ func (a *App) recordInput(sessionID string, data string) {
 	// 如果命令被提交且有内容
 	if result.Committed && result.Line != "" {
 		runtime.EventsEmit(a.ctx, "script-command-recorded", result.Line)
-		slog.Debug("scriptRecording recorded command", "session", sessionID, "cmd", result.Line)
+		slog.Debug("scriptRecording recorded command", "session", sessionID)
 
 		// 设置待匹配的命令前缀（用于检测 Tab 补全修正）
 		if extractorOk && extractor != nil {
@@ -1325,17 +1292,63 @@ func (a *App) Broadcast(sessionIDs []string, data string) {
 	if len(sessionIDs) == 0 {
 		return
 	}
-	a.sessionMgr.Broadcast(sessionIDs, data)
+	accepted := a.sessionMgr.BroadcastAccepted(sessionIDs, data)
 
 	// Record broadcast input using specialized method for deduplication
-	if a.coreRecorder != nil {
-		a.coreRecorder.AddBroadcastInput(sessionIDs, data)
+	if a.coreRecorder != nil && len(accepted) > 0 {
+		a.coreRecorder.AddBroadcastInput(accepted, data)
 	}
 }
 
 func (a *App) CloseSession(sessionID string) {
-	a.closeRelayTransport(sessionID)
-	a.sessionMgr.Remove(sessionID)
+	a.closeSession(sessionID, nil, "")
+}
+func (a *App) closeSession(sessionID string, lifetime *session.Lifetime, expectedConnection string) bool {
+	var removed *session.Session
+	var pending *pendingTerminal
+	var transports []*filetransfer.RootRelayTransport
+	cleanup := func() {
+		a.cancelAssistantTarget(sessionID, "")
+		if value, ok := a.pendingTerminals.LoadAndDelete(sessionID); ok {
+			pending = value.(*pendingTerminal)
+		}
+		a.terminalControlService().Detach(sessionID, nil)
+		removed = a.sessionMgr.TakeIf(sessionID, nil)
+		transports = a.takeRelayTransports(sessionID)
+		a.sessionStateMu.Lock()
+		if state := a.sessionStates[sessionID]; state != nil && state.Output != nil {
+			state.Output.close()
+		}
+		delete(a.sessionStates, sessionID)
+		a.sessionStateMu.Unlock()
+		a.extractorMu.Lock()
+		delete(a.commandExtractors, sessionID)
+		a.extractorMu.Unlock()
+		a.activeConfigsMu.Lock()
+		delete(a.activeConfigs, sessionID)
+		a.activeConfigsMu.Unlock()
+	}
+	closed := true
+	if lifetime != nil {
+		closed = lifetime.Finish(cleanup)
+	} else if expectedConnection != "" {
+		closed = a.terminalLifecycles.CloseMatching(sessionID, func() bool {
+			_, err := a.terminalControlService().Inspect(terminalcontrol.Target{SessionID: sessionID, ConnectionID: expectedConnection}, terminalcontrol.ReadOptions{Limit: 1})
+			return err == nil
+		}, cleanup)
+	} else {
+		a.terminalLifecycles.Close(sessionID, cleanup)
+	}
+	if pending != nil {
+		pending.close()
+	}
+	for _, transport := range transports {
+		transport.Close()
+	}
+	if removed != nil && removed.Conn != nil {
+		_ = removed.Conn.Close()
+	}
+	return closed
 }
 
 func (a *App) ParseIntent(input string) ([]ConnectConfig, error) {
@@ -3614,6 +3627,12 @@ func (a *App) GetScriptRecordingStatus() script.ScriptStatus {
 func (a *App) storeSessionState(sessionID string, config ConnectConfig) *SessionState {
 	a.sessionStateMu.Lock()
 	defer a.sessionStateMu.Unlock()
+	if previous := a.sessionStates[sessionID]; previous != nil && previous.Output != nil {
+		previous.Output.close()
+	}
+	if a.sessionStates == nil {
+		a.sessionStates = make(map[string]*SessionState)
+	}
 
 	st := &SessionState{
 		ID:     sessionID,
@@ -3640,6 +3659,11 @@ func (a *App) updateSessionState(sessionID, status, reason string) {
 func (a *App) ReconnectSession(sessionID string) ConnectResult {
 	a.sessionStateMu.RLock()
 	state, ok := a.sessionStates[sessionID]
+	var config ConnectConfig
+	var status string
+	if ok {
+		config, status = state.Config, state.Status
+	}
 	a.sessionStateMu.RUnlock()
 
 	if !ok {
@@ -3649,7 +3673,7 @@ func (a *App) ReconnectSession(sessionID string) ConnectResult {
 		}
 	}
 
-	if state.Status != "disconnected" {
+	if status != "disconnected" {
 		return ConnectResult{
 			Success: false,
 			Message: "会话未断开，无法重连",
@@ -3657,7 +3681,7 @@ func (a *App) ReconnectSession(sessionID string) ConnectResult {
 	}
 
 	// 使用原配置和原sessionID重新连接
-	result := a.ConnectWithID(state.Config, sessionID)
+	result := a.connectTerminal(config, sessionID, remote.Dial, state)
 
 	// 如果连接失败，保持disconnected状态
 	// 如果连接成功，ConnectWithID已经更新了状态
@@ -3700,6 +3724,7 @@ func readTerminalChunk(r io.Reader, buf []byte, n int) string {
 // 时无限积压或永久卡住首段输出）；TerminalOutputReady 幂等。
 type terminalOutputGate struct {
 	mu     sync.Mutex
+	closed bool
 	ready  bool
 	buf    []string
 	bufLen int
@@ -3711,11 +3736,23 @@ func newTerminalOutputGate() *terminalOutputGate {
 	return &terminalOutputGate{}
 }
 
+// Discard old buffered output when the tab closes or a replacement is installed.
+func (g *terminalOutputGate) close() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.closed = true
+	g.buf = nil
+	g.bufLen = 0
+}
+
 // feed 处理一段输出。返回 true 表示调用方应立即转发给监听（直接 emit）；
 // 返回 false 表示已暂存，等待 TerminalOutputReady 冲刷。
 func (g *terminalOutputGate) feed(data string) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.closed {
+		return false
+	}
 	if g.ready || g.bufLen+len(data) > terminalOutputGateMax {
 		return true
 	}
@@ -3731,6 +3768,9 @@ func (g *terminalOutputGate) feed(data string) bool {
 func (g *terminalOutputGate) deliver(data string, emit func(string)) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.closed {
+		return
+	}
 	if !g.ready && g.bufLen+len(data) <= terminalOutputGateMax {
 		g.buf = append(g.buf, data)
 		g.bufLen += len(data)
@@ -3744,7 +3784,7 @@ func (g *terminalOutputGate) deliver(data string, emit func(string)) {
 func (g *terminalOutputGate) markReady() []string {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if g.ready {
+	if g.closed || g.ready {
 		return nil
 	}
 	g.ready = true
@@ -3759,7 +3799,7 @@ func (g *terminalOutputGate) markReady() []string {
 func (g *terminalOutputGate) markReadyAndEmit(emit func(string)) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if g.ready {
+	if g.closed || g.ready {
 		return
 	}
 	g.ready = true

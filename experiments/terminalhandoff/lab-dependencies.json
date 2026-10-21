@@ -1,0 +1,14 @@
+[
+  {
+    "package": "bash",
+    "version": "5.2.37-r0",
+    "source": "https://dl-cdn.alpinelinux.org/alpine/v3.22/main/x86_64/bash-5.2.37-r0.apk",
+    "sha256": "8218982214f1b51f520d282b0c81d654846e974ce009e758acc6187bd64fe228"
+  },
+  {
+    "package": "readline",
+    "version": "8.2.13-r1",
+    "source": "https://dl-cdn.alpinelinux.org/alpine/v3.22/main/x86_64/readline-8.2.13-r1.apk",
+    "sha256": "520fa586c689144928191bee13e2c85ff4e170ad87d1471ec48e3e97611673d8"
+  }
+]

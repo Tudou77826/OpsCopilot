@@ -1,0 +1,36 @@
+.oc-handoff { display:flex; flex-direction:column; height:100%; min-height:0; position:relative; color:var(--text-primary); background:var(--bg-primary); }
+.oc-handoff button { border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-secondary); color:var(--text-primary); padding:5px 10px; font:inherit; font-size:12px; cursor:pointer; }
+.oc-handoff button:hover { background:var(--bg-hover); }
+.oc-handoff button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.oc-handoff button:disabled { opacity:.5; cursor:default; }
+.oc-handoff-bar { min-height:36px; display:flex; align-items:center; gap:9px; padding:4px 12px; border-bottom:1px solid var(--border); background:var(--bg-secondary); font-size:12px; }
+.oc-handoff-dot { width:6px; height:6px; border-radius:50%; background:var(--text-tertiary); flex-shrink:0; }
+.oc-handoff-dot.is-active { background:var(--accent); box-shadow:0 0 8px var(--accent); }
+.oc-handoff-summary { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-secondary); }
+.oc-handoff-lab { margin-left:4px; color:var(--text-tertiary); font-size:10px; }
+.oc-handoff-viewport { flex:1; min-height:0; position:relative; }
+.oc-handoff-content { height:100%; }
+.oc-handoff-content[aria-disabled="true"] { pointer-events:none; }
+.oc-handoff-shield { position:absolute; inset:0; z-index:30; border-radius:16px; background:color-mix(in srgb, var(--bg-primary) 8%, transparent); box-shadow:inset 0 0 34px color-mix(in srgb, var(--accent) 13%, transparent); }
+.oc-handoff-shield::before { content:""; position:absolute; inset:2px; padding:4px; border-radius:16px; pointer-events:none; background:linear-gradient(135deg, #36c7d6, #9c8de0, #e5a1b4, #36c7d6); -webkit-mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite:xor; mask-composite:exclude; animation:oc-handoff-breathe 3s ease-in-out infinite; }
+.oc-handoff-control { position:absolute; bottom:22px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:12px; width:max-content; max-width:calc(100% - 32px); padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius-md); background:color-mix(in srgb,var(--bg-secondary) 95%,transparent); box-shadow:0 8px 28px var(--shadow); }
+.oc-handoff-control strong { font-size:13px; display:block; }
+.oc-handoff-control span:not(.oc-handoff-orbit) { font-size:12px; display:block; margin-top:3px; color:var(--text-secondary); }
+.oc-handoff-orbit { display:block; width:20px; height:20px; flex-shrink:0; border-radius:50%; border:2px solid var(--accent); border-right-color:#e5a1b4; box-shadow:0 0 12px color-mix(in srgb,var(--accent) 30%,transparent); animation:oc-handoff-spin 1.6s linear infinite; }
+.oc-handoff-control button { flex-shrink:0; }
+.oc-handoff-setup { position:absolute; z-index:40; top:40px; right:12px; width:min(430px,calc(100% - 24px)); padding:18px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--bg-secondary); box-shadow:0 12px 32px var(--shadow); font-size:13px; box-sizing:border-box; }
+.oc-handoff-setup-heading { font-weight:600; font-size:14px; }
+.oc-handoff-setup p { color:var(--text-secondary); font-size:12px; line-height:1.7; margin:8px 0 16px; }
+.oc-handoff-scenarios { display:grid; gap:8px; }
+.oc-handoff-scenarios label { display:flex; gap:10px; align-items:flex-start; padding:10px; border:1px solid var(--border); border-radius:var(--radius-sm); cursor:pointer; }
+.oc-handoff-scenarios small { display:block; color:var(--text-secondary); margin-top:4px; font-size:12px; }
+.oc-handoff input { accent-color:var(--accent); }
+.oc-handoff-confirm { display:flex; align-items:flex-start; gap:8px; margin-top:16px; line-height:1.6; font-size:12px; color:var(--text-secondary); }
+.oc-handoff-setup-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+.oc-handoff button.oc-handoff-primary { background:var(--accent); color:var(--text-on-accent); border-color:var(--accent); }
+.oc-handoff-error { padding:8px 12px; font-size:12px; color:var(--severity-danger); background:var(--bg-secondary); border-bottom:1px solid var(--border); }
+.oc-handoff-tab-badge { display:inline-flex; align-items:center; gap:4px; margin-left:8px; padding:1px 5px; font-size:10px; color:var(--accent); border:1px solid color-mix(in srgb,var(--accent) 45%,transparent); border-radius:var(--radius-xs); white-space:nowrap; }
+@keyframes oc-handoff-breathe { 0%,100% { opacity:.6; } 50% { opacity:1; } }
+@keyframes oc-handoff-spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion:reduce) { .oc-handoff-shield::before, .oc-handoff-orbit { animation:none; } }
+@media (max-width:600px) { .oc-handoff-control { gap:8px; padding:10px; } .oc-handoff-control span:not(.oc-handoff-orbit) { display:none; } }

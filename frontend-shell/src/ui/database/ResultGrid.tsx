@@ -1,4 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
+import { TbCheck, TbCopy, TbX } from 'react-icons/tb';
+import { IconButton } from '../controls/IconButton';
 import {
   flexRender,
   getCoreRowModel,
@@ -134,22 +136,25 @@ export function ResultGrid({ result }: { result: DatabaseResultSet }) {
                       key={cell.id}
                       style={{ width: cell.column.getSize() }}
                       title={value ?? 'NULL'}
-                      onDoubleClick={() =>
+                      onDoubleClick={() => {
+                        setNotice('');
                         setExpanded({
                           title: result.columns[Number(cell.column.id)].name,
                           value: value ?? 'NULL',
-                        })
-                      }
+                        });
+                      }}
                       onKeyDown={(e) => {
                         if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
                           e.preventDefault();
                           void copy(value ?? 'NULL');
                         }
-                        if (e.key === 'Enter')
+                        if (e.key === 'Enter') {
+                          setNotice('');
                           setExpanded({
                             title: result.columns[Number(cell.column.id)].name,
                             value: value ?? 'NULL',
                           });
+                        }
                       }}
                     >
                       {flexRender(
@@ -180,13 +185,15 @@ export function ResultGrid({ result }: { result: DatabaseResultSet }) {
         <div className="oc-db-cell-detail">
           <header>
             <strong>{expanded.title}</strong>
-            <button onClick={() => void copy(expanded.value)}>复制</button>
-            <button
-              aria-label="关闭单元格详情"
+            <IconButton label="复制单元格内容" title={notice === '已复制' ? '已复制' : '复制单元格内容'} onClick={() => void copy(expanded.value)}>
+              {notice === '已复制' ? <TbCheck size={18} /> : <TbCopy size={18} />}
+            </IconButton>
+            <IconButton
+              label="关闭单元格详情"
               onClick={() => setExpanded(null)}
             >
-              ×
-            </button>
+              <TbX size={18} />
+            </IconButton>
           </header>
           <textarea
             aria-label="单元格完整内容"

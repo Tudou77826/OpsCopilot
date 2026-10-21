@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
-	"opscopilot/pkg/assistantsettings"
-	"opscopilot/pkg/companion"
 	"path/filepath"
 	"strings"
+
+	"opscopilot/pkg/assistantcontrol"
+	"opscopilot/pkg/assistantsettings"
+	"opscopilot/pkg/companion"
 )
 
 func (a *App) assistantPreferences() (*assistantsettings.Store, error) {
@@ -51,6 +53,11 @@ func (a *App) SaveAssistantSettings(personaPrompt, revision string) (assistantse
 
 // Only the companion entry uses persona preferences; diagnosis and legacy callers retain their own prompts.
 func (a *App) AskCompanionAI(question string) string {
+	turn, beginErr := a.assistantCoordinator().Begin(a.ctx, assistantcontrol.Target{}, nil)
+	if beginErr != nil {
+		return fmt.Sprintf("Error: %v", beginErr)
+	}
+	defer turn.Finish("completed", "知识问答已结束")
 	settings, err := a.GetAssistantSettings()
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
@@ -58,7 +65,7 @@ func (a *App) AskCompanionAI(question string) string {
 	if a.aiService == nil {
 		return "Error: AI 服务未就绪"
 	}
-	answer, err := a.aiService.AskWithPersona(a.ctx, question, a.resolveKnowledgeBase(), settings.EffectivePersona())
+	answer, err := a.aiService.AskWithPersona(turn.Context(), question, a.resolveKnowledgeBase(), settings.EffectivePersona())
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
 	}

@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FiArchive, FiCode, FiFile, FiFileText, FiFolder } from 'react-icons/fi';
+import { TbArrowRight, TbFolderUp, TbRefresh, TbX } from 'react-icons/tb';
+import { IconButton } from '../controls/IconButton';
 import { confirmDialog } from '../feedback/ConfirmDialog';
 import type { ConfirmChoice } from '../feedback/ConfirmDialog';
 import FileContextMenu, { ContextMenuItem } from './FileContextMenu';
@@ -534,8 +536,8 @@ function FilePane({
                 <div style={{ flex: 1 }} />
             </div>
             <div style={styles.pathBar}>
-                <button style={styles.iconBtn} onClick={onUp} disabled={disabled}>↑</button>
-                <button style={styles.iconBtn} onClick={onRefresh} disabled={disabled}>⟳</button>
+                <IconButton label={`${title}：上级目录`} onClick={onUp} disabled={disabled}><TbFolderUp size={18} /></IconButton>
+                <IconButton label={`${title}：刷新目录`} onClick={onRefresh} disabled={disabled}><TbRefresh size={18} /></IconButton>
                 <input
                     style={styles.pathInput}
                     value={pathInput}
@@ -545,7 +547,7 @@ function FilePane({
                     }}
                     disabled={disabled}
                 />
-                <button style={styles.btn} onClick={onGo} disabled={disabled}>进入</button>
+                <IconButton label={`${title}：进入目录`} onClick={onGo} disabled={disabled}><TbArrowRight size={18} /></IconButton>
             </div>
             <div style={styles.filterBar}>
                 <input
@@ -2654,7 +2656,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
                     <div style={styles.modal}>
                         <div style={styles.modalHeader}>
                             <div style={{ color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{editPath}</div>
-                            <button style={styles.btnSecondary} onClick={() => !editSaving && setEditOpen(false)} disabled={editSaving}>×</button>
+                            <IconButton label="关闭文件编辑" onClick={() => !editSaving && setEditOpen(false)} disabled={editSaving}><TbX size={18} /></IconButton>
                         </div>
                         <div style={styles.modalBody}>
                             <textarea

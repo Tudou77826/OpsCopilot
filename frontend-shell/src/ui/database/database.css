@@ -1314,3 +1314,11 @@
 .oc-db-driver-selection > button {
   margin-top: 6px;
 }
+.oc-db-ai-history { flex-shrink:0; border-bottom:1px solid var(--border); padding:8px 12px; font-size:12px; color:var(--text-secondary); }
+.oc-db-ai-history summary { cursor:pointer; }
+.oc-db-ai-history ol { list-style:none; padding:0; margin:8px 0 0; max-height:150px; overflow:auto; }
+.oc-db-ai-history li { display:flex; align-items:center; gap:12px; padding:6px 0; }
+.oc-db-ai-history li>span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.oc-db-ai-history li>details { flex:1; min-width:0; }
+.oc-db-ai-history li>details pre { white-space:pre-wrap; overflow-wrap:anywhere; margin:8px 0; }
+.oc-db-ai-history small { color:var(--text-muted); }

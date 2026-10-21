@@ -131,6 +131,11 @@ func validateProfile(p *Profile) error {
 }
 
 func (s *Service) Save(in ProfileInput) (Profile, error) {
+	s.policyMu.Lock()
+	defer s.policyMu.Unlock()
+	if err := s.editableProfile(in.ID); err != nil {
+		return Profile{}, err
+	}
 	p := in.Profile
 	if err := validateProfile(&p); err != nil {
 		return Profile{}, err
@@ -211,6 +216,11 @@ func (s *Service) Save(in ProfileInput) (Profile, error) {
 }
 
 func (s *Service) Delete(id string, revision int) error {
+	s.policyMu.Lock()
+	defer s.policyMu.Unlock()
+	if err := s.editableProfile(id); err != nil {
+		return err
+	}
 	release, err := filetxn.Lock(s.path)
 	if err != nil {
 		return err

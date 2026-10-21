@@ -7,11 +7,13 @@ import { SessionStatus, normalizeProtocol, PROTOCOL_LABEL } from '../types';
 import { TimestampResult } from '../timestampParser';
 import { TerminalRuntime } from '../ports';
 import { createInitialLayout } from './layoutConfig';
+import type { TerminalWorkspaceController } from '../../workspace/controller';
 
 const FILE_TRANSFER_TAB_ID = 'file-transfer';
 
 export interface TerminalSession {
     id: string;
+    connectionId?: string;
     title: string;
     status: SessionStatus;
     config?: any;
@@ -19,7 +21,9 @@ export interface TerminalSession {
 }
 
 export interface FlexLayoutAdapterProps {
-	workspaces?: { id: string; title: string; request: number; render(): React.ReactNode }[];
+    onWorkspaceController?: (controller: TerminalWorkspaceController | undefined) => void;
+    terminalBadges?: Record<string, string>;
+	workspaces?: { id: string; title: string; request: number; onClose?(): void; render(): React.ReactNode }[];
 	onWorkspaceFocusChange?: (kind: string | null) => void;
     terminals: TerminalSession[];
     onTerminalData: (id: string, data: string) => void;
@@ -48,6 +52,7 @@ export interface FlexLayoutAdapterProps {
 }
 
 const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
+    terminalBadges,
     terminals,
     onTerminalData,
     terminalRefs,
@@ -74,6 +79,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
     filePanelRequest,
     workspaces,
     onWorkspaceFocusChange,
+    onWorkspaceController,
 }) => {
     const [layoutHasContent, setLayoutHasContent] = useState(false);
     const handledWorkspaceRequests = useRef(new Map<string, number>());
@@ -149,6 +155,27 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
     // Create model once
     const model = useMemo(() => Model.fromJson(createInitialLayout()), []);
 
+    useEffect(() => {
+        onWorkspaceController?.({
+            selectWorkspace(id) {const node=model.getNodeById(id);if(!(node instanceof TabNode)||node.getComponent()!=='workspace')return false;model.doAction(Actions.selectTab(id));onWorkspaceFocusChange?.(id);return true;},
+            presentedWorkspace() {const node=model.getActiveTabset()?.getSelectedNode();return node instanceof TabNode&&node.getComponent()==='workspace'?node.getId():null;},
+            selectTerminal(id) {
+                const node = model.getNodeById(id);
+                if (!(node instanceof TabNode) || node.getComponent() !== 'terminal') return false;
+                model.doAction(Actions.selectTab(id));
+                onActiveTerminalChange?.(id);
+                onWorkspaceFocusChange?.('terminal');
+                return true;
+            },
+            presentedTerminal() {
+                const node = model.getActiveTabset()?.getSelectedNode();
+                if (!(node instanceof TabNode) || node.getComponent() !== 'terminal') return null;
+                return terminalRefs.current.get(node.getId())?.getCursorScreenPosition() ? node.getId() : null;
+            },
+        });
+        return () => onWorkspaceController?.(undefined);
+    }, [model, terminalRefs, onWorkspaceController, onActiveTerminalChange, onWorkspaceFocusChange]);
+
     // Track previous terminal IDs to compute diffs
     const prevTerminalIdsRef = useRef<Set<string>>(new Set());
 
@@ -203,6 +230,9 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
             setLayoutHasContent(true);
             onWorkspaceFocusChange?.(workspace.id);
         }
+        const existing=new Set((workspaces??[]).map(w=>w.id));
+        const remove:string[]=[];model.visitNodes(node=>{if(node instanceof TabNode&&node.getComponent()==='workspace'&&!existing.has(node.getId()))remove.push(node.getId());});
+        for(const id of remove){handledWorkspaceRequests.current.delete(id);model.doAction(Actions.deleteTab(id));}
     }, [workspaces, model, findFirstTabsetId, onWorkspaceFocusChange]);
 
     // --- Sync terminals[] → flexlayout Model ---
@@ -284,6 +314,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
     const handleAction = useCallback((action: any): any => {
         if (action.type === Actions.DELETE_TAB) {
             const tabId = action.data.node;
+            const workspace=workspaces?.find(w=>w.id===tabId);if(workspace?.onClose){workspace.onClose();return undefined;}
             if (tabId === FILE_TRANSFER_TAB_ID || (model.getNodeById(tabId) instanceof TabNode && (model.getNodeById(tabId) as TabNode).getComponent() === 'workspace')) {
                 return action;
             }
@@ -302,7 +333,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
             return action;
         }
         return action;
-    }, [onCloseTerminal, onRenameTerminal, model]);
+    }, [onCloseTerminal, onRenameTerminal, model,workspaces]);
 
     // --- Factory: render Terminal in each tab ---
     const factory = useCallback((node: TabNode) => {
@@ -338,7 +369,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
 
     // --- Custom tab rendering ---
     const handleRenderTab = useCallback((node: TabNode, renderValues: ITabRenderValues) => {
-        if (node.getComponent() === 'workspace') return;
+        if (node.getComponent() === 'workspace') {if(terminalBadges?.[node.getId()])renderValues.buttons.push(<span key="ai-owner" className="oc-handoff-tab-badge">{terminalBadges[node.getId()]}</span>);return;}
         if (node.getComponent() === 'fileTransfer') {
             renderValues.leading = (
                 <span style={{
@@ -433,6 +464,10 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
             </span>
         );
 
+        if (terminalBadges?.[terminalId]) {
+            parts.push(<span key="ownership" className="oc-handoff-tab-badge">{terminalBadges[terminalId]}</span>);
+        }
+
         if (!isConnected) {
             parts.push(
                 <button
@@ -493,7 +528,7 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
                 }} />
             );
         }
-    }, [isBroadcastMode, broadcastIds, onToggleTerminalBroadcast, onReconnect]);
+    }, [isBroadcastMode, broadcastIds, onToggleTerminalBroadcast, onReconnect, terminalBadges]);
 
     // --- Track active terminal ---
     const handleModelChange = useCallback((_model: Model, action: any) => {

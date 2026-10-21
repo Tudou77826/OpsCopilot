@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { IconButton } from '@opscopilot/shell-terminal/ui';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -609,9 +610,7 @@ const KnowledgeBrowser: React.FC<KnowledgeBrowserProps> = ({ target }) => {
             <div style={styles.detailContainer}>
                 {/* Header */}
                 <div style={styles.detailHeader}>
-                    <button className="kb-back-btn" style={styles.backButton} onClick={() => { setView('tree'); setError(''); }}>
-                        {TbArrowLeft({ size: 16 })}返回
-                    </button>
+                    <IconButton label="返回知识库" onClick={() => { setView('tree'); setError(''); }}><TbArrowLeft size={18} /></IconButton>
                     <span style={styles.detailTitle} title={selectedEntry.title}>
                         {selectedEntry.title.length > 80
                             ? selectedEntry.title.slice(0, 80) + '...'
@@ -772,9 +771,7 @@ const KnowledgeBrowser: React.FC<KnowledgeBrowserProps> = ({ target }) => {
         return (
             <div style={styles.detailContainer}>
                 <div style={styles.detailHeader}>
-                    <button className="kb-back-btn" style={styles.backButton} onClick={() => setView('detail')}>
-                        {TbArrowLeft({ size: 16 })}返回
-                    </button>
+                    <IconButton label="返回知识详情" onClick={() => setView('detail')}><TbArrowLeft size={18} /></IconButton>
                     <span style={styles.detailTitle}>新建 Issue</span>
                 </div>
 

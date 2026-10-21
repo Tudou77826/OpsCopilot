@@ -1,9 +1,11 @@
 import React, { useRef, useState } from 'react';
+import { TbX } from 'react-icons/tb';
+import { IconButton } from '../controls/IconButton';
 import type { ProductTab } from './ProductChrome';
 
 /** Desktop sidebar frame, with bounds measured within the current host. */
-export function ProductSidebar({ isOpen, activeTab, onToggle, children, chatTitle = '伙伴助手' }: {
- isOpen: boolean; activeTab: ProductTab; onToggle(): void; children: React.ReactNode; chatTitle?: string;
+export function ProductSidebar({ isOpen, activeTab, onToggle, children, chatTitle = '伙伴助手', showHeader = true }: {
+ isOpen: boolean; activeTab: ProductTab; onToggle(): void; children: React.ReactNode; chatTitle?: string; showHeader?: boolean;
 }) {
  const container = useRef<HTMLDivElement>(null);
  const [widths, setWidths] = useState<Partial<Record<ProductTab, number>>>({});
@@ -28,12 +30,12 @@ export function ProductSidebar({ isOpen, activeTab, onToggle, children, chatTitl
      }}
      onPointerUp={() => {drag.current=undefined;}} onPointerCancel={() => {drag.current=undefined;}} />}
    <div style={{ display: isOpen ? 'flex' : 'none', flexDirection: 'column', height: '100%', flex: 1, minHeight: 0 }}>
-     <div className="sidebar-header" style={styles.header}>
+     {showHeader && <div className="sidebar-header" style={styles.header}>
        <div className="sidebar-title-group"><h3 style={styles.title}>{titles[activeTab]}</h3>
          {(activeTab === 'troubleshoot' || activeTab === 'chat') && <span className="sidebar-ai-badge">AI</span>}
        </div>
-       <button onClick={onToggle} style={styles.closeButton} aria-label="Toggle Sidebar">×</button>
-     </div>
+       <IconButton onClick={onToggle} label="关闭侧栏"><TbX size={18} /></IconButton>
+     </div>}
      <div style={styles.mainArea}><div style={styles.content}>{children}</div></div>
    </div>
  </div>;

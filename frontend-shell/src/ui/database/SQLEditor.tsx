@@ -23,6 +23,7 @@ import { tags } from '@lezer/highlight';
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
 
 export interface SQLEditorRef {
+  value(): string;
   selection(): string;
   cursorOffset(): number;
   focus(): void;
@@ -46,6 +47,7 @@ export const SQLEditor = forwardRef<
   useImperativeHandle(
     ref,
     () => ({
+      value: () => view.current?.state.doc.toString() ?? '',
       cursorOffset: () => view.current?.state.selection.main.head ?? 0,
       selection: () => {
         const v = view.current;

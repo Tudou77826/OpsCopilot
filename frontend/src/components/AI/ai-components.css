@@ -38,7 +38,8 @@
 }
 .ai-rich-text a { color: var(--severity-info); text-decoration: none; }
 .ai-rich-text a:hover { text-decoration: underline; }
-.ai-inline-code {
+.ai-inline-code,
+.ai-rich-text :not(pre) > code {
     padding: 2px 5px;
     border-radius: 3px;
     background: var(--bg-primary);
@@ -354,6 +355,9 @@
     transition: border-color .14s ease, box-shadow .14s ease;
 }
 .ai-composer-shell:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent); }
+.ai-composer-shell:not(.has-attachment) { grid-template-columns: minmax(0, 1fr) auto; }
+.ai-composer-shell.has-queue { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+.ai-composer-shell.has-queue:not(.has-attachment) { grid-template-columns: minmax(0, 1fr) auto auto; }
 .ai-composer-shell textarea {
     width: 100%;
     min-height: 30px;
@@ -382,6 +386,10 @@
 .ai-composer-attach:disabled { opacity: .35; }
 .ai-composer-send { background: var(--accent); color: var(--text-on-accent); cursor: pointer; }
 .ai-composer-send:disabled { background: var(--border-strong); color: var(--text-disabled); cursor: default; }
+.ai-composer-stop { display:grid; place-items:center; width:28px; height:28px; border:1px solid var(--border-strong); border-radius:7px; background:var(--bg-elevated); color:var(--text-primary); cursor:pointer; }
+.ai-composer-stop span { width:10px; height:10px; border-radius:2px; background:currentColor; }
+.ai-composer-stop:hover:not(:disabled) { background:var(--bg-hover); }
+.ai-composer-stop:disabled { opacity:.5; cursor:default; }
 .ai-composer-hint { margin-top: 5px; color: var(--text-disabled); text-align: right; font-size: 9px; }
 
 /* OpsCopilot AI workspace — precise, dense and deliberately non-chatty. */
@@ -513,6 +521,8 @@
     border-bottom: 1px solid var(--border-subtle);
     background: color-mix(in srgb, var(--bg-primary) 48%, transparent);
 }
+.ai-chat-subheader select { min-width:0; max-width:50%; padding:5px 8px; color:var(--text-primary); background:var(--bg-secondary); border:1px solid var(--border); border-radius:var(--radius-sm); font:inherit; }
+.ai-panel-footer > .oc-assistant-interaction { position:relative; top:auto; left:auto; right:auto; margin:0 0 12px; max-height:340px; overflow:auto; }
 .ai-session-state {
     display: inline-flex;
     align-items: center;

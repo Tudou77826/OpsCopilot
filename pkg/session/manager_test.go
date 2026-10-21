@@ -5,6 +5,7 @@ import (
 	"io"
 	"sync"
 	"testing"
+	"time"
 
 	"opscopilot/pkg/remote"
 )
@@ -47,6 +48,38 @@ type MockWriter struct {
 	mu   sync.Mutex
 }
 
+type slowCloseConn struct {
+	mockConn
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (c *slowCloseConn) Close() error { close(c.entered); <-c.release; return nil }
+
+func TestSlowCloseDoesNotBlockSessionRegistry(t *testing.T) {
+	m := NewManager()
+	c := &slowCloseConn{entered: make(chan struct{}), release: make(chan struct{})}
+	m.AddWithID("old", c, &MockWriter{})
+	done := make(chan struct{})
+	go func() { m.Remove("old"); close(done) }()
+	<-c.entered
+	defer func() { close(c.release); <-done }()
+	checked := make(chan bool, 1)
+	go func() {
+		fresh := m.AddWithID("old", &mockConn{}, &MockWriter{})
+		current, ok := m.Get("old")
+		checked <- ok && current == fresh
+	}()
+	select {
+	case ok := <-checked:
+		if !ok {
+			t.Fatal("replacement identity lost")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("slow close blocked the session registry")
+	}
+}
+
 func (w *MockWriter) Write(p []byte) (n int, err error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -55,6 +88,19 @@ func (w *MockWriter) Write(p []byte) (n int, err error) {
 }
 
 func (w *MockWriter) Close() error { return nil }
+
+func TestOldReaderCannotRemoveReconnectedSession(t *testing.T) {
+	m := NewManager()
+	m.AddWithID("same", &mockConn{}, &MockWriter{})
+	old, _ := m.Get("same")
+	newConn := &mockConn{}
+	m.AddWithID("same", newConn, &MockWriter{})
+	m.RemoveIf("same", old)
+	current, ok := m.Get("same")
+	if !ok || current == old || newConn.closed {
+		t.Fatal("old reader removed the new session")
+	}
+}
 
 func TestSessionManager(t *testing.T) {
 	manager := NewManager()

@@ -49,7 +49,7 @@ require (
 	github.com/wailsapp/mimetype v1.4.1 // indirect
 	github.com/yuin/goldmark v1.7.16
 	golang.org/x/net v0.47.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 // replace github.com/wailsapp/wails/v2 v2.11.0 => C:\Users\15802\go\pkg\mod
