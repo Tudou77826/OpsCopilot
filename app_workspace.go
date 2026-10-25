@@ -21,6 +21,8 @@ func (a *App) workspaceService() *workspace.Service {
 	return a.workspace
 }
 func (a *App) WorkspaceAttach() string {
+	a.assistantConversationMu.Lock()
+	defer a.assistantConversationMu.Unlock()
 	// A replacement page cannot inherit an executing old page's authority.
 	state := a.assistantCoordinator().Snapshot()
 	if state.Phase == "running" || state.Phase == "waiting" {
@@ -28,7 +30,23 @@ func (a *App) WorkspaceAttach() string {
 	}
 	return a.workspaceService().Attach()
 }
+func (a *App) WorkspaceRegisterPage(key string) (string, error) {
+	// Serialize page replacement with submission: a reload must not revoke a
+	// newer turn that was accepted between replacing the document and stopping it.
+	a.assistantConversationMu.Lock()
+	defer a.assistantConversationMu.Unlock()
+	client, replaced, err := a.workspaceService().RegisterPage(key)
+	if err == nil && replaced {
+		state := a.assistantCoordinator().Snapshot()
+		if state.Phase == "running" || state.Phase == "waiting" {
+			_ = a.assistantCoordinator().Stop(state.TurnID)
+		}
+	}
+	return client, err
+}
 func (a *App) WorkspaceDetach(client string) {
+	a.assistantConversationMu.Lock()
+	defer a.assistantConversationMu.Unlock()
 	if a.workspaceService().Detach(client) {
 		state := a.assistantCoordinator().Snapshot()
 		if state.Phase == "running" || state.Phase == "waiting" {
@@ -204,14 +222,21 @@ func (a *App) openWorkspaceConnection(ctx context.Context, client string, cfg Co
 		return result.tab, result.err
 	}
 }
-func (a *App) assistantWorkspaceTools(turn *assistantcontrol.Turn, target terminalcontrol.Target) *assistanttools.WorkspaceTools {
+func (a *App) assistantWorkspaceTools(turn *assistantcontrol.Turn, target terminalcontrol.Target, reviewers ...assistantcontrol.Reviewer) *assistanttools.WorkspaceTools {
 	tools := assistanttools.NewWorkspaceTools(turn, target, a.workspaceInventory, a.prepareWorkspaceConnection, a.selectWorkspaceTab, func(target terminalcontrol.Target) *assistanttools.TerminalTools {
-		return a.assistantTerminalTools(turn, target)
+		terminal := a.assistantTerminalTools(turn, target)
+		if len(reviewers) > 0 {
+			terminal.Review = reviewers[0]
+		}
+		return terminal
 	})
 	tools.OnOperation = func(action, phase string, target terminalcontrol.Target) {
 		// Only identifiers and lifecycle phases belong in application logs.
 		slog.Info("assistant workspace operation", "turn", turn.ID(), "action", action, "phase", phase, "tab", target.SessionID, "connection", target.ConnectionID)
 	}
 	tools.Database = a.assistantDatabaseTools(turn)
+	tools.Files = a.assistantFileTools(turn)
+	tools.LocalDirectories = &assistanttools.LocalDirectoryTools{Turn: turn, Projects: a.assistantLocalProjectStore()}
+	tools.References = &assistanttools.ReferenceTools{Turn: turn, KnowledgeDirectory: a.resolveKnowledgeBase, Commands: a.assistantReferenceCommands}
 	return tools
 }

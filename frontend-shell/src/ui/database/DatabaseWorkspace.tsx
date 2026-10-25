@@ -93,6 +93,17 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
     });
   };
   const editor = useRef<SQLEditorRef>(null);
+  const revealed = useRef('');
+  useEffect(() => {
+    const w = managed?.workspace;
+    if (!w?.revealNonce || !w.revealBlock || revealed.current === w.revealNonce) return;
+    const queryId = `ai-query-${w.id}`;
+    if (tab?.id !== queryId) { setActiveTab(queryId); return; }
+    const block = w.blocks.find(item => item.id === w.revealBlock);
+    if (!block) return;
+    revealed.current = w.revealNonce;
+    update(queryId, {result:block.result, error:block.error, resultIndex:0});
+  }, [managed?.workspace.revealNonce, tab?.id]);
   useEffect(()=>{
     if(managed?.workspace.pending&&tab?.id===`ai-query-${managed.workspace.id}`&&editor.current?.value()===managed.workspace.sql){managed.onPresented(managed.workspace.sql);}
   },[managed?.workspace.pending,tab?.sql,tab?.id]);
@@ -553,7 +564,7 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
                       />
                     </>
                   )}
-                  {managed&&tab.id===`ai-query-${managed.workspace.id}`&&managed.workspace.blocks.length>0&&<DatabaseExecutionHistory blocks={managed.workspace.blocks} onSelect={block=>update(tab.id,{result:block.result,error:block.error,resultIndex:0})}/>}
+                  {managed&&tab.id===`ai-query-${managed.workspace.id}`&&managed.workspace.blocks.length>0&&<DatabaseExecutionHistory blocks={managed.workspace.blocks} revealId={managed.workspace.revealBlock} revealNonce={managed.workspace.revealNonce} onSelect={block=>update(tab.id,{result:block.result,error:block.error,resultIndex:0})}/>}
                   {tab.error && (
                     <div className="oc-db-banner">
                       <DatabaseError message={tab.error} />

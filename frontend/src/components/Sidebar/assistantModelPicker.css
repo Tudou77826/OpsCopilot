@@ -1,0 +1,13 @@
+.ai-model-picker { display:flex; align-items:center; min-width:0; max-width:150px; flex-shrink:1; }
+.ai-model-select { display:flex; align-items:center; gap:5px; min-width:0; min-height:28px; padding:4px 7px; border:0; border-radius:6px; background:transparent; color:var(--text-secondary); font:inherit; font-size:11px; cursor:pointer; }
+.ai-model-select > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ai-model-select:hover:not(:disabled), .ai-model-select[aria-expanded="true"] { color:var(--text-primary); background:var(--bg-hover); }
+.ai-model-select:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+.ai-model-select:disabled { opacity:.6; cursor:default; }
+.ai-model-select > svg { flex-shrink:0; color:var(--text-muted); }
+.ai-model-menu { position:fixed; z-index:500; box-sizing:border-box; padding:3px; overflow:auto; overscroll-behavior:contain; border:1px solid var(--border-strong); border-radius:7px; background:var(--bg-elevated); color:var(--text-primary); box-shadow:0 6px 18px var(--shadow); font-size:12px; }
+.ai-model-menu > button { display:flex; align-items:center; gap:8px; box-sizing:border-box; width:100%; min-height:30px; padding:5px 8px; border:0; border-radius:4px; text-align:left; background:transparent; color:inherit; font:inherit; cursor:pointer; }
+.ai-model-menu > button.is-active { background:var(--bg-hover); }
+.ai-model-menu > button[aria-selected="true"] > svg { flex-shrink:0; color:var(--accent); }
+.ai-model-option-label { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ai-model-status { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }

@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -44,14 +46,16 @@ type Answer struct {
 	Selected []string `json:"selected"`
 }
 type State struct {
-	TurnID   string  `json:"turnId"`
-	Target   Target  `json:"target"`
-	Phase    string  `json:"phase"`
-	Message  string  `json:"message"`
-	Prompt   *Prompt `json:"prompt,omitempty"`
-	Output   string  `json:"output,omitempty"`
-	Source   string  `json:"source,omitempty"`
-	Activity string  `json:"activity,omitempty"`
+	TurnID      string    `json:"turnId"`
+	Target      Target    `json:"target"`
+	Phase       string    `json:"phase"`
+	Message     string    `json:"message"`
+	Prompt      *Prompt   `json:"prompt,omitempty"`
+	Output      string    `json:"output,omitempty"`
+	Source      string    `json:"source,omitempty"`
+	Activity    string    `json:"activity,omitempty"`
+	Messages    []Message `json:"messages,omitempty"`
+	SaveWarning string    `json:"saveWarning,omitempty"`
 }
 type pending struct {
 	prompt Prompt
@@ -62,12 +66,16 @@ type Coordinator struct {
 	current *Turn
 }
 type Turn struct {
-	owner  *Coordinator
-	ctx    context.Context
-	cancel context.CancelFunc
-	state  State
-	wait   *pending
-	yield  func() error
+	owner             *Coordinator
+	ctx               context.Context
+	cancel            context.CancelFunc
+	state             State
+	wait              *pending
+	yield             func() error
+	textOpen          bool
+	segmentID         string
+	timing            turnClock
+	operationRevision uint64
 }
 
 func active(phase string) bool { return phase == "running" || phase == "waiting" }
@@ -129,26 +137,62 @@ func (t *Turn) SetActivity(activity string) {
 	t.owner.mu.Lock()
 	defer t.owner.mu.Unlock()
 	if t.owner.current == t && active(t.state.Phase) && t.ctx.Err() == nil {
+		if activity != "" {
+			t.textOpen = false
+		}
 		t.state.Activity = activity
 	}
 }
 
 // AppendText fences late agent notifications and bounds UI memory per turn.
 func (t *Turn) AppendText(text string) {
+	t.AppendSegment(text, "")
+}
+func (t *Turn) AppendSegment(text, segmentID string) {
 	t.owner.mu.Lock()
 	defer t.owner.mu.Unlock()
 	if t.owner.current != t || !active(t.state.Phase) || t.ctx.Err() != nil {
 		return
 	}
+	if segmentID != "" && segmentID != t.segmentID {
+		t.textOpen = false
+		t.segmentID = segmentID
+	}
 	if len(t.state.Output)+len(text) > 128*1024 {
 		return
 	}
+	if !t.textOpen && len(t.state.Messages) >= 512 {
+		return
+	}
 	t.state.Output += text
+	if !t.textOpen {
+		t.record("ai", "text", text)
+		t.textOpen = true
+	} else {
+		t.state.Messages[len(t.state.Messages)-1].Content += text
+	}
+}
+
+// record is called only under the coordinator lock. UI records are never authority.
+func (t *Turn) record(role, kind, content string) {
+	t.textOpen = false
+	if len(t.state.Messages) >= 512 {
+		return
+	}
+	t.state.Messages = append(t.state.Messages, Message{ID: fmt.Sprintf("%s:event:%d", t.ID(), len(t.state.Messages)), TurnID: t.ID(), Role: role, Kind: kind, Content: content, Time: time.Now()})
+}
+func (t *Turn) Record(kind, content string) {
+	t.owner.mu.Lock()
+	defer t.owner.mu.Unlock()
+	if t.owner.current == t && active(t.state.Phase) && t.ctx.Err() == nil {
+		t.record("ai", kind, content)
+	}
 }
 func (t *Turn) Snapshot() State {
 	t.owner.mu.Lock()
 	defer t.owner.mu.Unlock()
 	state := t.state
+	state.Messages = append([]Message(nil), state.Messages...)
 	if state.Prompt != nil {
 		prompt := clonePrompt(*state.Prompt)
 		state.Prompt = &prompt
@@ -168,6 +212,7 @@ func (c *Coordinator) Snapshot() State {
 		return State{Phase: "idle"}
 	}
 	state := c.current.state
+	state.Messages = append([]Message(nil), state.Messages...)
 	if state.Prompt != nil {
 		prompt := clonePrompt(*state.Prompt)
 		state.Prompt = &prompt
@@ -187,6 +232,22 @@ func (t *Turn) Finish(phase, message string) {
 	}
 	t.owner.mu.Lock()
 	if t.owner.current == t && active(t.state.Phase) {
+		for i := range t.state.Messages {
+			m := &t.state.Messages[i]
+			if m.Kind == "operation" && (m.Operation.Status == "running" || m.Operation.Status == "cancelling") {
+				m.Content = "操作结果尚未确认"
+				m.Operation.Status = "unknown"
+				m.Operation.Outcome = "本轮已结束，尚未确认此步骤的最终结果。"
+				m.Operation.Next = "先核对原页签中的执行或传输记录，不要直接重复操作。"
+			}
+		}
+		if t.state.Prompt != nil {
+			t.record("ai", "notice", "交互已结束，未作选择："+t.state.Prompt.Title)
+		}
+		if t.timing.enabled {
+			t.record("ai", "timing", t.timing.summary(time.Now()))
+			t.timing.enabled = false
+		}
 		t.state.Phase, t.state.Message, t.state.Prompt = phase, message, nil
 		t.wait = nil
 	}
@@ -206,7 +267,7 @@ func (c *Coordinator) Stop(id string) error {
 }
 
 func validatePrompt(p Prompt) error {
-	if (p.Kind != "approval" && p.Kind != "input" && p.Kind != "database_connection") || p.Title == "" || len(p.Title) > 512 || len(p.Description) > 8192 || len(p.Command) > 8192 || len(p.Data) > 8192 || len(p.Choices) > 16 || len(p.Details) > 16 || !p.Expires.After(time.Now()) || p.Expires.After(time.Now().Add(10*time.Minute)) {
+	if (p.Kind != "approval" && p.Kind != "input" && p.Kind != "database_connection") || p.Title == "" || len(p.Title) > 512 || len(p.Description) > 8192 || len(p.Command) > 8192 || len(p.Data) > 8192 || len(p.Choices) > 16 || len(p.Details) > 16 || (!p.Expires.IsZero() && (!p.Expires.After(time.Now()) || p.Expires.After(time.Now().Add(10*time.Minute)))) || (p.Kind != "input" && p.Expires.IsZero()) {
 		return errors.New("交互请求无效或已过期")
 	}
 	seen := map[string]bool{}
@@ -229,7 +290,7 @@ func validatePrompt(p Prompt) error {
 	}
 	return nil
 }
-func (t *Turn) Request(ctx context.Context, prompt Prompt) (Answer, error) {
+func (t *Turn) Request(ctx context.Context, prompt Prompt) (result Answer, requestErr error) {
 	if err := validatePrompt(prompt); err != nil {
 		return Answer{}, err
 	}
@@ -252,6 +313,14 @@ func (t *Turn) Request(ctx context.Context, prompt Prompt) (Answer, error) {
 	defer func() {
 		t.owner.mu.Lock()
 		if t.wait == wait {
+			t.timingConfirmation(false)
+			if t.state.Prompt != nil && requestErr != nil {
+				message := "交互已取消，未作选择："
+				if errors.Is(requestErr, context.DeadlineExceeded) {
+					message = "等待已超时，未作选择或授权："
+				}
+				t.record("ai", "notice", message+prompt.Title)
+			}
 			t.wait = nil
 			t.state.Prompt = nil
 			if active(t.state.Phase) {
@@ -266,20 +335,30 @@ func (t *Turn) Request(ctx context.Context, prompt Prompt) (Answer, error) {
 		}
 	}
 	t.owner.mu.Lock()
-	if t.owner.current != t || t.wait != wait || t.ctx.Err() != nil || ctx.Err() != nil || !prompt.Expires.After(time.Now()) {
+	if t.owner.current != t || t.wait != wait || t.ctx.Err() != nil || ctx.Err() != nil || (!prompt.Expires.IsZero() && !prompt.Expires.After(time.Now())) {
 		t.owner.mu.Unlock()
 		return Answer{}, ErrStale
 	}
+	t.timingConfirmation(true)
 	t.state.Phase, t.state.Message, t.state.Prompt = "waiting", "等待你的确认", &wait.prompt
+	kind := "question"
+	if prompt.Kind == "approval" {
+		kind = "permission"
+	}
+	t.record("ai", kind, prompt.Title)
 	t.owner.mu.Unlock()
-	timer := time.NewTimer(time.Until(prompt.Expires))
-	defer timer.Stop()
+	var expiry <-chan time.Time
+	if !prompt.Expires.IsZero() {
+		timer := time.NewTimer(time.Until(prompt.Expires))
+		defer timer.Stop()
+		expiry = timer.C
+	}
 	select {
 	case <-ctx.Done():
 		return Answer{}, ctx.Err()
 	case <-t.ctx.Done():
 		return Answer{}, t.ctx.Err()
-	case <-timer.C:
+	case <-expiry:
 		return Answer{}, context.DeadlineExceeded
 	case answer := <-wait.result:
 		if t.ctx.Err() != nil || ctx.Err() != nil {
@@ -292,7 +371,7 @@ func (c *Coordinator) Respond(turnID, requestID string, answer Answer) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	t := c.current
-	if t == nil || t.state.TurnID != turnID || t.ctx.Err() != nil || t.wait == nil || t.state.Phase != "waiting" || t.wait.prompt.ID != requestID || !t.wait.prompt.Expires.After(time.Now()) {
+	if t == nil || t.state.TurnID != turnID || t.ctx.Err() != nil || t.wait == nil || t.state.Phase != "waiting" || t.wait.prompt.ID != requestID || (!t.wait.prompt.Expires.IsZero() && !t.wait.prompt.Expires.After(time.Now())) {
 		return ErrStale
 	}
 	p := t.wait.prompt
@@ -332,6 +411,23 @@ func (c *Coordinator) Respond(turnID, requestID string, answer Answer) error {
 		}
 	}
 	answer.Selected = append([]string(nil), answer.Selected...)
+	var labels []string
+	for _, id := range answer.Selected {
+		for _, choice := range p.Choices {
+			if id == choice.ID {
+				labels = append(labels, choice.Label)
+			}
+		}
+	}
+	if p.Kind == "input" && answer.Text != "" {
+		labels = append(labels, answer.Text)
+	}
+	kind := "answer"
+	if p.Kind == "approval" {
+		kind = "permission_answer"
+	}
+	t.record("user", kind, strings.Join(labels, "\n"))
+	t.timingConfirmation(false)
 	t.wait.result <- answer
 	t.wait = nil
 	t.state.Phase, t.state.Message, t.state.Prompt = "running", "正在继续", nil

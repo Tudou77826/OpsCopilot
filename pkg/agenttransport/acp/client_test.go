@@ -196,16 +196,7 @@ func TestLiveChrysInitialize(t *testing.T) {
 	if err := os.MkdirAll(home, 0700); err != nil {
 		t.Fatal(err)
 	}
-	env := make([]string, 0)
-	for _, entry := range os.Environ() {
-		key, _, _ := strings.Cut(entry, "=")
-		upper := strings.ToUpper(key)
-		if upper == "HOME" || upper == "USERPROFILE" || upper == "APPDATA" || upper == "LOCALAPPDATA" || strings.HasPrefix(upper, "CHRYS") || strings.Contains(upper, "API_KEY") {
-			continue
-		}
-		env = append(env, entry)
-	}
-	env = append(env, "HOME="+home, "USERPROFILE="+home, "APPDATA="+filepath.Join(directory, "appdata"), "LOCALAPPDATA="+filepath.Join(directory, "localappdata"))
+	env := managedEnvironment(directory, home, "")
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	client, err := Start(ctx, ProcessConfig{Executable: executable, Args: []string{"acp"}, Directory: directory, Environment: env}, nil)
@@ -218,4 +209,7 @@ func TestLiveChrysInitialize(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("LIVE_CHRYS_INITIALIZE name=%s version=%s protocol=%d; no session/new or model prompt sent", result.AgentInfo.Name, result.AgentInfo.Version, result.ProtocolVersion)
+	if err := result.requireManagedCapabilities(); err != nil {
+		t.Fatal(err)
+	}
 }

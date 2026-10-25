@@ -174,6 +174,7 @@ func (a *App) openDatabaseGateway(ctx context.Context, id, mode string) (dbworks
 		route = append([]string{net.JoinHostPort(node.Host, fmt.Sprint(node.Port))}, route...)
 	}
 	connectiondiag.Event(ctx, "ssh.route", "实际配置路径 本机 → %s；SSH账号见各节点事件；后台重新认证，不复用已打开终端或 su/sudo 身份", strings.Join(route, " → "))
+	connectiondiag.Fact(ctx, "SSH实际路径", "本机 → "+strings.Join(route, " → "))
 	client, err := sshclient.NewClientWithTrace(ctx, cfg)
 	if err != nil {
 		return nil, nil, err

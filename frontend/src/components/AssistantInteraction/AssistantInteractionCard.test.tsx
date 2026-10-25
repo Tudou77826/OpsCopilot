@@ -4,6 +4,21 @@ import { AssistantInteractionCard } from './AssistantInteractionCard';
 import type { InteractionPrompt } from './types';
 const approval: InteractionPrompt = { id: 'p1', kind: 'approval', title: '确认操作', description: '等待时终端可以操作', command: "printf 'hello'", expires: new Date(Date.now() + 60000).toISOString(), multiple: false };
 describe('助手交互卡片', () => {
+    it('回退原因和快速模型建议在确认卡片中默认可见', () => {
+        const notice='快速模型访问失败，本次自审改用隔离的 iCode 会话。建议在「设置 → 模型服务」配置可用的快速模型。';
+        render(<AssistantInteractionCard prompt={{...approval,details:[{label:'AI 自审',value:'需要人工确认'},{label:'自审方式',value:notice}]}} onRespond={vi.fn()} onStop={vi.fn()}/>);
+        expect(screen.getByText(notice)).toBeVisible();
+        expect(screen.queryByText('更多操作详情')).not.toBeInTheDocument();
+    });
+    it('传输两端路径、方向和身份默认可见', () => {
+        const prompt: InteractionPrompt = { ...approval, command: undefined, details: [
+            {label:'传输方向',value:'本机 → 服务器'}, {label:'本机文件',value:'C:\\packages\\plugin.zip'},
+            {label:'远端文件',value:'/opt/packages/plugin.zip'}, {label:'执行身份',value:'operator'},
+        ] };
+        render(<AssistantInteractionCard prompt={prompt} onRespond={vi.fn()} onStop={vi.fn()} />);
+        for (const detail of prompt.details!) expect(screen.getByText(detail.value)).toBeVisible();
+        expect(screen.queryByText('更多操作详情')).toBeNull();
+    });
     it('明确允许一次，显示原命令并防止重复提交', async () => {
         const respond = vi.fn().mockReturnValue(new Promise(() => {}));
         const stop = vi.fn();

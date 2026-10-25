@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"opscopilot/pkg/assistantcontrol"
+	"opscopilot/pkg/terminalcontrol"
 )
 
 // Interactions adapts only explicit user questions/one-shot permissions. It
@@ -23,7 +24,9 @@ type Interactions struct {
 	// Optional restricted callers can refuse all executable requests. The desktop
 	// managed profile leaves this false and presents native one-shot approvals.
 	DenyPermissions bool
+	DenyRequests    bool
 	Audit           func(event, status string, data json.RawMessage) error
+	Review          assistantcontrol.Reviewer
 	sessionMu       sync.RWMutex
 }
 
@@ -65,6 +68,9 @@ func (b *Interactions) Notify(ctx context.Context, method string, data json.RawM
 }
 
 func (b *Interactions) Request(ctx context.Context, method string, data json.RawMessage) (any, error) {
+	if b.DenyRequests {
+		return nil, &RPCError{Code: -32601, Message: "自审没有交互或执行权限"}
+	}
 	if b.Turn == nil || b.Turn.Context().Err() != nil {
 		return nil, assistantcontrol.ErrStale
 	}
@@ -125,7 +131,7 @@ func (b *Interactions) Request(ctx context.Context, method string, data json.Raw
 					}
 					choices = append(choices, assistantcontrol.Choice{ID: strconv.Itoa(i), Label: label})
 				}
-				p := assistantcontrol.Prompt{Kind: "input", Title: q.Question, Description: fmt.Sprintf("问题 %d / %d", index+1, len(modern.Questions)), Choices: choices, Multiple: q.MultiSelect, Expires: time.Now().Add(5 * time.Minute)}
+				p := assistantcontrol.Prompt{Kind: "input", Title: q.Question, Description: fmt.Sprintf("问题 %d / %d", index+1, len(modern.Questions)), Choices: choices, Multiple: q.MultiSelect}
 				a, err := request(p)
 				if err != nil {
 					return nil, err
@@ -135,7 +141,14 @@ func (b *Interactions) Request(ctx context.Context, method string, data json.Raw
 					i, _ := strconv.Atoi(id)
 					values = append(values, q.Options[i].Label)
 				}
-				answers = append(answers, map[string]any{"values": values, "note": a.Text})
+				// iCode treats typed answers as values. A note without a selected
+				// option invalidates the entire response, including other answers.
+				note := a.Text
+				if len(values) == 0 && strings.TrimSpace(note) != "" {
+					values = append(values, note)
+					note = ""
+				}
+				answers = append(answers, map[string]any{"values": values, "note": note})
 			}
 			return map[string]any{"answers": answers, "cancelled": false}, nil
 		}
@@ -143,7 +156,7 @@ func (b *Interactions) Request(ctx context.Context, method string, data json.Raw
 		for i, label := range input.Options {
 			choices = append(choices, assistantcontrol.Choice{ID: strconv.Itoa(i), Label: label})
 		}
-		a, err := request(assistantcontrol.Prompt{Kind: "input", Title: input.Question, Choices: choices, Expires: time.Now().Add(5 * time.Minute)})
+		a, err := request(assistantcontrol.Prompt{Kind: "input", Title: input.Question, Choices: choices})
 		if err != nil {
 			return nil, err
 		}
@@ -163,6 +176,7 @@ func (b *Interactions) Request(ctx context.Context, method string, data json.Raw
 		var permission struct {
 			ToolCall struct {
 				Title string          `json:"title"`
+				Kind  string          `json:"kind"`
 				Input json.RawMessage `json:"rawInput"`
 			} `json:"toolCall"`
 			Options []struct {
@@ -190,7 +204,39 @@ func (b *Interactions) Request(ctx context.Context, method string, data json.Raw
 				return nil, err
 			}
 		}
-		a, err := request(assistantcontrol.Prompt{Kind: "approval", Title: permission.ToolCall.Title, Command: string(permission.ToolCall.Input), Description: "Chrys 已检查操作风险；此操作仍需要你确认。授权仅对本次操作有效。", Details: []assistantcontrol.Detail{{Label: "执行位置", Value: "本机（不是 SSH 服务器）"}, {Label: "确认原因", Value: "本机命令、文件修改或敏感内容访问需要确认"}}, Choices: []assistantcontrol.Choice{{ID: "reject", Label: "拒绝"}, {ID: "allow", Label: "允许本次"}}, Expires: time.Now().Add(5 * time.Minute)})
+		details := []assistantcontrol.Detail{{Label: "执行位置", Value: "本机（不是 SSH 服务器）"}}
+		if b.Review != nil {
+			b.Turn.SetActivity("reviewing")
+			verdict := b.Review(ctx, assistantcontrol.ReviewInput{Location: "本机", Tool: permission.ToolCall.Kind, Action: string(permission.ToolCall.Input)})
+			if ctx.Err() != nil || b.Turn.Context().Err() != nil {
+				return nil, assistantcontrol.ErrStale
+			}
+			// File writes never qualify for read-only automatic permission.
+			kind := permission.ToolCall.Kind
+			approved := verdict.Allowed() && (kind == "read" || kind == "search" || kind == "execute") && !terminalcontrol.RequiresHumanReview(string(permission.ToolCall.Input))
+			if verdict.Allowed() && !approved {
+				verdict.Reason = "操作类型或敏感目标触及人工确认边界"
+			}
+			status := "human_required"
+			if approved {
+				status = "auto_allowed"
+			}
+			if b.Audit != nil {
+				encoded, _ := json.Marshal(map[string]any{"action": json.RawMessage(data), "verdict": verdict})
+				if err := b.Audit("self_review", status, encoded); err != nil {
+					return nil, err
+				}
+			}
+			b.Turn.Record("review", map[bool]string{true: "只读自审通过：", false: "需要人工确认："}[approved]+verdict.Reason)
+			if approved {
+				return map[string]any{"outcome": map[string]string{"outcome": "selected", "optionId": allow}}, nil
+			}
+			details = append(details, assistantcontrol.Detail{Label: "AI 自审", Value: verdict.Reason})
+			if verdict.Notice != "" {
+				details = append(details, assistantcontrol.Detail{Label: "自审方式", Value: verdict.Notice})
+			}
+		}
+		a, err := request(assistantcontrol.Prompt{Kind: "approval", Title: permission.ToolCall.Title, Command: string(permission.ToolCall.Input), Description: "此操作需要你确认。授权仅对本次操作有效。", Details: details, Choices: []assistantcontrol.Choice{{ID: "reject", Label: "拒绝"}, {ID: "allow", Label: "允许本次"}}, Expires: time.Now().Add(5 * time.Minute)})
 		if err != nil {
 			return nil, err
 		}

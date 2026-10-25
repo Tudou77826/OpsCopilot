@@ -51,3 +51,33 @@ func TestTraceConcurrentAttemptsAndBounds(t *testing.T) {
 		t.Fatal("attempts share evidence")
 	}
 }
+
+func TestFactsAreFilteredIsolatedBoundedAndFrozen(t *testing.T) {
+	ctx, trace := New(context.Background())
+	Fact(ctx, "driver", "password=private-password late-secret\nsecond line")
+	AddSecrets(ctx, "late-secret")
+	if value := trace.Facts()["driver"]; strings.Contains(value, "private-password") || strings.Contains(value, "late-secret") || strings.Contains(value, "\n") {
+		t.Fatal("comparison field leaked or contains a new line", value)
+	}
+	copy := trace.Facts()
+	copy["driver"] = "changed"
+	if trace.Facts()["driver"] == "changed" {
+		t.Fatal("facts snapshot aliases the attempt")
+	}
+	for i := 0; i < 100; i++ {
+		Fact(ctx, fmt.Sprint(i), strings.Repeat("界", 2000))
+	}
+	if len(trace.Facts()) > 48 {
+		t.Fatal("unbounded facts")
+	}
+	for _, value := range trace.Facts() {
+		if len(value) > 1024 {
+			t.Fatal("unbounded comparison value")
+		}
+	}
+	trace.Finish()
+	Fact(ctx, "driver", "late update")
+	if trace.Facts()["driver"] == "late update" {
+		t.Fatal("frozen attempt changed")
+	}
+}

@@ -31,10 +31,15 @@ type DatabaseWorkspaceUpdate struct {
 }
 
 func (a *App) DatabaseWorkspacePoll(client string, since uint64) (DatabaseWorkspaceUpdate, error) {
-	if err := a.workspaceService().Check(client); err != nil {
+	if err := a.workspaceService().Registered(client); err != nil {
 		return DatabaseWorkspaceUpdate{}, err
 	}
 	revision, items := a.databaseControlService().List(since)
+	if a.workspaceService().Check(client) != nil {
+		for i := range items {
+			items[i].Pending = ""
+		}
+	}
 	return DatabaseWorkspaceUpdate{revision, items}, nil
 }
 func (a *App) DatabaseWorkspacePresented(client, id, nonce, sessionID, sql string) error {

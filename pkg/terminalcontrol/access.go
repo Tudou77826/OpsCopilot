@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -74,13 +75,14 @@ type ReviewDetails struct {
 }
 
 type commandReview struct {
-	details  ReviewDetails
-	request  CommandRequest
-	snapshot Snapshot
-	caller   context.Context
-	invalid  bool
-	resolved bool
-	heldRun  *Run
+	details      ReviewDetails
+	request      CommandRequest
+	snapshot     Snapshot
+	caller       context.Context
+	invalid      bool
+	resolved     bool
+	selfReviewed bool
+	heldRun      *Run
 }
 
 // ApprovedOperation is opaque and single-use; its execution accepts no target,
@@ -235,6 +237,9 @@ func (a *Access) authorize(ctx, caller context.Context, run *Run, id string, req
 			return nil, ErrStaleApproval
 		}
 		reason = "explicit_approval"
+		if run.approval.review.selfReviewed {
+			reason = "ai_read_only_review"
+		}
 	} else if assessment := assessCommand(request.Command, allowed, snapshot.Directory); !assessment.ReadOnly {
 		expires := time.Now().Add(time.Minute)
 		if a.scope.Expires.Before(expires) {
@@ -350,15 +355,43 @@ func (a *Access) Review(id string) (ReviewDetails, error) {
 	return review.details, nil
 }
 
+func (a *Access) RecordAIReview(id string, allowed bool) error {
+	review, err := a.Review(id)
+	if err != nil {
+		return err
+	}
+	status := "human_required"
+	if allowed {
+		status = "read_only_candidate"
+	}
+	return a.append(ExecutionAudit{Time: time.Now().UTC(), Actor: a.scope.Actor, Target: review.Target, RunID: review.RunID, OperationID: review.OperationID, ApprovalID: id, CommandHash: digest(review.Command), CommandBytes: len(review.Command), Phase: "ai_review_completed", Reason: status})
+}
+
 // Approve belongs only to the trusted user approval path; ACP tool-success or
 // a model's approved=true is not a substitute. Calling it never executes SQL/SSH.
 func (a *Access) Approve(id string, allow bool) (ApprovedOperation, error) {
+	return a.resolveReview(id, allow, "")
+}
+
+// ApproveReadOnlyReview retains scope, identity, expiry and exact-command binding.
+func (a *Access) ApproveReadOnlyReview(id, reason string) (ApprovedOperation, error) {
+	if strings.TrimSpace(reason) == "" || len(reason) > 1024 {
+		return nil, ErrDenied
+	}
+	return a.resolveReview(id, true, reason)
+}
+func (a *Access) resolveReview(id string, allow bool, aiReason string) (ApprovedOperation, error) {
 	a.mu.Lock()
 	review := a.reviews[id]
 	if review == nil || review.resolved || review.invalid || a.ctx.Err() != nil || review.caller.Err() != nil || !review.details.Expires.After(time.Now()) {
 		a.mu.Unlock()
 		return nil, ErrStaleApproval
 	}
+	if aiReason != "" && (review.details.Assessment.Category != "无法自动判定" || RequiresHumanReview(review.request.Command)) {
+		a.mu.Unlock()
+		return nil, ErrDenied
+	}
+	review.selfReviewed = aiReason != ""
 	review.resolved = true
 	if !allow {
 		review.invalid = true
@@ -381,6 +414,10 @@ func (a *Access) Approve(id string, allow bool) (ApprovedOperation, error) {
 	event := ExecutionAudit{Time: time.Now().UTC(), Actor: a.scope.Actor, Target: review.details.Target, RunID: review.details.RunID, OperationID: review.details.OperationID, ApprovalID: id, CommandHash: digest(review.request.Command), CommandBytes: len(review.request.Command), UID: review.snapshot.UID, PID: review.snapshot.PID, Sequence: review.snapshot.Sequence, DirectoryHash: digest(review.snapshot.Directory), Phase: "approval_denied"}
 	if allow {
 		event.Phase = "approval_granted"
+		if review.selfReviewed {
+			event.Phase = "ai_review_granted"
+			event.Reason = "ai_read_only_review"
+		}
 	}
 	if err := a.append(event); err != nil {
 		return nil, err

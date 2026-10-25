@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -20,32 +18,48 @@ import (
 // StartAssistantTurn accepts a message and an optional resource candidate.
 // Conversation never requires SSH; only terminal tools bind and check it.
 func (a *App) StartAssistantTurn(question, sessionID, connectionID string) (assistantcontrol.State, error) {
+	return a.startAssistantTurn(question, sessionID, connectionID, "")
+}
+func (a *App) StartAssistantTurnOnPage(question, sessionID, connectionID, client string) (assistantcontrol.State, error) {
+	if client == "" {
+		return assistantcontrol.State{}, errors.New("消息缺少发起页面，请刷新后重试")
+	}
+	return a.startAssistantTurn(question, sessionID, connectionID, client)
+}
+func (a *App) startAssistantTurn(question, sessionID, connectionID, client string) (assistantcontrol.State, error) {
 	question = strings.TrimSpace(question)
 	if question == "" || len(question) > 16384 || !utf8.ValidString(question) {
 		return assistantcontrol.State{}, errors.New("请输入不超过 16 KB 的问题")
 	}
 	target := terminalcontrol.Target{SessionID: sessionID, ConnectionID: connectionID}
-	executable, err := findChrysExecutable()
+	executable, err := a.assistantExecutable()
 	if err != nil {
 		return assistantcontrol.State{}, err
-	}
-	llm := a.configMgr.Config.LLM
-	model := llm.ComplexModel
-	if model == "" {
-		model = llm.Model
-	}
-	if model == "" {
-		model = llm.FastModel
-	}
-	if model == "" || llm.BaseURL == "" {
-		return assistantcontrol.State{}, errors.New("请先在模型服务中配置模型和服务地址")
 	}
 	a.assistantConversationMu.Lock()
 	defer a.assistantConversationMu.Unlock()
 	if a.assistantRunning {
 		return assistantcontrol.State{}, assistantcontrol.ErrBusy
 	}
-	ctx, cancel := context.WithTimeout(a.ctx, 10*time.Minute)
+	managed, err := a.assistantModelConfigLocked()
+	if err != nil {
+		return assistantcontrol.State{}, err
+	}
+	managed.Executable = executable
+	managed.SkillsDirectory = filepath.Join(a.configMgr.Directory(), "assistant-skills")
+	managed.AuditDirectory = filepath.Join(a.configMgr.Directory(), "audit", "assistant")
+	if client != "" {
+		state := a.assistantCoordinator().Snapshot()
+		if state.Phase == "running" || state.Phase == "waiting" {
+			return assistantcontrol.State{}, assistantcontrol.ErrBusy
+		}
+		if err := a.workspaceService().Activate(client); err != nil {
+			return assistantcontrol.State{}, err
+		}
+	}
+	// Questions wait for an explicit answer/stop; resource leases and individual
+	// operations keep their own bounded deadlines.
+	ctx, cancel := context.WithCancel(a.ctx)
 	turn, err := a.assistantCoordinator().Begin(ctx, assistantcontrol.Target{}, nil)
 	if err != nil {
 		cancel()
@@ -53,25 +67,45 @@ func (a *App) StartAssistantTurn(question, sessionID, connectionID string) (assi
 	}
 	turn.SetSource("assistant")
 	a.assistantHistory.Begin(turn.ID(), question)
+	a.assistantSelectedModel = managed.LocalModel
+	if err = a.saveAssistantHistoryLocked(true, nil); err != nil {
+		turn.Finish("failed", "尚未执行操作："+a.assistantSaveWarning)
+		a.assistantHistory.Finish(turn.Snapshot())
+		cancel()
+		return assistantcontrol.State{}, err
+	}
 	if a.assistantConversation == nil {
-		a.assistantConversation = &acp.Conversation{}
+		if a.assistantRecovered {
+			// Capture history BEFORE this turn's accepted user message so the new
+			// instruction is supplied once, at the end of the prompt.
+			history := a.assistantHistory.Snapshot()
+			history.Messages = history.Messages[:len(history.Messages)-1]
+			a.assistantConversation = acp.NewRecoveredConversation(assistantcontrol.RecoveryContext(history))
+		} else {
+			a.assistantConversation = &acp.Conversation{}
+		}
 	}
 	conversation := a.assistantConversation
 	a.assistantRunning = true
 	done := make(chan struct{})
 	a.assistantDone = done
-	tools := a.assistantWorkspaceTools(turn, target)
+	reviewer := a.assistantReviewer(turn, managed, question)
+	tools := a.assistantWorkspaceTools(turn, target, reviewer)
+	tools.InitialPageContext = a.assistantPageContext(target)
+	checkpointStop := make(chan struct{})
+	go a.checkpointAssistant(turn, checkpointStop)
 	go func() {
+		defer close(checkpointStop)
 		defer cancel()
 		defer tools.Close()
-		err := conversation.Run(a.ctx, acp.ManagedConfig{Executable: executable, BaseURL: llm.BaseURL, APIKey: llm.APIKey, Model: model, SkillsDirectory: filepath.Join(a.configMgr.Directory(), "assistant-skills"), AuditDirectory: filepath.Join(a.configMgr.Directory(), "audit", "assistant")}, turn, tools, question)
+		err := conversation.RunWithReviewer(a.ctx, managed, turn, tools, question, reviewer)
 		// Revoke application authority before publishing final completion.
 		tools.Close()
 		a.assistantConversationMu.Lock()
 		defer a.assistantConversationMu.Unlock()
 		defer close(done)
 		a.assistantRunning = false
-		defer func() { a.assistantHistory.Finish(turn.Snapshot()) }()
+		defer func() { a.assistantHistory.Finish(turn.Snapshot()); _ = a.saveAssistantHistoryLocked(false, nil) }()
 		if turn.Context().Err() != nil {
 			turn.Finish("stopped", "已停止")
 			return
@@ -83,6 +117,13 @@ func (a *App) StartAssistantTurn(question, sessionID, connectionID string) (assi
 		turn.Finish("completed", "本轮已完成")
 	}()
 	return turn.Snapshot(), nil
+}
+
+func (a *App) RestoreAssistantConversationOnPage(client string) (assistantcontrol.ConversationSnapshot, error) {
+	if client == "" {
+		return assistantcontrol.ConversationSnapshot{}, errors.New("页面标识无效")
+	}
+	return a.restoreAssistantConversation(client)
 }
 
 // NewAssistantConversation resets model context as well as the visible chat.
@@ -97,25 +138,52 @@ func (a *App) NewAssistantConversation() error {
 	if state.Phase == "running" || state.Phase == "waiting" {
 		return assistantcontrol.ErrBusy
 	}
+	_ = a.ensureAssistantHistoryLocked()
+	if err := a.resetAssistantHistoryLocked(); err != nil {
+		return err
+	}
 	if a.assistantConversation != nil {
 		a.assistantConversation.Close()
 		a.assistantConversation = nil
 	}
+	// Keep the user's selection, but reload its credentials/settings for the
+	// next conversation instead of retaining a stale model snapshot forever.
+	a.assistantSelectedModel = acp.LocalModel{ID: a.assistantSelectedModel.ID}
 	a.assistantCoordinator().ClearFinished(state.TurnID)
-	a.assistantHistory.Reset()
+	a.assistantRecoveryNote = ""
+	a.assistantRecovered = false
 	return nil
 }
 
 // RestoreAssistantConversation restores display state, never a pending action.
 // A replacement page first revokes/drains the previous turn, including prompts.
 func (a *App) RestoreAssistantConversation() (assistantcontrol.ConversationSnapshot, error) {
+	return a.restoreAssistantConversation("")
+}
+func (a *App) restoreAssistantConversation(client string) (assistantcontrol.ConversationSnapshot, error) {
 	a.assistantConversationMu.Lock()
+	if err := a.ensureAssistantHistoryLocked(); err != nil {
+		a.assistantConversationMu.Unlock()
+		return assistantcontrol.ConversationSnapshot{}, err
+	}
+	if client != "" {
+		if err := a.workspaceService().Registered(client); err != nil {
+			a.assistantConversationMu.Unlock()
+			return assistantcontrol.ConversationSnapshot{}, err
+		}
+		// A passive window may read history, but cannot stop the sender's turn.
+		if a.workspaceService().Check(client) != nil {
+			snapshot := a.assistantSnapshotLocked()
+			a.assistantConversationMu.Unlock()
+			return snapshot, nil
+		}
+	}
 	state := a.assistantCoordinator().Snapshot()
 	running := a.assistantRunning
 	if !running && state.Source != "assistant" {
 		// Independent legacy/trial operations share admission, not the Chrys
 		// conversation. Reading its history must not cancel or wait on them.
-		snapshot := a.assistantHistory.Snapshot()
+		snapshot := a.assistantSnapshotLocked()
 		a.assistantConversationMu.Unlock()
 		return snapshot, nil
 	}
@@ -134,7 +202,7 @@ func (a *App) RestoreAssistantConversation() (assistantcontrol.ConversationSnaps
 	if a.assistantRunning || (state.Source == "assistant" && (state.Phase == "running" || state.Phase == "waiting")) {
 		return assistantcontrol.ConversationSnapshot{}, assistantcontrol.ErrBusy
 	}
-	return a.assistantHistory.Snapshot(), nil
+	return a.assistantSnapshotLocked(), nil
 }
 
 func (a *App) shutdownAssistant(ctx context.Context) {
@@ -197,29 +265,4 @@ func (a *App) assistantTerminalTools(turn *assistantcontrol.Turn, target termina
 		}
 		return a.newTerminalAccess(ctx, terminalcontrol.AccessScope{Actor: "desktop-chrys", Expires: time.Now().Add(10 * time.Minute), Targets: []terminalcontrol.AccessTarget{{Target: target, UID: view.LastPrompt.UID, RoutineDiagnostics: true}}})
 	}}
-}
-
-func findChrysExecutable() (string, error) {
-	if configured := os.Getenv("OPSCOPILOT_CHRYS_EXECUTABLE"); configured != "" {
-		if !filepath.IsAbs(configured) {
-			return "", errors.New("Chrys 程序路径必须是绝对路径")
-		}
-		info, err := os.Stat(configured)
-		if err != nil || info.IsDir() {
-			return "", errors.New("找不到指定的 Chrys 程序")
-		}
-		return configured, nil
-	}
-	if executable, err := os.Executable(); err == nil {
-		for _, name := range []string{"chrys.exe", "chrys"} {
-			candidate := filepath.Join(filepath.Dir(executable), "chrys", name)
-			if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
-				return candidate, nil
-			}
-		}
-	}
-	if executable, err := exec.LookPath("chrys"); err == nil {
-		return filepath.Abs(executable)
-	}
-	return "", errors.New("尚未安装 Chrys 运行组件。当前开发版可通过 OPSCOPILOT_CHRYS_EXECUTABLE 指定程序路径")
 }

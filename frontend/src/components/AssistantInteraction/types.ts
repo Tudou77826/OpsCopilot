@@ -1,4 +1,4 @@
-import type { assistantcontrol } from '../../../wailsjs/go/models';
-export type AssistantWork = assistantcontrol.State;
-export type InteractionPrompt = assistantcontrol.Prompt;
-export type InteractionAnswer = assistantcontrol.Answer;
+import type { AssistantTurnState, AssistantPrompt, AssistantAnswer } from '../../../../frontend-shell/src/assistant/runtime';
+export type AssistantWork = AssistantTurnState;
+export type InteractionPrompt = AssistantPrompt;
+export type InteractionAnswer = AssistantAnswer;

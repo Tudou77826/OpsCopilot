@@ -10,6 +10,10 @@ export async function startAssistantModelFixture() {
       let body = '';
       for await (const chunk of request) { body += chunk; if (body.length > 2 ** 20) throw Error('fixture request too large'); }
       const data = JSON.parse(body);
+      if(body.includes('independent OpsCopilot action reviewer')) {
+        response.writeHead(200,{'Content-Type':'application/json'});
+        response.end(JSON.stringify({id:'judge',object:'chat.completion',choices:[{index:0,message:{role:'assistant',content:JSON.stringify({readOnly:false,inScope:true,sensitive:false,reason:'测试操作需人工确认'})},finish_reason:'stop'}]}));return;
+      }
       checks.requests++;
       const messages = data.messages || [];
       const lastUser = messages.findLastIndex(message => message.role === 'user' && !JSON.stringify(message.content).includes('<system-reminder>'));
@@ -30,6 +34,24 @@ export async function startAssistantModelFixture() {
       const commandScenario=question.includes('E2E_LIBRARY_DATABASE');
       const databaseScenario=commandScenario||/E2E_DATABASE_(CREATE|CLOSE|TRANSACTION|PENDING|LONG)/.test(question);
       const wire=index=>{try{return JSON.parse(results[index]?.content||'{}').result;}catch{return undefined;}};
+      if (question.includes('E2E_LOCAL_DIRS_ADD')) {
+        plan.push(step('local_directories'), step('local_add_directories', {project_id:wire(0)?.activeId||'missing',paths: controls.localDirectories.paths, purpose: '读取隔离测试项目中的说明文件'}), step('read_file', {path: controls.localDirectories.readPath}));
+      }
+      if(question.includes('E2E_LOCAL_DIRS_READ'))plan.push(step('local_directories'),step('read_file',{path:controls.localDirectories.readPath}));
+      const fileScenario=question.includes('E2E_FILE_');
+      if(fileScenario){
+        const settings=controls.files;
+        plan.push(step('file_workspaces'),step('file_open',{session_id:wire(0)?.sessions?.find(s=>s.status==='connected')?.tabId||'missing'}),step('file_take',{workspace_id:wire(1)?.id||'missing'}));
+        if(question.includes('E2E_FILE_BROWSE')){plan.push(step('file_list',{side:'remote',path:'/'}),step('file_release'));}
+        else{
+          plan.push(step('file_transfer',{direction:question.includes('DOWNLOAD')?'download':'upload',local_path:question.includes('DOWNLOAD')?settings.download:settings.source,remote_path:question.includes('DENY')||question.includes('STOP')?'/never-created.zip':'/fixture.zip',purpose:'仅传输隔离测试文件，不执行或安装'}));
+          for(let i=4;i<=Math.min(results.length+1,24);i++){
+            const tasks=wire(i-1)?.tasks;
+            if(tasks?.some(t=>t.id===wire(3)?.id&&['done','failed','cancelled'].includes(t.status))||question.includes('DENY')&&i===4){plan.push(step('file_release'));break;}
+            plan.push(step('file_tasks'));
+          }
+        }
+      }
       if(databaseScenario){
         let offset=0;
         if(commandScenario){plan.push(step('load_skill',{skill_name:'database-discovery'}),step('run_skill_script',{skill_name:'database-discovery',script_name:'scripts/discover.py'}));offset=2;}
@@ -94,9 +116,9 @@ export async function startAssistantModelFixture() {
       checks.scenario = question;
       // Leave observable intervals for the UI to distinguish model inference
       // from a real input lease, and for testing release before the final reply.
-      if ((next?.name === 'terminal_context' && results.length > 0) || next?.name==='database_execute' || !next) await new Promise(resolve => setTimeout(resolve, 2000));
+      if ((next?.name === 'terminal_context' && results.length > 0) || next?.name==='database_execute' || next?.name==='file_tasks' || !next) await new Promise(resolve => setTimeout(resolve, 2000));
       const remembered = JSON.stringify(messages.filter(message => message.role === 'user')).match(/OC_SESSION_[a-f0-9]+/)?.[0];
-      const answer = workspaceScenario ? 'WORKSPACE_CHAIN_OK' : question.includes('E2E_LONG_READ') ? Array.from({length:30},(_,index)=>`### 检查项 ${index+1}\n\n这是本地界面回归的长回答，用来验证阅读历史时，新回复不会把用户强制带回底部。`).join('\n\n') : /测试代号/.test(question) ? remembered || '未提供代号' : missingTerminal ? '当前没有可用的 SSH 终端，可以继续聊天；需要操作时请先连接 SSH。' : passiveOnly ? '已读取当前终端屏幕，终端保持可操作。当前预览仍使用模拟模型。' : actionScenario ? '终端助手链路已完成。结果来自原终端。' : /名字|叫什么|who are you/i.test(question)
+      const answer = fileScenario ? '文件管理流程已完成，任务状态保留在文件页签。' : workspaceScenario ? 'WORKSPACE_CHAIN_OK' : question.includes('E2E_LONG_READ') ? Array.from({length:30},(_,index)=>`### 检查项 ${index+1}\n\n这是本地界面回归的长回答，用来验证阅读历史时，新回复不会把用户强制带回底部。`).join('\n\n') : /测试代号/.test(question) ? remembered || '未提供代号' : missingTerminal ? '当前没有可用的 SSH 终端，可以继续聊天；需要操作时请先连接 SSH。' : passiveOnly ? '已读取当前终端屏幕，终端保持可操作。当前预览仍使用模拟模型。' : actionScenario ? '终端助手链路已完成。结果来自原终端。' : /名字|叫什么|who are you/i.test(question)
         ? '我是 OpsCopilot。当前预览使用模拟模型，用于体验终端接手、提问和审批流程。'
         : '当前预览使用模拟模型。可以输入“查看当前目录”体验终端操作流程。';
       const businessAnswer = `orders-reader 在 orders-2026-10-21.log 的 08:41:12 记录 request=req-17、code=UPSTREAM_TIMEOUT、upstream=inventory。实际日志标记：${toolEvidence.match(/ORDER_UPSTREAM_[a-f0-9]+/)?.[0] || '未观察到'}。已观察到上游调用超时，根因仍需更多证据，未修改配置。`;
@@ -106,5 +128,5 @@ export async function startAssistantModelFixture() {
     } catch (error) { checks.errors.push(String(error)); response.writeHead(500); response.end(JSON.stringify({ error: String(error) })); }
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  return { baseURL: `http://127.0.0.1:${server.address().port}/v1`, checks, get database(){return controls.database;},set database(value){controls.database=value;},close: () => server.close() };
+  return { baseURL: `http://127.0.0.1:${server.address().port}/v1`, checks, get localDirectories(){return controls.localDirectories;},set localDirectories(value){controls.localDirectories=value;},get files(){return controls.files;},set files(value){controls.files=value;},get database(){return controls.database;},set database(value){controls.database=value;},close: () => server.close() };
 }

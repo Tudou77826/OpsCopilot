@@ -26,6 +26,7 @@ import (
 	"opscopilot/pkg/agenttransport/acp"
 	"opscopilot/pkg/ai"
 	"opscopilot/pkg/assistantcontrol"
+	"opscopilot/pkg/assistantlocal"
 	"opscopilot/pkg/companion"
 	social "opscopilot/pkg/companionsocial"
 	"opscopilot/pkg/completion"
@@ -34,6 +35,7 @@ import (
 	"opscopilot/pkg/core/security"
 	"opscopilot/pkg/dbcontrol"
 	"opscopilot/pkg/dbworkspace"
+	"opscopilot/pkg/filecontrol"
 	"opscopilot/pkg/filetransfer"
 	"opscopilot/pkg/knowledge"
 	"opscopilot/pkg/knowledge/patchstore"
@@ -61,6 +63,8 @@ var Version = "dev"
 
 // App struct
 type App struct {
+	fileControlOnce   sync.Once
+	fileControl       *filecontrol.Service
 	serviceCenter     *servicecenter.Client
 	ctx               context.Context
 	sessionMgr        *session.Manager
@@ -85,39 +89,48 @@ type App struct {
 	shellTransports   map[string]*filetransfer.RootRelayTransport
 	// sftpUnsupportedCache 记录已确认 SFTP 不可用的会话（relayMu 保护），
 	// 避免每次路径级失败都重新做有界握手探测。
-	sftpUnsupportedCache    map[string]bool
-	sessionStates           map[string]*SessionState // 会话状态追踪
-	sessionStateMu          sync.RWMutex
-	commandExtractors       map[string]*terminal.CommandExtractor // 命令提取器（Tab 补全修正）
-	extractorMu             sync.RWMutex                          // 命令提取器锁
-	patchStoreMu            sync.RWMutex
-	patchStore              patchstore.PatchStore    // 补丁存储（可选）
-	feedbackStore           patchstore.FeedbackStore // 反馈存储（可选）
-	patchSyncStatusMu       sync.RWMutex
-	patchSyncStatus         PatchSyncStatus
-	patchSyncing            atomic.Bool
-	sessionShareMu          sync.RWMutex         // protects sessionShare
-	sessionShare            *sessionShareRuntime // 会话共享运行时（nil = 未启用，逻辑见 app_sessionshare.go）
-	companion               *companion.Store     // 单伙伴成长存储，默认休眠；绑定见 app_companion.go
-	achievements            *achievements.Store
-	social                  *achievements.Client
-	databaseMu              sync.Mutex
-	database                *dbworkspace.Service
-	databaseControlOnce     sync.Once
-	databaseControl         *dbcontrol.Service
-	terminalControlOnce     sync.Once
-	terminalControl         *terminalcontrol.Service
-	assistantControlOnce    sync.Once
-	assistantControl        *assistantcontrol.Coordinator
-	assistantConversationMu sync.Mutex
-	assistantConversation   *acp.Conversation
-	assistantHistory        assistantcontrol.History
-	assistantRunning        bool
-	assistantDone           chan struct{}
-	workspaceOnce           sync.Once
-	workspace               *workspace.Service
-	terminalLifecycles      session.Lifecycle
-	pendingTerminals        sync.Map // tab ID -> *pendingTerminal, only before publication
+	sftpUnsupportedCache      map[string]bool
+	sessionStates             map[string]*SessionState // 会话状态追踪
+	sessionStateMu            sync.RWMutex
+	commandExtractors         map[string]*terminal.CommandExtractor // 命令提取器（Tab 补全修正）
+	extractorMu               sync.RWMutex                          // 命令提取器锁
+	patchStoreMu              sync.RWMutex
+	patchStore                patchstore.PatchStore    // 补丁存储（可选）
+	feedbackStore             patchstore.FeedbackStore // 反馈存储（可选）
+	patchSyncStatusMu         sync.RWMutex
+	patchSyncStatus           PatchSyncStatus
+	patchSyncing              atomic.Bool
+	sessionShareMu            sync.RWMutex         // protects sessionShare
+	sessionShare              *sessionShareRuntime // 会话共享运行时（nil = 未启用，逻辑见 app_sessionshare.go）
+	companion                 *companion.Store     // 单伙伴成长存储，默认休眠；绑定见 app_companion.go
+	achievements              *achievements.Store
+	social                    *achievements.Client
+	databaseMu                sync.Mutex
+	database                  *dbworkspace.Service
+	databaseControlOnce       sync.Once
+	databaseControl           *dbcontrol.Service
+	terminalControlOnce       sync.Once
+	terminalControl           *terminalcontrol.Service
+	assistantControlOnce      sync.Once
+	assistantControl          *assistantcontrol.Coordinator
+	assistantConversationMu   sync.Mutex
+	assistantConversation     *acp.Conversation
+	assistantSelectedModel    acp.LocalModel // pinned metadata and credentials, never serialized
+	assistantHistory          assistantcontrol.History
+	assistantHistoryLoaded    bool
+	assistantHistoryLoadError error
+	assistantArchive          *assistantcontrol.ArchiveStore
+	assistantRecoveryNote     string
+	assistantRecovered        bool
+	assistantSaveWarning      string
+	assistantProjectsOnce     sync.Once
+	assistantProjects         *assistantlocal.Projects
+	assistantRunning          bool
+	assistantDone             chan struct{}
+	workspaceOnce             sync.Once
+	workspace                 *workspace.Service
+	terminalLifecycles        session.Lifecycle
+	pendingTerminals          sync.Map // tab ID -> *pendingTerminal, only before publication
 }
 
 // NewApp creates a new App application struct
@@ -1791,6 +1804,7 @@ func (a *App) initFeedbackStore() {
 }
 
 func (a *App) SaveSettings(cfg config.AppConfig) string {
+	cfg.AssistantRuntime.Executable = strings.TrimSpace(cfg.AssistantRuntime.Executable)
 	cfg.Terminal = config.NormalizeTerminalConfig(cfg.Terminal)
 	cfg.Appearance = config.NormalizeAppearanceConfig(cfg.Appearance)
 	cfg.PatchStore.Type = "git"
@@ -2366,6 +2380,9 @@ func (a *App) getTransferClientWithRelay(sessionID string) (transferClientInfo, 
 }
 
 func (a *App) FTList(sessionID, remotePath string) string {
+	return a.ftListContext(context.Background(), sessionID, remotePath)
+}
+func (a *App) ftListContext(ctx context.Context, sessionID, remotePath string) string {
 	info, err := a.getTransferClientWithRelay(sessionID)
 	if err != nil {
 		return mustJSON(ftResponse{OK: false, Error: toTransferErr(err)})
@@ -2381,16 +2398,16 @@ func (a *App) FTList(sessionID, remotePath string) string {
 			slog.Debug("ftList session root-relay transport not ready", "session", sessionID[:8])
 			return mustJSON(remoteFSResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotFound, Message: "root-relay 传输未就绪"}})
 		}
-		entries, err = relay.List(context.Background(), remotePath)
+		entries, err = relay.List(ctx, remotePath)
 	} else {
 		tr := filetransfer.NewSFTPTransport(info.client)
-		entries, err = tr.List(context.Background(), remotePath)
+		entries, err = tr.List(ctx, remotePath)
 		// SFTP 失败：仅 root 或确认无 SFTP 子系统时回退 shell，否则原样返回
 		// （路径级失败回退会把上传前的同名检查等高频路径拖进 shell 往返）。
 		if err != nil && a.shouldFallBackToShell(sessionID, info.client, info.identity) {
 			slog.Debug("ftList session SFTP list failed, falling back to shell", "session", sessionID[:8], "error", err)
 			shell := a.getShellTransport(sessionID, info.client)
-			entries, err = shell.List(context.Background(), remotePath)
+			entries, err = shell.List(ctx, remotePath)
 		}
 	}
 	if err != nil {
@@ -2403,6 +2420,9 @@ func (a *App) FTList(sessionID, remotePath string) string {
 }
 
 func (a *App) FTStat(sessionID, remotePath string) string {
+	return a.ftStatContext(context.Background(), sessionID, remotePath)
+}
+func (a *App) ftStatContext(ctx context.Context, sessionID, remotePath string) string {
 	info, err := a.getTransferClientWithRelay(sessionID)
 	if err != nil {
 		return mustJSON(ftResponse{OK: false, Error: toTransferErr(err)})
@@ -2415,14 +2435,14 @@ func (a *App) FTStat(sessionID, remotePath string) string {
 		if relay == nil {
 			return mustJSON(remoteFSResponse{OK: false, Error: &filetransfer.TransferError{Code: filetransfer.ErrorCodeNotFound, Message: "root-relay 传输未就绪"}})
 		}
-		entry, err = relay.Stat(context.Background(), remotePath)
+		entry, err = relay.Stat(ctx, remotePath)
 	} else {
 		tr := filetransfer.NewSFTPTransport(info.client)
-		entry, err = tr.Stat(context.Background(), remotePath)
+		entry, err = tr.Stat(ctx, remotePath)
 		// SFTP 失败：仅 root 或确认无 SFTP 子系统时回退 shell，否则原样返回。
 		if err != nil && a.shouldFallBackToShell(sessionID, info.client, info.identity) {
 			shell := a.getShellTransport(sessionID, info.client)
-			entry, err = shell.Stat(context.Background(), remotePath)
+			entry, err = shell.Stat(ctx, remotePath)
 		}
 	}
 	if err != nil {
@@ -2599,6 +2619,21 @@ func friendlyTransportLabel(code string) string {
 }
 
 func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string) string {
+	return a.startFileTransferTaskContext(context.Background(), sessionID, op, localPath, remotePath, "", nil, nil)
+}
+func (a *App) startFileTransferTaskContext(parent context.Context, sessionID, op, localPath, remotePath, requestedTaskID string, check func() error, observer func(string, map[string]any)) string {
+	if parent.Err() != nil {
+		return mustJSON(ftResponse{OK: false, Error: toTransferErr(parent.Err())})
+	}
+	emit := func(event string, data map[string]any) {
+		if observer != nil {
+			observer(event, data)
+		}
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, event, data)
+		}
+	}
+
 	prefix := "gui_download"
 	if op == "upload" || op == "uploadDir" {
 		prefix = "gui_upload"
@@ -2615,14 +2650,18 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 	// 实际传输用的连接由 goroutine 内重新解析获取。
 	info.closeFn()
 
-	taskID := uuid.New().String()
-	ctx, cancel := context.WithCancel(context.Background())
+	taskID := requestedTaskID
+	if taskID == "" {
+		taskID = uuid.NewString()
+	}
+	ctx, cancel := context.WithCancel(parent)
 
 	a.ftMu.Lock()
 	a.ftCancels[taskID] = cancel
 	a.ftMu.Unlock()
 
 	go func() {
+		defer cancel()
 		outcome := "failure"
 		defer func() {
 			if errors.Is(ctx.Err(), context.Canceled) {
@@ -2641,9 +2680,9 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 		taskInfo, err := a.getTransferClientWithRelay(sessionID)
 		if err != nil {
 			slog.Error("ft task failed to re-resolve transfer client", "task", taskID[:8], "error", err)
-			if a.ctx != nil {
+			if a.ctx != nil || observer != nil {
 				te := toTransferErr(err)
-				runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
+				emit("file-transfer-done", map[string]any{
 					"taskId":    taskID,
 					"sessionId": sessionID,
 					"ok":        false,
@@ -2655,9 +2694,15 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 			return
 		}
 		defer taskInfo.closeFn()
+		if check != nil {
+			if err := check(); err != nil {
+				emit("file-transfer-done", map[string]any{"taskId": taskID, "sessionId": sessionID, "ok": false, "message": err.Error()})
+				return
+			}
+		}
 
 		progressFn := func(p filetransfer.Progress) {
-			if a.ctx == nil {
+			if a.ctx == nil && observer == nil {
 				return
 			}
 			payload := map[string]any{
@@ -2674,7 +2719,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 				payload["bytesTotal"] = p.BytesTotal
 				payload["speedBps"] = p.SpeedBps
 			}
-			runtime.EventsEmit(a.ctx, "file-transfer-progress", payload)
+			emit("file-transfer-progress", payload)
 		}
 
 		// 并发限流：同一会话最多 maxConcurrentTransfersPerSession 个传输同时执行，
@@ -2695,8 +2740,8 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 		if !acquired {
 			a.releaseFTLimiter(sessionID, lim, false)
 			slog.Info("ft task cancelled while queued", "task", taskID[:8])
-			if a.ctx != nil {
-				runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
+			if a.ctx != nil || observer != nil {
+				emit("file-transfer-done", map[string]any{
 					"taskId":    taskID,
 					"sessionId": sessionID,
 					"ok":        false,
@@ -2715,13 +2760,13 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 			if ok {
 				outcome = "success"
 			}
-			if a.ctx == nil {
+			if a.ctx == nil && observer == nil {
 				return
 			}
 			if ok {
 				a.recordCompanion(companion.EventTransferCompleted, "ft:"+taskID)
 			}
-			runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
+			emit("file-transfer-done", map[string]any{
 				"taskId":    taskID,
 				"sessionId": sessionID,
 				"ok":        ok,
@@ -2743,8 +2788,8 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 			relay := a.getRelayTransport(sessionID)
 			if relay == nil {
 				slog.Warn("ft task root-relay transport not ready", "task", taskID[:8])
-				if a.ctx != nil {
-					runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
+				if a.ctx != nil || observer != nil {
+					emit("file-transfer-done", map[string]any{
 						"taskId":    taskID,
 						"sessionId": sessionID,
 						"ok":        false,
@@ -2770,13 +2815,13 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 			if opErr == nil {
 				outcome = "success"
 			}
-			if a.ctx == nil {
+			if a.ctx == nil && observer == nil {
 				return
 			}
 			if opErr != nil {
 				slog.Error("ft task root-relay transfer failed", "task", taskID[:8], "error", opErr)
 				te := toTransferErr(opErr)
-				runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
+				emit("file-transfer-done", map[string]any{
 					"taskId":    taskID,
 					"sessionId": sessionID,
 					"ok":        false,
@@ -2787,7 +2832,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 				return
 			}
 			a.recordCompanion(companion.EventTransferCompleted, "ft:"+taskID)
-			runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
+			emit("file-transfer-done", map[string]any{
 				"taskId":    taskID,
 				"sessionId": sessionID,
 				"ok":        true,
@@ -2816,10 +2861,10 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 			usedTransport = "sftp(login)"
 		}
 
-		if opErr != nil {
+		if opErr != nil && ctx.Err() == nil {
 			te := toTransferErr(opErr)
 			slog.Debug("ft task sftp failed, trying scp fallback", "task", taskID[:8], "code", te.Code)
-			if te != nil && (te.Code == filetransfer.ErrorCodeSFTPNotSupported || te.Code == filetransfer.ErrorCodeUnknown || te.Code == filetransfer.ErrorCodeNetwork) {
+			if te != nil && (te.Code == filetransfer.ErrorCodeSFTPNotSupported || (observer == nil && (te.Code == filetransfer.ErrorCodeUnknown || te.Code == filetransfer.ErrorCodeNetwork))) {
 				scpTr := filetransfer.NewSCPTransport(c)
 				ok, _, checkErr := scpTr.Check(ctx)
 				if checkErr == nil && ok {
@@ -2844,13 +2889,13 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 		if opErr == nil {
 			outcome = "success"
 		}
-		if a.ctx == nil {
+		if a.ctx == nil && observer == nil {
 			return
 		}
 		if opErr != nil {
 			slog.Error("ft task transfer failed", "task", taskID[:8], "transport", usedTransport, "error", opErr)
 			te := toTransferErr(opErr)
-			runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
+			emit("file-transfer-done", map[string]any{
 				"taskId":    taskID,
 				"sessionId": sessionID,
 				"ok":        false,
@@ -2861,7 +2906,7 @@ func (a *App) startFileTransferTask(sessionID, op, localPath, remotePath string)
 			return
 		}
 		a.recordCompanion(companion.EventTransferCompleted, "ft:"+taskID)
-		runtime.EventsEmit(a.ctx, "file-transfer-done", map[string]any{
+		emit("file-transfer-done", map[string]any{
 			"taskId":    taskID,
 			"sessionId": sessionID,
 			"ok":        true,

@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 	"opscopilot/pkg/sshclient"
 )
@@ -58,6 +59,7 @@ func (v *transcript) wait(ctx context.Context, after int, needle string) error {
 }
 
 type labServer struct {
+	files    sftp.Handlers
 	listener net.Listener
 	config   *ssh.ServerConfig
 	mu       sync.Mutex
@@ -108,7 +110,7 @@ func startLabUsing(t *testing.T, shell string, attach func(io.WriteCloser) (*Con
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := &labServer{listener: ln, config: cfg, peers: map[net.Conn]bool{}, helper: os.Getenv("OPSCOPILOT_HANDOFF_FIXTURE"), lib: os.Getenv("OPSCOPILOT_HANDOFF_LIB"), shell: shell, distro: os.Getenv("OPSCOPILOT_HANDOFF_DISTRO")}
+	s := &labServer{files: sftp.InMemHandler(), listener: ln, config: cfg, peers: map[net.Conn]bool{}, helper: os.Getenv("OPSCOPILOT_HANDOFF_FIXTURE"), lib: os.Getenv("OPSCOPILOT_HANDOFF_LIB"), shell: shell, distro: os.Getenv("OPSCOPILOT_HANDOFF_DISTRO")}
 	if s.distro == "" {
 		s.distro = "docker-desktop"
 	}
@@ -215,6 +217,18 @@ func (s *labServer) serve(peer net.Conn) {
 			defer ch.Close()
 			for req := range reqs {
 				switch req.Type {
+				case "subsystem":
+					var request struct{ Name string }
+					_ = ssh.Unmarshal(req.Payload, &request)
+					if os.Getenv("OPSCOPILOT_HANDOFF_FILES") != "1" || request.Name != "sftp" {
+						req.Reply(false, nil)
+						return
+					}
+					req.Reply(true, nil)
+					server := sftp.NewRequestServer(ch, s.files)
+					defer server.Close()
+					_ = server.Serve()
+					return
 				case "pty-req", "window-change", "env":
 					req.Reply(true, nil)
 				case "exec":

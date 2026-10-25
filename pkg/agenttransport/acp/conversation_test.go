@@ -26,6 +26,7 @@ func conversationPeer() {
 	var history []string
 	var pending json.RawMessage
 	ignoreCancel := false
+	modelProfiles := map[string]string{}
 	reply := func(id json.RawMessage, result any) {
 		_ = encoder.Encode(map[string]any{"jsonrpc": "2.0", "id": id, "result": result})
 	}
@@ -36,8 +37,29 @@ func conversationPeer() {
 		}
 		switch message.Method {
 		case "initialize":
-			reply(message.ID, map[string]any{"protocolVersion": 1})
-		case "_profiles/models/write", "_profiles/agents/write":
+			capabilities := map[string]any{"mcpCapabilities": map[string]bool{"http": true}, "_meta": map[string]any{"chrys": ExtensionCapabilities{APIVersion: 1, Methods: managedMethods}}}
+			if os.Getenv("ACP_CONVERSATION_INCOMPATIBLE") == "1" {
+				capabilities = map[string]any{}
+			}
+			reply(message.ID, map[string]any{"protocolVersion": 1, "agentInfo": map[string]string{"name": "fixture", "version": "test"}, "agentCapabilities": capabilities})
+		case "_profiles/models/write":
+			var params struct {
+				Profile map[string]any `json:"profile"`
+			}
+			_ = json.Unmarshal(message.Params, &params)
+			modelProfiles[stringValue(params.Profile["id"])] = stringValue(params.Profile["model_id"])
+			reply(message.ID, map[string]any{})
+		case "session/set_model":
+			var params struct {
+				ModelID string `json:"modelId"`
+			}
+			_ = json.Unmarshal(message.Params, &params)
+			if modelProfiles[params.ModelID] == "reject-switch" {
+				_ = encoder.Encode(map[string]any{"jsonrpc": "2.0", "id": message.ID, "error": map[string]any{"code": -32602, "message": "rejected"}})
+			} else {
+				reply(message.ID, map[string]any{})
+			}
+		case "_profiles/agents/write":
 			reply(message.ID, map[string]any{})
 		case "session/new":
 			reply(message.ID, map[string]any{"sessionId": "conversation-one"})

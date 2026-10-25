@@ -10,6 +10,7 @@ import HighlightRulesModal from './HighlightRulesModal';
 import CommandWhitelistPanel from './CommandWhitelist/CommandWhitelistPanel';
 import FileAccessPanel from './FileAccess/FileAccessPanel';
 import AboutPanel from './AboutPanel';
+import AssistantRuntimePanel from './AssistantRuntimePanel';
 import { ServiceCenterSettings } from '../ServiceCenter/ServiceCenter';
 import { HighlightRule, TerminalConfig } from '../Terminal/highlightTypes';
 import { Theme } from '../appearanceTypes';
@@ -30,6 +31,7 @@ import { TbArrowLeft, TbX } from 'react-icons/tb';
 import { IconButton } from '@opscopilot/shell-terminal/ui';
 
 interface AppConfig {
+    assistant_runtime?: { executable: string; model_source?: string };
     llm: {
         APIKey: string;
         BaseURL: string;
@@ -326,7 +328,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         { id: 'broadcast', label: '多窗口', icon: TbLayoutGrid({}), category: '交互' },
         { id: 'knowledge', label: '知识共享', icon: TbBooks({}), category: '知识' },
         { id: 'sessionshare', label: '会话共享', icon: TbUsers({}), category: '知识', keywords: ['连接共享', '共享会话', 'session share'] },
-        { id: 'aiagent', label: 'AI 接入', icon: TbPlugConnected({}), category: 'AI 接入' },
+        { id: 'aiagent', label: 'AI 接入', icon: TbPlugConnected({}), category: 'AI 接入', keywords: ['iCode', 'Chrys', 'ACP', '运行环境', '程序路径', '握手'] },
         { id: 'whitelist', label: '命令白名单', icon: TbShieldCheck({}), category: 'AI 接入' },
         { id: 'fileaccess', label: '文件访问控制', icon: TbLock({}), category: 'AI 接入' },
         { id: 'experimental', label: '高级选项', icon: TbSettings({}), category: '系统' },
@@ -906,7 +908,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         let message = '';
         let tone: 'warning' | 'accent' = 'accent';
         if (valid.length === 0) {
-            message = '尚未配置 skill 目录，AI Agent 无法调用 OpsCopilot。请填写目录后点击「检测状态」。';
+            message = '尚未配置外部 Agent 的 Skill 目录；需要从其他 AI 工具调用 OpsCopilot 时再配置。';
             tone = 'warning';
         } else if (checked.length === 0) {
             message = `已配置 ${valid.length} 个目录，请点击「检测状态」查看安装情况。`;
@@ -1546,9 +1548,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             case 'aiagent':
                 return (
                     <div style={styles.settingsGroup}>
+                        <AssistantRuntimePanel value={config.assistant_runtime?.executable || ''} disabled={loading}
+                            onChange={executable => setConfig({ ...config, assistant_runtime: { ...config.assistant_runtime, executable } })} />
                         {renderSkillAttentionBanner()}
                         <div style={styles.card}>
-                            <div style={styles.cardTitle}>Skill 安装</div>
+                            <div style={styles.cardTitle}>外部 Agent · Skill 安装</div>
                             <div style={{ ...styles.rowDesc, marginLeft: '0', marginBottom: '10px' }}>
                                 以 Claude Code skill 格式安装到指定目录（opscopilot-ops/ 子目录），
                                 AI Agent 即可调用 OpsCopilot 执行运维操作和故障诊断。

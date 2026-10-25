@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -17,14 +18,33 @@ const catalogFileName = ".catalog.json"
 // BuildCatalog 构建/增量更新目录
 // 遍历 dir 下所有 .md 文件，hash 比对后只重新解析变更文件
 func BuildCatalog(dir string) (*Catalog, error) {
-	existing := loadExistingCatalog(dir)
+	return buildCatalog(dir, true)
+}
+
+// ReadCatalog builds a fresh view with the same parser, without writing an index.
+// This also works for knowledge directories mounted read-only.
+func ReadCatalog(dir string) (*Catalog, error) {
+	return buildCatalog(dir, false)
+}
+
+func buildCatalog(dir string, persist bool) (*Catalog, error) {
+	existing := &Catalog{FileHash: make(map[string]string)}
+	if persist {
+		existing = loadExistingCatalog(dir)
+	}
 
 	currentFiles, err := walkMarkdownFiles(dir)
 	if err != nil {
 		return nil, fmt.Errorf("walk markdown files: %w", err)
 	}
 
-	for relPath, content := range currentFiles {
+	paths := make([]string, 0, len(currentFiles))
+	for relPath := range currentFiles {
+		paths = append(paths, relPath)
+	}
+	sort.Strings(paths)
+	for _, relPath := range paths {
+		content := currentFiles[relPath]
 		hash := md5Hash(content)
 
 		// 未变更 → 跳过
@@ -59,8 +79,10 @@ func BuildCatalog(dir string) (*Catalog, error) {
 	}
 
 	// 持久化
-	if err := saveCatalog(dir, existing); err != nil {
-		return nil, fmt.Errorf("save catalog: %w", err)
+	if persist {
+		if err := saveCatalog(dir, existing); err != nil {
+			return nil, fmt.Errorf("save catalog: %w", err)
+		}
 	}
 
 	return existing, nil
@@ -102,7 +124,7 @@ func walkMarkdownFiles(dir string) (map[string]string, error) {
 			return err
 		}
 		// 跳过目录、非 md 文件、以及 .bak 备份文件
-		if d.IsDir() || strings.HasSuffix(strings.ToLower(d.Name()), ".bak") ||
+		if d.IsDir() || d.Type()&fs.ModeSymlink != 0 || strings.HasSuffix(strings.ToLower(d.Name()), ".bak") ||
 			!strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
 			return nil
 		}

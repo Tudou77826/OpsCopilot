@@ -12,6 +12,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -21,11 +23,31 @@ import (
 
 const jdbcFrameLimit = 64 << 20
 
+const jdbcDirectMemoryEnv = "OPSCOPILOT_JDBC_DIRECT_MEMORY_MB"
+
+// A process-local diagnostic override, never an automatic retry or a global Java
+// setting. Default launches preserve the original JVM automatic direct-memory
+// policy; explicit comparisons retain the existing heap arguments and connection cap.
+func jdbcJVMOptions() ([]string, error) {
+	options := []string{"-Xms16m", "-Xmx96m"}
+	if value := strings.TrimSpace(os.Getenv(jdbcDirectMemoryEnv)); value != "" {
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 16 || n > 1024 {
+			return nil, fmt.Errorf("%s 必须为 16–1024 之间的整数（MiB）；未启动 JDBC 组件", jdbcDirectMemoryEnv)
+		}
+		options = append(options, fmt.Sprintf("-XX:MaxDirectMemorySize=%dm", n))
+	}
+	return append(options, "-Dfile.encoding=UTF-8", "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED"), nil
+}
+
 type jdbcReply struct {
-	ID     uint64          `json:"id"`
-	Data   json.RawMessage `json:"data"`
-	Error  string          `json:"error"`
-	Events []jdbcPhase     `json:"events,omitempty"`
+	ID      uint64           `json:"id"`
+	Data    json.RawMessage  `json:"data"`
+	Error   string           `json:"error"`
+	Fatal   bool             `json:"fatal,omitempty"`
+	Events  []jdbcPhase      `json:"events,omitempty"`
+	Runtime *jdbcRuntimeInfo `json:"runtime,omitempty"`
+	Failure *jdbcFailureInfo `json:"failure,omitempty"`
 }
 
 type jdbcPhase struct {
@@ -33,22 +55,36 @@ type jdbcPhase struct {
 	ElapsedMS int64  `json:"elapsedMS"`
 }
 type jdbcProcess struct {
-	cmd     *exec.Cmd
-	input   io.WriteCloser
-	output  io.ReadCloser
-	write   sync.Mutex
-	mu      sync.Mutex
-	pending map[uint64]chan jdbcReply
-	next    atomic.Uint64
-	done    chan struct{}
-	exited  chan struct{}
-	once    sync.Once
-	release func()
+	cmd          *exec.Cmd
+	input        io.WriteCloser
+	output       io.ReadCloser
+	write        sync.Mutex
+	mu           sync.Mutex
+	pending      map[uint64]chan jdbcReply
+	next         atomic.Uint64
+	done         chan struct{}
+	exited       chan struct{}
+	once         sync.Once
+	release      func()
+	startup      *jdbcStartupDiagnostic
+	exitCode     int
+	exitObserved bool
 }
 
 func (s *Service) startJDBC(ctx context.Context, d JDBCDriver) (*jdbcProcess, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	java, helper, err := s.jdbcRuntime()
 	if err != nil {
+		return nil, err
+	}
+	recordJDBCFiles(ctx, java, helper)
+	options, err := jdbcJVMOptions()
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	s.mu.Lock()
@@ -61,9 +97,26 @@ func (s *Service) startJDBC(ctx context.Context, d JDBCDriver) (*jdbcProcess, er
 	release := func() { s.mu.Lock(); s.jdbcProcesses--; s.mu.Unlock() }
 	// Legacy vendor drivers reflect on public NIO buffer APIs. Export only this
 	// package to the isolated helper; do not open unrelated/private JDK members.
-	cmd := exec.Command(java, "-Xms16m", "-Xmx96m", "-Dfile.encoding=UTF-8",
-		"--add-exports=java.base/sun.nio.ch=ALL-UNNAMED", "-jar", helper)
-	connectiondiag.Event(ctx, "jdbc.runtime.start", "Java程序=%s 辅助程序=%s JVM参数=-Xms16m -Xmx96m -Dfile.encoding=UTF-8 --add-exports=java.base/sun.nio.ch=ALL-UNNAMED；不使用系统Java和额外网络服务", java, helper)
+	cmd := exec.Command(java, append(options, "-jar", helper)...)
+	var memoryOptions []string
+	for _, option := range options {
+		if memoryOptionPattern.MatchString(option) {
+			memoryOptions = append(memoryOptions, option)
+		}
+	}
+	connectiondiag.Fact(ctx, "JVM请求的内存参数", strings.Join(memoryOptions, " "))
+	var optionEnvironment []string
+	for _, name := range []string{"JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS"} {
+		if strings.TrimSpace(os.Getenv(name)) != "" {
+			optionEnvironment = append(optionEnvironment, name)
+		}
+	}
+	presence := "未发现"
+	if len(optionEnvironment) > 0 {
+		presence = strings.Join(optionEnvironment, ", ") + "（仅记录存在，未输出值）"
+	}
+	connectiondiag.Fact(ctx, "宿主JVM参数环境变量", presence)
+	connectiondiag.Event(ctx, "jdbc.runtime.start", "Java程序=%s 辅助程序=%s JVM参数=%s；不使用系统Java和额外网络服务", java, helper, strings.Join(options, " "))
 	hideJDBCWindow(cmd)
 	input, err := cmd.StdinPipe()
 	if err != nil {
@@ -76,7 +129,8 @@ func (s *Service) startJDBC(ctx context.Context, d JDBCDriver) (*jdbcProcess, er
 		release()
 		return nil, err
 	}
-	cmd.Stderr = io.Discard
+	startup := &jdbcStartupDiagnostic{}
+	cmd.Stderr = startup
 	if err = cmd.Start(); err != nil {
 		input.Close()
 		output.Close()
@@ -84,8 +138,16 @@ func (s *Service) startJDBC(ctx context.Context, d JDBCDriver) (*jdbcProcess, er
 		return nil, fmt.Errorf("启动 JDBC 运行组件失败: %w", err)
 	}
 	p := &jdbcProcess{cmd: cmd, input: input, output: output, pending: map[uint64]chan jdbcReply{}, done: make(chan struct{}), exited: make(chan struct{}), release: release}
+	p.startup = startup
 	go p.read()
-	go func() { _ = cmd.Wait(); close(p.exited); p.close() }()
+	go func() {
+		_ = cmd.Wait()
+		p.mu.Lock()
+		p.exitCode, p.exitObserved = cmd.ProcessState.ExitCode(), true
+		p.mu.Unlock()
+		close(p.exited)
+		p.close()
+	}()
 	if err = ctx.Err(); err != nil {
 		p.close()
 		return nil, err
@@ -165,16 +227,24 @@ func (p *jdbcProcess) call(ctx context.Context, request map[string]any, out any)
 	select {
 	case err = <-finished:
 		if err != nil {
-			return fmt.Errorf("JDBC 通道已关闭")
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return p.runtimeFailure(ctx)
 		}
 	case <-ctx.Done():
 		p.close()
 		return ctx.Err()
 	case <-p.done:
-		return fmt.Errorf("JDBC 辅助进程已退出，请重新连接")
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return p.runtimeFailure(ctx)
 	}
 	select {
 	case reply := <-ch:
+		recordJDBCRuntime(ctx, reply.Runtime)
+		recordJDBCFailure(ctx, reply.Failure)
 		if op, _ := request["op"].(string); op == "open" || op == "load" || op == "version" {
 			for _, event := range reply.Events {
 				// Accept only fixed helper phase names; never forward arbitrary driver logs.
@@ -185,6 +255,10 @@ func (p *jdbcProcess) call(ctx context.Context, request map[string]any, out any)
 			}
 		}
 		if reply.Error != "" {
+			if reply.Fatal || strings.Contains(reply.Error, "OutOfMemoryError") {
+				connectiondiag.Event(ctx, "jdbc.memory.failed", "JDBC 运行组件报告内存分配失败；保留原错误并回收该辅助进程，不自动扩大内存或重试")
+				p.close()
+			}
 			return fmt.Errorf("%s", reply.Error)
 		}
 		if out != nil {
@@ -207,7 +281,10 @@ func (p *jdbcProcess) call(ctx context.Context, request map[string]any, out any)
 		p.close()
 		return ctx.Err()
 	case <-p.done:
-		return fmt.Errorf("JDBC 辅助进程已退出，请重新连接")
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return p.runtimeFailure(ctx)
 	}
 }
 
@@ -237,7 +314,7 @@ func validateJDBCResult(r ResultSet) error {
 }
 func (p *jdbcProcess) load(ctx context.Context, root string, d JDBCDriver, out any) error {
 	paths := []string{}
-	for _, j := range d.Jars {
+	for index, j := range d.Jars {
 		path := filepath.Join(root, d.ID, j.Name)
 		f, err := os.Open(path)
 		if err != nil {
@@ -252,6 +329,7 @@ func (p *jdbcProcess) load(ctx context.Context, root string, d JDBCDriver, out a
 		if n > 64<<20 || hex.EncodeToString(hash.Sum(nil)) != j.SHA256 {
 			return fmt.Errorf("JDBC 驱动文件校验失败，请重新导入")
 		}
+		connectiondiag.Fact(ctx, fmt.Sprintf("驱动JAR.%d", index+1), j.Name+" SHA256="+j.SHA256)
 		absolute, err := filepath.Abs(path)
 		if err != nil {
 			return err
@@ -275,6 +353,9 @@ func (p *jdbcProcess) load(ctx context.Context, root string, d JDBCDriver, out a
 		return fmt.Errorf("JDBC 运行组件版本不兼容，请更新组件包")
 	}
 	connectiondiag.Event(ctx, "jdbc.runtime.info", "Java版本=%s 厂商=%s 架构=%s；字段为空表示辅助程序较旧，不据此推断运行环境", handshake.JavaVersion, handshake.JavaVendor, handshake.OSArch)
+	connectiondiag.Fact(ctx, "Java版本", handshake.JavaVersion)
+	connectiondiag.Fact(ctx, "Java厂商", handshake.JavaVendor)
+	connectiondiag.Fact(ctx, "Java架构", handshake.OSArch)
 	if out != nil {
 		return json.Unmarshal(reply, out)
 	}

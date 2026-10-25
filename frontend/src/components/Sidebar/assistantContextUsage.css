@@ -1,0 +1,10 @@
+.ai-composer-model-controls { display:flex; align-items:center; gap:3px; min-width:0; max-width:180px; flex-shrink:1; }
+.ai-context-usage { display:inline-flex; align-items:center; justify-content:center; flex:0 0 26px; width:26px; height:28px; border-radius:6px; color:var(--accent); cursor:default; }
+.ai-context-usage:hover, .ai-context-usage:focus-visible { background:var(--bg-hover); }
+.ai-context-usage:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+.ai-context-track { stroke:var(--border-strong); }
+.ai-context-fill { stroke:currentColor; stroke-linecap:round; }
+.ai-context-usage.is-warning { color:var(--warning); }
+.ai-context-usage.is-high { color:var(--danger); }
+.ai-context-usage.is-unknown { color:var(--text-muted); }
+.ai-context-unknown { stroke:currentColor; stroke-width:1.5; stroke-linecap:round; }

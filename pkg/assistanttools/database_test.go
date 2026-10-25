@@ -91,6 +91,21 @@ func TestDatabaseWritesWaitForExactApprovalAndKeepOriginalOnRefusal(t *testing.T
 			}
 			err = <-done
 			snapshot, _ = service.Snapshot(w.ID)
+			if answer != "stop" {
+				var receipt assistantcontrol.Operation
+				for _, message := range c.Snapshot().Messages {
+					if message.Operation.ItemID == snapshot.Blocks[0].ID {
+						receipt = message.Operation
+					}
+				}
+				want := "completed"
+				if answer == "reject" {
+					want = "not_executed"
+				}
+				if receipt.Status != want {
+					t.Fatal("wrong SQL receipt", receipt)
+				}
+			}
 			if answer == "allow" {
 				if err != nil || db.queries.Load() != 1 {
 					t.Fatal(err, db.queries.Load())

@@ -25,6 +25,8 @@ export interface AssistantDatabaseWorkspace {
   connected: boolean;
   dismissed: boolean;
   revision: number;
+  revealBlock?: string;
+  revealNonce?: string;
 }
 export interface DatabaseWorkspaceUpdate {
   revision: number;

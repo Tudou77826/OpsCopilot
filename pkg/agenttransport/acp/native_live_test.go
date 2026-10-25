@@ -47,6 +47,9 @@ func TestLiveChrysNativeSkillRunsAndRefreshesWithoutLosingConversation(t *testin
 			w.WriteHeader(400)
 			return
 		}
+		if serveReviewFixture(w, request) {
+			return
+		}
 		step := calls.Add(1)
 		tool := ""
 		args := map[string]any{}
@@ -112,6 +115,15 @@ func TestLiveChrysNativeSkillRunsAndRefreshesWithoutLosingConversation(t *testin
 		t.Fatal(err)
 	}
 	first.Finish("completed", "")
+	visibleExecution := false
+	for _, message := range first.Snapshot().Messages {
+		if message.Operation.Kind == "local" && strings.Contains(message.Operation.Result, "NATIVE_PYTHON_RESULT") {
+			visibleExecution = true
+		}
+	}
+	if !visibleExecution {
+		t.Fatal("native script output missing from display feed", first.Snapshot().Messages)
+	}
 	data, err := os.ReadFile(marker)
 	if err != nil || string(data) != "EXECUTED" || approvals.Load() != 1 {
 		t.Fatal("native execution/approval missing", string(data), err, approvals.Load())

@@ -42,9 +42,9 @@ Chrys 的问题支持单选、多选和补充文本。提问和命令审批不�
 
 停止先取消本轮工具权限，再发送 `session/cancel`，等待 Chrys 结束本轮。正常取消保留 Session，下一条消息可以接着讨论。超过三秒未完成取消、通信中断或异常结束时，宿主关闭进程并将对话标记为不可继续；后续明确要求新建对话，不自动重建一个丢失上下文的会话，也不自动重试未知结果的命令。
 
-“新建对话”同时关闭旧 Session 所在进程、清理其临时目录并重置后端状态，成功后才清空页面消息。执行和取消清理尚未完成时拒绝重置；失败保留原页面。模型配置发生变化时，也要求新建对话后再使用新配置，避免静默切换模型或上下文。应用正常退出关闭保留的助手进程。
+“新建对话”关闭旧 Session 所在进程、清理临时目录并重置后端状态，成功后才清空页面消息。执行和取消清理尚未完成时拒绝重置；失败保留原页面。输入框支持从 iCode 已配置模型中显式切换，保留同一会话；外部模型配置变化在新建对话或重新选择后读取，避免静默切换模型或上下文。应用正常退出关闭保留的助手进程。
 
-本版仅保留当前应用进程内的对话，没有跨应用重启的历史恢复或对话列表。关闭侧栏不会结束对话。强制刷新页面会丢失前端历史和待发送队列，不恢复未发送的操作；后端不会因此自动清空模型上下文，可通过新建对话明确重置。
+当前对话及模型选择保存到本地，刷新页面或重启程序可恢复消息；不提供多会话列表。重启后以新的隔离运行组件参考近期可见历史，不恢复隐藏工具上下文，界面说明恢复范围。未结束的任务标为中断，队列、审批、占用和旧连接均不恢复；只有新的用户消息才会触发助手。关闭侧栏不会结束对话。保存边界与故障处理见 [iCode 运行组件说明](assistant-icode-runtime.md)。
 
 助手始终停靠右侧，标题、创建对话和关闭操作合并为一行。待发消息、编辑区与发送工具栏共用一个输入面板；停止位于运行状态旁。回车将补充消息加入队列，Shift + Enter 换行，输入法确认候选词不发送。未提交的草稿保留。输入面板底部显示下一条消息使用的终端候选；当前任务使用不同终端时，在运行状态旁补充其目标。状态提示仅根据宿主已知的启动、处理、输出和待答状态显示，不推断具体命令正在执行。上翻阅读历史后，新输出不强制滚动，可通过“回到最新”恢复跟随。审批默认展示执行位置、完整命令、宿主判断和确认原因，模型补充目的与其他详情按需展开；确认和拒绝仍作用于原请求。
 
@@ -132,7 +132,7 @@ go test . -run '^Test(Terminal(Lifecycle|Handoff|OutputGate|Access)|Assistant|Wo
 go vet ./pkg/assistantskills ./pkg/workspace ./pkg/session ./pkg/assistantcontrol ./pkg/assistanttools ./pkg/agenttransport/... ./pkg/terminalcontrol
 ```
 
-真实 Chrys 测试需显式设置 `OPSCOPILOT_CHRYS_TEST_EXE`，执行 `TestLiveChrysManagedTools` 或 `TestLiveChrysConversationContinuity`。页面联调通过 `e2e/harness/terminal-handoff.mjs` 的 `--chrys=<绝对路径>` 启用本地模拟模型；不提供时保留原固定场景测试。
+运行组件安装、发现顺序和 ACP 接口要求见 [iCode 运行组件](assistant-icode-runtime.md)。真实运行组件测试需显式设置 `OPSCOPILOT_CHRYS_TEST_EXE`，执行 `TestLiveChrysManagedTools` 或 `TestLiveChrysConversationContinuity`。页面联调通过 `e2e/harness/terminal-handoff.mjs` 的 `--icode=<绝对路径>` 启用本地模拟模型；`--chrys=` 参数保留兼容，不提供时保留原固定场景测试。
 
 ### 真实模型联调
 

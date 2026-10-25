@@ -32,7 +32,13 @@ func (d *DatabaseTools) Close() {
 	}
 	d.lease = nil
 }
-func (d *DatabaseTools) Call(ctx context.Context, name, argument string) (any, error) {
+func (d *DatabaseTools) Call(ctx context.Context, name, argument string) (value any, callErr error) {
+	recorded := false
+	defer func() {
+		if callErr != nil && !recorded && !hasCallReceipt(ctx) {
+			d.Turn.ObserveOperation("database-error-"+fmt.Sprint(len(d.Turn.Snapshot().Messages)), "数据库操作未完成", assistantcontrol.Operation{Kind: "database", Status: "failed", Stage: databaseStage(name), Outcome: "此步骤未完成；此前已完成的操作仍保留。", Next: "展开诊断详情核对原因，再决定下一步。", Detail: callErr.Error()})
+		}
+	}()
 	d.Turn.SetActivity("database")
 	defer d.Turn.SetActivity("")
 	var in mcp.DatabaseArgs
@@ -67,6 +73,7 @@ func (d *DatabaseTools) Call(ctx context.Context, name, argument string) (any, e
 				if err == nil {
 					d.current = w.ID
 					err = d.Turn.ChangeTarget(assistantcontrol.Target{TabID: w.ID, ConnectionID: w.Session.ID})
+					d.Turn.ObserveOperation("database-"+w.ID, "数据库页签已打开 · "+w.Profile.Name, assistantcontrol.Operation{Kind: "database", WorkspaceID: w.ID, Status: "completed"})
 				}
 				return w, err
 			}
@@ -144,18 +151,70 @@ func (d *DatabaseTools) Call(ctx context.Context, name, argument string) (any, e
 		if err != nil {
 			return nil, err
 		}
+		recorded = true
+		receipt := assistantcontrol.Operation{Kind: "database", WorkspaceID: w.ID, ItemID: b.ID, Status: "not_executed", Stage: "SQL 执行", Outcome: "SQL 原文已保留，尚未提交数据库。"}
+		receipt.Action, receipt.Location = in.SQL, w.Profile.Name
+		d.Turn.ObserveOperation(b.ID, "SQL 尚未执行", receipt)
 		if !read {
 			d.Service.SetBlock(w.ID, b.ID, "awaiting_approval", dbworkspace.QueryResult{}, "")
 			if err = d.confirm(lease, "确认这一次数据库操作", reason, w.Profile.Name+" / "+in.Database, in.SQL); err != nil {
 				d.Service.SetBlock(w.ID, b.ID, "not_executed", dbworkspace.QueryResult{}, "未获得本次批准")
 				d.deniedSQL[refusalKey] = true
+				receipt.Next = "需要执行时，请重新发起并明确批准。"
+				d.Turn.ObserveOperation(b.ID, "SQL 未获批准，未执行", receipt)
 				d.Close()
 				return nil, err
 			}
 		}
+		receipt.Status, receipt.Outcome = "running", "正在准备或执行 SQL，尚未确认最终结果。"
+		d.Turn.ObserveOperation(b.ID, "SQL 处理中", receipt)
 		result, err := d.Service.Execute(lease, w.ID, d.Turn.ID(), b, in.Database)
+		// Preserve the database's observed outcome even when final audit fails.
+		observed, _ := d.Service.Snapshot(w.ID)
+		for _, block := range observed.Blocks {
+			if block.ID == b.ID {
+				receipt.Status = block.Status
+				receipt.Detail = block.Error
+				break
+			}
+		}
+		title := "SQL 执行完成"
+		switch receipt.Status {
+		case "completed":
+			receipt.Outcome = "已收到数据库执行结果，SQL 原文和结果保留在页签中。"
+		case "preparing", "not_executed", "awaiting_approval":
+			title, receipt.Status, receipt.Outcome = "SQL 未提交", "not_executed", "准备阶段未完成，SQL 未提交；原文已保留。"
+			receipt.Next = "查看诊断详情后再决定是否重新执行。"
+		default:
+			title = "SQL 执行未完成"
+			receipt.Outcome = "已进入数据库执行阶段；未确认整条语句成功，也不能推定所有操作均未生效。"
+			receipt.Next = "先核对 SQL 结果与事务状态，再决定是否重试。"
+		}
+		if err != nil {
+			receipt.Detail = err.Error()
+			if receipt.Status == "completed" {
+				title = "SQL 已执行，结果记录异常"
+				receipt.Status = "warning"
+				receipt.Next = "先核对页签中的结果，不要直接重复执行。"
+			}
+		}
+		if result.Error != "" {
+			if receipt.Detail == "" {
+				receipt.Detail = result.Error
+			} else if receipt.Detail != result.Error {
+				receipt.Detail += "\n" + result.Error
+			}
+		}
+		receipt.Result = databaseResultPreview(result)
+		if in.Purpose != "" {
+			title = in.Purpose
+		}
+		d.Turn.ObserveOperation(b.ID, title, receipt)
 		if err != nil {
 			status := "failed"
+			if receipt.Status == "not_executed" {
+				status = "not_executed"
+			}
 			if lease.Err() != nil || result.Cancelled {
 				status = "cancelled"
 			}
@@ -181,6 +240,21 @@ func (d *DatabaseTools) Call(ctx context.Context, name, argument string) (any, e
 		return map[string]bool{"closed": err == nil}, err
 	}
 	return nil, errors.New("未知数据库工具")
+}
+func databaseStage(name string) string {
+	switch name {
+	case "database_open":
+		return "建立数据库连接 / 呈现页签"
+	case "database_create":
+		return "保存连接配置"
+	case "database_take":
+		return "接管数据库页签"
+	case "database_execute":
+		return "准备 SQL"
+	case "database_close":
+		return "关闭数据库连接"
+	}
+	return "读取数据库信息"
 }
 func (d *DatabaseTools) confirm(ctx context.Context, title, description, location, sql string) error {
 	answer, err := d.Turn.Request(ctx, assistantcontrol.Prompt{Kind: "approval", Title: title, Description: description, Command: sql, Details: []assistantcontrol.Detail{{Label: "执行位置", Value: location}}, Choices: []assistantcontrol.Choice{{ID: "reject", Label: "取消"}, {ID: "allow", Label: "允许本次"}}, Expires: time.Now().Add(5 * time.Minute)})

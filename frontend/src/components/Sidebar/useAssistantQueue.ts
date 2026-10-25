@@ -18,6 +18,7 @@ export function useAssistantQueue(runtime: AssistantRuntime) {
     const [restoring, setRestoring] = useState(!!runtime.restoreConversation);
     const [restoreError, setRestoreError] = useState('');
     const [truncated, setTruncated] = useState(false);
+    const [recoveryNote, setRecoveryNote] = useState('');
     const restoreBlocked = useRef(!!runtime.restoreConversation);
     const restoreGeneration = useRef(0);
     const [current, setCurrent] = useState<QueuedAssistantMessage>();
@@ -46,6 +47,7 @@ export function useAssistantQueue(runtime: AssistantRuntime) {
             if (!mounted.current || generation !== restoreGeneration.current) return;
             setMessages(snapshot.messages);
             setTruncated(snapshot.truncated);
+            setRecoveryNote(snapshot.recoveryNote || '');
             restoreBlocked.current = false;
         } catch (error) {
             if (mounted.current && generation === restoreGeneration.current)
@@ -67,18 +69,18 @@ export function useAssistantQueue(runtime: AssistantRuntime) {
                 const message = queue.current.shift()!;
                 publishQueue();
                 setCurrent(message);
-                const submitted: AssistantMessage = { id: `local-${++sequence.current}`, role: 'user', content: message.question };
+                const submitted: AssistantMessage = { id: `local-${++sequence.current}`, role: 'user', content: message.question, time:new Date().toISOString() };
                 setMessages(previous => [...previous, submitted]);
                 try {
                     const result = await turn.ask(message.question, message.target);
                     if (!mounted.current) return;
-                    const answer: AssistantMessage = { id: `local-${++sequence.current}`, role: 'ai', content: result.output, phase: result.phase };
-                    setMessages(previous => [...previous, answer]);
+                    const answer: AssistantMessage = { id: `local-${++sequence.current}`, role: 'ai', content: result.output, phase: result.phase, time:new Date().toISOString() };
+                    setMessages(previous => [...previous, ...(result.messages?.length ? result.messages : [answer])]);
                     // Manual takeover and timeout must not dispatch the next message.
                     if (result.phase !== 'completed') pause(true);
                 } catch (error) {
                     if (!mounted.current) return;
-                    const failure: AssistantMessage = { id: `local-${++sequence.current}`, role: 'ai', content: `请求未完成：${error instanceof Error ? error.message : String(error)}`, phase: 'failed' };
+                    const failure: AssistantMessage = { id: `local-${++sequence.current}`, role: 'ai', kind: 'notice', content: `请求未完成：${error instanceof Error ? error.message : String(error)}`, phase: 'failed' };
                     setMessages(previous => [...previous, failure]);
                     pause(true);
                 }
@@ -148,11 +150,12 @@ export function useAssistantQueue(runtime: AssistantRuntime) {
             publishQueue();
             setMessages([]);
             setTruncated(false); setRestoreError(''); restoreBlocked.current = false;
+            setRecoveryNote('');
             pause(false);
         } finally {
             transition.current = false;
             if (mounted.current) setTransitioning(false);
         }
     }
-    return { state: turn.state, respond: turn.respond, current, pending, messages, paused, transitioning, restoring, restoreError, truncated, restore, enqueue, sendNow, remove, resume, stop, newConversation };
+    return { state: turn.state, respond: turn.respond, current, pending, messages, paused, transitioning, restoring, restoreError, truncated, recoveryNote, restore, enqueue, sendNow, remove, resume, stop, newConversation };
 }

@@ -15,9 +15,10 @@ interface Props {
     onStop(state: HandoffState): Promise<void>;
     onRespond?(state: HandoffState, answer: InteractionAnswer): Promise<void>;
     onFocus(): void;
+    experimental?: boolean;
 }
 
-export function TerminalHandoff({ state, transportError, connected, children, onStart, onStop, onRespond, onFocus }: Props) {
+export function TerminalHandoff({ state, transportError, connected, children, onStart, onStop, onRespond, onFocus, experimental = false }: Props) {
     const [expanded, setExpanded] = useState(false);
     const [confirmed, setConfirmed] = useState(false);
     const [scenario, setScenario] = useState('inspect');
@@ -53,11 +54,11 @@ export function TerminalHandoff({ state, transportError, connected, children, on
         try { await onStop(state); requestAnimationFrame(onFocus); }
         catch (reason) { setError(String(reason)); }
     }
-    return <section className="oc-handoff" aria-label="终端与接手测试">
-        {connected && state && <div className="oc-handoff-bar">
+    return <section className="oc-handoff" aria-label="终端">
+        {connected && state && (experimental || state.owned) && <div className="oc-handoff-bar">
             <span className={`oc-handoff-dot${state.owned ? ' is-active' : ''}`} aria-hidden="true" />
             <span className="oc-handoff-summary" role="status">{assistantWork ? (state.owned ? state.message : '当前终端') : state.work?.message || (state.phase === 'idle' ? '当前终端' : state.message)}{state.exitCode !== undefined && state.phase === 'completed' ? ` · 退出码 ${state.exitCode}` : ''}</span>
-            {state.owned || (workActive && !assistantWork) ? <button type="button" onClick={() => void stop()}>停止</button> : <button type="button" disabled={workActive} aria-expanded={expanded} onClick={toggleSetup}>接手测试 <span className="oc-handoff-lab">实验</span></button>}
+            {state.owned || (workActive && !assistantWork) ? <button type="button" onClick={() => void stop()}>停止</button> : experimental && <button type="button" disabled={workActive} aria-expanded={expanded} onClick={toggleSetup}>接手测试 <span className="oc-handoff-lab">实验</span></button>}
         </div>}
         {connected && expanded && !state?.owned && !workActive && <div className="oc-handoff-setup" aria-label="开始接手测试">
             <div className="oc-handoff-setup-heading">沿用当前命令行</div>

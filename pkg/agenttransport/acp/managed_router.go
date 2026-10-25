@@ -18,8 +18,11 @@ type managedBinding struct {
 	cancel context.CancelFunc
 }
 type managedRouter struct {
-	mu      sync.RWMutex
-	current *managedBinding
+	mu           sync.RWMutex
+	current      *managedBinding
+	review       assistantcontrol.Reviewer
+	denyRequests bool
+	observeUsage func(json.RawMessage)
 }
 
 func (r *managedRouter) bind(turn *assistantcontrol.Turn, tools ManagedTools, sessionID string, audit ...func(string, string, json.RawMessage) error) error {
@@ -33,21 +36,28 @@ func (r *managedRouter) bind(turn *assistantcontrol.Turn, tools ManagedTools, se
 	}
 	ctx, cancel := context.WithCancel(turn.Context())
 	b := &managedBinding{ctx: ctx, cancel: cancel, tools: tools}
+	feed := &executionFeed{}
 	b.bridge = &Interactions{Turn: turn, SessionID: sessionID, OnUpdate: func(_ string, raw json.RawMessage) {
+		if ctx.Err() == nil && r.observeUsage != nil {
+			r.observeUsage(raw)
+		}
 		var params struct {
 			Update struct {
-				Type    string `json:"sessionUpdate"`
-				Status  string `json:"status"`
-				Content struct {
+				Type      string `json:"sessionUpdate"`
+				Status    string `json:"status"`
+				MessageID string `json:"messageId"`
+				CallID    string `json:"toolCallId"`
+				Content   struct {
 					Type string `json:"type"`
 					Text string `json:"text"`
 				} `json:"content"`
 			} `json:"update"`
 		}
 		if ctx.Err() == nil && json.Unmarshal(raw, &params) == nil && params.Update.Type == "agent_message_chunk" && params.Update.Content.Type == "text" {
-			turn.AppendText(params.Update.Content.Text)
+			turn.AppendSegment(params.Update.Content.Text, params.Update.MessageID)
 		}
 		if ctx.Err() == nil && (params.Update.Type == "tool_call" || params.Update.Type == "tool_call_update") {
+			turn.TrackTool(params.Update.CallID, params.Update.Status)
 			if params.Update.Status == "completed" || params.Update.Status == "failed" {
 				turn.SetActivity("")
 			} else {
@@ -56,10 +66,14 @@ func (r *managedRouter) bind(turn *assistantcontrol.Turn, tools ManagedTools, se
 			if b.bridge.Audit != nil {
 				if err := b.bridge.Audit("tool", params.Update.Status, raw); err != nil {
 					turn.Finish("failed", "本机操作审计保存失败，助手已停止")
+					return
 				}
 			}
+			feed.observe(turn, raw)
 		}
 	}}
+	b.bridge.Review = r.review
+	b.bridge.DenyRequests = r.denyRequests
 	if len(audit) > 0 {
 		b.bridge.Audit = audit[0]
 	}

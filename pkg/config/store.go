@@ -15,20 +15,26 @@ import (
 )
 
 type AppConfig struct {
-	LLM                  LLMConfig          `json:"llm"`
-	Log                  LogConfig          `json:"log"`
-	Docs                 DocsConfig         `json:"docs"`
-	Scripts              ScriptsConfig      `json:"scripts"`
-	CLI                  CLIConfig          `json:"cli"`
-	QuickCommands        []QuickCommand     `json:"quick_commands"`
-	CompletionDelay      int                `json:"completion_delay"`
-	CommandQueryShortcut string             `json:"command_query_shortcut"`
-	Experimental         ExperimentalConfig `json:"experimental"`
-	Terminal             TerminalConfig     `json:"terminal"`
-	Appearance           AppearanceConfig   `json:"appearance"`
-	HighlightRules       []HighlightRule    `json:"highlight_rules"`
-	PatchStore           PatchStoreConfig   `json:"patch_store"`
-	SessionShare         SessionShareConfig `json:"session_share"`
+	LLM                  LLMConfig              `json:"llm"`
+	AssistantRuntime     AssistantRuntimeConfig `json:"assistant_runtime"`
+	Log                  LogConfig              `json:"log"`
+	Docs                 DocsConfig             `json:"docs"`
+	Scripts              ScriptsConfig          `json:"scripts"`
+	CLI                  CLIConfig              `json:"cli"`
+	QuickCommands        []QuickCommand         `json:"quick_commands"`
+	CompletionDelay      int                    `json:"completion_delay"`
+	CommandQueryShortcut string                 `json:"command_query_shortcut"`
+	Experimental         ExperimentalConfig     `json:"experimental"`
+	Terminal             TerminalConfig         `json:"terminal"`
+	Appearance           AppearanceConfig       `json:"appearance"`
+	HighlightRules       []HighlightRule        `json:"highlight_rules"`
+	PatchStore           PatchStoreConfig       `json:"patch_store"`
+	SessionShare         SessionShareConfig     `json:"session_share"`
+}
+
+type AssistantRuntimeConfig struct {
+	Executable  string `json:"executable"`
+	ModelSource string `json:"model_source,omitempty"`
 }
 
 const DefaultCLIExecTimeoutSec = 120
@@ -438,22 +444,24 @@ func (m *Manager) migrateQuickCommands() error {
 func (m *Manager) Save() error {
 	// 保存主配置（不包含 prompts 和 quick_commands）
 	type ConfigForSave struct {
-		LLM                  LLMConfig          `json:"llm"`
-		Log                  LogConfig          `json:"log"`
-		Docs                 DocsConfig         `json:"docs"`
-		Scripts              ScriptsConfig      `json:"scripts"`
-		CLI                  CLIConfig          `json:"cli"`
-		CompletionDelay      int                `json:"completion_delay"`
-		CommandQueryShortcut string             `json:"command_query_shortcut"`
-		Experimental         ExperimentalConfig `json:"experimental"`
-		Terminal             TerminalConfig     `json:"terminal"`
-		Appearance           AppearanceConfig   `json:"appearance"`
-		PatchStore           PatchStoreConfig   `json:"patch_store"`
-		SessionShare         SessionShareConfig `json:"session_share"`
+		LLM                  LLMConfig              `json:"llm"`
+		AssistantRuntime     AssistantRuntimeConfig `json:"assistant_runtime"`
+		Log                  LogConfig              `json:"log"`
+		Docs                 DocsConfig             `json:"docs"`
+		Scripts              ScriptsConfig          `json:"scripts"`
+		CLI                  CLIConfig              `json:"cli"`
+		CompletionDelay      int                    `json:"completion_delay"`
+		CommandQueryShortcut string                 `json:"command_query_shortcut"`
+		Experimental         ExperimentalConfig     `json:"experimental"`
+		Terminal             TerminalConfig         `json:"terminal"`
+		Appearance           AppearanceConfig       `json:"appearance"`
+		PatchStore           PatchStoreConfig       `json:"patch_store"`
+		SessionShare         SessionShareConfig     `json:"session_share"`
 	}
 
 	cfg := ConfigForSave{
 		LLM:                  m.Config.LLM,
+		AssistantRuntime:     m.Config.AssistantRuntime,
 		Log:                  m.Config.Log,
 		Docs:                 m.Config.Docs,
 		Scripts:              m.Config.Scripts,
@@ -743,6 +751,13 @@ func (m *Manager) SetLLMConfig(apiKey, baseURL, model string) {
 
 func (m *Manager) SetLogDir(dir string) {
 	m.Config.Log.Dir = dir
+}
+
+// QuickCommandsSnapshot returns an independent view under the mutation lock.
+func (m *Manager) QuickCommandsSnapshot() []QuickCommand {
+	m.quickCmdMu.Lock()
+	defer m.quickCmdMu.Unlock()
+	return append([]QuickCommand(nil), m.Config.QuickCommands...)
 }
 
 // AddQuickCommand 追加一条快捷命令并立即写盘。

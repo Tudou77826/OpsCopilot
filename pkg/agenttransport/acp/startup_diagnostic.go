@@ -1,6 +1,7 @@
 package acp
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"sync"
@@ -16,6 +17,14 @@ type startupDiagnostic struct {
 	line      []byte
 	oversized bool
 	module    string
+	exited    bool
+	exitCode  int
+}
+
+func (d *startupDiagnostic) markExited(code int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.exited, d.exitCode = true, code
 }
 
 func (d *startupDiagnostic) parseLine() {
@@ -52,7 +61,10 @@ func (d *startupDiagnostic) summary() string {
 	defer d.mu.Unlock()
 	d.parseLine()
 	if d.module == "" {
+		if d.exited {
+			return fmt.Sprintf("iCode 在 ACP 握手前退出（退出码 %d），请到「AI 接入 → AI 接入」检测运行环境。", d.exitCode)
+		}
 		return ""
 	}
-	return "Chrys 运行环境缺少 Python 模块「" + d.module + "」，尚未进入 ACP 握手。请补齐 Chrys 安装依赖。"
+	return "iCode 运行环境缺少 Python 模块「" + d.module + "」，尚未进入 ACP 握手。请补齐 iCode 安装依赖。"
 }

@@ -27,17 +27,19 @@ type Block struct {
 	Error   string                  `json:"error,omitempty"`
 }
 type Workspace struct {
-	ID        string                  `json:"id"`
-	Profile   dbworkspace.Profile     `json:"profile"`
-	Session   dbworkspace.SessionInfo `json:"session"`
-	Schemas   []string                `json:"schemas"`
-	SQL       string                  `json:"sql"`
-	Blocks    []Block                 `json:"blocks"`
-	OwnerTurn string                  `json:"ownerTurn"`
-	Pending   string                  `json:"pending"`
-	Connected bool                    `json:"connected"`
-	Dismissed bool                    `json:"dismissed"`
-	Revision  uint64                  `json:"revision"`
+	ID          string                  `json:"id"`
+	Profile     dbworkspace.Profile     `json:"profile"`
+	Session     dbworkspace.SessionInfo `json:"session"`
+	Schemas     []string                `json:"schemas"`
+	SQL         string                  `json:"sql"`
+	Blocks      []Block                 `json:"blocks"`
+	OwnerTurn   string                  `json:"ownerTurn"`
+	Pending     string                  `json:"pending"`
+	Connected   bool                    `json:"connected"`
+	Dismissed   bool                    `json:"dismissed"`
+	Revision    uint64                  `json:"revision"`
+	RevealBlock string                  `json:"revealBlock,omitempty"`
+	RevealNonce string                  `json:"revealNonce,omitempty"`
 }
 type Event struct {
 	At          time.Time `json:"at"`
@@ -137,6 +139,37 @@ func (s *Service) Snapshot(id string) (Workspace, error) {
 		return Workspace{}, errors.New("数据库页签不存在")
 	}
 	return clone(r.Workspace), nil
+}
+
+// Reveal changes presentation only, including disconnected retained results.
+func (s *Service) Reveal(ctx context.Context, id, blockID string) error {
+	s.mu.Lock()
+	r := s.items[id]
+	if r == nil || r.Dismissed {
+		s.mu.Unlock()
+		return errors.New("原数据库页签已关闭或未恢复；不会重新连接或执行 SQL")
+	}
+	if r.Pending != "" {
+		s.mu.Unlock()
+		return errors.New("数据库页签正在呈现，请稍后再定位")
+	}
+	if blockID != "" {
+		found := false
+		for _, block := range r.Blocks {
+			if block.ID == blockID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			s.mu.Unlock()
+			return errors.New("原 SQL 记录已不存在")
+		}
+	}
+	r.RevealBlock, r.RevealNonce = blockID, uuid.NewString()
+	s.changed(r)
+	s.mu.Unlock()
+	return s.Present(ctx, id)
 }
 func (s *Service) Open(ctx context.Context, profile dbworkspace.Profile) (Workspace, error) {
 	info, err := s.DB.ConnectRevision(ctx, profile.ID, profile.Revision)

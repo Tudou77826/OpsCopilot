@@ -1,12 +1,18 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { CompanionEntry, CompanionAssistantHeader } from './CompanionEntry';
 import type { CompanionHost, CompanionSnapshot } from '../../companion/types';
 import type { SocialHost } from '../../companion/socialHost';
 
-beforeEach(() => vi.stubGlobal('matchMedia', () => ({matches:false,addEventListener:vi.fn(),removeEventListener:vi.fn()})));
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+const presentationKey = 'opscopilot.companion.presentation.v1';
+beforeEach(() => {
+ localStorage.clear();
+ // Existing scene/medal cases start from the user's saved expanded preference.
+ localStorage.setItem(presentationKey, JSON.stringify({expanded:true,height:180}));
+ vi.stubGlobal('matchMedia', () => ({matches:false,addEventListener:vi.fn(),removeEventListener:vi.fn()}));
+});
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); localStorage.clear(); });
 const snapshot: CompanionSnapshot = {schemaVersion:1,ruleVersion:1,revision:1,level:3,levelXP:0,levelXPRequired:10,todayXP:0,dailyXPMax:12,hatchCost:50,canHatch:false,pet:{id:'pet',speciesId:'lumen',name:'灯灯',paletteId:'amber',xp:20,adoptedAt:'2026-10-10T00:00:00Z'}};
 function host(): CompanionHost { return {snapshot:vi.fn(async()=>snapshot),hatch:vi.fn(),rename:vi.fn()}; }
 function social(): SocialHost {
@@ -21,11 +27,11 @@ it('shows the partner, real medal tiers and growth together, and stops medal rea
  render(<CompanionAssistantHeader host={runtime} socialHost={ledger} enabled visible onManage={manage}/>);
  await screen.findByRole('button',{name:'脚本匠人 · 铜章 · 3个'});
  expect(screen.queryByText('持续实践者')).toBeNull();
- expect(screen.getByRole('button',{name:'脚本匠人 · 铜章 · 3个'})).toHaveAttribute('aria-describedby',screen.getByRole('tooltip').id);
+ expect(screen.getByRole('button',{name:'脚本匠人 · 铜章 · 3个'})).toHaveAttribute('aria-describedby',screen.getByText('脚本匠人 · 铜章 · 3个').closest('[role="tooltip"]')!.id);
  expect(screen.getByRole('progressbar',{name:'伙伴升级进度'})).toHaveAttribute('max','10');
  expect(document.querySelector('.oc-assistant-companion-scene .oc-assistant-medals')).not.toBeNull();
  expect(screen.getByRole('progressbar',{name:'伙伴升级进度'}).closest('.oc-assistant-companion-identity')).not.toBeNull();
- expect(screen.getByRole('button',{name:'收起伙伴展示'})).toHaveTextContent('');
+ expect(screen.getByRole('button',{name:'收起伙伴展示'})).toHaveTextContent('灯灯');
  expect(screen.getByRole('button',{name:'收起伙伴展示'}).querySelector('svg')).not.toBeNull();
  fireEvent.click(screen.getByRole('button',{name:'养成与奖章'})); expect(manage).toHaveBeenCalledOnce();
  expect(ledger.sync).not.toHaveBeenCalled(); expect(ledger.participation).not.toHaveBeenCalled();
@@ -151,8 +157,106 @@ it('shows an unhatched egg rather than an owned species and links to the acquisi
  vi.mocked(runtime.snapshot).mockResolvedValue({...snapshot,pet:null,level:0,hatchCost:0,canHatch:true});
  render(<CompanionAssistantHeader host={runtime} enabled visible onManage={manage}/>);
  await screen.findByText('尚未开蛋');
- expect(screen.getByRole('img',{name:'伙伴蛋'})).toBeVisible();
+ expect(screen.getAllByRole('img',{name:'伙伴蛋'})).toHaveLength(2);
  expect(document.querySelector('.oc-companion-roaming')).toBeNull();
  fireEvent.click(screen.getByRole('button',{name:'去开蛋'}));
  expect(manage).toHaveBeenCalledOnce();
+});
+
+it('starts collapsed in a single identity toolbar and remembers expansion without mounting the scene', async () => {
+ localStorage.removeItem(presentationKey);
+ const ledger=social(), runtime=host();
+ const view=render(<CompanionAssistantHeader host={runtime} socialHost={ledger} enabled visible onManage={vi.fn()} actions={<button>关闭</button>}/>);
+ await screen.findByText('灯灯');
+ expect(screen.getByRole('button',{name:'展开伙伴展示'})).toHaveAttribute('aria-expanded','false');
+ expect(document.querySelector('.oc-assistant-companion-scene')).toBeNull();
+ expect(ledger.status).not.toHaveBeenCalled();
+ expect(screen.queryByText('伙伴助手')).toBeNull();
+ expect(screen.queryByText('AI 助手')).toBeNull();
+ expect(screen.getByRole('button',{name:'关闭'}).closest('header')).toBe(screen.getByText('灯灯').closest('header'));
+ fireEvent.click(screen.getByRole('button',{name:'展开伙伴展示'}));
+ await screen.findByRole('separator',{name:'调整伙伴场景高度'});
+ expect(ledger.status).toHaveBeenCalledOnce();
+ view.unmount();
+ render(<CompanionAssistantHeader host={runtime} enabled visible onManage={vi.fn()}/>);
+ await screen.findByRole('button',{name:'收起伙伴展示'});
+});
+
+it('keeps only conversation actions when companionship is disabled', () => {
+ const runtime=host();
+ render(<CompanionAssistantHeader host={runtime} enabled={false} visible onManage={vi.fn()} actions={<button>新建对话</button>}/>);
+ expect(screen.getByRole('button',{name:'新建对话'})).toBeVisible();
+ expect(screen.queryByRole('img')).toBeNull();
+ expect(screen.queryByLabelText('伙伴展示')).toBeNull();
+ expect(runtime.snapshot).not.toHaveBeenCalled();
+});
+
+it('supports bounded keyboard resizing, viewport clamping, reset and height restoration', async () => {
+ let parentHeight=800;
+ const callbacks: (()=>void)[]=[];
+ vi.spyOn(HTMLElement.prototype,'clientHeight','get').mockImplementation(()=>parentHeight);
+ vi.stubGlobal('ResizeObserver', class {
+  constructor(callback:()=>void) { callbacks.push(callback); }
+  observe() {} disconnect() {}
+ });
+ const runtime=host();
+ const view=render(<CompanionAssistantHeader host={runtime} enabled visible onManage={vi.fn()}/>);
+ const separator=await screen.findByRole('separator',{name:'调整伙伴场景高度'});
+ expect(separator).toHaveAttribute('aria-valuenow','180');
+ fireEvent.keyDown(separator,{key:'ArrowDown',shiftKey:true});
+ expect(separator).toHaveAttribute('aria-valuenow','220');
+ fireEvent.keyDown(separator,{key:'End'});
+ expect(separator).toHaveAttribute('aria-valuenow','320');
+ parentHeight=600;
+ act(()=>callbacks.forEach(callback=>callback()));
+ expect(separator).toHaveAttribute('aria-valuenow','240');
+ expect(JSON.parse(localStorage.getItem(presentationKey)!).height).toBe(320);
+ parentHeight=800;
+ act(()=>callbacks.forEach(callback=>callback()));
+ expect(separator).toHaveAttribute('aria-valuenow','320');
+ fireEvent.doubleClick(separator);
+ expect(separator).toHaveAttribute('aria-valuenow','180');
+ fireEvent.keyDown(separator,{key:'ArrowUp'});
+ view.unmount();
+ render(<CompanionAssistantHeader host={runtime} enabled visible onManage={vi.fn()}/>);
+ expect(await screen.findByRole('separator')).toHaveAttribute('aria-valuenow','170');
+ fireEvent.keyDown(screen.getByRole('separator'),{key:'Home'});
+ expect(screen.getByRole('separator')).toHaveAttribute('aria-valuenow','120');
+});
+
+it('captures the drag, saves on release and cancels interrupted drags without changing the saved height', async () => {
+ vi.stubGlobal('PointerEvent',class extends MouseEvent {
+  pointerId:number; isPrimary:boolean;
+  constructor(type:string,init:PointerEventInit) { super(type,init); this.pointerId=init.pointerId??1;this.isPrimary=init.isPrimary??true; }
+ });
+ render(<CompanionAssistantHeader host={host()} enabled visible onManage={vi.fn()}/>);
+ const separator=await screen.findByRole('separator');
+ separator.setPointerCapture=vi.fn();
+ separator.hasPointerCapture=vi.fn(()=>true);
+ separator.releasePointerCapture=vi.fn();
+ fireEvent.pointerDown(separator,{pointerId:1,button:0,clientY:200});
+ fireEvent.pointerMove(separator,{pointerId:1,clientY:250});
+ expect(separator.setPointerCapture).toHaveBeenCalledWith(1);
+ expect(separator).toHaveAttribute('aria-valuenow','230');
+ expect(JSON.parse(localStorage.getItem(presentationKey)!).height).toBe(180);
+ fireEvent.pointerUp(separator,{pointerId:1,clientY:250});
+ expect(JSON.parse(localStorage.getItem(presentationKey)!).height).toBe(230);
+ fireEvent.pointerDown(separator,{pointerId:2,button:0,clientY:250});
+ fireEvent.pointerMove(separator,{pointerId:2,clientY:150});
+ fireEvent.pointerCancel(separator,{pointerId:2});
+ expect(separator).toHaveAttribute('aria-valuenow','230');
+ expect(JSON.parse(localStorage.getItem(presentationKey)!).height).toBe(230);
+ expect(separator.releasePointerCapture).toHaveBeenCalledWith(2);
+});
+
+it('handles corrupt or unavailable presentation storage without losing the conversation controls', async () => {
+ localStorage.setItem(presentationKey,'not json');
+ const view=render(<CompanionAssistantHeader host={host()} enabled visible onManage={vi.fn()}/>);
+ await screen.findByRole('button',{name:'展开伙伴展示'});
+ view.unmount();
+ vi.spyOn(Storage.prototype,'getItem').mockImplementation(()=>{throw new Error('storage unavailable');});
+ vi.spyOn(Storage.prototype,'setItem').mockImplementation(()=>{throw new Error('storage unavailable');});
+ render(<CompanionAssistantHeader host={host()} enabled visible onManage={vi.fn()}/>);
+ fireEvent.click(await screen.findByRole('button',{name:'展开伙伴展示'}));
+ expect(await screen.findByRole('separator')).toHaveAttribute('aria-valuenow','180');
 });

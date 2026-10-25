@@ -1,6 +1,7 @@
 package sessionshare
 
 import (
+	"encoding/base64"
 	"strings"
 	"testing"
 )
@@ -56,8 +57,14 @@ func TestDecryptTampered(t *testing.T) {
 		t.Fatalf("EncryptSecrets error: %v", err)
 	}
 
-	// 篡改密文末尾一个字符
-	tampered := enc[:len(enc)-2] + "A="
+	// Change authenticated bytes, not padding bits (or an already identical
+	// Base64 character), so every run actually tampers with the ciphertext.
+	raw, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(enc, encPrefixV1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw[len(raw)-1] ^= 1
+	tampered := encPrefixV1 + base64.StdEncoding.EncodeToString(raw)
 	if _, err := DecryptSecrets(tampered, "k"); err == nil {
 		t.Fatal("expected error with tampered ciphertext")
 	}

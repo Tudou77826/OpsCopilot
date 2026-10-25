@@ -99,6 +99,7 @@ func (s *Service) ConnectRevision(ctx context.Context, id string, revision int) 
 		return SessionInfo{}, err
 	}
 	connectiondiag.Event(ctx, "database.version.ok", "版本=%s", info.Version)
+	connectiondiag.Fact(ctx, "数据库版本", info.Version)
 	lifetime, stop := context.WithCancel(context.Background())
 	v := &session{info: info, db: db, conn: c, connector: adapter, gate: make(chan struct{}, 1), ctx: lifetime, cancel: stop, cleanup: release}
 	if control, ok := adapter.(QueryCanceller); ok {
@@ -170,6 +171,7 @@ func (s *Service) Test(ctx context.Context, in ProfileInput) (version string, er
 		return "", fmt.Errorf("测试数据库连接失败: %w", err)
 	}
 	connectiondiag.Event(ctx, "database.version.ok", "版本=%s", version)
+	connectiondiag.Fact(ctx, "数据库版本", version)
 	return version, nil
 }
 

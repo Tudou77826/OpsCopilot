@@ -6,6 +6,7 @@ require (
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
+	github.com/joho/godotenv v1.5.1
 	github.com/pkg/sftp v1.13.10
 	github.com/sashabaranov/go-openai v1.41.2
 	github.com/stretchr/testify v1.10.0
@@ -18,7 +19,9 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
-require filippo.io/edwards25519 v1.1.0 // indirect
+require (
+	filippo.io/edwards25519 v1.1.0 // indirect
+)
 
 require (
 	al.essio.dev/pkg/shellescape v1.5.1 // indirect

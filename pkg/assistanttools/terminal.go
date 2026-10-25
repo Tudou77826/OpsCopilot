@@ -35,6 +35,7 @@ type TerminalTools struct {
 	// Observe returns an audited, read-only screen snapshot. It must never
 	// bootstrap a shell or acquire an input lease.
 	Observe     func(context.Context) (terminalcontrol.TerminalContext, error)
+	Review      assistantcontrol.Reviewer
 	mu          sync.Mutex
 	access      *terminalcontrol.Access
 	run         terminalcontrol.ControlledTerminal
@@ -179,6 +180,7 @@ func (b *TerminalTools) CallWithPurpose(ctx context.Context, name, command, purp
 	result, err := b.run.Execute(ctx, terminalcontrol.CommandRequest{Command: command})
 	var required *terminalcontrol.ApprovalRequired
 	if !errors.As(err, &required) {
+		b.observeCommand(result, err, command, purpose)
 		if err != nil {
 			_ = b.release()
 		}
@@ -194,7 +196,46 @@ func (b *TerminalTools) CallWithPurpose(ctx context.Context, name, command, purp
 	if node == "" {
 		node = "当前终端"
 	}
-	details := []assistantcontrol.Detail{{Label: "快速判定", Value: review.Assessment.Category}, {Label: "执行影响", Value: review.Assessment.Impact}, {Label: "确认原因", Value: review.Assessment.Reason}, {Label: "执行位置", Value: fmt.Sprintf("%s · UID %d · %s", node, review.Prompt.UID, review.Prompt.Directory)}}
+	var verdict assistantcontrol.ReviewVerdict
+	if b.Review != nil {
+		b.Turn.SetActivity("reviewing")
+		verdict = b.Review(ctx, assistantcontrol.ReviewInput{Location: fmt.Sprintf("%s · UID %d · %s", node, review.Prompt.UID, review.Prompt.Directory), Tool: "remote_shell", Action: review.Command})
+		if ctx.Err() != nil || b.Turn.Context().Err() != nil {
+			_ = b.release()
+			return nil, assistantcontrol.ErrStale
+		}
+		if review.Assessment.Category != "无法自动判定" || terminalcontrol.RequiresHumanReview(review.Command) {
+			if verdict.Allowed() {
+				verdict.Reason = "此操作触及人工确认边界"
+			}
+			verdict.ReadOnly = false
+		}
+		if auditErr := b.access.RecordAIReview(required.ID, verdict.Allowed()); auditErr != nil {
+			_ = b.release()
+			return nil, auditErr
+		}
+		b.Turn.Record("review", map[bool]string{true: "只读自审通过：", false: "需要人工确认："}[verdict.Allowed()]+verdict.Reason)
+	}
+	if verdict.Allowed() {
+		op, approveErr := b.access.ApproveReadOnlyReview(required.ID, verdict.Reason)
+		if approveErr != nil {
+			_ = b.release()
+			return nil, approveErr
+		}
+		result, execErr := op.Execute(ctx)
+		b.observeCommand(result, execErr, command, purpose)
+		if execErr != nil {
+			_ = b.release()
+		}
+		return result, execErr
+	}
+	details := []assistantcontrol.Detail{{Label: "规则检查", Value: review.Assessment.Category}, {Label: "执行影响", Value: review.Assessment.Impact}, {Label: "确认原因", Value: review.Assessment.Reason}, {Label: "执行位置", Value: fmt.Sprintf("%s · UID %d · %s", node, review.Prompt.UID, review.Prompt.Directory)}}
+	if verdict.Reason != "" {
+		details = append([]assistantcontrol.Detail{{Label: "AI 自审", Value: verdict.Reason}}, details...)
+	}
+	if verdict.Notice != "" {
+		details = append(details, assistantcontrol.Detail{Label: "自审方式", Value: verdict.Notice})
+	}
 	if len(purpose) > 0 && len(purpose) <= 512 {
 		details = append([]assistantcontrol.Detail{{Label: "AI 操作目的（供参考）", Value: purpose}}, details...)
 	}
@@ -210,6 +251,7 @@ func (b *TerminalTools) CallWithPurpose(ctx context.Context, name, command, purp
 		return nil, err
 	}
 	result, err = op.Execute(ctx)
+	b.observeCommand(result, err, command, purpose)
 	if err != nil {
 		_ = b.release()
 		return map[string]any{"execution": result, "owned": false}, err
@@ -221,6 +263,39 @@ func (b *TerminalTools) CallWithPurpose(ctx context.Context, name, command, purp
 	return map[string]any{"execution": result, "owned": inspectErr == nil && view.Owned}, inspectErr
 }
 
+func (b *TerminalTools) observeCommand(result terminalcontrol.CommandResult, err error, command, purpose string) {
+	if result.OperationID == "" {
+		return
+	}
+	op := assistantcontrol.Operation{Kind: "terminal", WorkspaceID: b.Target.SessionID, ConnectionID: b.Target.ConnectionID, Status: "unknown", Stage: "远程命令", Outcome: "尚未确认命令结果。", Next: "先查看终端现场，不要直接重复执行。"}
+	op.Action, op.Result, op.Location = command, result.Output.Text, "远程终端"
+	if result.Output.Truncated {
+		op.Result += "\n[终端片段，完整现场请查看原终端]"
+	}
+	title := "命令结果未确认"
+	if result.Completion == terminalcontrol.Completed && result.ExitCode != nil {
+		op.Status, op.Outcome, op.Next = "completed", fmt.Sprintf("已收到退出码 %d；输出保留在终端。", *result.ExitCode), ""
+		title = "终端命令已结束"
+		if *result.ExitCode != 0 {
+			title, op.Status, op.Next = "终端命令返回异常", "failed", "查看终端输出，核对失败原因。"
+		}
+	} else if result.Submission == terminalcontrol.NotSubmitted {
+		title, op.Status, op.Outcome = "命令未提交", "not_executed", "命令未提交到终端。"
+		op.Next = "核对连接及批准状态后再决定下一步。"
+	}
+	if err != nil {
+		op.Detail = err.Error()
+		if op.Status == "completed" {
+			op.Status, title, op.Next = "warning", "命令已结束，结果记录异常", "先核对终端输出，不要直接重复执行。"
+		}
+	}
+	if purpose != "" {
+		title = assistantcontrol.DisplayExcerpt(purpose, 512)
+	} else if op.Action != "" {
+		title = "执行命令"
+	}
+	b.Turn.ObserveOperation(result.OperationID, title, op)
+}
 func (b *TerminalTools) runContext() (terminalcontrol.TerminalContext, error) {
 	if b.run == nil {
 		return terminalcontrol.TerminalContext{}, terminalcontrol.ErrRevoked

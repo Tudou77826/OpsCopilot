@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef } from 'react';
-import { TbArrowUp, TbClockUp, TbPaperclip, TbPlayerStop, TbTerminal2 } from 'react-icons/tb';
+import { TbArrowUp, TbClockUp, TbPaperclip, TbPlayerStop, TbTerminal2, TbLayout } from 'react-icons/tb';
 import { IconButton } from '@opscopilot/shell-terminal/ui';
 import { AIContextChip } from './types';
 
@@ -22,6 +22,7 @@ interface AIComposerProps {
     editor?: React.ReactNode;
     sendDisabled?: boolean;
     toolbarLeading?: React.ReactNode;
+    toolbarTrailing?: React.ReactNode;
 }
 
 const AIComposer: React.FC<AIComposerProps> = ({
@@ -43,6 +44,7 @@ const AIComposer: React.FC<AIComposerProps> = ({
     editor,
     sendDisabled = false,
     toolbarLeading,
+    toolbarTrailing,
 }) => {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const hintId = useId();
@@ -99,8 +101,9 @@ const AIComposer: React.FC<AIComposerProps> = ({
             {conversation && <div className="ai-composer-toolbar">
                 {toolbarLeading}
                 <div className="ai-composer-targets">{contexts.length ? contexts.map(context => <span key={context.id} title={context.label} aria-label={context.label}>
-                    {TbTerminal2({ size: 14 })}<span>{context.label}</span>
-                </span>) : <span className="ai-composer-shortcut" aria-hidden="true">Shift + Enter 换行</span>}</div>
+                    {context.kind === 'workspace' ? <TbLayout size={14}/> : <TbTerminal2 size={14}/>}<span>{context.label}</span>
+                </span>) : !toolbarTrailing && <span className="ai-composer-shortcut" aria-hidden="true">Shift + Enter 换行</span>}</div>
+                {toolbarTrailing}
                 {sendButton}
             </div>}
             </div>

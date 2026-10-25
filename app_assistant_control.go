@@ -21,7 +21,11 @@ func (a *App) cancelAssistantTarget(sessionID, connectionID string) {
 	}
 }
 func (a *App) AssistantControlState() assistantcontrol.State {
-	return a.assistantCoordinator().Snapshot()
+	a.assistantConversationMu.Lock()
+	defer a.assistantConversationMu.Unlock()
+	state := a.assistantCoordinator().Snapshot()
+	state.SaveWarning = a.assistantSaveWarning
+	return state
 }
 func (a *App) RespondAssistantInteraction(turnID, requestID string, answer assistantcontrol.Answer) error {
 	return a.assistantCoordinator().Respond(turnID, requestID, answer)

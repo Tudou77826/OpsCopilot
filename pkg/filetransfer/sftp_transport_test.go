@@ -123,6 +123,10 @@ func TestSFTP_RemoteOps_MkdirRenameRemove_ReadWrite(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected stat error after remove")
 	}
+	var missing *TransferError
+	if !errors.As(err, &missing) || missing.Code != ErrorCodeNotFound {
+		t.Fatalf("missing file must have a typed outcome, got %v", err)
+	}
 }
 
 func TestSFTP_NotSupported_SubsystemDisabled(t *testing.T) {
@@ -287,5 +291,40 @@ func TestDialSFTP_HappyPath_SessionClosedWithClient(t *testing.T) {
 	}
 	if err := c.Close(); err != nil {
 		t.Fatalf("close: %v", err)
+	}
+}
+
+func TestDialSFTPCancellationClosesOnlyItsDataChannel(t *testing.T) {
+	srv := newTestSSHServer(t, testSSHServerOptions{RootDir: t.TempDir(), EnableSFTP: true})
+	defer srv.Close()
+	client, err := ssh.Dial("tcp", srv.Addr(), srv.ClientConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c, err := DialSFTP(ctx, client, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = c.Stat("."); err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	closed := make(chan struct{})
+	go func() { _ = c.Wait(); close(closed) }()
+	select {
+	case <-closed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("data channel survived cancellation")
+	}
+	other, err := DialSFTP(context.Background(), client, 0)
+	if err != nil {
+		t.Fatal("shared SSH was closed", err)
+	}
+	defer other.Close()
+	if _, err = other.Stat("."); err != nil {
+		t.Fatal("other channel unavailable", err)
 	}
 }

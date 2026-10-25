@@ -13,6 +13,7 @@ import (
 
 var ErrUnavailable = errors.New("工作台未就绪或页面已更换，请打开主窗口后重试")
 var ErrStale = errors.New("工作台请求已失效")
+var ErrInactive = errors.New("此页面不是当前轮次的操作页面")
 
 type Target struct {
 	TabID        string `json:"tabId"`
@@ -25,8 +26,9 @@ type Tab struct {
 	Ready  bool   `json:"ready"`
 }
 type Snapshot struct {
-	Tabs   []Tab  `json:"tabs"`
-	Active Target `json:"active"`
+	Tabs            []Tab  `json:"tabs"`
+	Active          Target `json:"active"`
+	ActiveWorkspace string `json:"activeWorkspace,omitempty"`
 }
 
 // Public connection metadata is a whitelist, never a redacted credential struct.
@@ -55,8 +57,14 @@ type pending struct {
 	done    chan error
 }
 
-// The most recently attached desktop page is the presentation controller.
-// Old pages cannot publish snapshots or acknowledge the replacement's commands.
+type page struct {
+	key  string
+	view Snapshot
+	seen time.Time
+}
+
+// Pages register independently. Only explicit activation by an accepted
+// assistant submission chooses the presentation controller for that turn.
 type Service struct {
 	mu       sync.Mutex
 	client   string
@@ -64,25 +72,90 @@ type Service struct {
 	seen     time.Time
 	snapshot Snapshot
 	pending  map[string]*pending
+	pages    map[string]*page
 }
 
 func (s *Service) Attach() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// Legacy single-view hosts explicitly replace their previous controller.
+	s.pages = map[string]*page{}
+	id := uuid.NewString()
+	s.pages[id] = &page{seen: time.Now(), view: Snapshot{Tabs: []Tab{}}}
+	s.activateLocked(id)
+	return id
+}
+
+func (s *Service) activateLocked(client string) {
 	if s.changed != nil {
 		close(s.changed)
 	}
 	s.changed = make(chan struct{})
-	s.client = uuid.NewString()
-	s.snapshot = Snapshot{Tabs: []Tab{}}
+	s.client = client
+	s.snapshot = s.pages[client].view
 	s.pending = make(map[string]*pending)
-	s.seen = time.Now()
-	return s.client
+	s.seen = s.pages[client].seen
+}
+
+// RegisterPage replaces only the same browser tab across reloads. A different
+// native/WebView/browser window cannot steal an executing turn by attaching.
+func (s *Service) RegisterPage(key string) (string, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if key == "" || len(key) > 128 {
+		return "", false, errors.New("页面标识无效")
+	}
+	if s.pages == nil {
+		s.pages = map[string]*page{}
+	}
+	replaced := false
+	for id, p := range s.pages {
+		if p.key == key {
+			replaced = replaced || id == s.client
+			delete(s.pages, id)
+		} else if id != s.client && time.Since(p.seen) > time.Minute {
+			delete(s.pages, id)
+		}
+	}
+	if len(s.pages) >= 32 {
+		return "", false, errors.New("打开的应用页面过多，请关闭不用的页面")
+	}
+	id := uuid.NewString()
+	s.pages[id] = &page{key: key, seen: time.Now(), view: Snapshot{Tabs: []Tab{}}}
+	if s.client == "" || replaced {
+		s.activateLocked(id)
+	}
+	return id, replaced, nil
+}
+func (s *Service) Activate(client string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.pages[client]
+	if p == nil || time.Since(p.seen) >= 5*time.Second {
+		return ErrStale
+	}
+	if s.client != client {
+		s.activateLocked(client)
+	}
+	return nil
+}
+func (s *Service) Registered(client string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p := s.pages[client]
+	if client == "" || p == nil || time.Since(p.seen) >= 5*time.Second {
+		return ErrStale
+	}
+	return nil
 }
 func (s *Service) Detach(client string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if client == "" || client != s.client {
+	if client == "" || s.pages[client] == nil {
+		return false
+	}
+	delete(s.pages, client)
+	if client != s.client {
 		return false
 	}
 	close(s.changed)
@@ -109,17 +182,20 @@ func (s *Service) Check(client string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.valid(client) {
-		return ErrUnavailable
+		if s.pages[client] != nil {
+			return ErrInactive
+		}
+		return ErrStale
 	}
 	return nil
 }
 func (s *Service) Pull(client string, view Snapshot) ([]Presentation, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if client == "" || client != s.client {
+	if client == "" || s.pages[client] == nil {
 		return nil, ErrStale
 	}
-	if len(view.Tabs) > 256 {
+	if len(view.Tabs) > 256 || len(view.ActiveWorkspace) > 128 {
 		return nil, errors.New("工作台页签过多")
 	}
 	ids := map[string]bool{}
@@ -129,8 +205,14 @@ func (s *Service) Pull(client string, view Snapshot) ([]Presentation, error) {
 		}
 		ids[tab.TabID] = true
 	}
-	s.seen = time.Now()
 	view.Tabs = append([]Tab{}, view.Tabs...)
+	p := s.pages[client]
+	p.seen = time.Now()
+	p.view = view
+	if client != s.client {
+		return []Presentation{}, nil
+	}
+	s.seen = p.seen
 	s.snapshot = view
 	commands := make([]Presentation, 0, len(s.pending))
 	for _, p := range s.pending {

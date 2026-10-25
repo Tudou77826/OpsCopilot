@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import AIChatPanel from './AIChatPanel';
 import type { AssistantConversationSnapshot, AssistantRuntime, AssistantTurnState } from '../../../../frontend-shell/src/assistant/runtime';
+import { registerWorkspaceIdentity, markWorkspaceReady, clearWorkspaceIdentity, provideWorkspaceSnapshot } from '../../shell-adapter/workspaceIdentity';
 
 const completed = (output = '助手的回答'): AssistantTurnState => ({turnId:'turn',target:{tabId:'',connectionId:''},phase:'completed',message:'本轮已完成',output});
 function runtime(): AssistantRuntime {
@@ -13,6 +14,62 @@ const submit = (text: string) => {
 };
 
 describe('统一 AI 对话', () => {
+    it('将对话操作交给统一顶栏，不重复显示助手标题或操作按钮', () => {
+        const close=vi.fn();
+        render(<AIChatPanel runtime={runtime()} onClose={close} renderHeader={actions => <header aria-label="伙伴顶栏"><span>微光</span>{actions}</header>}/>);
+        expect(screen.queryByRole('heading',{name:/AI 助手|伙伴助手/})).not.toBeInTheDocument();
+        expect(screen.getAllByRole('toolbar',{name:'对话操作'})).toHaveLength(1);
+        expect(screen.getByRole('button',{name:'新建对话'}).closest('header')).toBe(screen.getByLabelText('伙伴顶栏'));
+        fireEvent.click(screen.getByRole('button',{name:'关闭助手'}));
+        expect(close).toHaveBeenCalledOnce();
+    });
+    it('重启恢复展示历史范围，但不自动发消息或恢复旧授权', async () => {
+        const host=runtime();
+        host.restoreConversation=vi.fn(async()=>({id:'saved',truncated:false,recoveryNote:'已恢复本地对话；上次任务不会自动继续。',messages:[{id:'u',role:'user',content:'上次的问题'},{id:'a',role:'ai',kind:'notice',content:'上次任务中断，等待新的要求'}]}));
+        render(<AIChatPanel runtime={host}/>);
+        expect(await screen.findByText('上次的问题')).toBeVisible();
+        expect(screen.getByText('已恢复本地对话；上次任务不会自动继续。')).not.toBeVisible();
+        fireEvent.click(screen.getByText('已恢复对话'));
+        expect(screen.getByText('已恢复本地对话；上次任务不会自动继续。')).toBeVisible();
+        expect(host.start).not.toHaveBeenCalled();
+        expect(screen.queryByRole('button',{name:'允许本次'})).not.toBeInTheDocument();
+    });
+    it('明确显示未连接的远程页签，聊天仍然可发送', async () => {
+        const host=runtime();
+        render(<AIChatPanel runtime={host} activeTerminalTitle="业务节点" activeTerminalStatus="disconnected"/>);
+        expect(screen.getByLabelText('远程 · 业务节点 · 未连接')).toBeVisible();
+        submit('怎样排查这个服务？');
+        await screen.findByText('助手的回答');
+        expect(host.start).toHaveBeenCalledWith('怎样排查这个服务？',undefined);
+    });
+    it('数据库或文件页签显示当前页，不沿用上一个终端', () => {
+        render(<AIChatPanel runtime={runtime()} activeWorkspaceTitle="文件 · 节点 A"/>);
+        expect(screen.getByLabelText('当前页 · 文件 · 节点 A')).toBeVisible();
+        expect(screen.queryByLabelText(/远程 ·/)).not.toBeInTheDocument();
+    });
+    it('保留助手分段、问题和已选答案，显示时间并在结束后保留原顺序', async () => {
+        const host = runtime();
+        let state:AssistantTurnState={...completed(),phase:'running',messages:[
+            {id:'s1',role:'ai',kind:'text',content:'先检查日志',time:'2026-10-23T04:00:00Z'},
+            {id:'q1',role:'ai',kind:'question',content:'检查哪一天？',time:'2026-10-23T04:00:01Z'},
+            {id:'a1',role:'user',kind:'answer',content:'今天上午',time:'2026-10-23T04:00:03Z'},
+            {id:'r1',role:'ai',kind:'review',content:'本轮只读检查通过',time:'2026-10-23T04:00:04Z'},
+            {id:'s2',role:'ai',kind:'text',content:'已定位到错误',time:'2026-10-23T04:00:05Z'},
+        ]};
+        host.start=vi.fn(async()=>state);host.state=vi.fn(async()=>state);
+        render(<AIChatPanel runtime={host}/>);submit('检查日志');
+        expect(await screen.findByText('今天上午')).toBeVisible();
+        expect(screen.getByText('检查哪一天？')).toBeVisible();
+        expect(document.querySelectorAll('time').length).toBe(6);
+        expect(screen.getByText('本轮只读检查通过')).not.toBeVisible();
+        fireEvent.click(screen.getByText('过程记录'));
+        expect(screen.getByText('本轮只读检查通过')).toBeVisible();
+        state={...state,phase:'completed'};
+        await waitFor(()=>expect(screen.getByRole('button',{name:'新建对话'})).toBeEnabled());
+        expect(screen.getAllByText('今天上午')).toHaveLength(1);
+        expect(screen.getAllByText('已定位到错误')).toHaveLength(1);
+        expect(screen.getByText('本轮只读检查通过')).toBeVisible();
+    });
     beforeEach(() => { Element.prototype.scrollIntoView = vi.fn(); });
     it('没有 SSH 也能直接聊天，不再提供知识问答模式', async () => {
         const host = runtime();
@@ -27,13 +84,16 @@ describe('统一 AI 对话', () => {
     it('默认适配器也把无目标消息交给同一个会话入口', async () => {
         const start = vi.fn(async()=>completed('没有连接也能回答'));
         const legacy = vi.fn();
-        window.go = { main:{ App:{RestoreAssistantConversation:vi.fn(async()=>({id:'test',messages:[],truncated:false})),StartAssistantTurn:start,AskCompanionAI:legacy,StopAssistantTurn:vi.fn(async()=>undefined)} } } as any;
+        registerWorkspaceIdentity('test-page'); markWorkspaceReady('test-page');
+        const dispose = provideWorkspaceSnapshot(() => ({tabs:[],active:{tabId:'',connectionId:''}}));
+        window.go = { main:{ App:{RestoreAssistantConversationOnPage:vi.fn(async()=>({id:'test',messages:[],truncated:false})),StartAssistantTurnOnPage:start,WorkspacePull:vi.fn(async()=>[]),AskCompanionAI:legacy,StopAssistantTurn:vi.fn(async()=>undefined)} } } as any;
         render(<AIChatPanel/>);
         await waitFor(()=>expect(screen.getByPlaceholderText('输入问题…')).toBeEnabled());
         submit('你是谁？');
         expect(await screen.findByText('没有连接也能回答')).toBeVisible();
-        expect(start).toHaveBeenCalledWith('你是谁？','','');
+        expect(start).toHaveBeenCalledWith('你是谁？','','','test-page');
         expect(legacy).not.toHaveBeenCalled();
+        dispose(); clearWorkspaceIdentity('test-page');
     });
     it('活动终端只是可选工具目标，发送后切换页面不会改掉本轮目标', async () => {
         let resolve!: (state:AssistantTurnState)=>void;
@@ -44,7 +104,7 @@ describe('统一 AI 对话', () => {
         view.rerender(<AIChatPanel runtime={host} activeTerminalTitle="另一终端" activeTerminalTarget={{tabId:'two',connectionId:'another'}}/>);
         expect(host.start).toHaveBeenCalledWith('看下日志',{tabId:'one',connectionId:'connection'});
         expect(screen.getByTitle('本轮终端 · 原终端')).toBeVisible();
-        expect(screen.getByLabelText('另一终端')).toBeVisible();
+        expect(screen.getByLabelText('远程 · 另一终端')).toBeVisible();
         resolve(completed());
         await screen.findByText('助手的回答');
     });
@@ -97,7 +157,7 @@ describe('统一 AI 对话', () => {
         expect(screen.getByPlaceholderText('输入问题…')).toBeDisabled();
         fireEvent.click(screen.getByRole('button',{name:'重试恢复对话'}));
         expect(await screen.findByText('恢复成功')).toBeVisible();
-        expect(screen.getByText('仅显示最近的消息，助手仍可能记得更早的上下文。')).toBeVisible();
+        expect(screen.getByText('仅显示保留的近期消息，较早记录可能不在当前上下文中。')).toBeVisible();
         expect(screen.getByPlaceholderText('输入问题…')).toBeEnabled();
     });
     it('审批卡片位于状态与停止操作上方', async () => {

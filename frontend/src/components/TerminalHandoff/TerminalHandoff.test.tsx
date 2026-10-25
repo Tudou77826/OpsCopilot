@@ -16,14 +16,14 @@ describe('终端接手交接', () => {
         const work = {turnId:'assistant',source:'assistant',target:{tabId:'one',connectionId:'c1'},phase:'running',message:'正在思考'};
         const state: HandoffState = {...base,work};
         const props = {transportError:'',connected:true,onStart:vi.fn(),onStop:vi.fn(),onFocus:vi.fn()};
-        const view=render(<TerminalHandoff {...props} state={state}><textarea aria-label="手动终端"/></TerminalHandoff>);
+        const view=render(<TerminalHandoff experimental {...props} state={state}><textarea aria-label="手动终端"/></TerminalHandoff>);
         expect(screen.getByLabelText('手动终端').parentElement).not.toHaveAttribute('inert');
         expect(screen.queryByLabelText('接手期间终端由测试助手独占')).not.toBeInTheDocument();
         expect(screen.queryByText('正在思考')).not.toBeInTheDocument();
-        view.rerender(<TerminalHandoff {...props} state={{...state,owned:true}}><textarea aria-label="手动终端"/></TerminalHandoff>);
+        view.rerender(<TerminalHandoff experimental {...props} state={{...state,owned:true}}><textarea aria-label="手动终端"/></TerminalHandoff>);
         expect(screen.getByLabelText('手动终端').parentElement).toHaveAttribute('inert');
         expect(screen.getByText('AI 正在使用此终端')).toBeInTheDocument();
-        view.rerender(<TerminalHandoff {...props} state={{...state,owned:false}}><textarea aria-label="手动终端"/></TerminalHandoff>);
+        view.rerender(<TerminalHandoff experimental {...props} state={{...state,owned:false}}><textarea aria-label="手动终端"/></TerminalHandoff>);
         expect(screen.getByLabelText('手动终端').parentElement).not.toHaveAttribute('inert');
         expect(screen.queryByText('AI 正在使用此终端')).not.toBeInTheDocument();
     });
@@ -31,7 +31,7 @@ describe('终端接手交接', () => {
         const stop = vi.fn().mockResolvedValue(undefined);
         const respond = vi.fn().mockResolvedValue(undefined);
         const waiting: HandoffState = { ...base, work: { turnId: 'work1', target: { tabId: 'one', connectionId: 'c1' }, phase: 'waiting', message: '等待确认', prompt: { id: 'p1', kind: 'approval', title: '确认命令', description: '', multiple: false, expires: new Date(Date.now() + 60000).toISOString() } } };
-        render(<TerminalHandoff state={waiting} transportError="" connected onStart={vi.fn()} onStop={stop} onRespond={respond} onFocus={vi.fn()}><textarea aria-label="手动终端" /></TerminalHandoff>);
+        render(<TerminalHandoff experimental state={waiting} transportError="" connected onStart={vi.fn()} onStop={stop} onRespond={respond} onFocus={vi.fn()}><textarea aria-label="手动终端" /></TerminalHandoff>);
         expect(screen.getByLabelText('手动终端').parentElement).not.toHaveAttribute('inert');
         fireEvent.click(screen.getByRole('button', { name: '允许本次' }));
         await waitFor(() => expect(respond).toHaveBeenCalledWith(waiting, { text: '', selected: ['allow'] }));
@@ -50,10 +50,10 @@ describe('终端接手交接', () => {
     });
     it('同一页签换了底层连接后，必须重新确认空闲', () => {
         const props = { transportError: '', connected: true, onStart: vi.fn(), onStop: vi.fn(), onFocus: vi.fn() };
-        const view = render(<TerminalHandoff {...props} state={{ ...base, connectionId: 'c1' }}><textarea /></TerminalHandoff>);
+        const view = render(<TerminalHandoff experimental {...props} state={{ ...base, connectionId: 'c1' }}><textarea /></TerminalHandoff>);
         fireEvent.click(screen.getByRole('button', { name: /接手测试/ }));
         fireEvent.click(screen.getByRole('checkbox'));
-        view.rerender(<TerminalHandoff {...props} state={{ ...base, connectionId: 'c2' }}><textarea /></TerminalHandoff>);
+        view.rerender(<TerminalHandoff experimental {...props} state={{ ...base, connectionId: 'c2' }}><textarea /></TerminalHandoff>);
         expect(screen.queryByLabelText('开始接手测试')).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: /接手测试/ }));
         expect(screen.getByRole('checkbox')).not.toBeChecked();
@@ -96,7 +96,7 @@ describe('终端接手交接', () => {
 
     it('仅在用户确认普通空闲命令行后允许启动固定测试', async () => {
         const start = vi.fn().mockResolvedValue(undefined);
-        render(<TerminalHandoff state={base} transportError="" connected onStart={start} onStop={vi.fn()} onFocus={vi.fn()}><textarea aria-label="终端输入" /></TerminalHandoff>);
+        render(<TerminalHandoff experimental state={base} transportError="" connected onStart={start} onStop={vi.fn()} onFocus={vi.fn()}><textarea aria-label="终端输入" /></TerminalHandoff>);
         fireEvent.click(screen.getByRole('button', { name: /接手测试/ }));
         expect(screen.getByRole('button', { name: '开始测试' })).toBeDisabled();
         fireEvent.click(screen.getByRole('checkbox'));
@@ -110,12 +110,12 @@ describe('终端接手交接', () => {
         const stop = vi.fn().mockResolvedValue(undefined);
         const running = { ...base, runId: 'r1', phase: 'running', owned: true, message: '正在执行' };
         const props = { transportError: '', connected: true, onStart: vi.fn(), onStop: stop, onFocus: vi.fn() };
-        const view = render(<TerminalHandoff {...props} state={running}><textarea aria-label="终端输入" /></TerminalHandoff>);
+        const view = render(<TerminalHandoff experimental {...props} state={running}><textarea aria-label="终端输入" /></TerminalHandoff>);
         expect(screen.getByLabelText('终端输入').parentElement).toHaveAttribute('inert');
         expect(screen.getByLabelText('接手期间终端由测试助手独占')).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: '手动接管' }));
         await waitFor(() => expect(stop).toHaveBeenCalledWith(running));
-        view.rerender(<TerminalHandoff {...props} state={{ ...running, phase: 'stopped', owned: false, message: '远端命令可能仍在运行' }}><textarea aria-label="终端输入" /></TerminalHandoff>);
+        view.rerender(<TerminalHandoff experimental {...props} state={{ ...running, phase: 'stopped', owned: false, message: '远端命令可能仍在运行' }}><textarea aria-label="终端输入" /></TerminalHandoff>);
         expect(screen.queryByLabelText('接手期间终端由测试助手独占')).not.toBeInTheDocument();
         expect(screen.getByLabelText('终端输入').parentElement).not.toHaveAttribute('inert');
         expect(screen.getByRole('status')).toHaveTextContent('远端命令可能仍在运行');
@@ -192,7 +192,7 @@ describe('终端接手交接', () => {
     });
 
     it('取消后重新打开需要重新确认命令行空闲', () => {
-        render(<TerminalHandoff state={base} transportError="" connected onStart={vi.fn()} onStop={vi.fn()} onFocus={vi.fn()}><textarea /></TerminalHandoff>);
+        render(<TerminalHandoff experimental state={base} transportError="" connected onStart={vi.fn()} onStop={vi.fn()} onFocus={vi.fn()}><textarea /></TerminalHandoff>);
         fireEvent.click(screen.getByRole('button', { name: /接手测试/ }));
         fireEvent.click(screen.getByRole('checkbox'));
         fireEvent.click(screen.getByRole('button', { name: '取消' }));

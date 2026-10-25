@@ -26,7 +26,7 @@ func TestDiagnosticPreservesCauseAndRecordsEvidence(t *testing.T) {
 	if !errors.Is(err, cause) {
 		t.Fatal("lost original cause")
 	}
-	for _, expected := range []string{"数据库连接诊断 v3", "diagnostic-test", "node51:22", "node55:22", "拒绝 direct-tcpip", "具体服务端规则", "诊断日志："} {
+	for _, expected := range []string{"数据库连接诊断 v4", "diagnostic-test", "node51:22", "node55:22", "拒绝 direct-tcpip", "具体服务端规则", "诊断日志："} {
 		if !strings.Contains(err.Error(), expected) {
 			t.Fatalf("missing evidence: %s", expected)
 		}
@@ -43,6 +43,17 @@ func TestDiagnosticPreservesCauseAndRecordsEvidence(t *testing.T) {
 		if strings.Contains(err.Error(), secret) || strings.Contains(string(data), secret) {
 			t.Fatal("diagnostic leaked credentials")
 		}
+	}
+}
+
+func TestDiagnosticMemoryFailureKeepsEndpointUncertainty(t *testing.T) {
+	s := New(filepath.Join(t.TempDir(), "database.json"), nil)
+	ctx, diagnostic := s.beginDiagnostic(context.Background(), "测试连接", Profile{}, "")
+	connectiondiag.Event(ctx, "jdbc.memory.failed", "local allocation failure")
+	cause := errors.New("OutOfMemoryError: Cannot reserve direct buffer memory")
+	err := s.finishDiagnostic(ctx, diagnostic, cause)
+	if !errors.Is(err, cause) || !strings.Contains(err.Error(), "尚未确认申请量是否合理") || !strings.Contains(err.Error(), "当前证据不足以确认数据库目标 TCP 已建立") {
+		t.Fatal("memory failure must not prove endpoint reachability or a server memory cause", err)
 	}
 }
 

@@ -8,8 +8,8 @@ interface Props {
     onStop(): void;
     showStop?: boolean;
 }
-const primaryLabels = new Set(['执行位置', '目标节点', '执行身份', '当前目录', '快速判定', '执行影响', '确认原因']);
-const locationLabels = new Set(['执行位置', '目标节点', '执行身份', '当前目录']);
+const locationLabels = new Set(['执行位置', '目标节点', '执行身份', '当前目录', '传输方向', '本机文件', '远端文件', '本地目录']);
+const primaryLabels = new Set([...locationLabels, 'AI 自审', '自审方式', '规则检查', '快速判定', '执行影响', '确认原因']);
 export function AssistantInteractionCard({ prompt, onRespond, onStop, showStop = true }: Props) {
     const [selected, setSelected] = useState<string[]>([]);
     const [text, setText] = useState('');
@@ -29,6 +29,7 @@ export function AssistantInteractionCard({ prompt, onRespond, onStop, showStop =
     return <section className="oc-assistant-interaction" aria-label={prompt.title}>
         <header><span className="oc-interaction-eyebrow">{prompt.kind === 'approval' ? '需要你的确认' : '助手有一个问题'}</span>{showStop && <button type="button" onClick={onStop}>停止本轮</button>}</header>
         <h3>{prompt.title}</h3>
+		{prompt.kind === 'approval' && <p className="oc-interaction-expiry">等待至 {new Date(prompt.expires).toLocaleTimeString()}；超时不会授权</p>}
         {!!location.length && <div className="oc-interaction-location">{details(location)}</div>}
         {prompt.command && <pre tabIndex={0} aria-label="将要执行的命令"><code>{prompt.command}</code></pre>}
         {!!assessment.length && details(assessment)}
@@ -43,7 +44,7 @@ export function AssistantInteractionCard({ prompt, onRespond, onStop, showStop =
                 <input type={prompt.multiple ? 'checkbox' : 'radio'} name={prompt.id} checked={selected.includes(choice.id)} onChange={event => setSelected(previous => prompt.multiple ? event.target.checked ? [...previous, choice.id] : previous.filter(id => id !== choice.id) : [choice.id])} />{choice.label}
             </label>)}</fieldset>}
             <textarea aria-label="补充回答" placeholder="输入你的回答…" disabled={busy} value={text} onChange={event => setText(event.target.value)} maxLength={8192} rows={2} />
-            <footer><span>回答会直接交给当前问题</span><button className="oc-interaction-primary" type="submit" disabled={busy || (!selected.length && !text.trim())}>{busy ? '正在提交…' : '提交回答'}</button></footer>
+            <footer><span>等待你回答，不会自动选择</span><button className="oc-interaction-primary" type="submit" disabled={busy || (!selected.length && !text.trim())}>{busy ? '正在提交…' : '提交回答'}</button></footer>
         </form>}
         {error && <div className="oc-interaction-error" role="alert">{error}</div>}
     </section>;

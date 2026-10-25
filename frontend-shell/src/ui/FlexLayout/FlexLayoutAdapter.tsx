@@ -23,7 +23,7 @@ export interface TerminalSession {
 export interface FlexLayoutAdapterProps {
     onWorkspaceController?: (controller: TerminalWorkspaceController | undefined) => void;
     terminalBadges?: Record<string, string>;
-	workspaces?: { id: string; title: string; request: number; onClose?(): void; render(): React.ReactNode }[];
+	workspaces?: { id: string; title: string; request: number; restore?: boolean; onClose?(): void; render(): React.ReactNode }[];
 	onWorkspaceFocusChange?: (kind: string | null) => void;
     terminals: TerminalSession[];
     onTerminalData: (id: string, data: string) => void;
@@ -220,15 +220,17 @@ const FlexLayoutAdapter: React.FC<FlexLayoutAdapterProps> = ({
 
     useEffect(() => {
         for (const workspace of workspaces ?? []) {
-            if (!workspace.request || workspace.request === handledWorkspaceRequests.current.get(workspace.id)) continue;
-            handledWorkspaceRequests.current.set(workspace.id, workspace.request);
-            if (model.getNodeById(workspace.id)) model.doAction(Actions.selectTab(workspace.id));
+            const existing = model.getNodeById(workspace.id);
+            const requested = !!workspace.request && workspace.request !== handledWorkspaceRequests.current.get(workspace.id);
+            if (!requested && (!workspace.restore || existing)) continue;
+            if (requested) handledWorkspaceRequests.current.set(workspace.id, workspace.request);
+            if (existing) model.doAction(Actions.selectTab(workspace.id));
             else {
                 const target = findFirstTabsetId();
-                model.doAction(Actions.addTab({ type: 'tab', id: workspace.id, name: workspace.title, component: 'workspace', enableRename: false }, target || model.getRootRow().getId(), DockLocation.CENTER, -1, true));
+                model.doAction(Actions.addTab({ type: 'tab', id: workspace.id, name: workspace.title, component: 'workspace', enableRename: false }, target || model.getRootRow().getId(), DockLocation.CENTER, -1, requested));
             }
             setLayoutHasContent(true);
-            onWorkspaceFocusChange?.(workspace.id);
+            if (requested) onWorkspaceFocusChange?.(workspace.id);
         }
         const existing=new Set((workspaces??[]).map(w=>w.id));
         const remove:string[]=[];model.visitNodes(node=>{if(node instanceof TabNode&&node.getComponent()==='workspace'&&!existing.has(node.getId()))remove.push(node.getId());});

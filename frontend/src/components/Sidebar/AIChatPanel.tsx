@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { AIComposer, RichText } from '../AI';
+import { AIComposer } from '../AI';
 import { IconButton, ResourceLibraryIcon } from '@opscopilot/shell-terminal/ui';
 import { TbMessagePlus, TbPlayerStop, TbRefresh, TbX } from 'react-icons/tb';
 import { LatestMessageButton } from './LatestMessageButton';
@@ -9,7 +9,9 @@ import { useAssistantQueue } from './useAssistantQueue';
 import { AssistantInteractionCard } from '../AssistantInteraction/AssistantInteractionCard';
 import { DatabaseConnectionRequest } from '../AssistantInteraction/DatabaseConnectionRequest';
 import { AIChatMessage } from './AIChatMessage';
+import { AIChatTimeline } from './AIChatTimeline';
 import { AssistantMessageQueue } from './AssistantMessageQueue';
+import { AssistantLocalDirectories } from './AssistantLocalDirectories';
 import { AssistantLibrary } from '../AssistantLibrary/AssistantLibrary';
 import { CommandDraftEditor } from '../AssistantLibrary/CommandDraftEditor';
 import { CommandMenu } from '../AssistantLibrary/CommandMenu';
@@ -17,23 +19,29 @@ import type { AssistantCommand, CommandDraft, ConnectionChoice, LibraryHost, Lib
 import { wailsAssistantLibrary } from '../../shell-adapter/wailsAssistantLibrary';
 import '../AssistantLibrary/assistantLibrary.css';
 import './aiChatPanel.css';
+import { AssistantModelPicker } from './AssistantModelPicker';
+import { AssistantContextUsage } from './AssistantContextUsage';
 
 interface AIChatPanelProps {
     runtime?: AssistantRuntime;
     activeTerminalTitle?: string;
     activeTerminalTarget?: AssistantTarget;
+    activeTerminalStatus?: string;
+    activeWorkspaceTitle?: string;
     terminalTabs?: {id:string;connectionId?:string;title:string}[];
-    title?: string;
+    renderHeader?: (actions: ReactNode) => ReactNode;
     onClose?: () => void;
     children?: ReactNode;
     libraryHost?: LibraryHost;
 }
 
-export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget, terminalTabs, runtime = wailsAssistantRuntime, title = 'AI 助手', onClose, children, libraryHost=wailsAssistantLibrary }: AIChatPanelProps) {
+export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget, activeTerminalStatus, activeWorkspaceTitle, terminalTabs, runtime = wailsAssistantRuntime, renderHeader, onClose, children, libraryHost=wailsAssistantLibrary }: AIChatPanelProps) {
     const assistant = useAssistantQueue(runtime);
     const [controlError, setControlError] = useState('');
     const [input, setInput] = useState('');
     const [resetting, setResetting] = useState(false);
+    const [modelChanging, setModelChanging] = useState(false);
+    const [directoryRevision, setDirectoryRevision] = useState(0);
     const [showLatest, setShowLatest] = useState(false);
     const [libraryOpen,setLibraryOpen]=useState(false);
     const [library,setLibrary]=useState<LibraryState>({skills:[],commands:[]});
@@ -54,7 +62,8 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
     const followLatest = useRef(true);
     const busy = !!assistant.current;
     const messages = assistant.messages;
-    const contextTitle = activeTerminalTarget ? activeTerminalTitle : undefined;
+    const contextTitle = activeTerminalTitle;
+    const contextLabel = contextTitle ? `远程 · ${contextTitle}${activeTerminalStatus === 'disconnected' || !activeTerminalTarget ? ' · 未连接' : ''}` : activeWorkspaceTitle ? `当前页 · ${activeWorkspaceTitle}` : undefined;
     const actualTarget=assistant.state?.target;
     const turnTitle=actualTarget?.tabId ? terminalTabs?.find(tab=>tab.id===actualTarget.tabId && tab.connectionId===actualTarget.connectionId)?.title || (assistant.current?.target?.tabId===actualTarget.tabId ? assistant.current.title : undefined) : assistant.current?.title;
 
@@ -66,7 +75,7 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
     useLayoutEffect(() => {
         if (followLatest.current) scrollToLatest();
         else setShowLatest(true);
-    }, [messages, assistant.state?.output]);
+    }, [messages, assistant.state?.messages?.length, assistant.state?.output]);
 
     function send() {
         if(showMenu)return;
@@ -113,6 +122,7 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
         setControlError('');
         try {
             await assistant.newConversation();
+            setDirectoryRevision(value => value + 1);
             followLatest.current = true;
             setInput(''); setDraft(undefined); setShowLatest(false);
         } catch (error) {
@@ -123,17 +133,16 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
     // Describe only observed host state; never infer reading or execution
     // from model inference or from the presence of a terminal candidate.
     const progress = resetting ? '正在新建对话…' : assistant.transitioning || assistant.state?.phase === 'stopped' ? '正在停止，等待本轮结束…' : assistant.state?.prompt ?
-        assistant.state.prompt.kind === 'approval' ? '等待你确认' : '等待你回答' : assistant.state?.activity==='opening' ? '正在打开终端…' : assistant.state?.activity==='selecting' ? '正在切换终端…' : assistant.state?.output ? '正在回答…' :
-        assistant.state?.activity==='database' ? '正在处理数据库任务…' : assistant.state?.activity==='local' ? '正在使用工具…' : assistant.state?.target.tabId ? '正在处理操作…' : assistant.state?.turnId ? '正在思考…' : '正在启动助手…';
+        assistant.state.prompt.kind === 'approval' ? '等待你确认' : '等待你回答' : assistant.state?.activity==='reviewing' ? '正在检查操作范围…' : assistant.state?.activity==='opening' ? '正在打开终端…' : assistant.state?.activity==='selecting' ? '正在切换终端…' :
+        assistant.state?.activity==='database' ? '正在处理数据库任务…' : assistant.state?.activity==='local' ? '正在使用工具…' : assistant.state?.output ? '正在回答…' : assistant.state?.target.tabId ? '正在处理操作…' : assistant.state?.turnId ? '正在思考…' : '正在启动助手…';
 
-    return <div className="ai-panel ai-chat-panel">
-        <header className="ai-chat-header">
-            <h3>{title}</h3>
-            <div className="ai-chat-header-actions" role="toolbar" aria-label="对话操作">
-                <IconButton label="新建对话" disabled={busy || assistant.transitioning || assistant.restoring || preparing} onClick={() => void newConversation()}><TbMessagePlus size={18}/></IconButton>
+    const headerActions = <div className="ai-chat-header-actions" role="toolbar" aria-label="对话操作">
+                <IconButton label="新建对话" disabled={busy || assistant.transitioning || assistant.restoring || preparing || modelChanging} onClick={() => void newConversation()}><TbMessagePlus size={18}/></IconButton>
                 {onClose && <IconButton label="关闭助手" onClick={onClose}><TbX size={18}/></IconButton>}
-            </div>
-        </header>
+            </div>;
+
+    return <div className="ai-panel ai-chat-panel" aria-label="对话">
+        {renderHeader ? renderHeader(headerActions) : <header className="ai-chat-header">{headerActions}</header>}
         {children}
         {libraryOpen&&<AssistantLibrary host={libraryHost} busy={busy||assistant.transitioning} onClose={()=>setLibraryOpen(false)} onChanged={setLibrary}/>}
         <div className="ai-chat-history">
@@ -143,12 +152,13 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
                 setShowLatest(!followLatest.current);
             }}>
                 {messages.length ? <div className="ai-message-list">
-                    {assistant.truncated && <p className="ai-history-note">仅显示最近的消息，助手仍可能记得更早的上下文。</p>}
-                    {messages.map(message => <AIChatMessage key={message.id} content={message.content} phase={message.phase} user={message.role === 'user'} />)}
-                    {busy && assistant.state?.output && <article className="ai-assistant-message ai-streaming-message"><RichText content={assistant.state.output} /></article>}
+                    {assistant.recoveryNote && <details className="ai-history-note"><summary>已恢复对话</summary><p role="note">{assistant.recoveryNote}</p></details>}
+                    {assistant.truncated && <p className="ai-history-note">仅显示保留的近期消息，较早记录可能不在当前上下文中。</p>}
+                    <AIChatTimeline messages={[...messages, ...(busy ? assistant.state?.messages || [] : [])]} onReveal={runtime.revealResult}/>
+                    {busy && !assistant.state?.messages?.length && assistant.state?.output && <AIChatMessage content={assistant.state.output} />}
                 </div> : <div className="ai-chat-empty">
                     <h4>{assistant.restoring ? '正在恢复对话…' : assistant.restoreError ? '对话尚未恢复' : '有什么需要一起排查？'}</h4>
-                    {!assistant.restoring && !assistant.restoreError && <p>可以直接提问，需要操作时再选择终端。</p>}
+                    {!assistant.restoring && !assistant.restoreError && <p>可以直接提问，也可以让助手处理当前页的任务。</p>}
                 </div>}
             </div>
             <LatestMessageButton anchor={history} visible={showLatest} onClick={scrollToLatest}/>
@@ -161,18 +171,20 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
                 </div>
                 {busy && <IconButton label="停止本轮" className="ai-chat-stop" onClick={() => void stop()} disabled={assistant.transitioning}><TbPlayerStop size={17}/></IconButton>}
             </div>}
-            {controlError && <p className="ai-chat-error" role="alert">{controlError}</p>}
+            {controlError && !assistant.restoreError && <p className="ai-chat-error" role="alert">{controlError}</p>}
+            {assistant.state?.saveWarning && <p className="ai-chat-error" role="alert">{assistant.state.saveWarning}</p>}
             {assistant.restoreError && <div className="ai-restore-error" role="alert"><span>{assistant.restoreError}</span><IconButton label="重试恢复对话" onClick={()=>void assistant.restore()}><TbRefresh size={18}/></IconButton></div>}
             <div className="oc-command-composer" onKeyDown={event=>{if(event.key==='Escape')setMenuDismissed(true);}}>
             {showMenu&&<CommandMenu commands={library.commands.filter(c=>!c.skill||library.skills.some(s=>s.name===c.skill&&s.enabled))} query={input.slice(1)} onChoose={chooseCommand} onManage={()=>{setMenuDismissed(true);setLibraryOpen(true);}}/>}
-            <AIComposer value={draft?draft.template:input} onChange={value=>{setInput(value);setMenuDismissed(false);}} onSend={send} disabled={assistant.transitioning||assistant.restoring||!!assistant.restoreError||preparing} sendDisabled={showMenu||!!draft?.command.fields.some(field=>field.required&&!draft.values[field.key]?.trim())} busy={busy} queueWhileBusy queuePending={assistant.pending.length > 0} variant="conversation"
-                toolbarLeading={<IconButton label="管理 Skills 和快捷命令" title="资源库 · Skills 与快捷命令" className="ai-composer-library" onClick={()=>setLibraryOpen(true)}><ResourceLibraryIcon/></IconButton>}
+            <AIComposer value={draft?draft.template:input} onChange={value=>{setInput(value);setMenuDismissed(false);}} onSend={send} disabled={assistant.transitioning||assistant.restoring||!!assistant.restoreError||preparing||modelChanging} sendDisabled={showMenu||!!draft?.command.fields.some(field=>field.required&&!draft.values[field.key]?.trim())} busy={busy} queueWhileBusy queuePending={assistant.pending.length > 0} variant="conversation"
+                toolbarLeading={<><IconButton label="管理 Skills 和快捷命令" title="资源库 · Skills 与快捷命令" className="ai-composer-library" onClick={()=>setLibraryOpen(true)}><ResourceLibraryIcon/></IconButton><AssistantLocalDirectories compact={!!contextLabel} busy={busy || assistant.transitioning || assistant.restoring || resetting || modelChanging} revision={directoryRevision}/></>}
+                toolbarTrailing={<div className="ai-composer-model-controls"><AssistantContextUsage runtime={runtime} busy={busy} revision={`${directoryRevision}:${modelChanging}:${resetting}`}/><AssistantModelPicker runtime={runtime} busy={busy || assistant.transitioning || assistant.restoring || resetting || preparing || assistant.pending.length > 0} revision={directoryRevision} onChanging={setModelChanging} onError={setControlError}/></div>}
                 editor={draft?<CommandDraftEditor key={draft.command.name} draft={draft} connections={connections} disabled={assistant.transitioning||preparing} onChange={setDraft} onSend={send} onCancel={()=>{setDraft(undefined);setControlError('');}}/>:undefined}
                 header={<AssistantMessageQueue messages={assistant.pending} paused={assistant.paused} disabled={assistant.transitioning} resumeDisabled={busy} currentTitle={contextTitle}
                     onResume={() => { setControlError(''); assistant.resume(); }} onSendNow={id => void sendNow(id)} onRemove={assistant.remove} />}
                 placeholder="输入问题…"
                 hint={busy ? 'Enter 加入队列 · 立即发送会先停止本轮' : assistant.paused && assistant.pending.length ? '队列已暂停，继续后按顺序处理' : undefined}
-                contexts={contextTitle ? [{ id: 'terminal', label: contextTitle, active: true }] : []} />
+                contexts={contextLabel ? [{ id: 'target', label: contextLabel, active: true, kind:contextTitle ? 'terminal' : 'workspace' }] : []} />
             </div>
         </div>
     </div>;

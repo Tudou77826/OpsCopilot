@@ -134,3 +134,4 @@ e2e/playwright-report/
 /jdbc-helper/target/
 /build/jdbc-output/
 /database-diagnostics/
+/assistant-conversation.json*

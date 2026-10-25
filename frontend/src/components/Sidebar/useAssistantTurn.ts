@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { AssistantAnswer, AssistantTarget, AssistantTurnState, AssistantRuntime } from '../../../../frontend-shell/src/assistant/runtime';
+import type { AssistantAnswer, AssistantTarget, AssistantTurnState, AssistantRuntime, AssistantMessage } from '../../../../frontend-shell/src/assistant/runtime';
 
 interface Operation {
     live: boolean;
@@ -9,7 +9,7 @@ interface Operation {
     markReady: () => void;
     stopping?: Promise<void>;
 }
-export interface AssistantTurnResult { phase: string; output: string; }
+export interface AssistantTurnResult { phase: string; output: string; messages?: AssistantMessage[]; }
 const active = (state: AssistantTurnState) => state.phase === 'running' || state.phase === 'waiting';
 
 /** Owns the exact turn returned by start. A late response never targets a new turn. */
@@ -37,8 +37,9 @@ export function useAssistantTurn(runtime?: AssistantRuntime) {
         const operation: Operation = { live: true, stopRequested: false, ready, markReady };
         if (current.current?.live) throw Error('请先停止当前操作');
         current.current = operation;
+        let observed:AssistantTurnState | undefined;
         try {
-            let observed = await runtime.start(question, target ? { ...target } : undefined);
+            observed = await runtime.start(question, target ? { ...target } : undefined);
             operation.turnId = observed.turnId;
             operation.markReady();
             if (!operation.live || !mounted.current) {
@@ -56,8 +57,9 @@ export function useAssistantTurn(runtime?: AssistantRuntime) {
                         await stopOperation(operation);
                     }
                     await operation.stopping;
-                    if (observed.phase === 'failed') throw Error([observed.output, observed.message].filter(Boolean).join('\n\n'));
-                    return { phase: observed.phase, output: observed.output || observed.message };
+                    const messages = observed.messages?.length ? [...observed.messages] : undefined;
+                    if (messages && observed.phase !== 'completed') messages.push({id:`${observed.turnId}:outcome`,role:'ai',kind:'notice',content:observed.message,phase:observed.phase,time:new Date().toISOString()});
+                    return { phase: observed.phase, output: observed.phase === 'failed' ? [observed.output, observed.message].filter(Boolean).join('\n\n') : observed.output || observed.message, messages };
                 }
                 setState(observed);
                 await new Promise(resolve => setTimeout(resolve, 250));
@@ -73,6 +75,7 @@ export function useAssistantTurn(runtime?: AssistantRuntime) {
             return { phase: 'stopped', output: '本轮已停止' };
         } catch (error) {
             if (operation.turnId) await runtime.stop(operation.turnId).catch(() => undefined);
+            if (observed?.messages?.length) return {phase:'failed',output:observed.output || '',messages:[...observed.messages,{id:`${observed.turnId}:outcome`,role:'ai',kind:'notice',phase:'failed',content:`请求未完成：${error instanceof Error ? error.message : String(error)}`,time:new Date().toISOString()}]};
             throw error;
         } finally {
             operation.markReady();

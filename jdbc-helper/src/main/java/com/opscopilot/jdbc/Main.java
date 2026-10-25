@@ -20,14 +20,17 @@ public final class Main {
     private static Driver driver;
     private static String dialect;
     private static volatile String password = "", user = "", connectionURL = "";
+    private static volatile boolean memoryFailed;
     private static final ThreadLocal<String> PHASE = ThreadLocal.withInitial(() -> "处理请求");
     private static final ThreadLocal<List<Map<String, Object>>> EVENTS = ThreadLocal.withInitial(ArrayList::new);
     private static final ThreadLocal<Long> STARTED = ThreadLocal.withInitial(System::nanoTime);
+    private static Map<String, Object> runtimeDetails;
 
     public static void main(String[] args) throws Exception {
         // Driver diagnostics must never corrupt the protocol or reach application logs.
         System.setOut(new PrintStream(OutputStream.nullOutputStream()));
         System.setErr(new PrintStream(OutputStream.nullOutputStream()));
+        runtimeDetails = RuntimeDetails.capture();
         try (DataInputStream input = new DataInputStream(System.in)) {
             while (true) {
                 int size;
@@ -61,8 +64,22 @@ public final class Main {
         response.put("id", request.get("id"));
         PHASE.set(text(request, "op").equals("query") ? "执行 SQL" : "处理请求");
         EVENTS.get().clear(); STARTED.set(System.nanoTime());
-        try { response.put("data", operation.run()); }
-        catch (Exception | LinkageError error) { response.put("error", JdbcErrors.format(PHASE.get(), error, password, user, connectionURL)); }
+        try {
+            if (memoryFailed) throw new SQLException("JDBC 运行组件发生过内存分配失败，请重新连接；未继续执行操作");
+            response.put("data", operation.run());
+        }
+        catch (Exception | LinkageError | OutOfMemoryError error) {
+            memoryFailed |= JdbcErrors.isMemoryFailure(error);
+            response.put("error", JdbcErrors.format(PHASE.get(), error, password, user, connectionURL));
+            Map<String, Object> failure = new LinkedHashMap<>();
+            failure.put("phase", PHASE.get()); failure.put("category", JdbcErrors.category(error));
+            Map<String, Long> memory = JdbcErrors.memoryValues(error);
+            if (!memory.isEmpty()) failure.put("directMemory", memory);
+            response.put("failure", failure);
+            if (memoryFailed) response.put("fatal", true);
+        }
+        String op = text(request, "op");
+        if (op.equals("load") || op.equals("open") || op.equals("version")) response.put("runtime", runtimeDetails);
         if (!EVENTS.get().isEmpty()) response.put("events", new ArrayList<>(EVENTS.get()));
         byte[] bytes = JSON.toJson(response).getBytes(StandardCharsets.UTF_8);
         try {

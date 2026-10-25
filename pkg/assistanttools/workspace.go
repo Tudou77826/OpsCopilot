@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"opscopilot/pkg/assistantcontrol"
+	"opscopilot/pkg/assistantreference"
 	"opscopilot/pkg/terminalcontrol"
 	"opscopilot/pkg/workspace"
 )
@@ -28,20 +29,27 @@ type terminalDenials struct {
 // WorkspaceTools serializes explicit target changes. A captured call belongs
 // to its original target generation, even if its request body arrives late.
 type WorkspaceTools struct {
-	Database      *DatabaseTools
-	turn          *assistantcontrol.Turn
-	list          func(context.Context) (workspace.Inventory, error)
-	prepare       func(context.Context, string) (ConnectionPlan, error)
-	selectTab     func(context.Context, string) (workspace.Tab, error)
-	terminal      func(terminalcontrol.Target) *TerminalTools
-	mu            sync.Mutex
-	generation    atomic.Uint64
-	current       *TerminalTools
-	closed        bool
-	denied        map[string]bool
-	deniedTargets map[terminalcontrol.Target]terminalDenials
-	OnOperation   func(action, phase string, target terminalcontrol.Target)
+	References         *ReferenceTools
+	LocalDirectories   *LocalDirectoryTools
+	Files              *FileTools
+	Database           *DatabaseTools
+	turn               *assistantcontrol.Turn
+	list               func(context.Context) (workspace.Inventory, error)
+	prepare            func(context.Context, string) (ConnectionPlan, error)
+	selectTab          func(context.Context, string) (workspace.Tab, error)
+	terminal           func(terminalcontrol.Target) *TerminalTools
+	mu                 sync.Mutex
+	generation         atomic.Uint64
+	receiptSequence    atomic.Uint64
+	current            *TerminalTools
+	closed             bool
+	denied             map[string]bool
+	deniedTargets      map[terminalcontrol.Target]terminalDenials
+	OnOperation        func(action, phase string, target terminalcontrol.Target)
+	InitialPageContext string
 }
+
+func (w *WorkspaceTools) MessageContext() string { return w.InitialPageContext }
 
 func NewWorkspaceTools(turn *assistantcontrol.Turn, target terminalcontrol.Target, list func(context.Context) (workspace.Inventory, error), prepare func(context.Context, string) (ConnectionPlan, error), selectTab func(context.Context, string) (workspace.Tab, error), terminal func(terminalcontrol.Target) *TerminalTools) *WorkspaceTools {
 	return &WorkspaceTools{turn: turn, list: list, prepare: prepare, selectTab: selectTab, terminal: terminal, current: terminal(target), denied: make(map[string]bool), deniedTargets: make(map[terminalcontrol.Target]terminalDenials)}
@@ -50,6 +58,9 @@ func (w *WorkspaceTools) Close() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.closed = true
+	if w.Files != nil {
+		w.Files.Close()
+	}
 	if w.Database != nil {
 		w.Database.Close()
 	}
@@ -71,7 +82,7 @@ func (w *WorkspaceTools) Call(ctx context.Context, name, argument string) (any, 
 func (w *WorkspaceTools) CallWithPurpose(ctx context.Context, name, argument, purpose string) (any, error) {
 	return w.CaptureCall()(ctx, name, argument, purpose)
 }
-func (w *WorkspaceTools) call(ctx context.Context, generation uint64, name, argument, purpose string) (any, error) {
+func (w *WorkspaceTools) call(ctx context.Context, generation uint64, name, argument, purpose string) (result any, callErr error) {
 	if !w.mu.TryLock() {
 		return nil, errors.New("工作台已有操作进行中，请顺序调用")
 	}
@@ -79,11 +90,57 @@ func (w *WorkspaceTools) call(ctx context.Context, generation uint64, name, argu
 	if w.closed || generation != w.generation.Load() || ctx.Err() != nil || w.turn.Context().Err() != nil {
 		return nil, assistantcontrol.ErrStale
 	}
+	finishReceipt := w.beginCallReceipt(name, argument)
+	defer func() { finishReceipt(result, callErr) }()
+	if !hasDetailedReceipt(name) {
+		ctx = context.WithValue(ctx, callReceiptKey{}, true)
+	}
+	for _, tool := range assistantreference.ToolNames() {
+		if name == tool {
+			if w.References == nil {
+				return nil, errors.New("当前宿主不支持知识与快捷命令读取")
+			}
+			return w.References.Call(ctx, name, argument)
+		}
+	}
+	if name == "local_directories" || name == "local_add_directories" {
+		if w.LocalDirectories == nil {
+			return nil, errors.New("当前宿主不支持本地目录列表")
+		}
+		return w.LocalDirectories.Call(ctx, name, argument)
+	}
+	if strings.HasPrefix(name, "file_") {
+		if w.Files == nil {
+			return nil, errors.New("当前宿主不支持文件工作台")
+		}
+		if name == "file_open" || name == "file_take" {
+			w.generation.Add(1)
+			defer w.generation.Add(1)
+			if w.current != nil {
+				w.current.Close()
+				w.current = nil
+			}
+			if w.Database != nil {
+				w.Database.Close()
+			}
+			if err := w.turn.ChangeTarget(assistantcontrol.Target{}); err != nil {
+				return nil, err
+			}
+		}
+		value, err := w.Files.Call(ctx, name, argument)
+		if encoded, marshalErr := json.Marshal(value); marshalErr == nil && len(encoded) > 64<<10 {
+			value = map[string]any{"truncated": true, "preview": strings.ToValidUTF8(string(encoded[:64<<10]), "�"), "message": "完整目录保留在文件页签；请缩小范围。日志分析请使用终端"}
+		}
+		return value, err
+	}
 	if strings.HasPrefix(name, "database_") {
 		if w.Database == nil {
 			return nil, errors.New("当前宿主不支持数据库工作台")
 		}
 		if name == "database_open" || name == "database_take" {
+			if w.Files != nil {
+				w.Files.Close()
+			}
 			w.generation.Add(1)
 			defer w.generation.Add(1)
 			if w.current != nil {
@@ -110,6 +167,9 @@ func (w *WorkspaceTools) call(ctx context.Context, generation uint64, name, argu
 		}
 		return inventory, err
 	case "workspace_open", "workspace_select":
+		if w.Files != nil {
+			w.Files.Close()
+		}
 		if w.Database != nil {
 			w.Database.Close()
 		}

@@ -43,4 +43,5 @@ export interface AIContextChip {
     id: string;
     label: string;
     active?: boolean;
+    kind?: 'terminal' | 'workspace';
 }

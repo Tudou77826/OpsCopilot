@@ -107,3 +107,73 @@ func TestSnapshotIsCopiedAndStaleUIIsUnavailable(t *testing.T) {
 		t.Fatal("stale UI accepted")
 	}
 }
+
+func TestRegisteredObserverCannotStealSenderPresentation(t *testing.T) {
+	s := &Service{}
+	sender, _, err := s.RegisterPage("sender-tab")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tab := Tab{Target: Target{TabID: "sender-ssh", ConnectionID: "sender-physical"}, Title: "sender node", Status: "connected", Ready: true}
+	_, _ = s.Pull(sender, Snapshot{Tabs: []Tab{tab}, Active: tab.Target})
+	if err = s.Activate(sender); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- s.Present(ctx, sender, "select", tab) }()
+	command := pendingPresentation(t, s, sender, Snapshot{Tabs: []Tab{tab}, Active: tab.Target})
+	observer, replaced, err := s.RegisterPage("other-window")
+	if err != nil || replaced {
+		t.Fatal("observer replaced sender", err)
+	}
+	commands, err := s.Pull(observer, Snapshot{Tabs: []Tab{{Target: Target{TabID: "other-ssh", ConnectionID: "other-physical"}}}})
+	if err != nil || len(commands) != 0 {
+		t.Fatal("observer received sender operation", err)
+	}
+	if s.Acknowledge(observer, command.ID, true) == nil {
+		t.Fatal("observer acknowledged sender operation")
+	}
+	client, view, err := s.Current()
+	if err != nil || client != sender || view.Active != tab.Target {
+		t.Fatal("observer changed sender context")
+	}
+	if err = s.Acknowledge(sender, command.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err = <-done; err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Activate(observer); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Registered(sender); err != nil {
+		t.Fatal("sender cannot submit another message", err)
+	}
+	if err = s.Activate(sender); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReloadReplacesOnlyItsOwnPageRegistration(t *testing.T) {
+	s := &Service{}
+	sender, _, _ := s.RegisterPage("sender")
+	other, _, _ := s.RegisterPage("other")
+	_, _ = s.Pull(sender, Snapshot{})
+	_ = s.Activate(sender)
+	next, replaced, err := s.RegisterPage("sender")
+	if err != nil || !replaced {
+		t.Fatal("reload did not replace active sender")
+	}
+	if s.Registered(sender) == nil {
+		t.Fatal("old document registration survived reload")
+	}
+	if err = s.Registered(other); err != nil {
+		t.Fatal("reload invalidated unrelated window")
+	}
+	active, _, err := s.Current()
+	if err != nil || active != next {
+		t.Fatal("reload did not retain correct page")
+	}
+}

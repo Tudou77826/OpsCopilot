@@ -51,6 +51,9 @@ func TestLiveChrysSkillResourceTraversalDeniedAndScriptRequiresApproval(t *testi
 			return
 		}
 		all, _ := json.Marshal(request.Messages)
+		if serveReviewFixture(w, request) {
+			return
+		}
 		step := calls.Add(1)
 		if strings.Contains(string(all), "OUTSIDE_SECRET_MARKER") {
 			t.Error("arbitrary local file exposed")

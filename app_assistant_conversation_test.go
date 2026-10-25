@@ -76,13 +76,13 @@ func TestAssistantRestoreCancelsPendingApprovalAndDrainsBeforeHistory(t *testing
 		close(a.assistantDone)
 	}()
 	s, err := a.RestoreAssistantConversation()
-	if err != nil || len(s.Messages) != 2 || s.Messages[1].Phase != "stopped" || s.Messages[1].Content != "partial answer" {
+	if err != nil || len(s.Messages) != 5 || s.Messages[4].Phase != "stopped" || s.Messages[1].Content != "partial answer" {
 		t.Fatal(s, err)
 	}
 	if err := a.RespondAssistantInteraction(turn.ID(), promptID, assistantcontrol.Answer{Selected: []string{"allow"}}); !errors.Is(err, assistantcontrol.ErrStale) {
 		t.Fatal("restored an old approval", err)
 	}
-	if repeat, err := a.RestoreAssistantConversation(); err != nil || len(repeat.Messages) != 2 || repeat.ID != s.ID {
+	if repeat, err := a.RestoreAssistantConversation(); err != nil || len(repeat.Messages) != len(s.Messages) || repeat.ID != s.ID {
 		t.Fatal("restore must not duplicate history", repeat, err)
 	}
 }

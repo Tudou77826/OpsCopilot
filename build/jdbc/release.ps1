@@ -45,6 +45,7 @@ try {
     $env:JAVA_HOME = $JdkHome
     $packageDirectory = Join-Path $OutputDirectory 'opscopilot-windows-jdbc'
     New-Item -ItemType Directory -Path $packageDirectory -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'jdbc-memory-check.cmd') -Destination $packageDirectory
     Write-Host "[INFO] Building JDBC runtime: $JdkHome"
     & (Join-Path $PSScriptRoot 'build.ps1') -JdkHome $JdkHome -Maven $Maven -OutputDirectory (Join-Path $packageDirectory 'jdbc-runtime')
     # Use a unique intermediate filename; build/bin may contain a running app

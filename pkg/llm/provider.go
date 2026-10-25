@@ -267,9 +267,9 @@ func (p *OpenAIProvider) streamChatCompletion(ctx context.Context, messages []Ch
 	reqMessages := make([]openai.ChatCompletionMessage, len(messages))
 	for i, m := range messages {
 		reqMessages[i] = openai.ChatCompletionMessage{
-			Role:       m.Role,
-			Content:    m.Content,
-			Name:       m.Name,
+			Role:             m.Role,
+			Content:          m.Content,
+			Name:             m.Name,
 			ToolCallID:       m.ToolCallID,
 			ReasoningContent: m.ReasoningContent,
 		}

@@ -39,6 +39,9 @@ func (JDBC) Disconnected(c *sql.Conn) bool {
 
 func (j JDBC) Open(ctx context.Context, p Profile, password string, dial DialContext) (*sql.DB, func(), error) {
 	connectiondiag.Event(ctx, "jdbc.driver.config", "驱动类=%s 版本=%s 方言=%s URL模板=%s", j.definition.ClassName, j.definition.Version, j.definition.Dialect, j.definition.URLTemplate)
+	connectiondiag.Fact(ctx, "JDBC驱动类", j.definition.ClassName)
+	connectiondiag.Fact(ctx, "JDBC驱动版本", j.definition.Version)
+	connectiondiag.Fact(ctx, "JDBC方言", j.definition.Dialect)
 	for _, jar := range j.definition.Jars {
 		connectiondiag.Event(ctx, "jdbc.jar", "文件=%s SHA256=%s", jar.Name, jar.SHA256)
 	}
@@ -72,7 +75,13 @@ func (j JDBC) Open(ctx context.Context, p Profile, password string, dial DialCon
 	}
 	connectiondiag.Event(ctx, "jdbc.driver.loaded", "驱动 JAR 校验、加载及 URL 模板检查完成")
 	connectiondiag.Event(ctx, "jdbc.url.effective", "实际JDBC URL=%s；SSH时已替换为本机回环端口。不会记录数据库账号或密码。", jdbcURL(j.definition, p))
+	connectiondiag.Fact(ctx, "JDBC实际URL", jdbcURL(j.definition, p))
 	connectiondiag.Event(ctx, "jdbc.properties", "DriverManager登录超时=10s TLS配置=%s allowPublicKeyRetrieval=%t；generic方言仅传user/password，不将TLS或只读配置转换为厂商属性", p.TLS, p.JDBCAllowPublicKeyRetrieval)
+	properties := "仅传 user/password（值不记录）；其他厂商属性由驱动默认值决定"
+	if j.definition.Dialect == "mysql" {
+		properties = "user/password（值不记录）；固定超时、安全与TLS属性，具体值见时间线"
+	}
+	connectiondiag.Fact(ctx, "JDBC连接属性策略", properties)
 	if j.definition.Dialect == "mysql" {
 		connectiondiag.Event(ctx, "jdbc.properties.mysql", "connectTimeout=10000 socketTimeout=125000 allowMultiQueries=false allowLoadLocalInfile=false allowUrlInLocalInfile=false sslMode按TLS配置设置；此处仅记录属性，不发送额外请求")
 	}

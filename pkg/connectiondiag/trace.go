@@ -24,14 +24,48 @@ type Trace struct {
 	lines   []string
 	secrets []string
 	seen    map[string]bool
+	facts   map[string]string
 	bytes   int
 	closed  bool
 	dropped bool
 }
 
 func New(ctx context.Context) (context.Context, *Trace) {
-	t := &Trace{started: time.Now(), seen: map[string]bool{}}
+	t := &Trace{started: time.Now(), seen: map[string]bool{}, facts: map[string]string{}}
 	return context.WithValue(ctx, contextKey{}, t), t
+}
+
+// Fact stores a small comparison field, not an instruction or a diagnosis.
+// Callers supply fixed field names. Values are filtered again at rendering so
+// credentials discovered later in the attempt are still removed.
+func Fact(ctx context.Context, key, value string) {
+	if t := From(ctx); t != nil {
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		if t.closed || len(key) > 80 || (len(t.facts) >= 48 && t.facts[key] == "") {
+			return
+		}
+		value = strings.Map(func(r rune) rune {
+			if unicode.IsControl(r) {
+				return ' '
+			}
+			return r
+		}, t.redact(value))
+		if len(value) > 1024 {
+			value = string([]rune(value)[:min(256, len([]rune(value)))]) + " [字段已截断]"
+		}
+		t.facts[key] = value
+	}
+}
+
+func (t *Trace) Facts() map[string]string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	result := make(map[string]string, len(t.facts))
+	for key, value := range t.facts {
+		result[key] = t.redact(value)
+	}
+	return result
 }
 
 func From(ctx context.Context) *Trace {

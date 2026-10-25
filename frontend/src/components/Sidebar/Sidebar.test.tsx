@@ -88,7 +88,8 @@ describe('Sidebar Component', () => {
                 />
             </ToastProvider>
         );
-        expect(screen.getByRole('heading',{name:'AI 助手'})).toBeVisible();
+        expect(screen.queryByRole('heading',{name:'AI 助手'})).toBeNull();
+        expect(screen.getByRole('toolbar',{name:'对话操作'})).toBeVisible();
         expect(screen.queryByText('勿打扰')).toBeNull();
         expect(screen.queryByLabelText('伙伴展示')).toBeNull();
         expect(screen.queryByText('开启养成')).toBeNull();

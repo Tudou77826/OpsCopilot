@@ -53,7 +53,7 @@ func TestLiveChrysManagedTools(t *testing.T) {
 				continue
 			}
 			databaseTool := false
-			for _, allowed := range mcp.DatabaseToolNames() {
+			for _, allowed := range append(append(mcp.DatabaseToolNames(), mcp.FileToolNames()...), mcp.LocalDirectoryToolNames()...) {
 				databaseTool = databaseTool || name == allowed
 			}
 			if databaseTool {
@@ -71,6 +71,9 @@ func TestLiveChrysManagedTools(t *testing.T) {
 		}
 		message := map[string]any{"role": "assistant", "content": "MANAGED_CHAIN_OK"}
 		reason := "stop"
+		if serveReviewFixture(w, request) {
+			return
+		}
 		step := calls.Add(1)
 		if step == 1 {
 			if toolName == "" {

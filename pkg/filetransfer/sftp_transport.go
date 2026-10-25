@@ -381,6 +381,10 @@ func DialSFTP(ctx context.Context, client *ssh.Client, timeout time.Duration) (*
 			session.Close()
 			return nil, toTransferError(res.err)
 		}
+		// Cancellation must also interrupt stalled data reads/writes after the
+		// handshake. Close this session only; the shared terminal SSH stays open.
+		stop := context.AfterFunc(ctx, func() { _ = session.Close() })
+		go func() { _ = res.client.Wait(); stop() }()
 		return res.client, nil
 	case <-timer.C:
 		session.Close()
@@ -436,6 +440,13 @@ func toTransferError(err error) error {
 	var te *TransferError
 	if errors.As(err, &te) {
 		return te
+	}
+	var status *sftp.StatusError
+	if errors.Is(err, os.ErrNotExist) || (errors.As(err, &status) && status.FxCode() == sftp.ErrSSHFxNoSuchFile) {
+		return &TransferError{Code: ErrorCodeNotFound, Message: "文件或目录不存在"}
+	}
+	if errors.Is(err, os.ErrPermission) || (status != nil && status.FxCode() == sftp.ErrSSHFxPermissionDenied) {
+		return &TransferError{Code: ErrorCodePermissionDenied, Message: "权限不足"}
 	}
 	msg := err.Error()
 	lower := strings.ToLower(msg)

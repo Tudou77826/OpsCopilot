@@ -77,6 +77,30 @@ const getPaneContainingText = (text: string) => {
     return pane as HTMLElement;
 };
 
+describe('application file workspace presentation', () => {
+    it('presents supplied directory observations without hidden reads, retains jobs, then allows manual navigation', async () => {
+        const backend = makeBackend();
+        const onPresented = vi.fn();
+        const managed = { nonce: 'receipt-1', localPath: 'C:\\review', remotePath: '/packages',
+            localEntries: [], remoteEntries: [{ path: '/packages/bundle.zip', name: 'bundle.zip', isDir: false, size: 23, mode: 0, modTime: '2026-10-22T00:00:00Z' }],
+            tasks: [{ id: 'ai-job', direction: 'upload', localPath: 'C:\\review\\bundle.zip', remotePath: '/packages/bundle.zip', status: 'done', bytes: 23, total: 23, message: '传输完成' }], blocked: true, onPresented };
+        const view = render(<FilesPanel activeTerminalId="session-1" terminals={[{ id: 'session-1', title: 'prod-01' }]} host={backend} managed={managed} />);
+        await waitFor(() => expect(onPresented).toHaveBeenCalledWith('receipt-1'));
+        expect(within(screen.getByTestId('file-pane-远端')).getByText('bundle.zip')).toBeTruthy();
+        expect(backend.FTList).not.toHaveBeenCalled();
+        expect(backend.LocalList).not.toHaveBeenCalled();
+        expect(screen.getByText('传输完成')).toBeTruthy();
+        view.rerender(<FilesPanel activeTerminalId="session-1" terminals={[{ id: 'session-1', title: 'prod-01' }]} host={backend} managed={{...managed,revealTask:'ai-job',revealNonce:'locate-1'}} />);
+        await waitFor(() => expect(view.container.querySelector('[data-transfer-task="ai-job"]')).toBeVisible());
+        expect(backend.FTList).not.toHaveBeenCalled();
+        expect(backend.LocalList).not.toHaveBeenCalled();
+        view.rerender(<FilesPanel activeTerminalId="session-1" terminals={[{ id: 'session-1', title: 'prod-01' }]} host={backend} managed={{ ...managed, nonce: '', blocked: false }} />);
+        const remote = screen.getByTestId('file-pane-远端');
+        fireEvent.click(within(remote).getByRole('button', { name: '远端：刷新目录' }));
+        await waitFor(() => expect(backend.FTList).toHaveBeenCalledWith('session-1', '/packages'));
+    });
+});
+
 describe('browser transfer capabilities in the original FilesPanel', () => {
     it('does not add browser controls to the desktop host', async () => {
         renderPanel(1200);

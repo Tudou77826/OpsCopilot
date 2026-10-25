@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"opscopilot/pkg/connectiondiag"
@@ -27,6 +28,13 @@ func (s *Service) beginDiagnostic(ctx context.Context, operation string, p Profi
 	d := connectionDiagnostic{trace: trace, id: time.Now().UTC().Format("20060102T150405.000000000Z") + "-" + uuid.NewString()}
 	connectiondiag.Event(ctx, "attempt.start", "编号=%s 操作=%s 应用版本=%s 平台=%s/%s Go=%s", d.id, operation, s.BuildVersion, runtime.GOOS, runtime.GOARCH, runtime.Version())
 	connectiondiag.Event(ctx, "database.config", "引擎=%s 数据库目标=%s 数据库=%q TLS=%s 程序只读限制=%t SSH节点ID=%q 数据库账号不记录", p.Engine, net.JoinHostPort(p.Host, strconv.Itoa(p.Port)), p.Database, p.TLS, p.ReadOnly, p.GatewayID)
+	mode := "直接连接"
+	if p.GatewayID != "" {
+		mode = "SSH 隧道"
+	}
+	for key, value := range map[string]string{"应用版本": s.BuildVersion, "宿主平台": runtime.GOOS + "/" + runtime.GOARCH, "连接方式": mode, "数据库目标": net.JoinHostPort(p.Host, strconv.Itoa(p.Port)), "数据库或模式": p.Database, "TLS设置": p.TLS} {
+		connectiondiag.Fact(ctx, key, value)
+	}
 	connectiondiag.Event(ctx, "ssh.mode", "SSH通道策略=%s；默认先请求标准转发，仅在 SSH 明确拒绝时尝试同账号同目标的兼容通道", p.GatewayMode)
 	connectiondiag.Event(ctx, "diagnostic.scope", "仅观察本次真实连接；不改地址、不切账号、不额外认证、不执行诊断 SQL 或远程探测命令。SSH 跳转原有的命令备用路径如被触发会单独记录。")
 	return ctx, d
@@ -46,7 +54,11 @@ func (s *Service) finishDiagnostic(ctx context.Context, d connectionDiagnostic, 
 	} else {
 		connectiondiag.Event(ctx, "attempt.failed", "%v", cause)
 	}
-	conclusion := "待验证：成功 Java 软件的实际路径、SSH 身份、目标端点及通道机制，当前程序无法观察。"
+	// Freeze first so comparison fields, evidence and the timeline describe the
+	// same attempt; late cleanup cannot turn an intentional close into a cause.
+	timeline := d.trace.Finish()
+	facts := d.trace.Facts()
+	conclusion := ""
 	switch {
 	case d.trace.Has("database.version.ok"):
 		conclusion += "\n已确认：数据库连接和版本读取均已成功。"
@@ -71,20 +83,33 @@ func (s *Service) finishDiagnostic(ctx context.Context, d connectionDiagnostic, 
 	if cause == nil {
 		conclusion += "\n本次连接成功。"
 	}
+	if d.trace.Has("jdbc.memory.failed") {
+		conclusion += "\n已确认：本地 JDBC 运行组件报告内存分配失败，相关辅助进程已回收。尚未确认申请量是否合理，需对照成功客户端的驱动、URL、目标端口及 JVM／缓冲配置；不将其直接归因为数据库服务器内存不足。"
+	}
 	var original string
 	if cause != nil {
-		original = "错误详情：\n" + d.trace.Redact(cause.Error()) + "\n\n"
-		if len(original) > 12<<10 {
-			original = string([]rune(original)[:min(3000, len([]rune(original)))]) + "\n[错误详情已截断]\n\n"
-		}
+		original = "错误详情：\n" + diagnosticText(d.trace.Redact(cause.Error()), 8<<10) + "\n\n"
 	}
-	hypotheses := "\n\n待验证假设（不是诊断结论）：\n" +
-		"H1 路径或身份差异：对照成功软件的每跳 SSH 地址、端口、账号、认证方式和最终节点。\n" +
-		"H2 SSH 转发限制：原因码为 1 时需对照目标地址字符串/端口、账号和请求类型；不能仅凭错误定位具体策略。\n" +
-		"H3 数据库端点差异：未额外从远端执行 socket/zsql 探测；TCP 通道失败不等于已验证数据库监听状态。\n" +
-		"H4 JDBC 差异：仅当数据库 TCP 通道已建立后，再对照 JAR SHA256、Java 版本、URL、TLS/厂商属性和驱动异常链。\n" +
-		"H5 成功软件使用其他机制：未观察其实现，不推定它采用 exec、远端 JDBC 或其他代理。\n"
-	report := "数据库连接诊断 v3\n编号：" + d.id + "\n" + original + "证据判断：\n" + conclusion + hypotheses + "\n时间线（Go 为事件观察时间；Java 阶段在 RPC 返回时回传，另附请求内耗时）：\n" + d.trace.Finish() + "\n"
+	status, phase := "失败", facts["失败阶段"]
+	if cause == nil {
+		status, phase = "成功", "数据库连接及版本读取完成"
+	}
+	if phase == "" {
+		phase = "未取得辅助程序失败阶段；请结合最后完成事件和原始错误判断"
+	}
+	category := diagnosticCategory(facts["异常分类"])
+	if value := facts["辅助进程启动诊断"]; value != "" {
+		category = value
+	}
+	if cause == nil {
+		category = "连接与版本读取成功"
+	}
+	report := "数据库连接诊断 v4\n编号：" + d.id + "\n结果：" + status + "\n失败或完成阶段：" + phase + "\n诊断摘要：" + category + "\n\n" +
+		original + "环境与连接对照（成功／失败日志按同名字段比较）：\n" + diagnosticFacts(facts) +
+		"\n证据判断：\n" + diagnosticText(strings.TrimSpace(conclusion), 1024) +
+		"\n\n下一步核对：\n" + diagnosticNext(facts, d.trace, cause) +
+		"\n\n时间线（Go 为事件观察时间；Java 阶段在 RPC 返回时回传，另附请求内耗时）：\n" + diagnosticText(timeline, 48<<10) + "\n"
+	report = diagnosticText(report, connectiondiag.MaxReportBytes-1024)
 	path, saveErr := s.saveDiagnostic(d.id, report)
 	if saveErr != nil {
 		report += "\n诊断文件保存失败（不改变连接结果）：" + d.trace.Redact(saveErr.Error())
@@ -95,6 +120,80 @@ func (s *Service) finishDiagnostic(ctx context.Context, d connectionDiagnostic, 
 		return nil
 	}
 	return &diagnosticError{cause: cause, report: report}
+}
+
+func diagnosticCategory(category string) string {
+	if value := map[string]string{
+		"memory.direct":        "本地 JDBC 直接内存分配失败；申请量来源尚未确定，不能据此判断数据库服务器内存不足。",
+		"memory.other":         "本地 JDBC 运行组件发生内存分配失败；操作不自动重试。",
+		"driver.compatibility": "异常指向 Java／驱动模块、类版本或依赖兼容问题；详见原始异常链。",
+		"network.dns":          "驱动报告数据库地址解析失败。", "network.timeout": "驱动报告连接或读取超时；具体阶段见原始异常链。",
+		"network.refused": "驱动报告连接被拒绝；核对实际目标及监听端口。", "tls": "异常指向 TLS／证书验证阶段。",
+		"authentication": "驱动报告认证错误；数据库账号和密码不记录。",
+	}[category]; value != "" {
+		return value
+	}
+	return "现有证据尚不能自动确定根因；优先查看失败阶段、原始异常链和调用位置。"
+}
+
+func diagnosticFacts(facts map[string]string) string {
+	keys := []string{
+		"应用版本", "宿主平台", "连接方式", "数据库目标", "SSH实际路径", "JDBC实际URL",
+		"JDBC驱动类", "JDBC驱动版本", "JDBC方言", "JDBC连接属性策略", "数据库版本",
+		"Java版本", "Java构建", "Java厂商", "Java虚拟机", "Java架构",
+		"实际Java堆上限", "直接内存限额证据", "直接内存失败申请", "JVM请求的内存参数", "JVM接收的内存参数",
+		"宿主JVM参数环境变量", "JVM参数环境变量", "辅助进程启动诊断", "辅助进程结束状态",
+		"辅助程序SHA256", "Java启动器SHA256", "JVM本体SHA256", "Java发行信息SHA256", "TLS设置", "数据库或模式",
+	}
+	for i := 1; i <= 8; i++ {
+		keys = append(keys, fmt.Sprintf("驱动JAR.%d", i))
+	}
+	var text strings.Builder
+	for _, key := range keys {
+		value := facts[key]
+		if strings.HasPrefix(key, "驱动JAR.") && value == "" {
+			continue
+		}
+		if value == "" {
+			value = "未采集／未提供（不据此推断一致或不同）"
+		}
+		fmt.Fprintf(&text, "%s：%s\n", key, value)
+	}
+	return diagnosticText(text.String(), 4<<10)
+}
+
+func diagnosticNext(facts map[string]string, trace *connectiondiag.Trace, cause error) string {
+	var result string
+	switch {
+	case cause == nil:
+		result = "保留本报告，与失败环境的同名对照字段及实际连接路径比较。仅证明本次目标已连通，不代表其他目标或查询能力已验证。"
+	case trace.Has("jdbc.memory.failed"):
+		result = "先比较成功／失败环境的 JVM接收参数、实际堆上限、直接内存限额证据与环境变量存在情况；再对照驱动／辅助程序指纹、实际目标和分配调用位置。若堆栈指向报文读取，重点核对目标服务协议和版本；若指向初始化，核对驱动缓冲配置。提高上限后成功仅证明预算影响，不证明申请量合理。"
+	case trace.Has("jdbc.runtime.failed"):
+		result = "先核对辅助进程启动诊断、组件指纹和已发现的 JVM 参数环境变量。环境变量可能含密钥，仅在本机核对设置，不直接导出其原文；本报告只保留固定分类及内存参数。"
+	case trace.Has("jdbc.driver.connected"):
+		result = "连接已返回；优先查看后续元数据／版本读取的异常和调用位置，不把该错误误判为 SSH 无法连通。"
+	case trace.Has("ssh.database.channel.rejected") && !trace.Has("ssh.database.channel.ok") && !trace.Has("ssh.database.command.ok"):
+		result = "先对照最后 SSH 节点、身份、目标地址字符串和端口以及通道拒绝原因；尚未证明是哪条服务端策略生效。"
+	case facts["异常分类"] == "driver.compatibility":
+		result = "先对照 Java 构建、JVM参数、辅助程序指纹和每个依赖 JAR 的 SHA256；同名 JAR 或同一主版本号不能代替文件一致性。"
+	default:
+		result = "先比较实际目标、连接路径、驱动／辅助程序指纹及 Java 环境，再按原始异常链的失败阶段排查网络、TLS、认证或元数据。未读取服务器配置，不自动判定具体规则。"
+	}
+	return diagnosticText(result, 1024)
+}
+
+func diagnosticText(value string, limit int) string {
+	value = strings.ToValidUTF8(value, "�")
+	if len(value) <= limit {
+		return value
+	}
+	marker := "\n[内容已截断]\n"
+	end := max(0, limit-len(marker))
+	for end > 0 && !utf8.RuneStart(value[end]) {
+		end--
+	}
+	return value[:end] + marker
 }
 
 // Only files generated by this feature are rotated. Each attempt has an isolated

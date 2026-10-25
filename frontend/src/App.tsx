@@ -36,6 +36,8 @@ import { isTerminalStatusReply } from '../../frontend-shell/src/ui/Terminal/stat
 import { KnowledgeTarget } from './components/AI';
 import type { main } from '../wailsjs/go/models';
 import { wailsDatabaseRuntime } from './shell-adapter/wailsDatabaseRuntime';
+import { AssistantFileWorkspaceView, useAssistantFileWorkspaces } from './components/Sidebar/AssistantFileWorkspace';
+import { FileWorkspaceDismiss, FileWorkspaceTakeover } from '../wailsjs/go/main/App';
 import { useAssistantDatabaseWorkspaces } from './components/Sidebar/useAssistantDatabaseWorkspaces';
 import { AssistantDatabaseWorkspaceView } from './components/Sidebar/AssistantDatabaseWorkspace';
 import { DatabaseWorkspaceDismiss, DatabaseWorkspaceTakeover } from '../wailsjs/go/main/App';
@@ -81,13 +83,18 @@ function App() {
     const [workspaceController, setWorkspaceController] = useState<TerminalWorkspaceController>();
     const [workspaceClient,setWorkspaceClient]=useState('');
     const assistantDatabase=useAssistantDatabaseWorkspaces(workspaceClient,workspaceController);
+    const assistantFiles=useAssistantFileWorkspaces(workspaceClient,workspaceController);
     const databaseWorkspaces=useMemo(()=>[
+        ...assistantFiles.items.map(w=>({id:w.id,restore:true,title:`文件 · ${w.endpoint.title}`,request:w.pending?w.revision:0,onClose:()=>{
+            if(w.ownerTurn){void FileWorkspaceTakeover(w.id).catch(error=>setStatus(String(error)));return;}
+            void FileWorkspaceDismiss(w.id).catch(error=>setStatus(String(error)));
+        },render:()=> <AssistantFileWorkspaceView workspace={w} ready={assistantFiles.ready}/>})),
         {id:'database',title:'数据库',request:databaseRequest,render:()=> <Suspense fallback={<div style={{padding:20,color:'var(--text-muted)'}}>正在打开数据库…</div>}><DatabaseWorkspace runtime={wailsDatabaseRuntime}/></Suspense>},
-        ...assistantDatabase.items.map(w=>({id:w.id,title:`${w.profile.name} · AI`,request:w.pending?w.revision:0,onClose:()=>{
+        ...assistantDatabase.items.map(w=>({id:w.id,restore:true,title:`${w.profile.name} · AI`,request:w.pending?w.revision:0,onClose:()=>{
             if(w.ownerTurn){if(window.confirm('AI 正在使用此页签，先停止并接回？'))void DatabaseWorkspaceTakeover(w.id);return;}
             if(window.confirm('关闭数据库页签？未提交事务可能回滚，保存的连接配置不会删除。'))void DatabaseWorkspaceDismiss(w.id).catch(error=>setStatus(String(error)));
         },render:()=> <AssistantDatabaseWorkspaceView workspace={w} ready={assistantDatabase.ready}/>})),
-    ],[databaseRequest,assistantDatabase.items,assistantDatabase.ready]);
+    ],[databaseRequest,assistantDatabase.items,assistantDatabase.ready,assistantFiles.items,assistantFiles.ready]);
     const [knowledgeTarget, setKnowledgeTarget] = useState<KnowledgeTarget | null>(null);
     const [isBroadcastMode, setIsBroadcastMode] = useState(false);
     const [broadcastIds, setBroadcastIds] = useState<string[]>([]);
@@ -443,7 +450,7 @@ function App() {
         snapshot() {
             const presented = workspaceController?.presentedTerminal();
             const tabs = terminals.map(tab => ({ tabId: tab.id, connectionId: tab.connectionId || '', title: tab.title, status: tab.status, ready: tab.id === presented }));
-            return { tabs, active: tabs.find(tab => tab.tabId === presented) || { tabId: '', connectionId: '' } };
+            return { tabs, active: tabs.find(tab => tab.tabId === presented) || { tabId: '', connectionId: '' }, activeWorkspace: workspaceController?.presentedWorkspace?.() || '' };
         },
         open(tab: WorkspaceTab) { publishTerminal(tab.tabId, tab.connectionId, tab.title); },
         select: id => workspaceController?.selectTerminal(id) || false,
@@ -732,7 +739,7 @@ function App() {
             toolbar={<ProductToolbar status={status} theme={theme} onNewConnection={() => setIsSmartModalOpen(true)} onThemeToggle={handleThemeToggle} onSettings={() => { setSettingsInitialTab('llm'); setIsSettingsOpen(true); }} updateAvailable={updateAvailable} highlightNeedsAttention={highlightNeedsAttention} parsedTimestamp={parsedTimestamp} />}
             terminal={<FlexLayoutAdapter
                             onWorkspaceController={setWorkspaceController}
-                            terminalBadges={Object.fromEntries(assistantDatabase.items.filter(w=>w.ownerTurn).map(w=>[w.id,'AI 操作中']))}
+                            terminalBadges={Object.fromEntries([...assistantDatabase.items,...assistantFiles.items].filter(w=>w.ownerTurn).map(w=>[w.id,'AI 操作中']))}
                             workspaces={databaseWorkspaces}
                             onWorkspaceFocusChange={setWorkspaceKind}
                             terminals={terminals}
@@ -770,6 +777,7 @@ function App() {
                     onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
                     onConnect={(config) => handleBatchConnect([config])}
                     activeTerminalId={workspaceKind === 'terminal' ? activeTerminalId : null}
+                    activeWorkspaceTitle={databaseWorkspaces.find(workspace=>workspace.id===workspaceKind)?.title}
                     terminals={terminals}
                     onTypeCommand={handleQuickCommand}
                     onOpenKnowledgeSource={handleOpenKnowledgeSource}

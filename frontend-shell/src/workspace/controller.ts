@@ -1,6 +1,6 @@
 export interface WorkspaceTarget { tabId: string; connectionId: string; }
 export interface WorkspaceTab extends WorkspaceTarget { title: string; status: string; ready: boolean; }
-export interface WorkspaceSnapshot { tabs: WorkspaceTab[]; active: WorkspaceTarget; }
+export interface WorkspaceSnapshot { tabs: WorkspaceTab[]; active: WorkspaceTarget; activeWorkspace?: string; }
 export interface WorkspacePresentation { id: string; action: 'open' | 'select'; tab: WorkspaceTab; }
 export interface WorkspaceHost {
     attach(): Promise<string>;

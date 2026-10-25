@@ -66,6 +66,8 @@ func (t *SCPTransport) Upload(ctx context.Context, localPath, remotePath string,
 		return TransferResult{}, toTransferError(err)
 	}
 	defer func() { go session.Close() }()
+	stop := context.AfterFunc(ctx, func() { _ = session.Close() })
+	defer stop()
 
 	stdin, err := session.StdinPipe()
 	if err != nil {
@@ -143,6 +145,8 @@ func (t *SCPTransport) Download(ctx context.Context, remotePath, localPath strin
 		return TransferResult{}, toTransferError(err)
 	}
 	defer func() { go session.Close() }()
+	stop := context.AfterFunc(ctx, func() { _ = session.Close() })
+	defer stop()
 
 	stdin, err := session.StdinPipe()
 	if err != nil {

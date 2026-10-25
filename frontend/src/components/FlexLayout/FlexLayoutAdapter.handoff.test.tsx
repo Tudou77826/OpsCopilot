@@ -28,7 +28,7 @@ it('重连快照尚未到达时，不显示旧连接的接手入口、占用标�
     expect(screen.getByLabelText('终端输入').parentElement).not.toHaveAttribute('inert');
     fixture.states = { one: { ...old, connectionId: 'new', runId: '', phase: 'idle', owned: false } };
     view.rerender(<FlexLayoutAdapter {...props} />);
-    expect(screen.getByRole('button', { name: /接手测试/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /接手测试/ })).not.toBeInTheDocument();
     fixture.states = { one: { ...old, connectionId: 'new', runId: 'r2' } };
     view.rerender(<FlexLayoutAdapter {...props} />);
     expect(screen.getByText('接手测试中')).toBeInTheDocument();

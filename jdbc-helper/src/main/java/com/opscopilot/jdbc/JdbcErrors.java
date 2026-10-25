@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 final class JdbcErrors {
     private static final Pattern JDBC_URL = Pattern.compile("(?i)jdbc:[^\\s\"'<>]+", Pattern.UNICODE_CASE);
     private static final Pattern ASSIGNMENT = Pattern.compile("(?i)(password|passwd|pwd|secret|token|api[_-]?key)\\s*[:=]\\s*(?:\"[^\"]*\"|'[^']*'|[^\\s,;)\\]}]+)");
+    private static final Pattern DIRECT_MEMORY = Pattern.compile("Cannot reserve ([0-9]{1,19}) bytes of direct buffer memory \\(allocated: ([0-9]{1,19}), limit: ([0-9]{1,19})\\)");
 
     static String format(String phase, Throwable error, String password, String user, String url) {
         List<Throwable> chain = new ArrayList<>();
@@ -32,8 +33,11 @@ final class JdbcErrors {
             details.add(cause.getClass().getSimpleName() + ": " + message);
         }
         String lower = matching.toString().toLowerCase(Locale.ROOT);
+        boolean memoryFailure = isMemoryFailure(error);
         String hint;
-        if (lower.contains("public key retrieval is not allowed")) hint = "服务器要求完整密码验证。请启用可信 TLS，或在受信任网络／SSH 通道中显式允许获取服务器 RSA 公钥。";
+        if (memoryFailure && (lower.contains("direct buffer memory") || lower.contains("directbuffer"))) hint = "JDBC 驱动的直接内存分配失败。这是本地 Java 运行组件的报错，不代表数据库服务器内存不足。握手阶段需对照可用客户端的驱动 JAR、URL、目标端口和缓冲配置；仅凭此错误不能判断应当增大内存，程序不会自动重试。";
+        else if (memoryFailure) hint = "JDBC 运行组件发生内存分配失败，请检查驱动及查询范围；已停止使用该辅助进程，操作不自动重试。";
+        else if (lower.contains("public key retrieval is not allowed")) hint = "服务器要求完整密码验证。请启用可信 TLS，或在受信任网络／SSH 通道中显式允许获取服务器 RSA 公钥。";
         else if (lower.contains("inaccessibleobjectexception") || lower.contains("illegalaccesserror")) hint = "驱动与当前 Java 运行组件的模块访问规则不兼容。请更新程序和 JDBC 运行组件，并保留以下异常详情。";
         else if (lower.contains("javax/xml/bind") || lower.contains("javax.xml.bind")) hint = "驱动依赖旧版 JAXB。请更新随程序分发的 JDBC 运行组件，或导入对应的 JAXB 2.x 依赖 JAR。";
         else if (lower.contains("unsupportedclassversionerror")) hint = "驱动要求的 Java 版本高于当前运行组件，请使用兼容驱动或更新组件。";
@@ -46,8 +50,86 @@ final class JdbcErrors {
         else hint = "请根据以下驱动详情排查；驱动导入成功不代表数据库连接成功。";
         String context = "JDBC 操作失败 · " + phase;
         if (!state.isEmpty()) context += "（SQLState " + state + "，代码 " + code + "）";
-        context += "\n" + hint + "\n" + String.join("\n原因：", details);
+        context += "\n" + hint;
+        if (memoryFailure) context += memoryDetails(chain, matching.toString(), password, user, url);
+        else if (!phase.equals("执行 SQL")) {
+            Throwable deepest = chain.isEmpty() ? error : chain.get(chain.size() - 1);
+            context += "\n异常调用位置（采样，仅类、方法和行号）：" + stackDetails(deepest, password, user, url);
+        }
+        context += "\n" + String.join("\n原因：", details);
         return context.length() > 5000 ? context.substring(0, 5000) + "…" : context;
+    }
+
+    static String category(Throwable error) {
+        List<Throwable> chain = new ArrayList<>();
+        collect(error, chain, Collections.newSetFromMap(new IdentityHashMap<>()));
+        String text = chain.stream().map(cause -> cause.getClass().getName() + " " + cause.getMessage()).reduce("", (a, b) -> a + "\n" + b).toLowerCase(Locale.ROOT);
+        if (isMemoryFailure(error)) return text.contains("direct buffer memory") || text.contains("directbuffer") ? "memory.direct" : "memory.other";
+        if (text.contains("inaccessibleobjectexception") || text.contains("illegalaccesserror") || text.contains("unsupportedclassversionerror") || text.contains("classnotfoundexception") || text.contains("noclassdeffounderror")) return "driver.compatibility";
+        if (text.contains("sslhandshakeexception") || text.contains("certificateexception") || text.contains("pkix")) return "tls";
+        if (text.contains("unknownhostexception")) return "network.dns";
+        if (text.contains("sockettimeoutexception") || text.contains("connect timed out")) return "network.timeout";
+        if (text.contains("connectexception") || text.contains("connection refused")) return "network.refused";
+        if (chain.stream().anyMatch(cause -> cause instanceof SQLException sql && sql.getSQLState() != null && sql.getSQLState().startsWith("28"))) return "authentication";
+        return "driver.other";
+    }
+
+    static boolean isMemoryFailure(Throwable error) {
+        List<Throwable> chain = new ArrayList<>();
+        collect(error, chain, Collections.newSetFromMap(new IdentityHashMap<>()));
+        // Some vendor drivers keep only Error.toString() in their SQLException.
+        return chain.stream().anyMatch(cause -> cause instanceof OutOfMemoryError ||
+            String.valueOf(cause.getMessage()).contains("java.lang.OutOfMemoryError:"));
+    }
+
+    static Map<String, Long> memoryValues(Throwable error) {
+        List<Throwable> chain = new ArrayList<>();
+        collect(error, chain, Collections.newSetFromMap(new IdentityHashMap<>()));
+        for (Throwable cause : chain) {
+            var match = DIRECT_MEMORY.matcher(String.valueOf(cause.getMessage()));
+            if (!match.find()) continue;
+            try {
+                return Map.of("requested", Long.parseLong(match.group(1)), "allocated", Long.parseLong(match.group(2)), "limit", Long.parseLong(match.group(3)));
+            } catch (NumberFormatException ignored) { /* An incomplete number is not evidence. */ }
+        }
+        return Map.of();
+    }
+
+    private static String memoryDetails(List<Throwable> chain, String messages, String password, String user, String url) {
+        StringBuilder result = new StringBuilder();
+        var match = DIRECT_MEMORY.matcher(messages);
+        if (match.find()) {
+            try {
+                long requested = Long.parseLong(match.group(1)), allocated = Long.parseLong(match.group(2)), limit = Long.parseLong(match.group(3));
+                result.append(String.format(Locale.ROOT, "\n直接内存：本次申请 %.1f MiB；已分配 %.1f MiB；上限 %.1f MiB。", requested / 1048576.0, allocated / 1048576.0, limit / 1048576.0));
+            } catch (NumberFormatException ignored) { /* Preserve the bounded original error below. */ }
+        }
+        Throwable allocation = chain.stream().filter(cause -> cause instanceof OutOfMemoryError).findFirst().orElse(null);
+        if (allocation == null) return result + "\n驱动未保留原始内存分配调用栈，尚不能定位分配来源。\n以下为外层异常调用位置，不代表分配栈：" + stackDetails(chain.get(0), password, user, url);
+        result.append("\n内存分配调用位置（采样，仅类、方法和行号）：");
+        result.append(stackDetails(allocation, password, user, url));
+        return result.toString();
+    }
+
+    private static String stackDetails(Throwable error, String password, String user, String url) {
+        StringBuilder result = new StringBuilder();
+        StackTraceElement[] frames = error.getStackTrace();
+        SortedSet<Integer> selected = new TreeSet<>();
+        for (int i = 0; i < Math.min(4, frames.length); i++) selected.add(i);
+        // Preserve a vendor frame even when NIO/reflection fills the stack top.
+        for (int i = 4; i < Math.min(128, frames.length) && selected.size() < 8; i++) {
+            String name = frames[i].getClassName();
+            if (!name.startsWith("java.") && !name.startsWith("javax.") && !name.startsWith("jdk.") && !name.startsWith("sun.") && !name.startsWith("com.opscopilot.jdbc.")) selected.add(i);
+        }
+        for (int i = 4; i < frames.length && selected.size() < 8; i++) selected.add(i);
+        for (int i : selected) {
+            String owner = frames[i].getClassName(), method = frames[i].getMethodName();
+            if (!owner.matches("[A-Za-z0-9_$./]{1,180}") || !method.matches("[A-Za-z0-9_$<>]{1,120}")) continue;
+            if (result.length() > 1300) { result.append("\n  [调用位置已截断]"); break; }
+            result.append("\n  ").append(redact(owner + "." + method, password, user, url));
+            if (frames[i].getLineNumber() >= 0) result.append(":").append(frames[i].getLineNumber());
+        }
+        return result.length() == 0 ? "\n  [驱动未提供栈帧]" : result.toString();
     }
 
     private static void collect(Throwable error, List<Throwable> out, Set<Throwable> seen) {

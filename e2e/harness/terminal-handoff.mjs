@@ -11,9 +11,13 @@ import { startAssistantModelFixture } from './assistant-model-fixture.mjs';
 import { loadTrialModel, runRealModelTrial } from './assistant-real-model.mjs';
 import { prepareBusinessSkills, runBusinessSkillsTrial } from './assistant-skills-trial.mjs';
 import { prepareDatabaseTrial, runAssistantDatabaseTrial } from './assistant-database-trial.mjs';
+import { runFileWorkspaceTrial } from './assistant-file-trial.mjs';
+import { runSelectedMachineTrial } from './assistant-selected-machine-trial.mjs';
+import { runLocalDirectoriesTrial } from './assistant-local-directories-trial.mjs';
 import { runConversationRecoveryTrial } from './assistant-conversation-recovery.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const frontendDist = process.argv.find(value => value.startsWith('--frontend-dist='))?.slice('--frontend-dist='.length) || path.join(root,'frontend/dist');
 const runDir = path.join(root, 'e2e/.runtime', `handoff-desktop-${Date.now()}`);
 const appDir = path.join(runDir, 'app');
 const portArgument = process.argv.find(value => value.startsWith('--port='));
@@ -26,10 +30,14 @@ const keep = process.argv.includes('--keep');
 const previewOnly = process.argv.includes('--preview-only');
 const skillsTrial = process.argv.includes('--skills-trial');
 const databaseTrial=process.argv.includes('--database-trial');
+const fileTrial=process.argv.includes('--file-trial');
+const localDirectoriesTrial=process.argv.includes('--local-directories-trial');
+const selectedMachineTrial=process.argv.includes('--selected-machine-trial');
 const conversationTrial=process.argv.includes('--conversation-trial');
 const jdbcRuntime=process.argv.find(v=>v.startsWith('--jdbc-runtime='))?.slice('--jdbc-runtime='.length);
 if (previewOnly && !keep) throw Error('--preview-only requires --keep; it starts a preview without running assertions.');
-const chrysExecutable = process.argv.find(value => value.startsWith('--chrys='))?.slice('--chrys='.length);
+const chrysExecutable = process.argv.find(value => value.startsWith('--icode='))?.slice('--icode='.length)
+  || process.argv.find(value => value.startsWith('--chrys='))?.slice('--chrys='.length);
 if (skillsTrial && (!chrysExecutable || previewOnly)) throw Error('--skills-trial requires Chrys and runs assertions.');
 const realModelConfig = process.argv.find(value => value.startsWith('--real-model-config='))?.slice('--real-model-config='.length);
 if (realModelConfig && !chrysExecutable) throw Error('Real model trials require --chrys=<absolute path>.');
@@ -37,6 +45,9 @@ const realModel = realModelConfig ? await loadTrialModel(realModelConfig) : unde
 if(databaseTrial&&(!chrysExecutable||previewOnly))throw Error('--database-trial requires Chrys and assertions');
 const modelFixture = chrysExecutable && !realModel ? await startAssistantModelFixture() : undefined;
 if (conversationTrial && (!modelFixture || previewOnly || databaseTrial)) throw Error('--conversation-trial requires simulated Chrys and assertions, without --database-trial.');
+if(fileTrial&&(!modelFixture||previewOnly||databaseTrial||conversationTrial))throw Error('--file-trial requires simulated Chrys and assertions');
+if(localDirectoriesTrial&&(!modelFixture||previewOnly||databaseTrial||conversationTrial||fileTrial||selectedMachineTrial||skillsTrial))throw Error('--local-directories-trial requires simulated Chrys and assertions without other trials');
+if(selectedMachineTrial&&(!realModel||previewOnly||databaseTrial||conversationTrial||fileTrial))throw Error('--selected-machine-trial requires real model configuration and assertions');
 let stopping = false;
 let cleaning = false;
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -45,8 +56,8 @@ async function until(fn, label) {
   while (Date.now() < deadline) { try { const value = await fn(); if (value) return value; } catch {} await delay(200); }
   throw Error(`Timed out: ${label}`);
 }
-function build(exe, args, cwd = root) {
-  const result = spawnSync(exe, args, { cwd, stdio: 'inherit', windowsHide: true });
+function build(exe, args, cwd = root, env = {}) {
+  const result = spawnSync(exe, args, { cwd, env: {...process.env,...env}, stdio: 'inherit', windowsHide: true });
   if (result.error || result.status !== 0) throw Error(`Build failed: ${exe}`);
 }
 function launch(exe, args, cwd, env = {}) {
@@ -85,20 +96,27 @@ await writeFile(path.join(appDir, 'config.json'), JSON.stringify({
   llm: realModel || { BaseURL: modelFixture?.baseURL || 'http://127.0.0.1:1/v1', APIKey: chrysExecutable ? 'local-fixture-key' : '', Model: chrysExecutable ? 'fixture' : 'no-ai-fixture', ComplexModel: chrysExecutable ? 'fixture' : undefined },
   patch_store: { enabled: false }, session_share: { enabled: false },
 }));
+const nativeConfig = path.join(appDir,'native-appdata','chrys');
+if(chrysExecutable){
+  const model=realModel || {BaseURL:modelFixture.baseURL,APIKey:'local-fixture-key',Model:'fixture'};
+  await mkdir(path.join(nativeConfig,'models'),{recursive:true});
+  await writeFile(path.join(nativeConfig,'settings.yaml'),'model.profile.active: fixture\n');
+  await writeFile(path.join(nativeConfig,'models','fixture.yaml'),JSON.stringify({id:'fixture',name:'Trial model',provider:'openai',model_id:model.ComplexModel||model.Model,base_url:model.BaseURL,api_key:model.APIKey,stream:false,http_max_retries:0}));
+}
 await writeFile(path.join(appDir, 'service-center.json'), JSON.stringify({ baseUrl: '', choice: 'disabled' }));
-if (!process.argv.includes('--reuse-frontend')) build('cmd.exe', ['/d', '/s', '/c', 'npm run build -- --logLevel warn'], path.join(root, 'frontend'));
+if (!process.argv.includes('--reuse-frontend')) build('cmd.exe', ['/d', '/s', '/c', 'npm run build -- --logLevel warn'], path.join(root, 'frontend'), {VITE_TERMINAL_HANDOFF_LAB:previewOnly?'':'1'});
 build('go', ['build', '-tags', 'dev', '-o', path.join(appDir, 'opscopilot-handoff.exe'), '.']);
 const wslRoot = spawnSync('wsl.exe', ['-d', 'docker-desktop', '-e', 'wslpath', '-a', root], { encoding: 'utf8', env: { ...process.env, WSL_UTF8: '1' }, windowsHide: true });
 const linuxRoot = wslRoot.stdout?.trim();
 if (wslRoot.error || wslRoot.status !== 0 || !linuxRoot?.startsWith('/')) throw Error('Cannot resolve the isolated WSL fixture directory.');
 launch('go', ['test', './experiments/terminalhandoff', '-run', '^TestDesktopFixture$', '-v', '-count=1', keep ? '-timeout=0' : '-timeout=21m'], root, {
-  WSL_UTF8: '1', OPSCOPILOT_HANDOFF_FIXTURE: `${linuxRoot}/e2e/.runtime/terminal-handoff/pty-lab`,
+  OPSCOPILOT_HANDOFF_FILES: fileTrial?'1':'', WSL_UTF8: '1', OPSCOPILOT_HANDOFF_FIXTURE: `${linuxRoot}/e2e/.runtime/terminal-handoff/pty-lab`,
   OPSCOPILOT_HANDOFF_SHELLS: '/bin/sh', OPSCOPILOT_HANDOFF_DESKTOP: endpointFile,
   OPSCOPILOT_HANDOFF_ADDR: '',
   OPSCOPILOT_HANDOFF_KEEP: keep ? '1' : '', OPSCOPILOT_HANDOFF_OWNER_PID: String(process.pid),
 });
 const endpoint = await until(async () => JSON.parse(await readFile(endpointFile, 'utf8')), 'SSH fixture');
-launch(path.join(appDir, 'opscopilot-handoff.exe'), [], appDir, { devserver: `127.0.0.1:${appPort}`, assetdir: path.join(root, 'frontend/dist'), ...(chrysExecutable ? { OPSCOPILOT_CHRYS_EXECUTABLE: chrysExecutable } : {}) });
+launch(path.join(appDir, 'opscopilot-handoff.exe'), [], appDir, { devserver: `127.0.0.1:${appPort}`, assetdir: frontendDist, ...(chrysExecutable ? { APPDATA:path.dirname(nativeConfig), CHRYS_MODEL_PROFILE: '', OPSCOPILOT_ICODE_EXECUTABLE: chrysExecutable, OPSCOPILOT_CHRYS_EXECUTABLE: '' } : {}) });
 await until(async () => (await fetch(appURL)).ok, 'desktop HTTP');
 const browser = await chromium.launch({ channel: 'msedge', headless: true });
 const page = await browser.newPage({ viewport: { width: 1360, height: 900 } });
@@ -108,7 +126,13 @@ const checks = {};
 try {
   await page.goto(appURL);
   await page.waitForFunction(() => !!window.go?.main?.App?.TerminalHandoffStates);
-  if(conversationTrial){
+  if(localDirectoriesTrial){
+    await runLocalDirectoriesTrial({page,appDir,runDir,modelFixture,checks});
+  }else if(selectedMachineTrial){
+    await runSelectedMachineTrial({page,appDir,runDir,endpoint,checks});
+  }else if(fileTrial){
+    await runFileWorkspaceTrial({page,appDir,runDir,endpoint,modelFixture,checks});
+  }else if(conversationTrial){
     await runConversationRecoveryTrial({page,appURL,modelFixture,checks,runDir});
   }else if(databaseTrial){
     // Wails also opens a native WebView. Let its initial attach finish, then

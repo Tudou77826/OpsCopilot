@@ -108,6 +108,18 @@ interface FilesPanelProps {
     activeTerminalId: string | null;
     terminals: TerminalSessionLite[];
     host: FileTransferHost;
+    /** Optional application-owned presentation, not a second file browser. */
+    managed?: {
+        revealTask?: string; revealNonce?: string;
+        nonce: string;
+        localPath: string;
+        remotePath: string;
+        localEntries: FileEntry[];
+        remoteEntries: FileEntry[];
+        tasks: Array<{ id: string; direction: string; localPath: string; remotePath: string; status: string; bytes: number; total: number; message: string }>;
+        blocked: boolean;
+        onPresented(nonce: string): void;
+    };
 }
 
 type TaskState = {
@@ -697,7 +709,10 @@ function FilePane({
     );
 }
 
-const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, host }) => {
+const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, host, managed }) => {
+    const managedRef = useRef(managed);
+    managedRef.current = managed;
+    const [presentedNonce, setPresentedNonce] = useState('');
     const api = host;
     const defaultSessionId = useMemo(() => activeTerminalId || (terminals[0]?.id ?? ''), [activeTerminalId, terminals]);
 
@@ -798,6 +813,11 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
     const remoteEntriesRef = useRef<FileEntry[]>(remoteEntries);
     const [layoutMode, setLayoutMode] = useState<LayoutMode>('wide');
     const [narrowPane, setNarrowPane] = useState<NarrowPane>('local');
+    useEffect(() => {
+        if (!managed?.revealNonce || !managed.revealTask) return;
+        setDrawerOpen(true); setNarrowPane('queue');
+        queueHiddenByUserRef.current = false;
+    }, [managed?.revealNonce]);
     const [remoteDropOverlay, setRemoteDropOverlay] = useState<DropOverlayState | null>(null);
     const [localDropOverlay, setLocalDropOverlay] = useState<DropOverlayState | null>(null);
     const draggedLocalEntryRef = useRef<FileEntry | null>(null);
@@ -811,6 +831,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
         if (!api.onFileDrop) return;
 
         const handleFileDrop = async (x: number, y: number, paths: string[]) => {
+            if (managedRef.current?.blocked) return;
             if (!paths || paths.length === 0) return;
 
             // Hit-test: remote pane
@@ -1239,7 +1260,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
     };
 
     useEffect(() => {
-        refreshLocal('');
+        if (!managedRef.current) refreshLocal('');
     }, []);
 
     useEffect(() => {
@@ -1247,9 +1268,57 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
         setRemoteSelected(new Set());
         setRemoteAnchor('');
         refreshProtocol(sessionId).then(() => {
-            refreshRemote(remotePath);
+            if (!managedRef.current) refreshRemote(remotePath);
         });
     }, [sessionId]);
+
+    useEffect(() => {
+        if (!managed?.nonce) return;
+        setLocalPath(managed.localPath);
+        setLocalPathInput(managed.localPath);
+        setRemotePath(managed.remotePath);
+        setRemotePathInput(managed.remotePath);
+        localPathIntentRef.current = managed.localPath;
+        remotePathIntentRef.current = managed.remotePath;
+        // Discard manual directory requests started before the takeover.
+        localNavSeqRef.current++;
+        remoteNavSeqRef.current++;
+        setLocalEntries(sortEntries(managed.localEntries));
+        setRemoteEntries(sortEntries(managed.remoteEntries));
+        setLocalSelected(new Set()); setRemoteSelected(new Set());
+        setPresentedNonce(managed.nonce);
+    }, [managed?.nonce]);
+
+    useEffect(() => {
+        if (presentedNonce && presentedNonce === managed?.nonce && !editOpen && !nameDialog)
+            managed.onPresented(presentedNonce);
+    }, [presentedNonce, managed?.nonce, editOpen, nameDialog]);
+
+    const previouslyBlocked = useRef(!!managed?.blocked);
+    useEffect(() => {
+        if (previouslyBlocked.current && !managed?.blocked) {
+            // Handoff returns a normal usable panel, with actual post-transfer
+            // contents rather than the preflight directory snapshot.
+            void refreshLocalAuto();
+            void refreshRemoteAuto();
+        }
+        previouslyBlocked.current = !!managed?.blocked;
+    }, [managed?.blocked]);
+
+    useEffect(() => {
+        if (!managed?.tasks.length) return;
+        setTasks(previous => {
+            const next = { ...previous };
+            for (const task of managed.tasks) next[task.id] = {
+                taskId: task.id, sessionId, name: (task.direction === 'upload' ? task.localPath : task.remotePath).replace(/^.*[\\/]/, ''),
+                bytesDone: task.bytes, bytesTotal: task.total, speedBps: 0,
+                status: task.status === 'done' ? 'done' : task.status === 'cancelled' ? 'cancelled' : task.status === 'failed' ? 'error' : 'running',
+                message: task.message, step: task.status === 'cancelling' ? '正在取消，等待传输结束…' : undefined,
+            };
+            return next;
+        });
+        setDrawerOpen(open => queueHiddenByUserRef.current ? open : true);
+    }, [managed?.tasks]);
 
     useEffect(() => {
         setLocalPathInput(localPath);
@@ -1326,7 +1395,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
 
             const ok = !!data?.ok;
             const sid = (data?.sessionId as string) || '';
-            if (!ok) return;
+            if (!ok || managedRef.current?.blocked) return;
             if (sid && sid !== sessionIdRef.current) return;
 
             if (refreshTimerRef.current) {
@@ -2385,6 +2454,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
             ? { ...styles.split, ...styles.splitMedium }
             : styles.split;
     const showQueue = drawerOpen || (isNarrow && narrowPane === 'queue');
+    useEffect(() => {
+        if (!showQueue || !managed?.revealNonce || !managed.revealTask) return;
+        const row = Array.from(containerRef.current?.querySelectorAll<HTMLElement>('[data-transfer-task]') ?? [])
+            .find(item => item.dataset.transferTask === managed.revealTask);
+        row?.scrollIntoView?.({block:'nearest'});
+    }, [showQueue, managed?.revealNonce, tasks]);
 
     return (
         <div ref={containerRef} style={panelRootStyle} data-testid="files-panel" data-layout-mode={layoutMode}>
@@ -2616,7 +2691,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
                                     if (t.speedBps > 0) detail += ` · ${formatSpeed(t.speedBps)}`;
                                 }
                                 return (
-                                    <div key={t.taskId} style={styles.taskRow}>
+                                    <div key={t.taskId} data-transfer-task={t.taskId} style={{...styles.taskRow, ...(managed?.revealTask === t.taskId ? {outline:'1px solid var(--accent)',outlineOffset:-1} : {})}}>
                                         <div style={styles.taskId} title={t.name || t.taskId}>{t.name || t.taskId.slice(0, 8)}</div>
                                         <span style={{ ...styles.taskState, color: stateColor }}>{stateText}</span>
                                         <span style={styles.taskDetail} title={detail || undefined}>{detail}</span>

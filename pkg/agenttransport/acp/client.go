@@ -305,11 +305,27 @@ func (c *Client) handle(request envelope) {
 }
 
 type InitializeResult struct {
-	ProtocolVersion int `json:"protocolVersion"`
-	AgentInfo       struct {
+	ProtocolVersion   int `json:"protocolVersion"`
+	AgentCapabilities struct {
+		MCP struct {
+			HTTP bool `json:"http"`
+		} `json:"mcpCapabilities"`
+		Meta struct {
+			Chrys *ExtensionCapabilities `json:"chrys"`
+		} `json:"_meta"`
+	} `json:"agentCapabilities"`
+	AgentInfo struct {
 		Name    string `json:"name"`
 		Version string `json:"version"`
 	} `json:"agentInfo"`
+}
+
+// ExtensionCapabilities describes iCode's advertised private ACP surface.
+// The wire namespace remains chrys even though the executable is now icode.
+type ExtensionCapabilities struct {
+	APIVersion    int      `json:"apiVersion"`
+	Methods       []string `json:"methods"`
+	Notifications []string `json:"notifications"`
 }
 
 func (c *Client) Initialize(ctx context.Context) (InitializeResult, error) {

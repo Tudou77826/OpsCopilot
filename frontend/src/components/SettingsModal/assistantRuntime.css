@@ -1,0 +1,44 @@
+.oc-runtime-settings { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px; background: var(--bg-secondary); min-width: 0; }
+.oc-runtime-heading, .oc-runtime-heading > div, .oc-runtime-path, .oc-runtime-actions, .oc-runtime-result-heading { display: flex; align-items: center; gap: 10px; }
+.oc-runtime-heading, .oc-runtime-actions, .oc-runtime-result-heading { justify-content: space-between; }
+.oc-runtime-heading > div { min-width: 0; }
+.oc-runtime-heading svg { color: var(--accent); flex: none; }
+.oc-runtime-heading h3 { margin: 0; font-size: var(--font-size-base); font-weight: 600; color: var(--text-primary); }
+.oc-runtime-product, .oc-runtime-status { font-size: var(--font-size-xs); color: var(--text-muted); white-space: nowrap; }
+.oc-runtime-product { padding-left: 10px; border-left: 1px solid var(--border); }
+.oc-runtime-status.is-ready { color: var(--success); }
+.oc-runtime-status.is-failed { color: var(--warning); }
+.oc-runtime-description { margin: 10px 0 22px; color: var(--text-secondary); font-size: var(--font-size-sm); line-height: 1.6; }
+.oc-runtime-label { display: block; margin-bottom: 8px; color: var(--text-primary); font-size: var(--font-size-sm); }
+.oc-runtime-model-source { margin-bottom: 22px; }
+.oc-runtime-model-source select { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text-primary); font-size: var(--font-size-sm); }
+.oc-runtime-model-source p, .oc-runtime-model-result p { margin: 8px 0 0; color: var(--text-muted); font-size: var(--font-size-xs); line-height: 1.6; }
+.oc-runtime-model-result { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); font-size: var(--font-size-sm); color: var(--text-primary); }
+.oc-runtime-model-result.is-failed strong { color: var(--danger); }
+.oc-runtime-path input { min-width: 0; flex: 1; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text-primary); font-size: var(--font-size-sm); }
+.oc-runtime-path input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.oc-runtime-actions { margin-top: 12px; flex-wrap: wrap; }
+.oc-runtime-actions > span, .oc-runtime-footnote, .oc-runtime-progress { color: var(--text-muted); font-size: var(--font-size-xs); line-height: 1.6; }
+.oc-runtime-check { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-hover); color: var(--text-primary); font: inherit; font-size: var(--font-size-sm); cursor: pointer; flex-shrink: 0; }
+.oc-runtime-check:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.oc-runtime-settings button:disabled, .oc-runtime-settings input:disabled { opacity: .55; cursor: not-allowed; }
+.oc-runtime-result { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.oc-runtime-result-heading { font-size: var(--font-size-sm); }
+.oc-runtime-metadata { display: grid; gap: 6px; margin: 8px 0 14px; color: var(--text-secondary); font-size: var(--font-size-xs); }
+.oc-runtime-metadata code { overflow-wrap: anywhere; white-space: normal; color: var(--text-muted); }
+.oc-runtime-checks { padding: 0; margin: 0; list-style: none; }
+.oc-runtime-checks li { display: flex; align-items: flex-start; gap: 9px; padding: 8px 0; color: var(--text-secondary); font-size: var(--font-size-sm); }
+.oc-runtime-checks li > svg { flex-shrink: 0; margin-top: 2px; }
+.oc-runtime-checks li > div { flex: 1; min-width: 0; }
+.oc-runtime-checks li > small { flex-shrink: 0; color: var(--text-muted); }
+.oc-runtime-checks li.is-passed > svg { color: var(--success); }
+.oc-runtime-checks li.is-failed > svg, .oc-runtime-checks li.is-failed > small { color: var(--danger); }
+.oc-runtime-checks li.is-skipped { color: var(--text-muted); }
+.oc-runtime-checks li p { margin: 6px 0 0; color: var(--danger); line-height: 1.6; overflow-wrap: anywhere; }
+.oc-runtime-advice { margin: 12px 0 0; color: var(--text-secondary); font-size: var(--font-size-sm); line-height: 1.6; }
+.oc-runtime-error { color: var(--danger); font-size: var(--font-size-sm); line-height: 1.6; }
+.oc-runtime-footnote { margin: 18px 0 0; }
+@keyframes oc-runtime-spin { to { transform: rotate(360deg); } }
+.oc-runtime-check .is-spinning { animation: oc-runtime-spin 1s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .oc-runtime-check .is-spinning { animation: none; } }
+@media (max-width: 560px) { .oc-runtime-settings { padding: 16px; } .oc-runtime-product { display: none; } }

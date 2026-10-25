@@ -3,6 +3,7 @@ package acp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 )
@@ -38,12 +39,19 @@ func Start(ctx context.Context, config ProcessConfig, handler Handler) (*Client,
 	if err := command.Start(); err != nil {
 		_ = stdout.Close()
 		_ = stdin.Close()
-		return nil, errors.New("无法启动 ACP 程序，请检查运行依赖")
+		return nil, fmt.Errorf("无法启动 ACP 程序：%w", err)
 	}
 	client := Connect(ctx, stdout, stdin, handler, func() { _ = command.Process.Kill() })
 	client.startupDiagnostic = diagnostic
 	done := make(chan struct{})
 	client.processDone = done
-	go func() { defer close(done); <-client.Done(); _ = command.Wait() }()
+	go func() {
+		defer close(done)
+		<-client.Done()
+		_ = command.Wait()
+		if command.ProcessState != nil {
+			diagnostic.markExited(command.ProcessState.ExitCode())
+		}
+	}()
 	return client, nil
 }

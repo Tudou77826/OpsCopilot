@@ -22,6 +22,7 @@ interface TerminalSessionLite {
     id: string;
     title: string;
     connectionId?: string;
+    status?: string;
 }
 
 interface SidebarProps {
@@ -35,13 +36,14 @@ interface SidebarProps {
     onConnect: (config: ConnectionConfig) => void;
     activeTerminalId: string | null;
     terminals: TerminalSessionLite[];
+    activeWorkspaceTitle?: string;
     onTypeCommand?: (command: string) => void;
     onOpenKnowledgeSource?: (target: Omit<KnowledgeTarget, 'requestId'>) => void;
     knowledgeTarget?: KnowledgeTarget | null;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
-    isOpen, activeTab, onToggle, onConnect, activeTerminalId, terminals,
+    isOpen, activeTab, onToggle, onConnect, activeTerminalId, terminals, activeWorkspaceTitle,
     onTypeCommand, onOpenKnowledgeSource, knowledgeTarget, companionHost, socialHost, companionEnabled, onManageCompanion,
 }) => {
     const [editingScriptId, setEditingScriptId] = useState<string | null>(null);
@@ -113,13 +115,13 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <div style={{ display: activeTab === 'chat' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
                             <AIChatPanel
                                 terminalTabs={terminals}
-                                title={companionEnabled ? '伙伴助手' : 'AI 助手'}
+                                renderHeader={actions => <CompanionAssistantHeader actions={actions} socialHost={socialHost} host={companionHost} enabled={companionEnabled} visible={isOpen && activeTab === 'chat'} onManage={onManageCompanion}/>}
                                 onClose={onToggle}
                                 activeTerminalTitle={terminals.find(terminal => terminal.id === activeTerminalId)?.title}
-                                activeTerminalTarget={(() => {const terminal = terminals.find(terminal => terminal.id === activeTerminalId); return terminal?.connectionId ? {tabId: terminal.id, connectionId: terminal.connectionId} : undefined;})()}
-                            >
-                                <CompanionAssistantHeader socialHost={socialHost} host={companionHost} enabled={companionEnabled} visible={isOpen && activeTab === 'chat'} onManage={onManageCompanion}/>
-                            </AIChatPanel>
+                                activeTerminalStatus={terminals.find(terminal => terminal.id === activeTerminalId)?.status}
+                                activeWorkspaceTitle={activeWorkspaceTitle}
+                                activeTerminalTarget={(() => {const terminal = terminals.find(terminal => terminal.id === activeTerminalId); return terminal?.connectionId && terminal.status !== 'disconnected' ? {tabId: terminal.id, connectionId: terminal.connectionId} : undefined;})()}
+                            />
                         </div>
 
                         {/* Knowledge Browser */}
