@@ -54,6 +54,10 @@ export function AssistantCommandConnections() {
   return window['go']['main']['App']['AssistantCommandConnections']();
 }
 
+export function AssistantContextUsage() {
+  return window['go']['main']['App']['AssistantContextUsage']();
+}
+
 export function AssistantControlState() {
   return window['go']['main']['App']['AssistantControlState']();
 }
@@ -72,10 +76,6 @@ export function AssistantLocalProjects() {
 
 export function AssistantModelOptions() {
   return window['go']['main']['App']['AssistantModelOptions']();
-}
-
-export function AssistantContextUsage() {
-  return window['go']['main']['App']['AssistantContextUsage']();
 }
 
 export function Broadcast(arg1, arg2) {
@@ -410,6 +410,10 @@ export function GetConnectionTree() {
   return window['go']['main']['App']['GetConnectionTree']();
 }
 
+export function GetDesktopRuntimeStatus() {
+  return window['go']['main']['App']['GetDesktopRuntimeStatus']();
+}
+
 export function GetFileAccessConfig() {
   return window['go']['main']['App']['GetFileAccessConfig']();
 }
@@ -636,6 +640,10 @@ export function RestoreAssistantConversation() {
 
 export function RestoreAssistantConversationOnPage(arg1) {
   return window['go']['main']['App']['RestoreAssistantConversationOnPage'](arg1);
+}
+
+export function RetryDesktopRuntime() {
+  return window['go']['main']['App']['RetryDesktopRuntime']();
 }
 
 export function RetryPatchSync() {

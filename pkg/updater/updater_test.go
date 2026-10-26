@@ -16,6 +16,12 @@ func TestSelectDownloadURLSkipsJDBCComponents(t *testing.T) {
 	}
 }
 
+func TestSelectDownloadURLDoesNotSelectServerCLI(t *testing.T) {
+	if got := selectDownloadURL([]Asset{{Name: "opscopilot-cli-linux-amd64.zip", BrowserDownloadURL: "server"}}); got != "" {
+		t.Fatal("server archive selected", got)
+	}
+}
+
 func TestCompareVersions(t *testing.T) {
 	tests := []struct {
 		a, b string

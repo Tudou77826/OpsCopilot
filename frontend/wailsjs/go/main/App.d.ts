@@ -5,9 +5,9 @@ import {achievements} from '../models';
 import {assistantlocal} from '../models';
 import {config} from '../models';
 import {main} from '../models';
+import {acp} from '../models';
 import {assistantcontrol} from '../models';
 import {assistantskills} from '../models';
-import {acp} from '../models';
 import {companion} from '../models';
 import {servicecenter} from '../models';
 import {script} from '../models';
@@ -44,6 +44,8 @@ export function AskTroubleshoot(arg1:string):Promise<string>;
 
 export function AssistantCommandConnections():Promise<Array<main.AssistantConnectionChoice>>;
 
+export function AssistantContextUsage():Promise<acp.ContextUsage>;
+
 export function AssistantControlState():Promise<assistantcontrol.State>;
 
 export function AssistantLibrary():Promise<assistantskills.LibraryState>;
@@ -53,8 +55,6 @@ export function AssistantLocalDirectories():Promise<Array<string>>;
 export function AssistantLocalProjects():Promise<assistantlocal.ProjectState>;
 
 export function AssistantModelOptions():Promise<main.AssistantModels>;
-
-export function AssistantContextUsage():Promise<acp.ContextUsage>;
 
 export function Broadcast(arg1:Array<string>,arg2:string):Promise<void>;
 
@@ -222,6 +222,8 @@ export function GetCompletions(arg1:string,arg2:number):Promise<string>;
 
 export function GetConnectionTree():Promise<Array<main.SessionTreeNode>>;
 
+export function GetDesktopRuntimeStatus():Promise<main.DesktopRuntimeStatus>;
+
 export function GetFileAccessConfig():Promise<security.FileAccessConfig>;
 
 export function GetHighlightRules():Promise<Array<config.HighlightRule>>;
@@ -335,6 +337,8 @@ export function RespondAssistantInteraction(arg1:string,arg2:string,arg3:assista
 export function RestoreAssistantConversation():Promise<assistantcontrol.ConversationSnapshot>;
 
 export function RestoreAssistantConversationOnPage(arg1:string):Promise<assistantcontrol.ConversationSnapshot>;
+
+export function RetryDesktopRuntime():Promise<void>;
 
 export function RetryPatchSync():Promise<string>;
 

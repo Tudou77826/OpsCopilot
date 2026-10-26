@@ -656,10 +656,7 @@ func (a *App) DoUpdate(downloadURL string) string {
 		slog.Error("update: launch self-update failed", "error", err)
 		return toJSONError(fmt.Sprintf("launch updater: %v", err))
 	}
-	if a.serviceCenter != nil {
-		a.serviceCenter.Upgrade(upgradeID, target, "install", "success", "none")
-		go a.serviceCenter.Refresh(a.ctx)
-	}
+	// Startup reports completion only after the matching database runtime is ready.
 	slog.Info("update: self-update launched, scheduling quit")
 
 	runtime.EventsEmit(a.ctx, "update-ready", map[string]interface{}{"ok": true})
@@ -718,16 +715,8 @@ func (a *App) startup(ctx context.Context) {
 	// 初始化会话共享（如果已配置，见 app_sessionshare.go）
 	a.initSessionShareStore()
 
-	// 清理自更新残留文件，并显示更新结果
-	if execPath, err := os.Executable(); err == nil {
-		appDir := filepath.Dir(execPath)
-		if result, err := updater.CleanupAfterUpdate(appDir, updater.OSFS{}); err != nil {
-			slog.Warn("post-update cleanup failed", "error", err)
-		} else if result != nil {
-			slog.Info("update result", "success", result.Success, "version", result.Version)
-			runtime.EventsEmit(ctx, "update-completed", result)
-		}
-	}
+	// Finalize only after the matching JDBC helper and Java have been installed.
+	a.prepareDesktopRuntime(ctx)
 }
 
 // beforeClose is called before the application closes

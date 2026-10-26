@@ -6,11 +6,18 @@ import (
 	"path/filepath"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"opscopilot/pkg/desktopruntime"
 	"opscopilot/pkg/servicecenter"
 )
 
 func (a *App) initServiceCenter() {
 	a.serviceCenter = servicecenter.NewClient(filepath.Join(a.configMgr.Directory(), "service-center.json"), Version)
+	a.serviceCenter.SetStartupReadiness(func() bool {
+		if desktopruntime.ExpectedSHA256 == "" {
+			return true
+		}
+		return a.GetDesktopRuntimeStatus().Phase == "ready"
+	})
 	go a.serviceCenter.Run(a.ctx)
 }
 func (a *App) GetServiceCenterSettings() servicecenter.Settings {

@@ -46,6 +46,14 @@ type Client struct {
 	cancel        context.CancelFunc
 	epoch         uint64
 	diskBase      []byte
+	startupReady  func() bool
+}
+
+// SetStartupReadiness delays upgrade success until all bundled components are ready.
+func (c *Client) SetStartupReadiness(ready func() bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.startupReady = ready
 }
 
 func NewClient(path, version string) *Client {
@@ -472,9 +480,10 @@ func (c *Client) Refresh(parent context.Context) {
 	}
 	c.readyUntil = time.Now().Add(70 * time.Second)
 	pending := c.state.Pending
+	startupReady := c.startupReady == nil || c.startupReady()
 	c.mu.Unlock()
 	c.Count("active")
-	if pending != nil && pending.TargetVersion == c.version {
+	if pending != nil && pending.TargetVersion == c.version && startupReady {
 		c.Upgrade(pending.UpgradeID, pending.TargetVersion, "startup", "success", "none")
 		c.mu.Lock()
 		if c.epoch == epoch {

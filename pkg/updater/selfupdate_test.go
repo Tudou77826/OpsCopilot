@@ -149,7 +149,7 @@ func (m *MemFS) Stat(name string) (os.FileInfo, error) {
 	if data, ok := m.files[clean]; ok {
 		return &memFileInfo{name: filepath.Base(clean), size: int64(len(data))}, nil
 	}
-	return nil, fmt.Errorf("file not found: %s", name)
+	return nil, &os.PathError{Op: "stat", Path: name, Err: os.ErrNotExist}
 }
 
 func (m *MemFS) Remove(name string) error {
@@ -348,7 +348,7 @@ func TestCopyFiles(t *testing.T) {
 	}
 
 	log := &updateLogger{}
-	rollback := func() {}
+	rollback := func() error { return nil }
 
 	if err := copyFiles(ops, fs, log, rollback); err != nil {
 		t.Fatalf("copyFiles: %v", err)
@@ -382,7 +382,7 @@ func TestCopyFilesFailureRollback(t *testing.T) {
 
 	log := &updateLogger{}
 	rollbackCalled := false
-	rollback := func() { rollbackCalled = true }
+	rollback := func() error { rollbackCalled = true; return nil }
 
 	err := copyFiles(ops, fs, log, rollback)
 	if err == nil {
@@ -441,5 +441,89 @@ func TestCleanupAfterUpdateNoResult(t *testing.T) {
 	}
 	if result != nil {
 		t.Error("expected nil result when no result file")
+	}
+}
+
+func TestRollbackRemovesIntroducedPayloadAndRestoresExecutable(t *testing.T) {
+	root := t.TempDir()
+	source := t.TempDir()
+	fs := newMemFS()
+	exe := filepath.Join(root, "not-an-executable.exe")
+	fs.writeFile(exe, []byte("old executable"))
+	fs.writeFile(filepath.Join(source, "not-an-executable.exe"), []byte("new executable"))
+	fs.writeFile(filepath.Join(source, "jdbc-runtime.bundle"), []byte("new runtime"))
+	fs.errs[filepath.Join(root, "jdbc-runtime.bundle")] = fmt.Errorf("disk full")
+	// Fail during copying rather than stat. The injected filesystem below allows
+	// nonexistent destinations to be planned and fails only the write itself.
+	fault := &copyFailFS{MemFS: fs, target: filepath.Join(root, "jdbc-runtime.bundle")}
+	delete(fs.errs, filepath.Join(root, "jdbc-runtime.bundle"))
+	err := SelfUpdate(context.Background(), &Manifest{AppDir: root, ExtractedDir: source, ExePath: exe}, fault, &MockProcessWaiter{})
+	if err == nil {
+		t.Fatal("expected copy failure")
+	}
+	b, _ := fs.getFile(exe)
+	if string(b) != "old executable" {
+		t.Fatal("original executable not restored")
+	}
+	if fs.hasFile(filepath.Join(root, "jdbc-runtime.bundle")) {
+		t.Fatal("introduced payload survived rollback")
+	}
+}
+
+type copyFailFS struct {
+	*MemFS
+	target string
+}
+
+type restoreFailFS struct{ *copyFailFS }
+
+func (f *restoreFailFS) Rename(src, dst string) error {
+	if strings.HasSuffix(src, ".old") {
+		return fmt.Errorf("restore denied")
+	}
+	return f.MemFS.Rename(src, dst)
+}
+
+func TestFailedRollbackIsNotReportedAsSuccess(t *testing.T) {
+	root := t.TempDir()
+	source := t.TempDir()
+	fs := newMemFS()
+	exe := filepath.Join(root, "not-an-executable.exe")
+	fs.writeFile(exe, []byte("original"))
+	fs.writeFile(filepath.Join(source, filepath.Base(exe)), []byte("replacement"))
+	fs.writeFile(filepath.Join(source, "jdbc-runtime.bundle"), []byte("payload"))
+	fault := &restoreFailFS{&copyFailFS{MemFS: fs, target: filepath.Join(root, "jdbc-runtime.bundle")}}
+	err := SelfUpdate(context.Background(), &Manifest{AppDir: root, ExtractedDir: source, ExePath: exe}, fault, &MockProcessWaiter{})
+	if err == nil {
+		t.Fatal("restore failure ignored")
+	}
+	r, e := readResultFile(filepath.Join(root, resultFile), fs)
+	if e != nil || r.Success || r.RolledBack || !strings.Contains(r.Error, "自动恢复失败") {
+		t.Fatal("inaccurate rollback result", r, e)
+	}
+	if !fs.hasFile(exe + ".old") {
+		t.Fatal("recovery executable lost")
+	}
+}
+
+func (f *copyFailFS) CopyFile(src, dst string) error {
+	if dst == f.target {
+		f.writeFile(dst, []byte("partial"))
+		return fmt.Errorf("disk full")
+	}
+	return f.MemFS.CopyFile(src, dst)
+}
+
+func TestCleanupRetainsFailureBackupsAndUnrelatedFiles(t *testing.T) {
+	fs := newMemFS()
+	root := t.TempDir()
+	fs.writeFile(filepath.Join(root, "notes.old"), []byte("user backup"))
+	fs.writeFile(filepath.Join(root, "opscopilot.exe.old"), []byte("recovery executable"))
+	fs.writeFile(filepath.Join(root, resultFile), []byte(`{"success":false}`))
+	if _, err := CleanupAfterUpdate(root, fs); err != nil {
+		t.Fatal(err)
+	}
+	if !fs.hasFile(filepath.Join(root, "opscopilot.exe.old")) || !fs.hasFile(filepath.Join(root, "notes.old")) {
+		t.Fatal("failure recovery files removed")
 	}
 }

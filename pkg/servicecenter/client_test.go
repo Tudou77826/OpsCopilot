@@ -336,6 +336,19 @@ func TestStartupIsOnlySuccessfulAfterTargetVersionRuns(t *testing.T) {
 	mu.Unlock()
 	next := NewClient(path, "v2.0.0")
 	next.http.Transport = s.Client().Transport
+	next.SetStartupReadiness(func() bool { return false })
+	next.Refresh(context.Background())
+	if next.state.Pending == nil {
+		t.Fatal("component preparation was reported as complete")
+	}
+	mu.Lock()
+	for _, r := range received {
+		if r.Phase == "startup" {
+			t.Fatal("premature startup success")
+		}
+	}
+	mu.Unlock()
+	next.SetStartupReadiness(func() bool { return true })
 	next.Refresh(context.Background())
 	mu.Lock()
 	defer mu.Unlock()

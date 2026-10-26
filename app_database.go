@@ -32,6 +32,7 @@ func (a *App) databaseService() *dbworkspace.Service {
 		a.database = dbworkspace.New(filepath.Join(dir, "database-connections.json"), secrets)
 		a.database.Gateway = a.openDatabaseGateway
 		a.database.BuildVersion = Version
+		a.database.ResolveJDBCRuntime = resolveDesktopJDBCRuntime
 	}
 	return a.database
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"opscopilot/internal/plugincontract"
 	"opscopilot/internal/shellsidecar"
+	"opscopilot/pkg/desktopruntime"
 	"opscopilot/pkg/installguard"
 	"os"
 	"path/filepath"
@@ -43,6 +44,9 @@ func main() {
 		}
 		if err == nil {
 			err = os.Chdir(filepath.Dir(exe))
+		}
+		if err == nil {
+			err = desktopruntime.Ensure(context.Background(), filepath.Dir(exe), desktopruntime.ExpectedSHA256, nil)
 		}
 		if err == nil {
 			err = shellsidecar.Run(Version, os.Args[2:], filepath.Dir(exe))

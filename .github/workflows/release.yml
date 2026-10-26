@@ -33,18 +33,13 @@ jobs:
             frontend-shell/package-lock.json
 
       - name: Install Wails
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+        shell: pwsh
+        run: |
+          $wailsVersion = go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go install "github.com/wailsapp/wails/v2/cmd/wails@$wailsVersion"
 
-      - name: Build
-        run: cmd /c "build_release.bat"
-        env:
-          CI: true
-          GITHUB_REF_NAME: ${{ github.ref_name }}
-
-      - name: Create ZIP package
-        run: Compress-Archive -Path build/bin/* -Destination opscopilot-windows.zip
-
-      - name: Setup Java for optional JDBC component
+      - name: Setup Java for desktop database support
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -52,38 +47,26 @@ jobs:
           cache: maven
           cache-dependency-path: jdbc-helper/pom.xml
 
-      - name: Build optional JDBC runtime and offline bundle
+      - name: Build complete desktop package
         shell: pwsh
         run: |
-          ./build/jdbc/build.ps1
-          # Older clients select the first ZIP. A component-only archive must
-          # not be eligible as an application update for those clients either.
-          tar -czf opscopilot-jdbc-runtime-windows.tar.gz -C build/jdbc-output jdbc-runtime
-          if ($LASTEXITCODE -ne 0) { throw 'JDBC runtime archive failed' }
-          New-Item -ItemType Directory -Path build/jdbc-output/offline | Out-Null
-          Copy-Item -Path build/bin/* -Destination build/jdbc-output/offline -Recurse
-          Copy-Item -LiteralPath build/jdbc-output/jdbc-runtime -Destination build/jdbc-output/offline -Recurse
-          Compress-Archive -Path build/jdbc-output/offline/* -Destination opscopilot-windows-jdbc.zip
+          ./scripts/build-desktop.ps1 -Version '${{ github.ref_name }}' -OutputDirectory build/desktop-release
+          Copy-Item -LiteralPath build/desktop-release/opscopilot-windows.zip -Destination .
+          Copy-Item -LiteralPath build/desktop-release/SHA256SUMS.txt -Destination .
 
-      - name: Upload optional JDBC packages
-        uses: actions/upload-artifact@v4
-        with:
-          name: opscopilot-jdbc-packages
-          path: |
-            opscopilot-jdbc-runtime-windows.tar.gz
-            opscopilot-windows-jdbc.zip
+      - name: Verify desktop component and update contracts
+        run: go test ./pkg/desktopruntime ./pkg/updater ./pkg/installguard ./pkg/servicecenter ./pkg/dbworkspace
 
       - name: Upload artifact (ZIP)
         uses: actions/upload-artifact@v4
         with:
           name: opscopilot-windows
           path: opscopilot-windows.zip
-
-      - name: Upload artifact (exe)
+      - name: Upload checksums
         uses: actions/upload-artifact@v4
         with:
-          name: opscopilot-exe
-          path: build/bin/opscopilot.exe
+          name: opscopilot-checksums
+          path: SHA256SUMS.txt
 
   build-linux-service:
     runs-on: ubuntu-latest
@@ -134,9 +117,7 @@ jobs:
         with:
           files: |
             release/opscopilot-windows.zip
-            release/opscopilot-windows-jdbc.zip
-            release/opscopilot-jdbc-runtime-windows.tar.gz
-            release/opscopilot.exe
+            release/SHA256SUMS.txt
             release/opscopilot-service-center-linux-amd64
             release/opscopilot-service-center-linux-arm64
           # 仓库内 docs/release-notes/<tag>.md 作为 Release 正文；

@@ -3,6 +3,7 @@ package updater
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"opscopilot/pkg/installguard"
@@ -77,15 +78,17 @@ func SelfUpdate(ctx context.Context, m *Manifest, fs Filesystem, waiter ProcessW
 	ops, err := planUpdate(m.ExtractedDir, m.AppDir, fs)
 	if err != nil {
 		log.info("ERROR plan update: %v", err)
+		writeResult(m.AppDir, &UpdateResult{Success: false, Version: m.Version, Error: err.Error(), Timestamp: time.Now().Format(time.RFC3339)}, fs)
+		launchExe(m.ExePath)
 		return fmt.Errorf("plan update: %w", err)
 	}
 	log.info("planned %d file operations", len(ops))
 
 	if len(ops) == 0 {
-		log.info("no files to update")
-		writeResult(m.AppDir, &UpdateResult{Success: true, Version: m.Version, Timestamp: time.Now().Format(time.RFC3339)}, fs)
+		err := fmt.Errorf("安装包未包含可更新文件，请重新下载完整包")
+		writeResult(m.AppDir, &UpdateResult{Success: false, Version: m.Version, Error: err.Error(), Timestamp: time.Now().Format(time.RFC3339)}, fs)
 		launchExe(m.ExePath)
-		return nil
+		return err
 	}
 
 	// 4. Rename the running exe (now the parent has exited).
@@ -97,6 +100,8 @@ func SelfUpdate(ctx context.Context, m *Manifest, fs Filesystem, waiter ProcessW
 			log.info("renaming exe: %s -> %s", m.ExePath, oldPath)
 			if err := fs.Rename(m.ExePath, oldPath); err != nil {
 				log.info("ERROR rename exe: %v", err)
+				writeResult(m.AppDir, &UpdateResult{Success: false, Version: m.Version, Error: err.Error(), Timestamp: time.Now().Format(time.RFC3339)}, fs)
+				launchExe(m.ExePath)
 				return fmt.Errorf("rename exe: %w", err)
 			}
 			ops[i].dstPath = m.ExePath
@@ -108,23 +113,46 @@ func SelfUpdate(ctx context.Context, m *Manifest, fs Filesystem, waiter ProcessW
 	rollback, err := backupFiles(ops, fs, log)
 	if err != nil {
 		log.info("ERROR backup: %v", err)
+		recovered := true
 		if exeIsTarget {
-			fs.Rename(m.ExePath+oldSuffix, m.ExePath)
+			if restoreErr := fs.Rename(m.ExePath+oldSuffix, m.ExePath); restoreErr != nil {
+				err = errors.Join(err, restoreErr)
+				recovered = false
+			}
+		}
+		writeResult(m.AppDir, &UpdateResult{Success: false, Version: m.Version, Error: err.Error(), RolledBack: recovered, Timestamp: time.Now().Format(time.RFC3339)}, fs)
+		if recovered {
+			launchExe(m.ExePath)
 		}
 		return fmt.Errorf("backup: %w", err)
+	}
+	if exeIsTarget {
+		rollbackFiles := rollback
+		rollback = func() error {
+			recoveryErr := rollbackFiles()
+			if err := fs.Remove(m.ExePath); err != nil && !os.IsNotExist(err) {
+				recoveryErr = errors.Join(recoveryErr, err)
+			}
+			if err := fs.Rename(m.ExePath+oldSuffix, m.ExePath); err != nil {
+				recoveryErr = errors.Join(recoveryErr, err)
+			}
+			return recoveryErr
+		}
 	}
 
 	// 6. Copy new files.
 	if err := copyFiles(ops, fs, log, rollback); err != nil {
-		log.info("ERROR copy, rolled back: %v", err)
+		var failedRecovery *rollbackFailure
+		recovered := !errors.As(err, &failedRecovery)
+		log.info("ERROR copy, rollback completed=%t: %v", recovered, err)
 		writeResult(m.AppDir, &UpdateResult{
 			Success:    false,
 			Version:    m.Version,
 			Error:      err.Error(),
-			RolledBack: true,
+			RolledBack: recovered,
 			Timestamp:  time.Now().Format(time.RFC3339),
 		}, fs)
-		if exeIsTarget {
+		if exeIsTarget && recovered {
 			launchExe(m.ExePath)
 		}
 		return err
@@ -166,37 +194,54 @@ func planUpdate(extractedDir, appDir string, fs Filesystem) ([]fileOp, error) {
 
 // backupFiles copies each existing dstPath to bakPath.
 // Returns a rollback function that restores all successfully backed-up files.
-func backupFiles(ops []fileOp, fs Filesystem, log *updateLogger) (func(), error) {
+func backupFiles(ops []fileOp, fs Filesystem, log *updateLogger) (func() error, error) {
 	var backedUp []fileOp
+	var introduced []fileOp
 
 	for _, op := range ops {
 		if _, err := fs.Stat(op.dstPath); err != nil {
+			if !os.IsNotExist(err) {
+				return nil, fmt.Errorf("stat %s: %w", op.fileName, err)
+			}
+			introduced = append(introduced, op)
 			continue
 		}
 		log.info("backup: %s -> %s", op.fileName, op.bakPath)
 		if err := fs.CopyFile(op.dstPath, op.bakPath); err != nil {
-			for _, b := range backedUp {
-				fs.Rename(b.bakPath, b.dstPath)
-			}
 			return nil, fmt.Errorf("backup %s: %w", op.fileName, err)
 		}
 		backedUp = append(backedUp, op)
 	}
 
-	return func() {
+	return func() error {
+		var recoveryErr error
+		for _, op := range introduced {
+			if err := fs.Remove(op.dstPath); err != nil && !os.IsNotExist(err) {
+				recoveryErr = errors.Join(recoveryErr, err)
+			}
+		}
 		log.info("rolling back %d files", len(backedUp))
 		for _, b := range backedUp {
 			log.info("rollback: %s", b.fileName)
 			if err := fs.Rename(b.bakPath, b.dstPath); err != nil {
 				log.info("ERROR rollback %s: %v", b.fileName, err)
+				recoveryErr = errors.Join(recoveryErr, err)
 			}
 		}
+		return recoveryErr
 	}, nil
 }
 
+type rollbackFailure struct{ copyErr, recoveryErr error }
+
+func (e *rollbackFailure) Error() string {
+	return fmt.Sprintf("%v; 自动恢复失败，请退出程序并重新解压完整包（保留用户数据）: %v", e.copyErr, e.recoveryErr)
+}
+func (e *rollbackFailure) Unwrap() error { return e.copyErr }
+
 // copyFiles copies each srcPath to dstPath with retries.
 // On failure of any file, calls rollback and returns an error.
-func copyFiles(ops []fileOp, fs Filesystem, log *updateLogger, rollback func()) error {
+func copyFiles(ops []fileOp, fs Filesystem, log *updateLogger, rollback func() error) error {
 	for _, op := range ops {
 		var lastErr error
 		for attempt := 1; attempt <= maxRetries; attempt++ {
@@ -214,8 +259,11 @@ func copyFiles(ops []fileOp, fs Filesystem, log *updateLogger, rollback func()) 
 		}
 		if lastErr != nil {
 			log.info("FAILED after %d attempts: %s", maxRetries, op.fileName)
-			rollback()
-			return fmt.Errorf("copy %s: %w", op.fileName, lastErr)
+			copyErr := fmt.Errorf("copy %s: %w", op.fileName, lastErr)
+			if recoveryErr := rollback(); recoveryErr != nil {
+				return &rollbackFailure{copyErr: copyErr, recoveryErr: recoveryErr}
+			}
+			return copyErr
 		}
 	}
 	return nil
@@ -231,6 +279,9 @@ func CleanupAfterUpdate(appDir string, fs Filesystem) (*UpdateResult, error) {
 		result = data
 		fs.Remove(resultPath)
 	}
+	if result == nil || !result.Success {
+		return result, nil
+	}
 
 	// Clean up .bak and .old files.
 	entries, err := fs.ReadDir(appDir)
@@ -239,6 +290,10 @@ func CleanupAfterUpdate(appDir string, fs Filesystem) (*UpdateResult, error) {
 	}
 	for _, e := range entries {
 		name := e.Name()
+		base := strings.TrimSuffix(strings.TrimSuffix(name, bakSuffix), oldSuffix)
+		if base != "opscopilot.exe" && base != "jdbc-runtime.bundle" && base != "prompts.json" {
+			continue
+		}
 		if ext := filepath.Ext(name); ext == bakSuffix || ext == oldSuffix {
 			fullPath := filepath.Join(appDir, name)
 			if err := fs.Remove(fullPath); err != nil {

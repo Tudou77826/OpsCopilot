@@ -236,11 +236,8 @@ func selectDownloadURL(assets []Asset) string {
 			return a.BrowserDownloadURL
 		}
 	}
-	for _, a := range assets {
-		if strings.HasSuffix(strings.ToLower(a.Name), ".zip") && !strings.Contains(strings.ToLower(a.Name), "jdbc") {
-			return a.BrowserDownloadURL
-		}
-	}
+	// Other ZIPs may contain a server CLI or only one optional component.
+	// Never guess an application package from its extension.
 	for _, a := range assets {
 		if strings.EqualFold(a.Name, "opscopilot.exe") {
 			return a.BrowserDownloadURL

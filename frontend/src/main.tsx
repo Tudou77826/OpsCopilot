@@ -16,6 +16,7 @@ import '../../frontend-shell/src/ui/styles/flexlayout-tokens.css'
 import App from './App'
 import { ToastProvider } from './components/Toast/Toast'
 import ConfirmDialogInternal from './components/ConfirmDialog/ConfirmDialog'
+import DesktopRuntimeNotice from './components/DesktopRuntimeNotice'
 
 const container = document.getElementById('root')
 
@@ -25,6 +26,7 @@ root.render(
     <React.StrictMode>
         <ToastProvider>
             <App/>
+            <DesktopRuntimeNotice />
             <ConfirmDialogInternal />
         </ToastProvider>
     </React.StrictMode>

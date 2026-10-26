@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { EventsOn } from '../../../wailsjs/runtime/runtime';
 import logo from '../../assets/images/logo-universal.png';
+import DesktopRuntimeNotice from '../DesktopRuntimeNotice';
 import { colors, radius, font, btnSecondary } from './settingsStyles';
 
 interface ReleaseInfo {
@@ -519,7 +520,7 @@ const AboutPanel: React.FC = () => {
                     </div>
                 )}
                 {updateState === 'ready' && (
-                    <div style={styles.statusBannerOk}>下载完成，正在重启应用...</div>
+                    <div style={styles.statusBannerOk}>下载完成，正在重启；启动后将自动准备数据库组件…</div>
                 )}
                 {updateState === 'error' && (
                     <div style={styles.statusBannerError}>
@@ -527,6 +528,7 @@ const AboutPanel: React.FC = () => {
                         <button style={styles.linkBtn} onClick={handleCheck}>重试</button>
                     </div>
                 )}
+                <DesktopRuntimeNotice compact />
 
                 {/* 版本日志列表 loading */}
                 {historyState === 'loading' && updateState !== 'checking' && (

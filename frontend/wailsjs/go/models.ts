@@ -2243,6 +2243,22 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class DesktopRuntimeStatus {
+	    phase: string;
+	    message: string;
+	    detail?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new DesktopRuntimeStatus(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.phase = source["phase"];
+	        this.message = source["message"];
+	        this.detail = source["detail"];
+	    }
+	}
 	export class FileWorkspaceUpdate {
 	    revision: number;
 	    items: filecontrol.Workspace[];
