@@ -11,9 +11,21 @@
 .oc-handoff-viewport { flex:1; min-height:0; position:relative; }
 .oc-handoff-content { height:100%; }
 .oc-handoff-content[aria-disabled="true"] { pointer-events:none; }
-.oc-handoff-shield { position:absolute; inset:0; z-index:30; border-radius:16px; background:color-mix(in srgb, var(--bg-primary) 8%, transparent); box-shadow:inset 0 0 34px color-mix(in srgb, var(--accent) 13%, transparent); }
-.oc-handoff-shield::before { content:""; position:absolute; inset:2px; padding:4px; border-radius:16px; pointer-events:none; background:linear-gradient(135deg, #36c7d6, #9c8de0, #e5a1b4, #36c7d6); -webkit-mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite:xor; mask-composite:exclude; animation:oc-handoff-breathe 3s ease-in-out infinite; }
-.oc-handoff-control { position:absolute; bottom:22px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:12px; width:max-content; max-width:calc(100% - 32px); padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius-md); background:color-mix(in srgb,var(--bg-secondary) 95%,transparent); box-shadow:0 8px 28px var(--shadow); }
+.oc-handoff-shield {
+    --oc-handoff-gradient:linear-gradient(135deg, #36c7d6, #9c8de0, #e5a1b4, #36c7d6);
+    position:absolute; inset:0; z-index:30; isolation:isolate; container:handoff-surface / size;
+    border-radius:16px; background:color-mix(in srgb, var(--bg-primary) 8%, transparent);
+}
+.oc-handoff-shield::before { content:""; position:absolute; inset:2px; z-index:1; padding:5px; border-radius:16px; pointer-events:none; background:var(--oc-handoff-gradient); -webkit-mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask:linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite:xor; mask-composite:exclude; animation:oc-handoff-breathe 3s ease-in-out infinite; }
+/* Fade the same colors inward, keeping the content and neighboring tabs clear. */
+.oc-handoff-shield::after {
+    --oc-handoff-glow-mask:linear-gradient(to right, #000, transparent 28px, transparent calc(100% - 28px), #000), linear-gradient(to bottom, #000, transparent 28px, transparent calc(100% - 28px), #000);
+    content:""; position:absolute; inset:2px; z-index:0; border-radius:16px;
+    pointer-events:none; background:var(--oc-handoff-gradient); opacity:.42;
+    -webkit-mask-image:var(--oc-handoff-glow-mask); mask-image:var(--oc-handoff-glow-mask);
+}
+.oc-handoff-control { position:absolute; top:66%; left:50%; z-index:2; box-sizing:border-box; transform:translate(-50%,-50%); display:flex; align-items:center; gap:12px; width:max-content; max-width:calc(100% - 32px); padding:12px 14px; border:1px solid var(--border); border-radius:var(--radius-md); background:color-mix(in srgb,var(--bg-secondary) 95%,transparent); box-shadow:0 8px 28px var(--shadow); }
+.oc-handoff-control > div { min-width:0; }
 .oc-handoff-control strong { font-size:13px; display:block; }
 .oc-handoff-control span:not(.oc-handoff-orbit) { font-size:12px; display:block; margin-top:3px; color:var(--text-secondary); }
 .oc-handoff-orbit { display:block; width:20px; height:20px; flex-shrink:0; border-radius:50%; border:2px solid var(--accent); border-right-color:#e5a1b4; box-shadow:0 0 12px color-mix(in srgb,var(--accent) 30%,transparent); animation:oc-handoff-spin 1.6s linear infinite; }
@@ -30,7 +42,11 @@
 .oc-handoff button.oc-handoff-primary { background:var(--accent); color:var(--text-on-accent); border-color:var(--accent); }
 .oc-handoff-error { padding:8px 12px; font-size:12px; color:var(--severity-danger); background:var(--bg-secondary); border-bottom:1px solid var(--border); }
 .oc-handoff-tab-badge { display:inline-flex; align-items:center; gap:4px; margin-left:8px; padding:1px 5px; font-size:10px; color:var(--accent); border:1px solid color-mix(in srgb,var(--accent) 45%,transparent); border-radius:var(--radius-xs); white-space:nowrap; }
-@keyframes oc-handoff-breathe { 0%,100% { opacity:.6; } 50% { opacity:1; } }
+@keyframes oc-handoff-breathe { 0%,100% { opacity:.75; } 50% { opacity:1; } }
 @keyframes oc-handoff-spin { to { transform:rotate(360deg); } }
 @media (prefers-reduced-motion:reduce) { .oc-handoff-shield::before, .oc-handoff-orbit { animation:none; } }
 @media (max-width:600px) { .oc-handoff-control { gap:8px; padding:10px; } .oc-handoff-control span:not(.oc-handoff-orbit) { display:none; } }
+@container handoff-surface (max-height:180px) {
+    .oc-handoff-control { top:50%; gap:8px; padding:10px; }
+    .oc-handoff-control span:not(.oc-handoff-orbit) { display:none; }
+}
