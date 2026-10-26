@@ -44,6 +44,19 @@ type FileAccessChecker struct {
 	mu         sync.RWMutex
 }
 
+// LoadFileAccessChecker reads deployment policy without creating or replacing it.
+func LoadFileAccessChecker(configPath string) (*FileAccessChecker, error) {
+	c := &FileAccessChecker{configPath: configPath}
+	if configPath == "" {
+		c.config = DefaultFileAccessConfig()
+		return c, nil
+	}
+	if err := c.load(); err != nil {
+		return nil, fmt.Errorf("加载部署文件策略失败: %w", err)
+	}
+	return c, nil
+}
+
 // NewFileAccessChecker 创建文件访问检查器
 func NewFileAccessChecker(configPath string) (*FileAccessChecker, error) {
 	checker := &FileAccessChecker{

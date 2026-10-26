@@ -296,7 +296,10 @@ func (c *Conversation) start(ctx, turnContext context.Context, config ManagedCon
 	c.startupStage("session")
 	params := map[string]any{"cwd": directory, "mcpServers": []any{}}
 	if err = client.Call(startup, "session/new", params, &session); err != nil || session.SessionID == "" {
-		return errors.New("iCode 会话初始化失败，请检查模型配置和 MCP 支持")
+		if err == nil {
+			err = errors.New("session/new returned no sessionId")
+		}
+		return &managedFailure{message: "iCode 会话初始化失败，请检查模型配置和 MCP 支持", cause: err}
 	}
 	c.sessionID = session.SessionID
 	return nil

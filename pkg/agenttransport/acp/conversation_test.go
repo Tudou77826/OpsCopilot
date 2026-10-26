@@ -62,6 +62,10 @@ func conversationPeer() {
 		case "_profiles/agents/write":
 			reply(message.ID, map[string]any{})
 		case "session/new":
+			if os.Getenv("ACP_CONVERSATION_NEW_FAILURE") == "1" {
+				_ = encoder.Encode(map[string]any{"jsonrpc": "2.0", "id": message.ID, "error": map[string]any{"code": -32603, "message": "fixture-session-failed"}})
+				continue
+			}
 			reply(message.ID, map[string]any{"sessionId": "conversation-one"})
 		case "session/prompt":
 			var params struct {
@@ -97,6 +101,29 @@ func testConversationConfig(t *testing.T) ManagedConfig {
 		t.Fatal(err)
 	}
 	return ManagedConfig{Executable: executable, BaseURL: "http://127.0.0.1:1/v1", Model: "fixture", ParentDirectory: t.TempDir()}
+}
+
+func TestConversationPreservesSessionInitializationCause(t *testing.T) {
+	config := testConversationConfig(t)
+	t.Setenv("ACP_CONVERSATION_NEW_FAILURE", "1")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	c := &Conversation{}
+	defer c.Close()
+	coordinator := &assistantcontrol.Coordinator{}
+	turn, err := coordinator.Begin(ctx, assistantcontrol.Target{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer turn.Finish("failed", "")
+	err = c.Run(ctx, config, turn, &managedFixtureTools{}, "unused")
+	var cause *RPCError
+	if !errors.As(err, &cause) || cause.Message != "fixture-session-failed" {
+		t.Fatalf("initialization dropped original RPC cause: %v", err)
+	}
+	if strings.Contains(err.Error(), "fixture-session-failed") {
+		t.Fatal("raw cause leaked into user-facing message")
+	}
 }
 func TestConversationRetainsSessionAcrossTurnsAndRevokesOldBindings(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

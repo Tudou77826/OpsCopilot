@@ -3,6 +3,7 @@ package ops
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // OutputController 输出控制器
@@ -39,6 +40,19 @@ func NewOutputController(maxTotalBytes, maxLineLength, headLines int) *OutputCon
 
 // Process 处理输出
 func (c *OutputController) Process(output string) *OutputResult {
+	// Use local limits: callers may share the controller between requests.
+	limits := *c
+	if limits.MaxTotalBytes < 1 {
+		limits.MaxTotalBytes = 10240
+	}
+	if limits.MaxLineLength < 1 {
+		limits.MaxLineLength = 500
+	}
+	if limits.HeadLines < 0 {
+		limits.HeadLines = 0
+	}
+	c = &limits
+	output = strings.ToValidUTF8(output, "�")
 	meta := OutputMeta{
 		TotalBytes: len(output),
 	}
@@ -50,9 +64,10 @@ func (c *OutputController) Process(output string) *OutputResult {
 	for _, line := range lines {
 		if len(line) > c.MaxLineLength {
 			// 截断长行：前200字 + 标记 + 后200字
-			truncated := line[:200] +
+			keep := min(200, c.MaxLineLength/2)
+			truncated := utf8Head(line, keep) +
 				fmt.Sprintf("...[截断:原长度%d字]...", len(line)) +
-				line[len(line)-200:]
+				utf8Tail(line, keep)
 			processedLines = append(processedLines, truncated)
 			meta.LongLinesTruncated++
 		} else {
@@ -90,8 +105,10 @@ func (c *OutputController) Process(output string) *OutputResult {
 	// 添加省略标记
 	omitCount := len(processedLines) - headCount
 	omitMarker := fmt.Sprintf("\n...[省略 %d 行]...\n", omitCount)
+	markerIncluded := false
 	if usedBytes+len(omitMarker) < c.MaxTotalBytes {
 		resultLines = append(resultLines, omitMarker)
+		markerIncluded = true
 		usedBytes += len(omitMarker)
 	}
 
@@ -109,14 +126,40 @@ func (c *OutputController) Process(output string) *OutputResult {
 	}
 
 	resultLines = append(resultLines, tailLines...)
+	if markerIncluded {
+		resultLines[headCount] = fmt.Sprintf("\n...[省略 %d 行]...\n", len(processedLines)-headCount-len(tailLines))
+	}
 
 	finalOutput := strings.Join(resultLines, "\n")
+	if len(finalOutput) > c.MaxTotalBytes {
+		finalOutput = utf8Head(finalOutput, c.MaxTotalBytes)
+	}
 	meta.ReturnedBytes = len(finalOutput)
-	meta.ReturnedLines = len(resultLines)
+	meta.ReturnedLines = headCount + len(tailLines)
 	meta.TruncatedLines = meta.TotalLines - meta.ReturnedLines
 
 	return &OutputResult{
 		Output: finalOutput,
 		Meta:   meta,
 	}
+}
+
+func utf8Head(value string, size int) string {
+	if size >= len(value) {
+		return value
+	}
+	for size > 0 && !utf8.RuneStart(value[size]) {
+		size--
+	}
+	return value[:size]
+}
+func utf8Tail(value string, size int) string {
+	if size >= len(value) {
+		return value
+	}
+	start := len(value) - size
+	for start < len(value) && !utf8.RuneStart(value[start]) {
+		start++
+	}
+	return value[start:]
 }

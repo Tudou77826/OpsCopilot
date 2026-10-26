@@ -46,8 +46,14 @@ type Service struct {
 	opening    int
 	// JDBCRuntimeDir is supplied by the host/test; production defaults beside the executable.
 	JDBCRuntimeDir string
-	BuildVersion   string
-	jdbcProcesses  int
+	// ResolveJDBCRuntime lets the host gate and locate a managed runtime. Configure
+	// it before using the service; an explicit JDBCRuntimeDir takes precedence.
+	ResolveJDBCRuntime func() (string, error)
+	// JDBCDriverDir lets a headless host use a deployment-owned driver registry.
+	// Empty preserves the desktop's profile-relative registry.
+	JDBCDriverDir string
+	BuildVersion  string
+	jdbcProcesses int
 }
 
 func New(path string, secrets secretstore.SecretStore) *Service {

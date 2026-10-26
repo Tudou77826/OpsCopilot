@@ -1,0 +1,102 @@
+name: server-cli
+
+on:
+  push:
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'pkg/remote/**'
+      - 'pkg/filetransfer/**'
+      - 'pkg/agenttransport/acp/**'
+      - 'cmd/opscopilot-cli/**'
+      - 'pkg/opscli/**'
+      - 'pkg/opssession/**'
+      - 'pkg/core/ops/**'
+      - 'pkg/core/security/**'
+      - 'pkg/sshclient/**'
+      - 'pkg/filetxn/**'
+      - 'pkg/dbworkspace/**'
+      - 'pkg/knowledge/**'
+      - 'pkg/sessionshare/**'
+      - 'docs/server-cli.md'
+      - 'skills/opscopilot-server/**'
+      - '.github/workflows/server-cli.yml'
+  pull_request:
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'pkg/remote/**'
+      - 'pkg/filetransfer/**'
+      - 'pkg/agenttransport/acp/**'
+      - 'cmd/opscopilot-cli/**'
+      - 'pkg/opscli/**'
+      - 'pkg/opssession/**'
+      - 'pkg/core/ops/**'
+      - 'pkg/core/security/**'
+      - 'pkg/sshclient/**'
+      - 'pkg/filetxn/**'
+      - 'pkg/dbworkspace/**'
+      - 'pkg/knowledge/**'
+      - 'pkg/sessionshare/**'
+      - 'docs/server-cli.md'
+      - 'skills/opscopilot-server/**'
+      - '.github/workflows/server-cli.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test server CLI dependency surface
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          go test ./pkg/opscli ./pkg/opssession ./pkg/core/ops ./pkg/core/security ./pkg/sshclient ./pkg/filetxn ./pkg/dbworkspace ./pkg/knowledge/... ./pkg/knowledge/patchstore ./pkg/sessionshare ./pkg/agenttransport/acp -count=1
+
+      - name: Build independent Linux CLI bundles
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          set -euo pipefail
+          test -f docs/server-cli.md
+          test -f skills/opscopilot-server/SKILL.md
+          mkdir -p build/server-cli
+          for arch in amd64 arm64; do
+            stage="build/server-cli/stage-${arch}"
+            rm -rf "$stage"
+            mkdir -p "$stage/skills/opscopilot-server"
+            GOOS=linux GOARCH="$arch" CGO_ENABLED=0 go build -trimpath -o "$stage/opscopilot-cli" ./cmd/opscopilot-cli
+            cp docs/server-cli.md "$stage/server-cli.md"
+            cp skills/opscopilot-server/SKILL.md "$stage/skills/opscopilot-server/SKILL.md"
+            archive="build/server-cli/opscopilot-server-cli-linux-${arch}.tar.gz"
+            tar -czf "$archive" -C "$stage" .
+            test "$(tar -tzf "$archive" | grep -c 'opscopilot-cli$')" -eq 1
+            rm -rf "$stage"
+          done
+
+      - name: Verify CLI has no Wails dependency and is static
+        run: |
+          set -euo pipefail
+          deps="$(CGO_ENABLED=0 go list -deps ./cmd/opscopilot-cli)"
+          test -z "$(printf '%s\n' "$deps" | grep -E 'wailsapp/wails|frontend' || true)"
+          for archive in build/server-cli/*.tar.gz; do
+            tmp="$(mktemp -d)"
+            tar -xzf "$archive" -C "$tmp"
+            file "$tmp/opscopilot-cli"
+            file "$tmp/opscopilot-cli" | grep -q 'statically linked'
+            rm -rf "$tmp"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-cli-linux
+          path: build/server-cli/*.tar.gz

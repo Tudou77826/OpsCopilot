@@ -19,6 +19,27 @@ type WhitelistManager struct {
 	mu          sync.RWMutex
 }
 
+// LoadWhitelistManager never rewrites a deployed policy or silently substitutes
+// defaults after an invalid configuration. An empty path selects built-in rules.
+func LoadWhitelistManager(configPath string) (*WhitelistManager, error) {
+	m := &WhitelistManager{configPath: configPath}
+	if configPath == "" {
+		m.config = DefaultWhitelistConfig()
+		return m, nil
+	}
+	if err := m.load(); err != nil {
+		return nil, fmt.Errorf("加载部署命令策略失败: %w", err)
+	}
+	for _, policy := range m.config.Policies {
+		for _, command := range policy.Commands {
+			if _, err := regexp.Compile(command.Pattern); err != nil {
+				return nil, fmt.Errorf("部署命令策略包含无效匹配规则")
+			}
+		}
+	}
+	return m, nil
+}
+
 // NewWhitelistManager 创建白名单管理器
 func NewWhitelistManager(configPath string) (*WhitelistManager, error) {
 	mgr := &WhitelistManager{

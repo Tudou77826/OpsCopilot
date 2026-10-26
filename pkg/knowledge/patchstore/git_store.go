@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -263,7 +262,7 @@ func (s *GitPatchStore) gitOutput(ctx context.Context, args ...string) (string, 
 func (s *GitPatchStore) gitCmdInDir(ctx context.Context, dir string, args ...string) error {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	hideWindow(cmd)
 
 	if s.authorName != "" {
 		cmd.Env = append(os.Environ(),
@@ -286,7 +285,7 @@ func (s *GitPatchStore) gitCmdInDir(ctx context.Context, dir string, args ...str
 func (s *GitPatchStore) gitOutputInDir(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	hideWindow(cmd)
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

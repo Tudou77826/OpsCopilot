@@ -13,7 +13,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"syscall"
 )
 
 // GitSessionStore 基于 Git 仓库的会话共享存储实现（模式对齐 patchstore.GitPatchStore）。
@@ -345,7 +344,7 @@ func (s *GitSessionStore) gitOutput(ctx context.Context, args ...string) (string
 func (s *GitSessionStore) gitCmdInDir(ctx context.Context, dir string, args ...string) error {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	hideWindow(cmd)
 
 	s.ownerMu.Lock()
 	inject, name := s.injectIdentity, s.owner
@@ -373,7 +372,7 @@ func (s *GitSessionStore) gitCmdInDir(ctx context.Context, dir string, args ...s
 func (s *GitSessionStore) gitOutputInDir(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	hideWindow(cmd)
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

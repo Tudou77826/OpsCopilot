@@ -10,6 +10,10 @@ description: 通过 OpsCopilot CLI 使用用户预先配置的远程 Linux 服�
 
 # OpsCopilot 运维助手
 
+> 此 Skill 对应桌面配套 CLI。服务器问题平台启动独立 Chrys／iCode 时，使用单独的 `opscopilot-cli` 和 `skills/opscopilot-server/SKILL.md`：它通过平台 Session 登记节点及加密凭据，不读取桌面 sessions.json，不依赖 GUI 或系统 Keyring。两套入口的参数和生命周期不同，不能混用；部署说明见 `docs/server-cli.md`。
+
+服务端命令可用 `opscopilot-cli help <命令>` 或子命令 `--help` 查看参数与 JSON 示例；数据库长 SQL 支持 `database query --sql-file FILE|-`，与 `--sql` 互斥。服务端错误 JSON 可含 `hint`；`driver list` 的 `serverCapabilities` 说明各驱动的只读方言适配情况。这些参数和字段仅适用于独立服务端程序。
+
 通过 `"{{OPSCOPILOT_BIN}}"` 命令行连接用户配置的远程服务器和运维知识库，执行运维操作或进行故障定位。所有操作受命令白名单和文件访问控制约束（用户在 OpsCopilot GUI 中配置）。
 
 ## 前置条件

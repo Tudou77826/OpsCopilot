@@ -86,10 +86,14 @@ achievements.json.sync.lock
 social.db
 garden.json
 garden.json.lock
-patchstore/
+/patchstore/
 sessionstore/
 sessionstore-local.json
 scripts/
+!/scripts/
+/scripts/*
+!/scripts/build-desktop.ps1
+!/scripts/build-server-cli.ps1
 output/
 tmp/
 nual

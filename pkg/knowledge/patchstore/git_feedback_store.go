@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 )
 
 // GitFeedbackStore manages feedback data in a Git repository alongside patches
@@ -259,7 +258,7 @@ func (s *GitFeedbackStore) gitOutput(ctx context.Context, args ...string) (strin
 func (s *GitFeedbackStore) gitCmdInDir(ctx context.Context, dir string, args ...string) error {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	hideWindow(cmd)
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -273,7 +272,7 @@ func (s *GitFeedbackStore) gitCmdInDir(ctx context.Context, dir string, args ...
 func (s *GitFeedbackStore) gitOutputInDir(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	hideWindow(cmd)
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

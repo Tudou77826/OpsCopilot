@@ -52,7 +52,12 @@ func normalizeJDBC(d *JDBCDriver) {
 	}
 }
 
-func (s *Service) driverDir() string { return filepath.Join(filepath.Dir(s.path), "jdbc-drivers") }
+func (s *Service) driverDir() string {
+	if s.JDBCDriverDir != "" {
+		return s.JDBCDriverDir
+	}
+	return filepath.Join(filepath.Dir(s.path), "jdbc-drivers")
+}
 func (s *Service) JDBCStatus() (JDBCStatus, error) {
 	out := JDBCStatus{Drivers: []JDBCDriver{}}
 	if _, _, err := s.jdbcRuntime(); err != nil {
@@ -88,6 +93,16 @@ func (s *Service) JDBCStatus() (JDBCStatus, error) {
 }
 func (s *Service) jdbcRuntime() (string, string, error) {
 	root := s.JDBCRuntimeDir
+	if root == "" && s.ResolveJDBCRuntime != nil {
+		var err error
+		root, err = s.ResolveJDBCRuntime()
+		if err != nil {
+			return "", "", err
+		}
+		if root == "" {
+			return "", "", fmt.Errorf("JDBC 运行组件目录不可用")
+		}
+	}
 	if root == "" {
 		exe, err := os.Executable()
 		if err != nil {
