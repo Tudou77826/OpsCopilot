@@ -48,9 +48,10 @@ export function CompanionAssistantHeader({ host, socialHost, enabled, visible, o
     const fit = visibleFrameHeightRatio(pack, stage);
     const scale = companionDisplayScale(pack, stage);
     const bounds = pack.contractVersion === 2 ? pack.sceneBounds : undefined;
-    // The stage owns its complete height. The medal dock occupies a separate
-    // grid column, so a short scene never pays for an empty row above the pet.
-    const figureSize = `max(0px, min(calc((100cqh - 16px) / ${fit}), calc((100cqw - 24px) / ${scale * visibleFrameWidthRatio(pack, stage)})))`;
+    // Preserve the 120px composition, then grow the visible silhouette slowly.
+    // Extra scene height opens up the backdrop instead of producing a close-up.
+    const visualHeight = 'min(176px, calc(104px + (100cqh - 120px) * .4), calc(100cqh - 16px))';
+    const figureSize = `max(0px, min(calc(${visualHeight} / ${fit}), calc((100cqw - 24px) / ${scale * visibleFrameWidthRatio(pack, stage)})))`;
     const level = snapshot?.level ?? 1, required = snapshot?.levelXPRequired ?? 10;
     const progressText = level<100 ? `${snapshot?.levelXP??0} / ${required} 经验 · 升至 Lv.${level+1}` : `Lv.100 · 已满级 · 成长经验 ${pet?.xp??0} 经验`;
     return <section ref={presentation.root} className="oc-companion-assistant-header" data-expanded={expanded} data-resizing={presentation.dragging} aria-label="伙伴展示" style={{
