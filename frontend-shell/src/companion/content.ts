@@ -86,12 +86,11 @@ export function playbackStep(clip: CompanionClip, elapsedMs: number, repetitions
   return animationStep(repetitions===undefined?clip:{...clip,loop:true},elapsedMs);
 }
 
-/** Reserve the native stage canvas, independent of presentation zoom.
- * Growing this canvas when zooming out would cancel the requested size reduction. */
+/** Visible artwork height, including the display scale and authored footer.
+ * Scene fitting must not mistake the sprite's transparent canvas for its body. */
 export function visibleFrameHeightRatio(pack: CompanionContentPack, stage: CompanionStage): number {
   const clip=pack.stages[stage].idle, height=pack.assets[clip.frames[0]].height;
-  const scale=pack.contractVersion===2 ? pack.stageScale?.[stage] ?? 1 : 1;
-  return (height-clip.anchor.y+(clip.anchor.y-12)*scale)/height;
+  return (height-12)*companionDisplayScale(pack,stage)/height;
 }
 
 export function animationFrameIndex(clip: CompanionClip, elapsedMs: number): number {

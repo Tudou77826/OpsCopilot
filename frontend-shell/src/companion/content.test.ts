@@ -46,14 +46,18 @@ it('sleeps until a pose boundary and finishes a finite interaction on its final 
  expect(animationStep(clip,450)).toEqual({frame:2});expect(animationStep(clip,5000)).toEqual({frame:2});
  expect(animationStep({...clip,loop:true},450)).toEqual({frame:0,waitMs:200});
 });
-it('reserves visible space for the full jump at every stage in short and tall scenes',()=>{
- const pack=packForSpecies('bolt');
- for(const stage of ['child','growing','adult'] as const) for(const height of [260,283,340]){
-  const ratio=visibleFrameHeightRatio(pack,stage),size=Math.min(320,(height-16)/ratio);
-  expect(height-8-size*ratio).toBeGreaterThanOrEqual(7.99);
-  expect(size).toBeLessThanOrEqual(320);
+it('fits scaled artwork below the medal row at short and tall scene sizes',()=>{
+ for(const species of ['lumen','ember','moss','bolt','astra','tide','sage']) {
+  const pack=packForSpecies(species),stage='child' as const;
+  const clip=pack.stages[stage].idle,native=pack.assets[clip.frames[0]];
+  const ratio=visibleFrameHeightRatio(pack,stage);
+  expect(ratio).toBeCloseTo((native.height-12)*companionDisplayScale(pack,stage)/native.height);
+  for(const height of [120,180,260,340]) {
+   const size=Math.min(560,(height-56)/ratio);
+   expect(height-12-size*ratio).toBeGreaterThanOrEqual(43.99);
+   expect(size).toBeLessThanOrEqual(560);
+  }
  }
- expect(visibleFrameHeightRatio(pack,'adult')).toBeGreaterThan(visibleFrameHeightRatio(pack,'child'));
 });
 it('holds idle poses and traverses a timed wave instead of flashing every pose uniformly',()=>{
  const clip={frames:['open','half','closed','open-again'],fps:2,anchor:{x:128,y:224},sequence:[{frame:0,durationMs:3600},{frame:1,durationMs:100},{frame:2,durationMs:200},{frame:1,durationMs:100},{frame:3,durationMs:200}]};
