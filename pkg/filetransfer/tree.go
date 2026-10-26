@@ -33,9 +33,9 @@ type TreeFileFailure struct {
 
 // TreeResult 目录传输汇总。
 type TreeResult struct {
-	Dirs     int              `json:"dirs"` // 建立/枚举的目录数（含根）
-	Files    int              `json:"files"`
-	Bytes    int64            `json:"bytes"`
+	Dirs     int               `json:"dirs"` // 建立/枚举的目录数（含根）
+	Files    int               `json:"files"`
+	Bytes    int64             `json:"bytes"`
 	Failures []TreeFileFailure `json:"failures,omitempty"`
 	// Transport 实际使用的方式（用户可读标签），空由调用方按会话语义命名。
 	Transport string `json:"transport,omitempty"`
@@ -43,9 +43,9 @@ type TreeResult struct {
 
 // LocalTreeFile 本地待传文件（相对路径 + 绝对路径 + 大小）。
 type LocalTreeFile struct {
-	RelPath  string
-	AbsPath  string
-	Size     int64
+	RelPath string
+	AbsPath string
+	Size    int64
 }
 
 // LocalTreePlan 本地目录扫描结果。
@@ -391,7 +391,7 @@ func rejectOversized(files []sizedPath) error {
 	}
 	return &TransferError{
 		Code: ErrorCodeFileSizeExceeded,
-		Message: fmt.Sprintf("Base64 直传单文件上限 %d MB，所选目录中有 %d 个文件超限：\n%s\n请改用 Root 中转模式（非跳板机）或拆分目录。",
+		Message: fmt.Sprintf("兼容传输单文件上限 %d MiB，所选目录中有 %d 个文件超限：\n%s\n请拆分或压缩超限文件后重试。",
 			maxBase64DirectBytes/1024/1024, len(over), strings.Join(over, "\n")),
 	}
 }

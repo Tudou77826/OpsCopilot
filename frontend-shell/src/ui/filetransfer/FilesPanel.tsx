@@ -1008,8 +1008,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
     const formatError = (resp: FTResponse): string => {
         if (resp.error) {
             const code = resp.error.code;
-            if (code === 'FILE_SIZE_EXCEEDED') return '文件过大，Base64 直传模式最大支持 10 MB';
-            if (code === 'CHECKSUM_MISMATCH') return '文件校验失败，传输数据可能不完整。请重试';
+            if (code === 'FILE_SIZE_EXCEEDED') return resp.error.message || '文件超过当前传输方式的大小上限';
+            if (code === 'CHECKSUM_MISMATCH') return resp.error.message || '文件校验失败，传输数据可能不完整。请重试';
             return `${resp.error.message} (${code})`;
         }
         return resp.message || '失败';
@@ -2512,7 +2512,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({ activeTerminalId, terminals, ho
             {isRootRelay() ? (
                 <div style={styles.relayBanner}>
                     {protocol === 'su-relay(root-relay)'
-                        ? 'Root 提权模式：文件以 Root 身份经终端逐块写入（Base64 直传），单文件上限 10 MB，完成后自动校验完整性。'
+                        ? 'Root 提权模式：兼容传输单文件上限 100 MiB，校验完成后替换目标文件。'
                         : 'Root 提权模式：文件先经 SFTP/SCP 传到远端临时目录，再由 Root 复制到目标位置，完成后自动校验完整性。'}
                 </div>
             ) : null}

@@ -46,7 +46,7 @@ func TestParseFindOutput(t *testing.T) {
 			expected: nil,
 		},
 		{
-			name: "symbolic link",
+			name:  "symbolic link",
 			input: "symbolic link\t10\t1585405215\tlink_to_file",
 			expected: []Entry{
 				{Name: "link_to_file", IsDir: false, Size: 10},
@@ -170,21 +170,21 @@ func TestParseLsOutput_Empty(t *testing.T) {
 
 func TestParseStatOutput(t *testing.T) {
 	tests := []struct {
-		name      string
-		input     string
-		filePath  string
-		expected  Entry
-		hasError  bool
+		name     string
+		input    string
+		filePath string
+		expected Entry
+		hasError bool
 	}{
 		{
 			name:     "regular file",
 			input:    "regular file\t12345\t1709251200",
 			filePath: "/etc/passwd",
 			expected: Entry{
-				Name:    "passwd",
-				IsDir:   false,
-				Size:    12345,
-				Path:    "/etc/passwd",
+				Name:  "passwd",
+				IsDir: false,
+				Size:  12345,
+				Path:  "/etc/passwd",
 			},
 		},
 		{
@@ -192,10 +192,10 @@ func TestParseStatOutput(t *testing.T) {
 			input:    "directory\t4096\t1709251200",
 			filePath: "/root",
 			expected: Entry{
-				Name:    "root",
-				IsDir:   true,
-				Size:    4096,
-				Path:    "/root",
+				Name:  "root",
+				IsDir: true,
+				Size:  4096,
+				Path:  "/root",
 			},
 		},
 		{
@@ -382,8 +382,8 @@ func TestComputeLocalMD5_Nonexistent(t *testing.T) {
 }
 
 func TestMaxBase64DirectBytes(t *testing.T) {
-	if maxBase64DirectBytes != 10*1024*1024 {
-		t.Errorf("maxBase64DirectBytes = %d, want %d", maxBase64DirectBytes, 10*1024*1024)
+	if maxBase64DirectBytes != 100*1024*1024 {
+		t.Errorf("maxBase64DirectBytes = %d, want %d", maxBase64DirectBytes, 100*1024*1024)
 	}
 }
 

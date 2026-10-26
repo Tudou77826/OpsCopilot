@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -28,6 +29,13 @@ type testSSHServerOptions struct {
 	// (网络设备/嵌入式 sshd 等)：无超时的 sftp.NewClient 握手会在其上永久
 	// 阻塞，即 Issue #64 的卡死源。用于回归验证有界握手。
 	SilentSFTP bool
+	// SystemShell runs actual POSIX commands for the Linux compatibility tests.
+	// It is never enabled by production code or the ordinary protocol fixtures.
+	SystemShell          bool
+	EchoShellInput       bool
+	SystemPTY            bool
+	ShellLifetimeSeconds int
+	BlockedPTY           chan struct{} // signal receipt without replying until channel closes
 }
 
 type testSSHServer struct {
@@ -202,11 +210,50 @@ func (s *testSSHServer) handleSession(ch ssh.Channel, requests <-chan *ssh.Reque
 			_, _ = ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{Status: 127}))
 			return
 		case "pty-req", "shell":
+			if req.Type == "pty-req" && s.opts.BlockedPTY != nil {
+				close(s.opts.BlockedPTY)
+				_, _ = io.Copy(io.Discard, ch)
+				return
+			}
 			// RootRelayTransport 的 shell 会话（PTY + Shell 请求）。
 			// 对所有写进 stdin 的命令统一回 OK 标记；特定命令输出可控
 			// 的内容（见 shellExec），供 List/Stat 的 find/ls 解析测试用。
 			_ = req.Reply(true, nil)
 			if req.Type == "shell" {
+				if s.opts.SystemShell {
+					cmd := exec.Command("/bin/sh")
+					if s.opts.SystemPTY {
+						lifetime := s.opts.ShellLifetimeSeconds
+						if lifetime <= 0 {
+							lifetime = 20
+						}
+						cmd = exec.Command("timeout", strconv.Itoa(lifetime), "script", "-q", "-c", "/bin/sh", "/dev/null")
+						cmd.Env = append(os.Environ(), "PS1=", "PS2=", "TERM=dumb")
+					}
+					cmd.Dir = s.opts.RootDir
+					cmd.Stdin = ch
+					if s.opts.EchoShellInput {
+						cmd.Stdin = &echoShellReader{r: ch, w: ch}
+					}
+					input := &trackedShellInput{r: cmd.Stdin, ended: make(chan struct{})}
+					cmd.Stdin = input
+					cmd.Stdout = ch
+					cmd.Stderr = ch.Stderr()
+					if err := cmd.Start(); err != nil {
+						return
+					}
+					finished := make(chan struct{})
+					go func() {
+						select {
+						case <-input.ended:
+							_ = cmd.Process.Kill()
+						case <-finished:
+						}
+					}()
+					_ = cmd.Wait()
+					close(finished)
+					return
+				}
 				s.shellSession(ch)
 				return
 			}
@@ -214,6 +261,35 @@ func (s *testSSHServer) handleSession(ch ssh.Channel, requests <-chan *ssh.Reque
 			_ = req.Reply(false, nil)
 		}
 	}
+}
+
+type echoShellReader struct {
+	r io.Reader
+	w io.Writer
+}
+
+type trackedShellInput struct {
+	r     io.Reader
+	ended chan struct{}
+	once  sync.Once
+}
+
+func (r *trackedShellInput) Read(p []byte) (int, error) {
+	n, err := r.r.Read(p)
+	if err != nil {
+		r.once.Do(func() { close(r.ended) })
+	}
+	return n, err
+}
+
+func (e *echoShellReader) Read(p []byte) (int, error) {
+	n, err := e.r.Read(p)
+	if n > 0 {
+		if _, writeErr := e.w.Write(p[:n]); writeErr != nil {
+			return n, writeErr
+		}
+	}
+	return n, err
 }
 
 // shellExec 模拟一个极简 shell：按命令内容给出可控输出（不带尾部换行）。

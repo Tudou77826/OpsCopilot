@@ -22,7 +22,7 @@ import (
 
 const defaultRelayBaseDir = "/tmp/opscopilot"
 
-const maxBase64DirectBytes = 10 * 1024 * 1024 // 10 MB — base64 直传单文件上限
+const maxBase64DirectBytes = 100 * 1024 * 1024 // 100 MiB per file, bounded block transfer
 
 const (
 	rootRelayOK   = "__RELAY_OK__"
@@ -34,12 +34,27 @@ const (
 )
 
 // rootShellSession holds a persistent su session on an SSH channel.
-// Commands are serialized via cmdMu so only one runs at a time.
+// Commands are serialized; a cancelled caller can leave the queue immediately.
 type rootShellSession struct {
-	session *ssh.Session
-	stdin   io.WriteCloser
-	stdout  io.Reader
-	cmdMu   sync.Mutex // serializes command execution
+	session      *ssh.Session
+	stdin        io.WriteCloser
+	stdout       io.Reader
+	commands     chan struct{}
+	base64Ready  bool // protected by commands; only this private file channel is changed
+	base64Stream bool
+}
+
+func (s *rootShellSession) lockCommand(ctx context.Context) (func(), error) {
+	select {
+	case s.commands <- struct{}{}:
+		if err := ctx.Err(); err != nil {
+			<-s.commands
+			return nil, err
+		}
+		return func() { <-s.commands }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // RootRelayTransport implements file operations via su + /tmp/opscopilot/ relay directory.
@@ -54,8 +69,10 @@ type RootRelayTransport struct {
 	loginUser    string // login username, used to chown relay directory for SCP access
 	skipRelay    bool   // when true, skip SFTP/SCP/relay-dir and go directly to base64
 
-	mu    sync.Mutex
-	shell *rootShellSession // cached su session, nil if not yet created
+	mu         sync.Mutex
+	shell      *rootShellSession // cached su session, nil if not yet created
+	creating   chan struct{}
+	generation uint64
 }
 
 func NewRootRelayTransport(client *ssh.Client, rootPassword string, loginUser string) *RootRelayTransport {
@@ -69,11 +86,13 @@ func NewRootRelayTransport(client *ssh.Client, rootPassword string, loginUser st
 // Close releases any cached root shell session.
 func (t *RootRelayTransport) Close() {
 	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.shell != nil {
-		_, _ = io.WriteString(t.shell.stdin, "exit\n")
-		t.shell.session.Close()
-		t.shell = nil
+	shell := t.shell
+	t.shell = nil
+	t.generation++
+	t.mu.Unlock()
+	// Closing the SSH channel must not wait for a blocked command's stdin.
+	if shell != nil {
+		shell.session.Close()
 	}
 }
 
@@ -86,19 +105,83 @@ func (t *RootRelayTransport) SetSkipRelay(skip bool) {
 
 // getSession returns the cached root shell session, creating one if needed.
 func (t *RootRelayTransport) getSession(ctx context.Context) (*rootShellSession, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	t.mu.Lock()
+	if t.creating == nil {
+		t.creating = make(chan struct{}, 1)
+	}
+	gate := t.creating
+	shell := t.shell
+	t.mu.Unlock()
+	if shell != nil {
+		return shell, nil
+	}
+	select {
+	case gate <- struct{}{}:
+		defer func() { <-gate }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	t.mu.Lock()
+	if t.shell != nil {
+		shell = t.shell
+		t.mu.Unlock()
+		return shell, nil
+	}
+	generation := t.generation
+	t.mu.Unlock()
+	shell, err := t.createSession(ctx)
+	if err != nil {
+		return nil, err
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-
-	if t.shell != nil {
-		return t.shell, nil
+	if err := ctx.Err(); err != nil {
+		shell.session.Close()
+		return nil, err
 	}
+	if t.generation != generation {
+		shell.session.Close()
+		return nil, fmt.Errorf("文件传输会话已关闭，请重试")
+	}
+	t.shell = shell
+	return shell, nil
+}
 
+func (t *RootRelayTransport) createSession(ctx context.Context) (*rootShellSession, error) {
 	slog.Debug("rootRelay creating new su session", "loginUser", t.loginUser)
-
-	session, err := t.sshClient.NewSession()
+	type opened struct {
+		session *ssh.Session
+		err     error
+	}
+	ready := make(chan opened)
+	go func() {
+		session, err := t.sshClient.NewSession()
+		select {
+		case ready <- opened{session, err}:
+		case <-ctx.Done():
+			if session != nil {
+				session.Close()
+			}
+		}
+	}()
+	var session *ssh.Session
+	var err error
+	select {
+	case value := <-ready:
+		session, err = value.session, value.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 	if err != nil {
 		return nil, &TransferError{Code: ErrorCodeNetwork, Message: fmt.Sprintf("创建 SSH 会话失败: %s", err)}
 	}
+	// Closing only this owned channel interrupts PTY, shell and su setup. A
+	// stalled server must not hold the transport mutex or delay queued cancels.
+	stop := context.AfterFunc(ctx, func() { session.Close() })
+	defer stop()
 
 	modes := ssh.TerminalModes{
 		ssh.ECHO:          0,
@@ -170,11 +253,11 @@ func (t *RootRelayTransport) getSession(ctx context.Context) (*rootShellSession,
 	}
 
 	shell := &rootShellSession{
-		session: session,
-		stdin:   stdin,
-		stdout:  stdout,
+		session:  session,
+		stdin:    stdin,
+		stdout:   stdout,
+		commands: make(chan struct{}, 1),
 	}
-	t.shell = shell
 	slog.Debug("rootRelay session created")
 	return shell, nil
 }
@@ -213,13 +296,17 @@ func containsUIDZero(raw string) bool {
 }
 
 // invalidateSession closes and discards the current root shell session.
-func (t *RootRelayTransport) invalidateSession() {
+func (t *RootRelayTransport) invalidateSession(expected *rootShellSession) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.shell != nil {
+	if t.shell == expected {
 		slog.Debug("rootRelay session invalid, closing and recreating")
-		t.shell.session.Close()
 		t.shell = nil
+	}
+	t.mu.Unlock()
+	// A queued command may still hold an old session after another caller has
+	// recreated it. Never close the replacement because that old command failed.
+	if expected != nil && expected.session != nil {
+		expected.session.Close()
 	}
 }
 
@@ -237,22 +324,25 @@ func (t *RootRelayTransport) runAsRoot(ctx context.Context, cmd string) (string,
 		return "", err
 	}
 
-	shell.cmdMu.Lock()
-	defer shell.cmdMu.Unlock()
+	unlock, err := shell.lockCommand(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
 
 	// 发送实际命令。前置 echo START 定界输出起点（把登录提示符、命令回显
 	// 等杂散字节挡在标记之前）；三个标记都以引号拼接形式写入命令，回显
 	// 文本不含字面标记，ECHO 开启的设备也不会提前命中。
 	fullCmd := `echo __RELAY""_START__; ` + cmd + ` && echo __RELAY""_OK__ || echo __RELAY""_FAIL__`
 	if _, err := io.WriteString(shell.stdin, fullCmd+"\n"); err != nil {
-		t.invalidateSession()
+		t.invalidateSession(shell)
 		return "", &TransferError{Code: ErrorCodeNetwork, Message: fmt.Sprintf("发送命令失败: %s", err)}
 	}
 
 	// Read output until we see the marker, with context cancellation support
 	output, err := readUntilMarker(ctx, shell.stdout, rootRelayOK, rootRelayFail, 60*time.Second)
 	if err != nil {
-		t.invalidateSession()
+		t.invalidateSession(shell)
 		return "", err
 	}
 
@@ -370,6 +460,13 @@ func (t *RootRelayTransport) Upload(ctx context.Context, localPath, remotePath s
 	}
 	fileSize := st.Size()
 
+	// Through bastion: skip SFTP/SCP relay entirely, go directly to base64
+	if t.skipRelay {
+		slog.Debug("rootRelay skipping SFTP/SCP relay, using base64 direct mode")
+		emitStep(progress, "正在通过 base64 直传...")
+		return t.uploadViaBase64(ctx, lp, normalizeRemotePath(remotePath), fileSize, progress)
+	}
+
 	// Check space
 	emitStep(progress, "正在检查中转空间...")
 	if err := t.checkTmpSpace(ctx, fileSize); err != nil {
@@ -377,13 +474,6 @@ func (t *RootRelayTransport) Upload(ctx context.Context, localPath, remotePath s
 	}
 
 	slog.Debug("rootRelay file size", "bytes", fileSize)
-
-	// Through bastion: skip SFTP/SCP relay entirely, go directly to base64
-	if t.skipRelay {
-		slog.Debug("rootRelay skipping SFTP/SCP relay, using base64 direct mode")
-		emitStep(progress, "正在通过 base64 直传...")
-		return t.uploadViaBase64(ctx, lp, normalizeRemotePath(remotePath), fileSize, progress)
-	}
 
 	// Prepare relay directory
 	emitStep(progress, "正在创建中转目录...")
@@ -445,183 +535,12 @@ func (t *RootRelayTransport) Upload(ctx context.Context, localPath, remotePath s
 	return res, nil
 }
 
-// uploadViaBase64 uploads a file by base64-encoding its content and writing
-// it directly through the su session. This is the last-resort fallback when
-// neither SFTP nor SCP is available.
-func (t *RootRelayTransport) uploadViaBase64(ctx context.Context, lp string, remotePath string, fileSize int64, progress func(Progress)) (TransferResult, error) {
-	const chunkSize = 4000 // base64 chunk size per command (safe for shell command length)
-
-	data, err := os.ReadFile(lp)
-	if err != nil {
-		return TransferResult{}, toTransferError(err)
-	}
-
-	total := int64(len(data))
-
-	// Size limit check
-	if total > maxBase64DirectBytes {
-		return TransferResult{}, &TransferError{
-			Code:    ErrorCodeFileSizeExceeded,
-			Message: fmt.Sprintf("文件过大，Base64 直传最大支持 %d MB（当前 %d MB）", maxBase64DirectBytes/1024/1024, total/1024/1024),
-		}
-	}
-
-	// Compute local MD5 before transfer (non-fatal)
-	emitStep(progress, "正在计算文件校验和...")
-	localMD5, md5Err := computeLocalMD5(lp)
-	if md5Err != nil {
-		slog.Debug("rootRelay failed to compute local MD5 (continuing)", "error", md5Err)
-	}
-
-	emitStep(progress, fmt.Sprintf("正在通过 base64 直传 (%d 字节)...", total))
-
-	// For small files, send in one shot
-	if total <= chunkSize {
-		encoded := base64.StdEncoding.EncodeToString(data)
-		cmd := fmt.Sprintf("echo '%s' | base64 -d > %s", encoded, shellSingleQuote(remotePath))
-		if _, err := t.runAsRoot(ctx, cmd); err != nil {
-			return TransferResult{}, err
-		}
-		if progress != nil {
-			progress(Progress{BytesDone: total, BytesTotal: total})
-		}
-		slog.Info("rootRelay upload done", "src", lp, "dst", remotePath, "bytes", total, "mode", "base64-direct")
-	} else {
-		// For larger files, write in chunks using >> append
-		// First chunk: truncate (>)
-		// Subsequent chunks: append (>>)
-		// 进度节流：10MB 上限 ≈ 3500 块，逐块推送进度事件会淹没 UI，
-		// 每 256KB 或最后一块才上报一次。
-		const progressInterval = 256 * 1024
-		lastReported := 0
-		first := true
-		offset := 0
-		for offset < len(data) {
-			select {
-			case <-ctx.Done():
-				return TransferResult{}, &TransferError{Code: ErrorCodeNetwork, Message: "操作已取消"}
-			default:
-			}
-
-			end := offset + chunkSize
-			if end > len(data) {
-				end = len(data)
-			}
-			chunk := data[offset:end]
-			encoded := base64.StdEncoding.EncodeToString(chunk)
-
-			var cmd string
-			if first {
-				cmd = fmt.Sprintf("echo '%s' | base64 -d > %s", encoded, shellSingleQuote(remotePath))
-				first = false
-			} else {
-				cmd = fmt.Sprintf("echo '%s' | base64 -d >> %s", encoded, shellSingleQuote(remotePath))
-			}
-
-			if _, err := t.runAsRoot(ctx, cmd); err != nil {
-				return TransferResult{}, err
-			}
-
-			offset = end
-			if progress != nil && (offset-lastReported >= progressInterval || int64(offset) >= total) {
-				progress(Progress{BytesDone: int64(offset), BytesTotal: total})
-				lastReported = offset
-			}
-		}
-
-		slog.Info("rootRelay upload done", "src", lp, "dst", remotePath, "bytes", total, "mode", "base64-chunked")
-	}
-
-	// Post-transfer MD5 verification
-	if localMD5 != "" {
-		emitStep(progress, "正在验证文件完整性...")
-		remoteMD5, md5Err := t.computeRemoteMD5(ctx, remotePath)
-		if md5Err != nil {
-			slog.Debug("rootRelay failed to compute remote MD5 (skipping verification)", "error", md5Err)
-		} else if !strings.EqualFold(localMD5, remoteMD5) {
-			slog.Warn("rootRelay MD5 verification failed", "local", localMD5, "remote", remoteMD5)
-			_, _ = t.runAsRoot(ctx, "rm -f "+shellSingleQuote(remotePath))
-			return TransferResult{}, &TransferError{
-				Code:    ErrorCodeChecksumMismatch,
-				Message: fmt.Sprintf("文件校验失败：本地 %s，远端 %s。已删除远端文件，请重新上传", localMD5, remoteMD5),
-			}
-		}
-		slog.Debug("rootRelay MD5 verification passed", "md5", localMD5)
-	}
-
-	return TransferResult{Bytes: total, Transport: "Base64 直传"}, nil
+// Base64 data uses bounded commands and staged destination files.
+func (t *RootRelayTransport) uploadViaBase64(ctx context.Context, lp, remotePath string, fileSize int64, progress func(Progress)) (TransferResult, error) {
+	return (base64Transfer{run: t.runBase64Command, uploadChunk: t.uploadBase64Block}).upload(ctx, lp, remotePath, progress)
 }
-
-// downloadViaBase64 downloads a remote file by reading its base64-encoded content
-// through the su session. This is the last-resort fallback when neither SFTP nor SCP is available.
-func (t *RootRelayTransport) downloadViaBase64(ctx context.Context, remotePath string, localPath string, fileSize int64, progress func(Progress)) (TransferResult, error) {
-	// Size limit check
-	if fileSize > maxBase64DirectBytes {
-		return TransferResult{}, &TransferError{
-			Code:    ErrorCodeFileSizeExceeded,
-			Message: fmt.Sprintf("文件过大，Base64 直传最大支持 %d KB（当前 %d KB）", maxBase64DirectBytes/1024, fileSize/1024),
-		}
-	}
-
-	rp := normalizeRemotePath(remotePath)
-
-	// Compute remote MD5 before transfer (non-fatal)
-	emitStep(progress, "正在计算远端文件校验和...")
-	remoteMD5, md5Err := t.computeRemoteMD5(ctx, rp)
-	if md5Err != nil {
-		slog.Debug("rootRelay failed to compute remote MD5 (continuing)", "error", md5Err)
-	}
-
-	// Use base64 encoding to transfer file content
-	// For files we know the size of, limit base64 output accordingly
-	emitStep(progress, "正在通过 base64 直传下载...")
-	maxBase64Len := ""
-	if fileSize > 0 {
-		maxBase64Len = fmt.Sprintf(" | head -c %d", fileSize*2+100) // base64 is ~1.37x larger
-	}
-	cmd := fmt.Sprintf("base64 %s%s", shellSingleQuote(rp), maxBase64Len)
-	output, err := t.runAsRoot(ctx, cmd)
-	if err != nil {
-		return TransferResult{}, err
-	}
-
-	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(output))
-	if err != nil {
-		return TransferResult{}, &TransferError{Code: ErrorCodeUnknown, Message: fmt.Sprintf("base64 解码失败: %s", err)}
-	}
-
-	// Write to local file
-	lp := filepath.Clean(localPath)
-	if err := os.MkdirAll(filepath.Dir(lp), 0755); err != nil {
-		return TransferResult{}, toTransferError(err)
-	}
-	if err := os.WriteFile(lp, decoded, 0644); err != nil {
-		return TransferResult{}, toTransferError(err)
-	}
-
-	// Post-transfer MD5 verification
-	if remoteMD5 != "" {
-		emitStep(progress, "正在验证文件完整性...")
-		localMD5, md5Err := computeLocalMD5(lp)
-		if md5Err != nil {
-			slog.Debug("rootRelay failed to compute local MD5 (skipping verification)", "error", md5Err)
-		} else if !strings.EqualFold(localMD5, remoteMD5) {
-			slog.Warn("rootRelay MD5 verification failed", "remote", remoteMD5, "local", localMD5)
-			_ = os.Remove(lp)
-			return TransferResult{}, &TransferError{
-				Code:    ErrorCodeChecksumMismatch,
-				Message: fmt.Sprintf("文件校验失败：远端 %s，本地 %s。已删除本地文件，请重新下载", remoteMD5, localMD5),
-			}
-		}
-		slog.Debug("rootRelay MD5 verification passed", "md5", remoteMD5)
-	}
-
-	if progress != nil {
-		progress(Progress{BytesDone: int64(len(decoded)), BytesTotal: int64(len(decoded))})
-	}
-
-	slog.Info("rootRelay download done", "src", remotePath, "dst", localPath, "bytes", len(decoded), "mode", "base64-direct")
-	return TransferResult{Bytes: int64(len(decoded)), Transport: "Base64 直传"}, nil
+func (t *RootRelayTransport) downloadViaBase64(ctx context.Context, remotePath, localPath string, fileSize int64, progress func(Progress)) (TransferResult, error) {
+	return (base64Transfer{run: t.runBase64Command}).download(ctx, remotePath, localPath, fileSize, progress)
 }
 
 // Download downloads a remote file to a local path via root relay.
@@ -632,11 +551,14 @@ func (t *RootRelayTransport) Download(ctx context.Context, remotePath, localPath
 	rp := normalizeRemotePath(remotePath)
 
 	// Get remote file size
-	statOutput, err := t.runAsRoot(ctx, fmt.Sprintf("stat -c '%%s' %s", shellSingleQuote(rp)))
+	statOutput, err := t.runAsRoot(ctx, fmt.Sprintf("test -f %s && stat -Lc '%%s' -- %s", shellSingleQuote(rp), shellSingleQuote(rp)))
 	if err != nil {
 		return TransferResult{}, err
 	}
-	fileSize, _ := strconv.ParseInt(strings.TrimSpace(statOutput), 10, 64)
+	fileSize, parseErr := strconv.ParseInt(strings.TrimSpace(statOutput), 10, 64)
+	if parseErr != nil || fileSize < 0 {
+		return TransferResult{}, fmt.Errorf("无法确定远端普通文件大小")
+	}
 
 	// Through bastion: skip SFTP/SCP relay entirely, go directly to base64
 	if t.skipRelay {
