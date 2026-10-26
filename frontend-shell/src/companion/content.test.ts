@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { animationFrame, animationFrameIndex, animationStep, visibleFrameHeightRatio, companionClip, companionDisplayScale, clipDuration, playbackStep } from './content';
+import { animationFrame, animationFrameIndex, animationStep, visibleFrameHeightRatio, visibleFrameWidthRatio, companionClip, companionDisplayScale, clipDuration, playbackStep } from './content';
 import { packForSpecies } from './assets';
 import { roamingRange } from './ambientMotion';
 import { planSteps } from './motionSequence';
@@ -46,16 +46,21 @@ it('sleeps until a pose boundary and finishes a finite interaction on its final 
  expect(animationStep(clip,450)).toEqual({frame:2});expect(animationStep(clip,5000)).toEqual({frame:2});
  expect(animationStep({...clip,loop:true},450)).toEqual({frame:0,waitMs:200});
 });
-it('fits scaled artwork below the medal row at short and tall scene sizes',()=>{
+it('fits scaled artwork using the full stage height at both resize extremes',()=>{
  for(const species of ['lumen','ember','moss','bolt','astra','tide','sage']) {
   const pack=packForSpecies(species),stage='child' as const;
   const clip=pack.stages[stage].idle,native=pack.assets[clip.frames[0]];
   const ratio=visibleFrameHeightRatio(pack,stage);
-  expect(ratio).toBeCloseTo((native.height-12)*companionDisplayScale(pack,stage)/native.height);
+  if(pack.contractVersion!==2 || !pack.sceneBounds) throw new Error('Current roster must provide measured bounds');
+  const bounds=pack.sceneBounds;
+  expect(ratio).toBeCloseTo((bounds.bottom-bounds.top)*companionDisplayScale(pack,stage)/native.height);
+  const radius=visibleFrameWidthRatio(pack,stage)*native.width/2;
+  expect(radius).toBeGreaterThanOrEqual(clip.anchor.x-bounds.left);
+  expect(radius).toBeGreaterThanOrEqual(bounds.right-clip.anchor.x);
   for(const height of [120,180,260,340]) {
-   const size=Math.min(560,(height-56)/ratio);
-   expect(height-12-size*ratio).toBeGreaterThanOrEqual(43.99);
-   expect(size).toBeLessThanOrEqual(560);
+   const size=(height-16)/ratio;
+   expect(height-12-size*ratio).toBeGreaterThanOrEqual(3.99);
+   if(height===120) expect(size*ratio/height).toBeGreaterThan(.85);
   }
  }
 });

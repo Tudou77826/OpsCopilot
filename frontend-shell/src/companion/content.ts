@@ -49,6 +49,8 @@ export interface DetailedContentPack extends ContentPackBase {
   paletteHues: Record<CompanionPalette, number | null>;
   /** Three stages share the same native artwork instead of three bitmap copies. */
   stageScale?: Record<CompanionStage, number>;
+  /** Build-checked union of visible pixels across every authored pose. */
+  sceneBounds?: { left: number; top: number; right: number; bottom: number };
   /** Authored ambient poses share the base frames' foot anchor and scale. */
   ambient?: Record<CompanionAmbientAction, CompanionClip>;
   locomotion?: {
@@ -90,7 +92,15 @@ export function playbackStep(clip: CompanionClip, elapsedMs: number, repetitions
  * Scene fitting must not mistake the sprite's transparent canvas for its body. */
 export function visibleFrameHeightRatio(pack: CompanionContentPack, stage: CompanionStage): number {
   const clip=pack.stages[stage].idle, height=pack.assets[clip.frames[0]].height;
-  return (height-12)*companionDisplayScale(pack,stage)/height;
+  const bounds=pack.contractVersion===2 ? pack.sceneBounds : undefined;
+  return (bounds ? bounds.bottom-bounds.top : height-12)*companionDisplayScale(pack,stage)/height;
+}
+
+/** Symmetric radius around the shared anchor keeps every pose inside its lane. */
+export function visibleFrameWidthRatio(pack: CompanionContentPack, stage: CompanionStage): number {
+  const clip=pack.stages[stage].idle, width=pack.assets[clip.frames[0]].width;
+  const bounds=pack.contractVersion===2 ? pack.sceneBounds : undefined;
+  return bounds ? 2*Math.max(clip.anchor.x-bounds.left,bounds.right-clip.anchor.x)/width : 1;
 }
 
 export function animationFrameIndex(clip: CompanionClip, elapsedMs: number): number {

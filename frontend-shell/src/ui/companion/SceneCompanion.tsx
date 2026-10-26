@@ -1,7 +1,7 @@
 import React, {useEffect,useRef,useState} from 'react';
 import {PixelSprite} from './PixelSprite';
 import {packForSpecies} from '../../companion/assets';
-import {clipDuration,companionClip,companionDisplayScale,type CompanionAction} from '../../companion/content';
+import {clipDuration,companionClip,companionDisplayScale,visibleFrameWidthRatio,type CompanionAction} from '../../companion/content';
 import type {CompanionPalette,CompanionStage} from '../../companion/types';
 import {roamingRange} from '../../companion/ambientMotion';
 import {ambientAction,ambientDelay,planSteps,responseSequence,walkSequence,type MotionSegment} from '../../companion/motionSequence';
@@ -16,6 +16,7 @@ export function SceneCompanion({species,stage,palette,name,action,visible,size,o
   const currentRef=useRef(current),completion=useRef(onComplete),active=useRef(running);
   currentRef.current=current;completion.current=onComplete;active.current=running;
   const pack=packForSpecies(species),scale=companionDisplayScale(pack,stage);
+  const silhouette=visibleFrameWidthRatio(pack,stage);
   const locomotion=pack.contractVersion===2?pack.locomotion:undefined;
   function transform(x:number){return 'translateX(calc(-50% + '+x+'px))';}
   function freezeTravel(destination?:number) {
@@ -72,7 +73,7 @@ export function SceneCompanion({species,stage,palette,name,action,visible,size,o
   useEffect(()=>{
     const element=button.current,scene=element?.parentElement;if(!element||!scene)return;
     const fit=()=>{
-      freezeTravel();const bounds=roamingRange(scene.clientWidth,element.offsetWidth,scale);
+      freezeTravel();const bounds=roamingRange(scene.clientWidth,element.offsetWidth,scale,silhouette);
       position.current=Math.max(bounds.min,Math.min(bounds.max,position.current));
       element.style.left=String(bounds.center)+'px';element.style.transform=transform(position.current);
       queue.current=[];pending.current=undefined;select({action:currentRef.current.facing===0?'idle':'stand',facing:currentRef.current.facing});
@@ -80,7 +81,7 @@ export function SceneCompanion({species,stage,palette,name,action,visible,size,o
     position.current=0;next.current=0;direction.current=1;pending.current=undefined;currentRef.current={action:'idle',facing:0};fit();
     const observer=typeof ResizeObserver==='undefined'?undefined:new ResizeObserver(fit);observer?.observe(scene);
     return()=>{observer?.disconnect();freezeTravel();};
-  },[species,stage,scale]);
+  },[species,stage,scale,silhouette]);
   useEffect(()=>{
     if(!running){freezeTravel();queue.current=[];pending.current=undefined;select({action:currentRef.current.facing===0?'idle':'stand',facing:currentRef.current.facing});}
     else setEpoch(null);
@@ -101,14 +102,14 @@ export function SceneCompanion({species,stage,palette,name,action,visible,size,o
     timer.current=setTimeout(()=>{
       const selected=ambientAction(next.current++);
       if(selected==='walk'&&button.current) {
-        const bounds=roamingRange(button.current.parentElement!.clientWidth,button.current.offsetWidth,scale);
+        const bounds=roamingRange(button.current.parentElement!.clientWidth,button.current.offsetWidth,scale,silhouette);
         const planned=planSteps(position.current,direction.current,bounds.min,bounds.max,locomotion.stride,button.current.offsetWidth,scale);
         if(planned.repetitions>0){play(walkSequence(currentRef.current.facing,direction.current,planned.repetitions,planned.destination));direction.current=direction.current===1?-1:1;}
         else play(responseSequence(currentRef.current.facing,'look'));
       } else play(responseSequence(currentRef.current.facing,selected==='walk'?'look':selected));
     },ambientDelay(Math.random()));
     return()=>clearTimeout(timer.current);
-  },[running,epoch,current,locomotion,scale]);
+  },[running,epoch,current,locomotion,scale,silhouette]);
   useEffect(()=>()=>{clearTimeout(timer.current);freezeTravel();},[]);
   return <button ref={button} type="button" className="oc-companion-touch oc-companion-roaming" style={{width:size,height:size}}
     data-ambient={current.action} data-facing={current.facing===0?'front':current.facing<0?'left':'right'} data-roaming={running&&current.action==='walk'}

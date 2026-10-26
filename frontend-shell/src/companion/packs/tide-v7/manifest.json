@@ -1791,5 +1791,11 @@
         "staticFrame": 0
       }
     }
+  },
+  "sceneBounds": {
+    "left": 18,
+    "top": 13,
+    "right": 241,
+    "bottom": 246
   }
 }

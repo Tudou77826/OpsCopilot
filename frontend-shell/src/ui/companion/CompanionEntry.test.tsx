@@ -224,6 +224,29 @@ it('supports bounded keyboard resizing, viewport clamping, reset and height rest
  expect(screen.getByRole('separator')).toHaveAttribute('aria-valuenow','120');
 });
 
+it('bounds a narrow panel by its width and restores the preferred height when widened', async () => {
+ let width=300;
+ const callbacks:(()=>void)[]=[];
+ vi.spyOn(HTMLElement.prototype,'clientHeight','get').mockReturnValue(1000);
+ vi.spyOn(HTMLElement.prototype,'clientWidth','get').mockImplementation(()=>width);
+ vi.stubGlobal('ResizeObserver',class {
+  constructor(callback:()=>void) { callbacks.push(callback); }
+  observe() {} disconnect() {}
+ });
+ render(<CompanionAssistantHeader host={host()} enabled visible onManage={vi.fn()}/>);
+ const separator=await screen.findByRole('separator',{name:'调整伙伴场景高度'});
+ fireEvent.keyDown(separator,{key:'End'});
+ expect(separator).toHaveAttribute('aria-valuenow','210');
+ width=600;act(()=>callbacks.forEach(callback=>callback()));
+ fireEvent.keyDown(separator,{key:'End'});
+ expect(separator).toHaveAttribute('aria-valuenow','340');
+ width=300;act(()=>callbacks.forEach(callback=>callback()));
+ expect(separator).toHaveAttribute('aria-valuenow','210');
+ expect(JSON.parse(localStorage.getItem(presentationKey)!).height).toBe(340);
+ width=600;act(()=>callbacks.forEach(callback=>callback()));
+ expect(separator).toHaveAttribute('aria-valuenow','340');
+});
+
 it('captures the drag, saves on release and cancels interrupted drags without changing the saved height', async () => {
  vi.stubGlobal('PointerEvent',class extends MouseEvent {
   pointerId:number; isPrimary:boolean;

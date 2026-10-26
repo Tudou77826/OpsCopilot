@@ -57,6 +57,14 @@ function detailedFixture() {
 test('accepts detailed full-color soft-alpha frames without forcing an indexed palette',()=>{
  const {manifest,load}=detailedFixture();assert.equal(validateCompanionPack(manifest,process.cwd(),load).assets,24);
 });
+test('checks measured scene bounds against the actual animation frames',()=>{
+ const {manifest,load}=detailedFixture();
+ manifest.sceneBounds={left:124,top:220,right:133,bottom:229};
+ assert.equal(validateCompanionPack(manifest,process.cwd(),load).assets,24);
+ for(const bounds of [ {...manifest.sceneBounds,top:221}, {...manifest.sceneBounds,bottom:256}, {...manifest.sceneBounds,extra:1} ]) {
+  assert.throws(()=>validateCompanionPack({...manifest,sceneBounds:bounds},process.cwd(),load),/Scene bounds|scene bounds/);
+ }
+});
 test('rejects invalid detailed canvas, palette hue and pose timing',()=>{
  for(const change of [m=>{m.frameSize=64;},m=>{m.paletteHues.amber=360;},m=>{m.stages.child.idle.sequence[0].frame=2;},m=>{m.stages.child.idle.sequence[0].durationMs=0;},m=>{m.stageScale={child:1,growing:.5,adult:.8};},m=>{m.stages.child.idle.loop='yes';}]){
   const {manifest,load}=detailedFixture();change(manifest);assert.throws(()=>validateCompanionPack(manifest,process.cwd(),load));

@@ -3,6 +3,7 @@ import { dirname, resolve, sep, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodePng } from '../pixel/png.mjs';
 import { checkMedalAssets } from './check-medal-assets.mjs';
+import { measureSceneBounds } from '../pixel/measure-scene-bounds.mjs';
 
 const stages = ['child', 'growing', 'adult'];
 const actions = ['idle', 'happy', 'greet', 'sleep'];
@@ -15,7 +16,7 @@ const onlyKeys = (value, allowed, label) => {
 
 export function validateCompanionPack(manifest, root, load = path => readFileSync(path)) {
   const detailed=manifest?.contractVersion===2;
-  onlyKeys(manifest, detailed ? ['contractVersion','id','speciesId','style','frameSize','colorMode','paletteHues','stageScale','ambient','locomotion','assets','stages'] : ['contractVersion','id','speciesId','style','palette','palettes','assets','stages'], 'pack');
+  onlyKeys(manifest, detailed ? ['contractVersion','id','speciesId','style','frameSize','colorMode','paletteHues','stageScale','sceneBounds','ambient','locomotion','assets','stages'] : ['contractVersion','id','speciesId','style','palette','palettes','assets','stages'], 'pack');
   if (![1,2].includes(manifest.contractVersion) || manifest.style !== 'pixel' || !idPattern.test(manifest.id) || !idPattern.test(manifest.speciesId)) fail('Invalid companion pack identity or version');
   if(detailed) {
     if(manifest.frameSize!==256||manifest.colorMode!=='rgba') fail('Detailed frames require a 256px RGBA canvas');
@@ -65,6 +66,11 @@ export function validateCompanionPack(manifest, root, load = path => readFileSyn
     actual.set(id, { ...asset, image });
   }
   if (bytes > (detailed ? 8000000 : 2000000)) fail('Pack exceeds asset budget');
+  if(detailed && manifest.sceneBounds!==undefined) {
+    onlyKeys(manifest.sceneBounds,['left','top','right','bottom'],'scene bounds');
+    const measured=measureSceneBounds([...actual.values()].filter(asset=>asset.role==='character').map(asset=>asset.image));
+    if(Object.entries(measured).some(([key,value])=>manifest.sceneBounds[key]!==value)) fail('Scene bounds do not match the artwork; regenerate them');
+  }
   if (!manifest.stages || Object.keys(manifest.stages).sort().join() !== [...stages].sort().join()) fail('Exactly three stages required');
   const groups=stages.map(stage=>({stage,clips:manifest.stages[stage],expected:actions}));
   if(manifest.ambient!==undefined) groups.push({stage:'ambient',clips:manifest.ambient,expected:['look','stretch','walk']});

@@ -37,7 +37,9 @@ export function useCompanionPresentation(enabled: boolean, visible: boolean) {
     const update = () => {
       if (!panel.clientHeight) return; // Hidden panels must not erase the user's height.
       // Keep the composer and a useful portion of the conversation visible.
-      setMaximum(Math.max(0, Math.min(MAX_HEIGHT, Math.floor(panel.clientHeight * .4), panel.clientHeight - 44 - 280)));
+      // A narrow landscape should not grow into an empty portrait viewport.
+      const aspectMaximum = panel.clientWidth > 0 ? Math.floor(panel.clientWidth * .7) : MAX_HEIGHT;
+      setMaximum(Math.max(0, Math.min(MAX_HEIGHT, aspectMaximum, Math.floor(panel.clientHeight * .4), panel.clientHeight - 44 - 280)));
     };
     update();
     const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(update);

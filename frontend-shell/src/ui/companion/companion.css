@@ -72,7 +72,8 @@
 .oc-assistant-companion-identity:hover .oc-assistant-companion-progress, .oc-assistant-companion-identity:focus-within .oc-assistant-companion-progress { visibility: visible; }
 .oc-assistant-companion-progress progress { width: 100%; height: 4px; accent-color: var(--accent); }
 .oc-assistant-companion-body { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-.oc-assistant-companion-scene { --oc-companion-badge-size: clamp(28px, 18cqh, 36px); position: relative; container-type: size; height: var(--oc-companion-scene-height, 180px); flex: 0 1 auto; min-height: 0; overflow: hidden; background-size: cover; background-position: center; image-rendering: auto; }
+.oc-assistant-companion-scene { --oc-companion-badge-size: clamp(28px, 18cqh, 36px); position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; container: companion-scene / size; height: var(--oc-companion-scene-height, 180px); flex: 0 1 auto; min-height: 0; overflow: hidden; background-size: cover; background-position: center; image-rendering: auto; }
+.oc-assistant-companion-stage { position: relative; min-width: 0; height: 100%; container-type: size; }
 .oc-assistant-companion-resize { position: relative; display: grid; place-items: center; flex: 0 0 7px; cursor: ns-resize; touch-action: none; user-select: none; outline-offset: -2px; }
 .oc-assistant-companion-resize::before { content: ''; position: absolute; inset: 3px 0 auto; height: 1px; background: var(--border); }
 .oc-assistant-companion-resize > span { z-index: 1; width: 28px; height: 3px; border-radius: 2px; background: var(--text-muted); opacity: .4; }
@@ -80,7 +81,7 @@
 .oc-assistant-companion-resize:focus-visible { outline: 2px solid var(--accent); }
 .oc-companion-assistant-header[data-resizing="true"] { user-select: none; }
 @container (max-width: 300px) { .oc-assistant-companion-toggle small { display: none; } }
-.oc-assistant-companion-scene > .oc-companion-touch { position: absolute; bottom: calc(12px - var(--oc-companion-figure-size) * var(--oc-companion-foot-offset)); left: 50%; transform: translateX(-50%); }
+.oc-assistant-companion-stage > .oc-companion-touch { position: absolute; bottom: calc(12px - var(--oc-companion-figure-size) * var(--oc-companion-foot-offset)); left: 50%; transform: translateX(-50%); }
 .oc-companion-touch, .oc-companion-assistant-header .oc-companion-touch { display: grid; place-items: center; border: none; padding: 0; background: transparent; cursor: pointer; }
 .oc-companion-touch .oc-pixel-sprite { width: 100%; height: 100%; }
 .oc-companion-touch:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; }
@@ -91,22 +92,26 @@
    The 6.25% translation aligns that anchor, preserving the transparent footer. */
 .oc-companion-scene > .oc-companion-touch { position: absolute; width: min(440px, 205%); height: auto; aspect-ratio: 1; left: 50%; bottom: 12px; transform: translate(-50%, 6.25%); }
 .oc-companion-home .oc-companion-scene > .oc-companion-egg { width: 112px; height: 134px; }
-.oc-assistant-medals { position: absolute; top: var(--space-8); right: var(--space-12); max-width: calc(100% - 24px); display: flex; align-items: center; gap: var(--space-6); color: var(--companion-scene-ink); }
-.oc-assistant-medals-status { max-width: 180px; padding: var(--space-4) var(--space-6); background: var(--companion-scene-shade); color: var(--companion-scene-ink); font-size: var(--font-size-xs); }
-.oc-assistant-medals-strip { display: flex; align-items: center; gap: var(--space-6); padding: 0; margin: 0; list-style: none; }
+.oc-assistant-medals { position: relative; align-self: center; display: flex; flex-direction: column; align-items: center; gap: var(--space-6); max-width: 100px; margin: var(--space-8) var(--space-12) var(--space-8) var(--space-6); color: var(--companion-scene-ink); }
+.oc-assistant-medals-status { max-width: 100px; padding: var(--space-4) var(--space-6); background: var(--companion-scene-shade); color: var(--companion-scene-ink); font-size: var(--font-size-xs); }
+.oc-assistant-medals-strip { display: flex; flex-direction: column; align-items: center; gap: var(--space-6); padding: 0; margin: 0; list-style: none; }
 .oc-assistant-medal { position: static; }
 .oc-assistant-medal > button { display: grid; place-items: center; width: max(32px, var(--oc-companion-badge-size)); height: max(32px, var(--oc-companion-badge-size)); padding: 0; border-color: transparent; background: transparent; border-radius: var(--radius-sm); }
 .oc-assistant-medal .oc-pixel-medal { width: var(--oc-companion-badge-size); height: var(--oc-companion-badge-size); filter: drop-shadow(0 2px 2px var(--companion-scene-shade)); transition: transform 160ms ease-out; }
 .oc-assistant-medal > button:hover .oc-pixel-medal, .oc-assistant-medal > button:focus-visible .oc-pixel-medal { transform: translateY(-2px) scale(1.06); }
 .oc-assistant-medal > button:focus-visible { outline: 2px solid var(--companion-scene-ink); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .oc-assistant-medal .oc-pixel-medal { transition: none; } .oc-assistant-medal > button:hover .oc-pixel-medal, .oc-assistant-medal > button:focus-visible .oc-pixel-medal { transform: none; } }
-.oc-assistant-medal-caption { position: absolute; z-index: 1; top: calc(100% + var(--space-6)); right: 0; width: max-content; max-width: min(180px, calc(100cqw - 24px)); padding: var(--space-6) var(--space-8); border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-primary); font-size: var(--font-size-xs); line-height: 1.5; pointer-events: none; visibility: hidden; }
+.oc-assistant-medal-caption { position: absolute; z-index: 1; top: 50%; right: calc(100% + var(--space-6)); transform: translateY(-50%); width: max-content; max-width: min(180px, calc(100cqw - 180px)); padding: var(--space-6) var(--space-8); border: 1px solid var(--border); background: var(--bg-elevated); color: var(--text-primary); font-size: var(--font-size-xs); line-height: 1.5; pointer-events: none; visibility: hidden; }
 .oc-assistant-medal:hover .oc-assistant-medal-caption, .oc-assistant-medal:focus-within .oc-assistant-medal-caption { visibility: visible; }
 .oc-assistant-medals .oc-assistant-medals-more { display: grid; place-items: center; flex-shrink: 0; width: 28px; height: 28px; padding: 0; border-color: transparent; background: var(--companion-scene-shade); color: var(--companion-scene-ink); }
 .oc-assistant-medals-more svg { width: 16px; height: 16px; }
 .oc-assistant-medals .oc-assistant-medals-more:hover { border-color: var(--companion-scene-ink); }
 .oc-assistant-medals-stale { position: absolute; right: 0; top: 100%; width: max-content; color: var(--companion-scene-ink); background: var(--companion-scene-shade); font-size: var(--font-size-xs); }
 .oc-assistant-companion-start { position: absolute; right: var(--space-12); bottom: var(--space-8); }
+@container companion-scene (max-height: 160px) {
+  .oc-assistant-medals { flex-direction: row; max-width: none; margin-top: var(--space-4); margin-bottom: var(--space-4); }
+  .oc-assistant-medals-strip { gap: var(--space-4); }
+}
 
 .oc-companion-egg { display: block; width: 88px; height: 106px; flex-shrink: 0; color: var(--accent); }
 .oc-companion-eggshell { transform-origin: 60px 122px; }
@@ -160,7 +165,7 @@
 .oc-companion-rename { display: flex; align-items: end; gap: var(--space-8); flex-wrap: wrap; }
 .oc-companion-rename .oc-companion-actions { margin: 0 0 var(--space-8); }
 .oc-companion-entry .oc-companion-egg { width: 36px; height: 36px; }
-.oc-assistant-companion-scene > .oc-companion-egg { position: absolute; height: min(65cqh, 128px); width: auto; bottom: 12px; left: 50%; transform: translateX(-50%); }
+.oc-assistant-companion-stage > .oc-companion-egg { position: absolute; height: min(80cqh, 128px); width: auto; bottom: 12px; left: 50%; transform: translateX(-50%); }
 
 .oc-hatch-entry { position: relative; display: inline-flex; align-self: center; margin-left: auto; }
 .oc-companion-actions .oc-hatch-invitation { display: grid; place-items: center; flex: 0 0 28px; width: 28px; height: 28px; padding: 0; border: 0; background: transparent; color: var(--text-secondary); }

@@ -1627,5 +1627,11 @@
         ]
       }
     }
+  },
+  "sceneBounds": {
+    "left": 12,
+    "top": 66,
+    "right": 245,
+    "bottom": 246
   }
 }

@@ -8,7 +8,7 @@ import { CompanionAvatar } from './CompanionAvatar';
 import { useCompanion } from './useCompanion';
 import { AssistantMedals } from './AssistantMedals';
 import { SceneCompanion } from './SceneCompanion';
-import { companionDisplayScale, visibleFrameHeightRatio, type CompanionAction } from '../../companion/content';
+import { companionDisplayScale, visibleFrameHeightRatio, visibleFrameWidthRatio, type CompanionAction } from '../../companion/content';
 import { useCompanionPresentation } from './useCompanionPresentation';
 
 /** Personalization reads are mounted only after the user enables collection. */
@@ -47,15 +47,16 @@ export function CompanionAssistantHeader({ host, socialHost, enabled, visible, o
     const frame = pack.assets[idle.frames[0]];
     const fit = visibleFrameHeightRatio(pack, stage);
     const scale = companionDisplayScale(pack, stage);
-    // The top row belongs to medals; the remaining height fits the visible
-    // figure. Container units also follow flex/viewport constraints while dragging.
-    const figureSize = `max(0px, min(560px, calc((100cqh - 56px) / ${fit}), calc((100cqw - 24px) / ${scale})))`;
+    const bounds = pack.contractVersion === 2 ? pack.sceneBounds : undefined;
+    // The stage owns its complete height. The medal dock occupies a separate
+    // grid column, so a short scene never pays for an empty row above the pet.
+    const figureSize = `max(0px, min(calc((100cqh - 16px) / ${fit}), calc((100cqw - 24px) / ${scale * visibleFrameWidthRatio(pack, stage)})))`;
     const level = snapshot?.level ?? 1, required = snapshot?.levelXPRequired ?? 10;
     const progressText = level<100 ? `${snapshot?.levelXP??0} / ${required} 经验 · 升至 Lv.${level+1}` : `Lv.100 · 已满级 · 成长经验 ${pet?.xp??0} 经验`;
     return <section ref={presentation.root} className="oc-companion-assistant-header" data-expanded={expanded} data-resizing={presentation.dragging} aria-label="伙伴展示" style={{
       '--oc-companion-scene-height': `${presentation.height}px`,
       '--oc-companion-figure-size': figureSize,
-      '--oc-companion-foot-offset': (frame.height - idle.anchor.y) / frame.height * (1 - scale),
+      '--oc-companion-foot-offset': (frame.height - idle.anchor.y - ((bounds?.bottom ?? frame.height) - idle.anchor.y) * scale) / frame.height,
     } as CSSProperties}>
       <header className="oc-assistant-companion-toolbar">
         <div className="oc-assistant-companion-identity">
@@ -74,7 +75,9 @@ export function CompanionAssistantHeader({ host, socialHost, enabled, visible, o
       </header>
       {expanded && <div id={bodyId} className="oc-assistant-companion-body">
         <div className="oc-assistant-companion-scene">
-          {enabled && !pet ? <CompanionEgg/> : <SceneCompanion species={pet?.speciesId} stage={stage} palette={pet?.paletteId} name={pet?.name ?? '微光'} action={action} size="var(--oc-companion-figure-size)" visible={visible} onInteract={interact} onComplete={finishInteraction}/>}
+          <div className="oc-assistant-companion-stage">
+            {enabled && !pet ? <CompanionEgg/> : <SceneCompanion species={pet?.speciesId} stage={stage} palette={pet?.paletteId} name={pet?.name ?? '微光'} action={action} size="var(--oc-companion-figure-size)" visible={visible} onInteract={interact} onComplete={finishInteraction}/>}
+          </div>
           {enabled && pet && socialHost ? visible && <AssistantMedals host={socialHost} onManage={onManage}/> : <div className="oc-assistant-companion-start"><button type="button" onClick={onManage}>{enabled ? (pet ? '养成与奖章' : '去开蛋') : '开启养成'}</button></div>}
         </div>
         <div role="separator" tabIndex={0} className="oc-assistant-companion-resize" aria-label="调整伙伴场景高度" aria-orientation="horizontal" aria-controls={bodyId} aria-valuemin={presentation.minimum} aria-valuemax={presentation.maximum} aria-valuenow={presentation.height} aria-valuetext={`${presentation.height} 像素`} title="拖动调整高度 · 双击恢复默认 · 方向键微调" {...presentation.separator}><span/></div>
