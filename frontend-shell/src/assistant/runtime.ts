@@ -1,5 +1,8 @@
 /** Conversation is independent of resource availability. Tool targets are optional. */
 export interface AssistantTarget { tabId: string; connectionId: string; }
+// Transport values mirror the generated Go bindings; the host validates kinds.
+export interface AssistantPageReference extends AssistantTarget { kind: string; title: string; }
+export interface AssistantPageOption extends AssistantPageReference { kind: 'terminal' | 'database' | 'file'; unavailable?: string; description?: string; }
 export interface AssistantAnswer { text: string; selected: string[]; }
 export interface AssistantPrompt {
   data?: unknown;
@@ -18,6 +21,7 @@ export interface AssistantMessage {
   id: string; turnId?: string; role: string; content: string; phase?: string;
   kind?: string; time?: string;
   operation?: AssistantOperation;
+  references?: AssistantPageReference[];
 }
 export interface AssistantOperation {
 	measured?: boolean; durationMs?: number;
@@ -39,7 +43,7 @@ export interface AssistantRuntime {
   selectModel?(id: string): Promise<AssistantModels>;
   restoreConversation?(): Promise<AssistantConversationSnapshot>;
   newConversation(): Promise<void>;
-  start(question: string, target?: AssistantTarget): Promise<AssistantTurnState>;
+  start(question: string, target?: AssistantTarget, references?: AssistantPageReference[]): Promise<AssistantTurnState>;
   state(): Promise<AssistantTurnState>;
   stop(turnId: string): Promise<void>;
   respond(turnId: string, requestId: string, answer: AssistantAnswer): Promise<void>;

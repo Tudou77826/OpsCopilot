@@ -13,17 +13,20 @@ import (
 	"opscopilot/pkg/agenttransport/mcp"
 	"opscopilot/pkg/assistantcontrol"
 	"opscopilot/pkg/filecontrol"
+	"opscopilot/pkg/terminalcontrol"
 )
 
 type FileTools struct {
-	Turn      *assistantcontrol.Turn
-	Service   *filecontrol.Service
-	Inventory func(context.Context) (any, error)
-	Resolve   func(context.Context, string) (filecontrol.Endpoint, error)
-	current   string
-	denied    map[string]bool
-	consented map[string]bool
-	tasks     map[string]string // task ID -> workspace, only tasks initiated this turn
+	Turn                *assistantcontrol.Turn
+	Service             *filecontrol.Service
+	Inventory           func(context.Context) (any, error)
+	Review              assistantcontrol.Reviewer
+	Resolve             func(context.Context, string) (filecontrol.Endpoint, error)
+	current             string
+	denied              map[string]bool
+	consented           map[string]bool
+	tasks               map[string]string // task ID -> workspace, only tasks initiated this turn
+	downloadNoOverwrite bool
 }
 
 func (f *FileTools) Close() {
@@ -33,21 +36,33 @@ func (f *FileTools) Close() {
 		f.current = ""
 	}
 }
-func (f *FileTools) confirm(ctx context.Context, title, description string, details []assistantcontrol.Detail, key string) error {
+func (f *FileTools) confirm(ctx context.Context, title, description string, details []assistantcontrol.Detail, key string, humanReasons ...string) error {
 	if f.denied == nil {
 		f.denied = map[string]bool{}
 	}
 	if f.denied[key] {
-		return errors.New("本轮已拒绝此文件操作，请等待用户指示")
+		return fmt.Errorf("%w：本轮已拒绝此文件操作，请等待用户指示", assistantcontrol.ErrActionDenied)
 	}
-	a, err := f.Turn.Request(ctx, assistantcontrol.Prompt{Kind: "approval", Title: title, Description: description, Details: details, Choices: []assistantcontrol.Choice{{ID: "reject", Label: "取消"}, {ID: "allow", Label: "允许本次"}}, Expires: time.Now().Add(5 * time.Minute)})
+	data, _ := json.Marshal(details)
+	humanReason := ""
+	if strings.HasPrefix(key, "upload\x00") {
+		humanReason = "上传可能覆盖远端同名文件，当前通道不能保证不覆盖，需要人工核对"
+	}
+	if len(humanReasons) > 0 && humanReasons[0] != "" {
+		humanReason = humanReasons[0]
+	}
+	input := assistantcontrol.ReviewInput{Tool: "file", Location: "文件工作区", Action: title + "\n" + description + "\n" + string(data)}
+	verdict, err := f.Turn.ReviewAction(ctx, f.Review, input, humanReason)
+	if err == nil {
+		err = f.Turn.ConfirmAction(ctx, input, assistantcontrol.Prompt{Kind: "approval", Title: title, Description: description, Details: details, Choices: []assistantcontrol.Choice{{ID: "reject", Label: "取消"}, {ID: "allow", Label: "允许本次"}}, Expires: time.Now().Add(5 * time.Minute)}, verdict)
+	}
 	if err != nil {
+		if errors.Is(err, assistantcontrol.ErrActionDenied) {
+			f.denied[key] = true
+		}
 		return err
 	}
-	if len(a.Selected) != 1 || a.Selected[0] != "allow" {
-		f.denied[key] = true
-		return errors.New("文件操作未获允许")
-	}
+	f.downloadNoOverwrite = strings.HasPrefix(key, "download\x00") && verdict.Allowed()
 	if ctx.Err() != nil || f.Turn.Context().Err() != nil {
 		return assistantcontrol.ErrStale
 	}
@@ -56,6 +71,14 @@ func (f *FileTools) confirm(ctx context.Context, title, description string, deta
 func (f *FileTools) Call(ctx context.Context, name, argument string) (value any, callErr error) {
 	defer func() {
 		if callErr != nil && !hasCallReceipt(ctx) {
+			if errors.Is(callErr, assistantcontrol.ErrActionDenied) {
+				title := "文件操作"
+				if name == "file_transfer" {
+					title = "文件传输"
+				}
+				f.Turn.ObserveOperation("file-error-"+fmt.Sprint(len(f.Turn.Snapshot().Messages)), title, assistantcontrol.Operation{Kind: "file", Status: "denied"})
+				return
+			}
 			stage := "文件目录 / 页签"
 			if name == "file_transfer" {
 				stage = "传输准备"
@@ -143,6 +166,19 @@ func (f *FileTools) Call(ctx context.Context, name, argument string) (value any,
 		if err := validFilePath(in.Path, in.Side == "local"); err != nil {
 			return nil, err
 		}
+		w, err := f.Service.Snapshot(f.current)
+		if err != nil {
+			return nil, err
+		}
+		if f.Review != nil {
+			humanReason := ""
+			if sensitiveFilePath(in.Path) {
+				humanReason = "目录可能包含敏感凭据，需要人工确认"
+			}
+			if err = f.confirm(ctx, "浏览目录", "只列目录元信息，不读取文件内容。", []assistantcontrol.Detail{{Label: "目标节点", Value: w.Endpoint.Title + " / " + w.Endpoint.ConnectionID}, {Label: "位置", Value: in.Side}, {Label: "目录", Value: in.Path}}, "list:"+in.Side+":"+in.Path, humanReason); err != nil {
+				return nil, err
+			}
+		}
 		return f.Service.Browse(ctx, f.current, f.Turn.ID(), in.Path, in.Side == "local")
 	case "file_transfer":
 		if in.Direction != "upload" && in.Direction != "download" {
@@ -165,13 +201,32 @@ func (f *FileTools) Call(ctx context.Context, name, argument string) (value any,
 			return nil, err
 		}
 		key := in.Direction + "\x00" + in.LocalPath + "\x00" + in.RemotePath
-		if err = f.confirm(ctx, "确认这一次文件传输", "仅传输一个文件；目标同名文件可能被覆盖，路径会按当前文件通道身份访问。请核对内容及目标，不包含执行或安装授权。取消/失败可能留下部分目标文件。", []assistantcontrol.Detail{{Label: "目标节点", Value: w.Endpoint.Title}, {Label: "执行身份", Value: w.Endpoint.Identity}, {Label: "传输方向", Value: map[string]string{"upload": "本机 → 服务器", "download": "服务器 → 本机"}[in.Direction]}, {Label: "本机文件", Value: in.LocalPath}, {Label: "远端文件", Value: in.RemotePath}, {Label: "目的", Value: in.Purpose}}, key); err != nil {
+		description := "仅上传一个文件，可能覆盖远端同名文件。不包含执行或安装。取消/失败可能留下部分文件。"
+		humanReason := ""
+		if sensitiveFilePath(in.LocalPath) || sensitiveFilePath(in.RemotePath) {
+			humanReason = "传输路径可能涉及敏感凭据，需要人工确认"
+		}
+		if in.Direction == "download" {
+			description = "仅下载一个文件；自动通过时使用不覆盖发布，若目标已经存在或安全发布不受支持则失败，不替换已有文件。不包含执行或安装。"
+			listed, listErr := f.Service.Snapshot(w.ID)
+			if listErr != nil {
+				return nil, listErr
+			}
+			for _, entry := range listed.LocalEntries {
+				if entry.Name == filepath.Base(in.LocalPath) {
+					humanReason = "下载目标已存在，覆盖已有文件需要人工确认"
+					description = "下载并覆盖已有本机文件，需要明确确认。"
+					break
+				}
+			}
+		}
+		if err = f.confirm(ctx, "确认这一次文件传输", description, []assistantcontrol.Detail{{Label: "目标节点", Value: w.Endpoint.Title + " / " + w.Endpoint.ConnectionID}, {Label: "执行身份", Value: w.Endpoint.Identity}, {Label: "传输方向", Value: map[string]string{"upload": "本机 → 服务器", "download": "服务器 → 本机"}[in.Direction]}, {Label: "本机文件", Value: in.LocalPath}, {Label: "远端文件", Value: in.RemotePath}, {Label: "目的", Value: in.Purpose}}, key, humanReason); err != nil {
 			return nil, err
 		}
 		if err = f.Service.Present(ctx, w.ID); err != nil {
 			return nil, err
 		}
-		task, err := f.Service.Start(ctx, w.ID, f.Turn.ID(), filecontrol.Task{Direction: in.Direction, LocalPath: in.LocalPath, RemotePath: in.RemotePath})
+		task, err := f.Service.Start(ctx, w.ID, f.Turn.ID(), filecontrol.Task{Direction: in.Direction, LocalPath: in.LocalPath, RemotePath: in.RemotePath, NoOverwrite: f.downloadNoOverwrite})
 		if err == nil {
 			if f.tasks == nil {
 				f.tasks = map[string]string{}
@@ -184,6 +239,11 @@ func (f *FileTools) Call(ctx context.Context, name, argument string) (value any,
 		return nil, f.Service.Cancel(f.current, f.Turn.ID(), in.TaskID)
 	}
 	return nil, errors.New("未知文件操作")
+}
+
+func sensitiveFilePath(value string) bool {
+	encoded, _ := json.Marshal(map[string]string{"path": value})
+	return terminalcontrol.RequiresHumanReview(string(encoded))
 }
 func (f *FileTools) observeTasks(id string) {
 	w, err := f.Service.Snapshot(id)

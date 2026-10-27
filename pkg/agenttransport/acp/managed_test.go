@@ -36,7 +36,8 @@ func TestLiveChrysManagedTools(t *testing.T) {
 			t.Error("model credential was not resolved correctly")
 		}
 		var request struct {
-			Tools []struct {
+			Messages []json.RawMessage `json:"messages"`
+			Tools    []struct {
 				Function struct {
 					Name string `json:"name"`
 				} `json:"function"`
@@ -53,7 +54,7 @@ func TestLiveChrysManagedTools(t *testing.T) {
 				continue
 			}
 			databaseTool := false
-			for _, allowed := range append(append(mcp.DatabaseToolNames(), mcp.FileToolNames()...), mcp.LocalDirectoryToolNames()...) {
+			for _, allowed := range append(append(append(mcp.DatabaseToolNames(), mcp.FileToolNames()...), mcp.LocalDirectoryToolNames()...), mcp.ReferenceToolNames()...) {
 				databaseTool = databaseTool || name == allowed
 			}
 			if databaseTool {

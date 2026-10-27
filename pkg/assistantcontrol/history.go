@@ -13,14 +13,15 @@ const historyMaxMessages = 128
 
 // Message is display history, never an approval or an instruction to execute.
 type Message struct {
-	ID        string    `json:"id"`
-	TurnID    string    `json:"turnId"`
-	Role      string    `json:"role"`
-	Content   string    `json:"content"`
-	Phase     string    `json:"phase,omitempty"`
-	Kind      string    `json:"kind,omitempty"`
-	Time      time.Time `json:"time"`
-	Operation Operation `json:"operation,omitempty"`
+	ID         string          `json:"id"`
+	TurnID     string          `json:"turnId"`
+	Role       string          `json:"role"`
+	Content    string          `json:"content"`
+	Phase      string          `json:"phase,omitempty"`
+	Kind       string          `json:"kind,omitempty"`
+	Time       time.Time       `json:"time"`
+	Operation  Operation       `json:"operation,omitempty"`
+	References []PageReference `json:"references,omitempty"`
 }
 
 type ConversationSnapshot struct {
@@ -40,13 +41,13 @@ type History struct {
 	truncated bool
 }
 
-func (h *History) Begin(turnID, question string) {
+func (h *History) Begin(turnID, question string, refs ...PageReference) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.id == "" {
 		h.id = uuid.NewString()
 	}
-	h.append(Message{ID: turnID + ":user", TurnID: turnID, Role: "user", Content: question})
+	h.append(Message{ID: turnID + ":user", TurnID: turnID, Role: "user", Content: question, References: append([]PageReference(nil), refs...)})
 }
 
 func (h *History) Finish(state State) {
@@ -99,7 +100,15 @@ func (h *History) append(message Message) {
 func (h *History) Snapshot() ConversationSnapshot {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return ConversationSnapshot{ID: h.id, Messages: append([]Message{}, h.messages...), Truncated: h.truncated}
+	return ConversationSnapshot{ID: h.id, Messages: cloneMessages(h.messages), Truncated: h.truncated}
+}
+
+func cloneMessages(messages []Message) []Message {
+	copy := append([]Message{}, messages...)
+	for i := range copy {
+		copy[i].References = append([]PageReference(nil), copy[i].References...)
+	}
+	return copy
 }
 
 func (h *History) Reset() {
@@ -115,7 +124,7 @@ func (h *History) Reset() {
 func (h *History) Checkpoint(state State) ConversationSnapshot {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	copy := &History{id: h.id, messages: append([]Message{}, h.messages...), bytes: h.bytes, truncated: h.truncated}
+	copy := &History{id: h.id, messages: cloneMessages(h.messages), bytes: h.bytes, truncated: h.truncated}
 	if len(copy.messages) > 0 && copy.messages[len(copy.messages)-1].ID == state.TurnID+":user" {
 		for _, message := range state.Messages {
 			copy.append(message)
@@ -133,7 +142,7 @@ func (h *History) Restore(snapshot ConversationSnapshot) error {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.id, h.messages, h.truncated = snapshot.ID, append([]Message{}, snapshot.Messages...), snapshot.Truncated
+	h.id, h.messages, h.truncated = snapshot.ID, cloneMessages(snapshot.Messages), snapshot.Truncated
 	h.bytes = 0
 	for _, m := range h.messages {
 		h.bytes += messageBytes(m)

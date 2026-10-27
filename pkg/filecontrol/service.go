@@ -24,6 +24,8 @@ type Endpoint struct {
 	Identity     string `json:"identity"`
 }
 type Task struct {
+	// Host-only publication policy; not accepted from model JSON or UI.
+	NoOverwrite bool `json:"-"`
 	ID          string `json:"id"`
 	Direction   string `json:"direction"`
 	LocalPath   string `json:"localPath"`

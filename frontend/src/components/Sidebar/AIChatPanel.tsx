@@ -3,7 +3,7 @@ import { AIComposer } from '../AI';
 import { IconButton, ResourceLibraryIcon } from '@opscopilot/shell-terminal/ui';
 import { TbMessagePlus, TbPlayerStop, TbRefresh, TbX } from 'react-icons/tb';
 import { LatestMessageButton } from './LatestMessageButton';
-import type { AssistantRuntime, AssistantTarget } from '../../../../frontend-shell/src/assistant/runtime';
+import type { AssistantRuntime, AssistantTarget, AssistantPageOption, AssistantPageReference } from '../../../../frontend-shell/src/assistant/runtime';
 import { wailsAssistantRuntime } from '../../shell-adapter/wailsAssistantRuntime';
 import { useAssistantQueue } from './useAssistantQueue';
 import { AssistantInteractionCard } from '../AssistantInteraction/AssistantInteractionCard';
@@ -21,6 +21,7 @@ import '../AssistantLibrary/assistantLibrary.css';
 import './aiChatPanel.css';
 import { AssistantModelPicker } from './AssistantModelPicker';
 import { AssistantContextUsage } from './AssistantContextUsage';
+import { AssistantPagePicker, PageReferenceTags, samePage } from './AssistantPageReferences';
 
 interface AIChatPanelProps {
     runtime?: AssistantRuntime;
@@ -29,13 +30,15 @@ interface AIChatPanelProps {
     activeTerminalStatus?: string;
     activeWorkspaceTitle?: string;
     terminalTabs?: {id:string;connectionId?:string;title:string}[];
+    pageOptions?: AssistantPageOption[];
+    activePageReference?: AssistantPageReference;
     renderHeader?: (actions: ReactNode) => ReactNode;
     onClose?: () => void;
     children?: ReactNode;
     libraryHost?: LibraryHost;
 }
 
-export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget, activeTerminalStatus, activeWorkspaceTitle, terminalTabs, runtime = wailsAssistantRuntime, renderHeader, onClose, children, libraryHost=wailsAssistantLibrary }: AIChatPanelProps) {
+export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget, activeTerminalStatus, activeWorkspaceTitle, terminalTabs, pageOptions, activePageReference, runtime = wailsAssistantRuntime, renderHeader, onClose, children, libraryHost=wailsAssistantLibrary }: AIChatPanelProps) {
     const assistant = useAssistantQueue(runtime);
     const [controlError, setControlError] = useState('');
     const [input, setInput] = useState('');
@@ -49,6 +52,25 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
     const [connections,setConnections]=useState<ConnectionChoice[]>([]);
     const [preparing,setPreparing]=useState(false);
     const [menuDismissed,setMenuDismissed]=useState(false);
+    const [references, setReferences] = useState<AssistantPageReference[]>([]);
+    const [referenceOpen, setReferenceOpen] = useState(false);
+    const [referenceQuery, setReferenceQuery] = useState('');
+    const options: AssistantPageOption[] = pageOptions ?? (terminalTabs || []).map(tab=>({kind:'terminal',tabId:tab.id,connectionId:tab.connectionId || '',title:tab.title,unavailable:tab.connectionId?undefined:'未连接'}));
+    function submittedReferences() {
+        const selected = references.length ? references : activePageReference ? [activePageReference] : [];
+        if (selected.some(ref=>!options.some(option=>samePage(option,ref)&&!option.unavailable))) throw Error('引用页签已关闭、未连接或连接已更换，请移除后重新选择');
+        return selected.map(({kind,tabId,connectionId,title})=>({kind,tabId,connectionId,title}));
+    }
+    function changeInput(value: string) {
+        setInput(value); setMenuDismissed(false);
+        const mention = /(?:^|\s)@([^@\n]*)$/.exec(value);
+        if (mention) {setReferenceQuery(mention[1]); setReferenceOpen(true);}
+    }
+    function toggleReference(option: AssistantPageOption) {
+        setReferences(previous=>previous.some(ref=>samePage(ref,option)) ? previous.filter(ref=>!samePage(ref,option)) : [...previous,{kind:option.kind,tabId:option.tabId,connectionId:option.connectionId,title:option.title}]);
+        setInput(value=>value.replace(/(^|\s)@[^@\n]*$/, '$1'));
+        setReferenceQuery('');
+    }
     const prepareGeneration=useRef(0);
     const preparingRef=useRef(false);
     useEffect(()=>{
@@ -57,7 +79,7 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
         return()=>{live=false;prepareGeneration.current++;};
     },[libraryHost]);
     function chooseCommand(command:AssistantCommand){setDraft({command,template:command.template,values:{}});setInput('');setControlError('');void Promise.resolve().then(()=>libraryHost.connections()).then(setConnections).catch(error=>setControlError(String(error)));}
-    const showMenu=!draft&&!menuDismissed&&/^\/[^\s]*$/.test(input);
+    const showMenu=!draft&&!referenceOpen&&!menuDismissed&&/^\/[^\s]*$/.test(input);
     const history = useRef<HTMLDivElement>(null);
     const followLatest = useRef(true);
     const busy = !!assistant.current;
@@ -78,15 +100,18 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
     }, [messages, assistant.state?.messages?.length, assistant.state?.output]);
 
     function send() {
-        if(showMenu)return;
+        if(showMenu||referenceOpen)return;
         if(draft){void sendCommand();return;}
         const question = input.trim();
         if (!question || assistant.transitioning) return;
         followLatest.current = true;
         setControlError('');
         try {
-            assistant.enqueue(question, activeTerminalTarget, activeTerminalTitle);
+            const refs=submittedReferences();
+            const terminal=refs.find(ref=>ref.kind==='terminal');
+            assistant.enqueue(question, refs.length ? terminal ? {tabId:terminal.tabId,connectionId:terminal.connectionId} : undefined : activeTerminalTarget, terminal?.title || activeTerminalTitle, refs);
             setInput('');
+            setReferences([]);
         } catch (error) {
             setControlError(error instanceof Error ? error.message : String(error));
         }
@@ -100,9 +125,11 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
         // Capture target with the submitted draft, never after an async lookup.
         const target=activeTerminalTarget,targetTitle=activeTerminalTitle;
         try{
+            const refs=submittedReferences();
+            const terminal=refs.find(ref=>ref.kind==='terminal');
             const question=await libraryHost.prepare(draft.command.name,draft.template,draft.values);
             if(generation!==prepareGeneration.current)return;
-            followLatest.current=true;assistant.enqueue(question,target,targetTitle);setDraft(undefined);setInput('');
+            followLatest.current=true;assistant.enqueue(question,refs.length ? terminal ? {tabId:terminal.tabId,connectionId:terminal.connectionId} : undefined : target,terminal?.title || targetTitle,refs);setDraft(undefined);setInput('');setReferences([]);
         }catch(error){if(generation===prepareGeneration.current)setControlError(String(error));}
         finally{if(generation===prepareGeneration.current){preparingRef.current=false;setPreparing(false);}}
     }
@@ -124,7 +151,7 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
             await assistant.newConversation();
             setDirectoryRevision(value => value + 1);
             followLatest.current = true;
-            setInput(''); setDraft(undefined); setShowLatest(false);
+            setInput(''); setDraft(undefined); setShowLatest(false); setReferences([]); setReferenceOpen(false);
         } catch (error) {
             setControlError(`无法新建对话：${error instanceof Error ? error.message : String(error)}`);
         } finally { setResetting(false); }
@@ -176,15 +203,15 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
             {assistant.restoreError && <div className="ai-restore-error" role="alert"><span>{assistant.restoreError}</span><IconButton label="重试恢复对话" onClick={()=>void assistant.restore()}><TbRefresh size={18}/></IconButton></div>}
             <div className="oc-command-composer" onKeyDown={event=>{if(event.key==='Escape')setMenuDismissed(true);}}>
             {showMenu&&<CommandMenu commands={library.commands.filter(c=>!c.skill||library.skills.some(s=>s.name===c.skill&&s.enabled))} query={input.slice(1)} onChoose={chooseCommand} onManage={()=>{setMenuDismissed(true);setLibraryOpen(true);}}/>}
-            <AIComposer value={draft?draft.template:input} onChange={value=>{setInput(value);setMenuDismissed(false);}} onSend={send} disabled={assistant.transitioning||assistant.restoring||!!assistant.restoreError||preparing||modelChanging} sendDisabled={showMenu||!!draft?.command.fields.some(field=>field.required&&!draft.values[field.key]?.trim())} busy={busy} queueWhileBusy queuePending={assistant.pending.length > 0} variant="conversation"
-                toolbarLeading={<><IconButton label="管理 Skills 和快捷命令" title="资源库 · Skills 与快捷命令" className="ai-composer-library" onClick={()=>setLibraryOpen(true)}><ResourceLibraryIcon/></IconButton><AssistantLocalDirectories compact={!!contextLabel} busy={busy || assistant.transitioning || assistant.restoring || resetting || modelChanging} revision={directoryRevision}/></>}
+            <AIComposer value={draft?draft.template:input} onChange={changeInput} onSend={send} disabled={assistant.transitioning||assistant.restoring||!!assistant.restoreError||preparing||modelChanging} sendDisabled={referenceOpen||showMenu||!!draft?.command.fields.some(field=>field.required&&!draft.values[field.key]?.trim())} busy={busy} queueWhileBusy queuePending={assistant.pending.length > 0} variant="conversation"
+                toolbarLeading={<><IconButton label="管理 Skills 和快捷命令" title="资源库 · Skills 与快捷命令" className="ai-composer-library" onClick={()=>setLibraryOpen(true)}><ResourceLibraryIcon/></IconButton><AssistantPagePicker options={options} selected={references} open={referenceOpen} onOpenChange={value=>{setReferenceOpen(value);if(value)setReferenceQuery('');}} onToggle={toggleReference} disabled={assistant.transitioning||assistant.restoring||preparing||modelChanging} query={referenceQuery} onQueryChange={setReferenceQuery}/><AssistantLocalDirectories compact={!!contextLabel || !!references.length} busy={busy || assistant.transitioning || assistant.restoring || resetting || modelChanging} revision={directoryRevision}/></>}
                 toolbarTrailing={<div className="ai-composer-model-controls"><AssistantContextUsage runtime={runtime} busy={busy} revision={`${directoryRevision}:${modelChanging}:${resetting}`}/><AssistantModelPicker runtime={runtime} busy={busy || assistant.transitioning || assistant.restoring || resetting || preparing || assistant.pending.length > 0} revision={directoryRevision} onChanging={setModelChanging} onError={setControlError}/></div>}
                 editor={draft?<CommandDraftEditor key={draft.command.name} draft={draft} connections={connections} disabled={assistant.transitioning||preparing} onChange={setDraft} onSend={send} onCancel={()=>{setDraft(undefined);setControlError('');}}/>:undefined}
-                header={<AssistantMessageQueue messages={assistant.pending} paused={assistant.paused} disabled={assistant.transitioning} resumeDisabled={busy} currentTitle={contextTitle}
-                    onResume={() => { setControlError(''); assistant.resume(); }} onSendNow={id => void sendNow(id)} onRemove={assistant.remove} />}
+                header={<><AssistantMessageQueue messages={assistant.pending} paused={assistant.paused} disabled={assistant.transitioning} resumeDisabled={busy} currentTitle={contextTitle}
+                    onResume={() => { setControlError(''); assistant.resume(); }} onSendNow={id => void sendNow(id)} onRemove={assistant.remove} /><PageReferenceTags references={references} options={options} onRemove={ref=>setReferences(previous=>previous.filter(item=>!samePage(ref,item)))}/></>}
                 placeholder="输入问题…"
                 hint={busy ? 'Enter 加入队列 · 立即发送会先停止本轮' : assistant.paused && assistant.pending.length ? '队列已暂停，继续后按顺序处理' : undefined}
-                contexts={contextLabel ? [{ id: 'target', label: contextLabel, active: true, kind:contextTitle ? 'terminal' : 'workspace' }] : []} />
+                contexts={!references.length && contextLabel ? [{ id: 'target', label: contextLabel, active: true, kind:contextTitle ? 'terminal' : 'workspace' }] : []} />
             </div>
         </div>
     </div>;

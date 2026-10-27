@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -36,6 +37,8 @@ type AccessScope struct {
 	Actor   string
 	Expires time.Time
 	Targets []AccessTarget
+	// Desktop task review checks semantic scope even for syntactically read-only commands.
+	RequireActionReview bool
 }
 
 // Access owns one host-issued scope. Give Operations() to an adapter, retaining
@@ -75,14 +78,15 @@ type ReviewDetails struct {
 }
 
 type commandReview struct {
-	details      ReviewDetails
-	request      CommandRequest
-	snapshot     Snapshot
-	caller       context.Context
-	invalid      bool
-	resolved     bool
-	selfReviewed bool
-	heldRun      *Run
+	details         ReviewDetails
+	request         CommandRequest
+	snapshot        Snapshot
+	caller          context.Context
+	invalid         bool
+	resolved        bool
+	selfReviewed    bool
+	lowRiskReviewed bool
+	heldRun         *Run
 }
 
 // ApprovedOperation is opaque and single-use; its execution accepts no target,
@@ -238,9 +242,12 @@ func (a *Access) authorize(ctx, caller context.Context, run *Run, id string, req
 		}
 		reason = "explicit_approval"
 		if run.approval.review.selfReviewed {
-			reason = "ai_read_only_review"
+			reason = "host_policy_review"
+			if run.approval.review.lowRiskReviewed {
+				reason = "host_policy_review"
+			}
 		}
-	} else if assessment := assessCommand(request.Command, allowed, snapshot.Directory); !assessment.ReadOnly {
+	} else if assessment := assessCommand(request.Command, allowed, snapshot.Directory); !assessment.ReadOnly || a.scope.RequireActionReview {
 		expires := time.Now().Add(time.Minute)
 		if a.scope.Expires.Before(expires) {
 			expires = a.scope.Expires
@@ -355,22 +362,22 @@ func (a *Access) Review(id string) (ReviewDetails, error) {
 	return review.details, nil
 }
 
-func (a *Access) RecordAIReview(id string, allowed bool) error {
+func (a *Access) RecordPolicyReview(id string, allowed bool) error {
 	review, err := a.Review(id)
 	if err != nil {
 		return err
 	}
 	status := "human_required"
 	if allowed {
-		status = "read_only_candidate"
+		status = "passed_floor"
 	}
-	return a.append(ExecutionAudit{Time: time.Now().UTC(), Actor: a.scope.Actor, Target: review.Target, RunID: review.RunID, OperationID: review.OperationID, ApprovalID: id, CommandHash: digest(review.Command), CommandBytes: len(review.Command), Phase: "ai_review_completed", Reason: status})
+	return a.append(ExecutionAudit{Time: time.Now().UTC(), Actor: a.scope.Actor, Target: review.Target, RunID: review.RunID, OperationID: review.OperationID, ApprovalID: id, CommandHash: digest(review.Command), CommandBytes: len(review.Command), Phase: "host_policy_checked", Reason: status})
 }
 
 // Approve belongs only to the trusted user approval path; ACP tool-success or
 // a model's approved=true is not a substitute. Calling it never executes SQL/SSH.
 func (a *Access) Approve(id string, allow bool) (ApprovedOperation, error) {
-	return a.resolveReview(id, allow, "")
+	return a.resolveReview(id, allow, "", false)
 }
 
 // ApproveReadOnlyReview retains scope, identity, expiry and exact-command binding.
@@ -378,20 +385,33 @@ func (a *Access) ApproveReadOnlyReview(id, reason string) (ApprovedOperation, er
 	if strings.TrimSpace(reason) == "" || len(reason) > 1024 {
 		return nil, ErrDenied
 	}
-	return a.resolveReview(id, true, reason)
+	return a.resolveReview(id, true, reason, false)
 }
-func (a *Access) resolveReview(id string, allow bool, aiReason string) (ApprovedOperation, error) {
+
+// ApproveLowRiskReview is host-only; target, UID, shell sequence, lease and
+// single-use dispatch are identical to exact human approval. It never broadens scope.
+func (a *Access) ApproveLowRiskReview(id, reason string) (ApprovedOperation, error) {
+	if strings.TrimSpace(reason) == "" || len(reason) > 1024 {
+		return nil, ErrDenied
+	}
+	return a.resolveReview(id, true, reason, true)
+}
+
+var legacyWriteWords = regexp.MustCompile(`(?i)(^|[^a-z0-9_])(mv|cp|tee|sed|touch|mkdir|set-content|add-content|out-file)([^a-z0-9_]|$)`)
+
+func (a *Access) resolveReview(id string, allow bool, aiReason string, lowRisk bool) (ApprovedOperation, error) {
 	a.mu.Lock()
 	review := a.reviews[id]
 	if review == nil || review.resolved || review.invalid || a.ctx.Err() != nil || review.caller.Err() != nil || !review.details.Expires.After(time.Now()) {
 		a.mu.Unlock()
 		return nil, ErrStaleApproval
 	}
-	if aiReason != "" && (review.details.Assessment.Category != "无法自动判定" || RequiresHumanReview(review.request.Command)) {
+	if aiReason != "" && ((!lowRisk && (review.details.Assessment.Category != "无法自动判定" || legacyWriteWords.MatchString(review.request.Command))) || RequiresHumanReview(review.request.Command)) {
 		a.mu.Unlock()
 		return nil, ErrDenied
 	}
 	review.selfReviewed = aiReason != ""
+	review.lowRiskReviewed = lowRisk
 	review.resolved = true
 	if !allow {
 		review.invalid = true
@@ -416,7 +436,10 @@ func (a *Access) resolveReview(id string, allow bool, aiReason string) (Approved
 		event.Phase = "approval_granted"
 		if review.selfReviewed {
 			event.Phase = "ai_review_granted"
-			event.Reason = "ai_read_only_review"
+			event.Reason = "host_policy_review"
+			if review.lowRiskReviewed {
+				event.Reason = "host_policy_review"
+			}
 		}
 	}
 	if err := a.append(event); err != nil {

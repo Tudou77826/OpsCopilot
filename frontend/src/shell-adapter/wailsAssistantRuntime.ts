@@ -3,6 +3,7 @@ import { AssistantContextUsage, AssistantModelOptions, SelectAssistantModel, New
 import { currentWorkspaceIdentity, currentWorkspaceSnapshot } from './workspaceIdentity';
 import { pullWorkspace } from './wailsWorkspaceHost';
 import { RevealAssistantResult } from '../../wailsjs/go/main/App';
+import { StartAssistantTurnWithReferencesOnPage } from '../../wailsjs/go/main/App';
 
 export const wailsAssistantRuntime: AssistantRuntime = {
 	contextUsage: AssistantContextUsage,
@@ -17,10 +18,11 @@ export const wailsAssistantRuntime: AssistantRuntime = {
         })};
     },
     newConversation: NewAssistantConversation,
-    start: async (question, target) => {
+    start: async (question, target, references) => {
         const view = currentWorkspaceSnapshot();
         const client = await currentWorkspaceIdentity();
         await pullWorkspace(client, view);
+        if (references?.length) return StartAssistantTurnWithReferencesOnPage(question, client, references);
         return StartAssistantTurnOnPage(question, target?.tabId || '', target?.connectionId || '', client);
     },
     state: AssistantControlState,

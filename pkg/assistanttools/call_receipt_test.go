@@ -3,13 +3,73 @@ package assistanttools
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"opscopilot/pkg/agenttransport/mcp"
 	"opscopilot/pkg/assistantcontrol"
+	"opscopilot/pkg/dbcontrol"
+	"opscopilot/pkg/dbworkspace"
+	"opscopilot/pkg/filecontrol"
+	"opscopilot/pkg/filetransfer"
 	"opscopilot/pkg/terminalcontrol"
+	"opscopilot/pkg/workspace"
 )
+
+func TestReadSummariesWhitelistContentsAndReportClipping(t *testing.T) {
+	db := dbcontrol.Workspace{SQL: "select count(*) from orders", Profile: dbworkspace.Profile{Name: "订单库", GatewayID: "not-for-display"}, Session: dbworkspace.SessionInfo{ID: "not-for-display"}}
+	summary := callResultSummary("database_context", db)
+	if !strings.Contains(summary, db.SQL) || strings.Contains(summary, "not-for-display") {
+		t.Fatal(summary)
+	}
+	files := filecontrol.Workspace{LocalPath: "D:/logs", RemotePath: "/var/log", RemoteEntries: []filetransfer.Entry{{Name: "service.log"}}}
+	summary = callResultSummary("file_list", files)
+	if !strings.Contains(summary, "/var/log") || !strings.Contains(summary, "service.log") {
+		t.Fatal(summary)
+	}
+	summary = callResultSummary("database_context", map[string]any{"truncated": true, "preview": "partial"})
+	if !strings.Contains(summary, "截断") {
+		t.Fatal("tool clipping hidden", summary)
+	}
+}
+
+func TestRejectedCallIsNotReportedAsFailure(t *testing.T) {
+	r, _ := referenceFixture(t)
+	w := &WorkspaceTools{turn: r.Turn}
+	finish := w.newCallReceipt("workspace_open", "{}", time.Now())
+	finish(nil, fmt.Errorf("context: %w", assistantcontrol.ErrActionDenied))
+	messages := r.Turn.Snapshot().Messages
+	op := messages[len(messages)-1].Operation
+	if op.Status != "denied" || op.Detail != "" || op.Next != "" || op.Outcome != "" {
+		t.Fatal("explicit refusal should not become a failure diagnostic", op)
+	}
+}
+
+func TestTerminalReadReceiptKeepsActualSnapshotAndSourceWithoutTakingOwnership(t *testing.T) {
+	r, _ := referenceFixture(t)
+	target := terminalcontrol.Target{SessionID: "tab", ConnectionID: "physical"}
+	view := terminalcontrol.TerminalContext{Target: target, Output: terminalcontrol.Observation{From: 1, To: 27, Text: "original screen", Truncated: true}}
+	w := NewWorkspaceTools(r.Turn, target, func(context.Context) (workspace.Inventory, error) {
+		return workspace.Inventory{Snapshot: workspace.Snapshot{Tabs: []workspace.Tab{{Target: workspace.Target{TabID: "tab", ConnectionID: "physical"}, Title: "生产节点"}}}}, nil
+	}, nil, nil, func(target terminalcontrol.Target) *TerminalTools {
+		return &TerminalTools{Turn: r.Turn, Target: target, readAllowed: true, Observe: func(context.Context) (terminalcontrol.TerminalContext, error) { return view, nil }}
+	})
+	defer w.Close()
+	if _, err := w.Call(context.Background(), "terminal_context", "{}"); err != nil {
+		t.Fatal(err)
+	}
+	view.Output.Text = "new screen after read"
+	messages := r.Turn.Snapshot().Messages
+	op := messages[len(messages)-1].Operation
+	if op.WorkspaceID != "tab" || op.ConnectionID != "physical" || !strings.Contains(op.Location, "生产节点") || !strings.Contains(op.Result, "original screen") || !strings.Contains(op.Result, "截断") || strings.Contains(op.Result, "new screen") {
+		t.Fatal(op)
+	}
+	if w.current.run != nil || w.current.access != nil {
+		t.Fatal("passive read took ownership")
+	}
+}
 
 func TestEveryApplicationToolHasReceiptCoverage(t *testing.T) {
 	names := []string{"workspace_list", "workspace_open", "workspace_select", "terminal_context", "terminal_execute", "terminal_take", "terminal_release"}

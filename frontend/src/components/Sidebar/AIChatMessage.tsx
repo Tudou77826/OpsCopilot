@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { TbCheck, TbCopy } from 'react-icons/tb';
 import { IconButton } from '@opscopilot/shell-terminal/ui';
 import { RichText } from '../AI';
-import type { AssistantOperation } from '../../../../frontend-shell/src/assistant/runtime';
+import type { AssistantOperation, AssistantPageReference } from '../../../../frontend-shell/src/assistant/runtime';
 import { AssistantOperationReceipt } from './AssistantOperationReceipt';
+import { PageReferenceTags } from './AssistantPageReferences';
 
-export function AIChatMessage({ id = '', content, user = false, phase, kind, time, operation, onReveal, onExecutionExpand, timing }: { id?: string; content: string; user?: boolean; phase?: string; kind?: string; time?: string; operation?: AssistantOperation; onReveal?: (id:string)=>Promise<void>; onExecutionExpand?: () => void; timing?: string }) {
+export function AIChatMessage({ id = '', content, user = false, phase, kind, time, operation, references, onReveal, onExecutionExpand, timing }: { id?: string; content: string; user?: boolean; phase?: string; kind?: string; time?: string; operation?: AssistantOperation; references?: AssistantPageReference[]; onReveal?: (id:string)=>Promise<void>; onExecutionExpand?: () => void; timing?: string }) {
     const [copied, setCopied] = useState(false);
     const [error, setError] = useState(false);
     async function copy() {
@@ -18,7 +19,7 @@ export function AIChatMessage({ id = '', content, user = false, phase, kind, tim
     const date = time ? new Date(time) : undefined;
     const stamp = date && !Number.isNaN(date.getTime()) ? <time dateTime={time} title={[date.toLocaleString(),timing].filter(Boolean).join(' · ')}>{date.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}</time> : null;
     if (kind && kind !== 'text') return <article className={`ai-interaction-record is-${kind}`} data-testid="message-item"><div className="ai-message-meta"><span>{kind === 'answer' ? '你的回答' : kind === 'question' ? '助手提问' : kind === 'permission' ? '操作确认' : kind === 'permission_answer' ? '你的选择' : kind === 'review' ? '自审' : kind === 'review_fallback' ? '自审方式' : '操作状态'}</span>{stamp}</div><p>{content}</p></article>;
-    if (user) return <div className="ai-user-message" data-testid="message-item">{stamp}<RichText content={content} /></div>;
+    if (user) return <div className="ai-user-message" data-testid="message-item">{stamp}<PageReferenceTags references={references || []}/><RichText content={content} /></div>;
     return <article className="ai-assistant-message" data-testid="message-item">
         <div className="ai-message-meta"><span>助手</span>{stamp}<IconButton label="复制回答" title={copied ? '已复制' : '复制回答'} onClick={() => void copy()}>{copied ? <TbCheck size={16} /> : <TbCopy size={16} />}</IconButton></div>
         {copied && <span className="ai-composer-accessible-hint" role="status">已复制</span>}

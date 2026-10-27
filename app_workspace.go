@@ -225,6 +225,9 @@ func (a *App) openWorkspaceConnection(ctx context.Context, client string, cfg Co
 func (a *App) assistantWorkspaceTools(turn *assistantcontrol.Turn, target terminalcontrol.Target, reviewers ...assistantcontrol.Reviewer) *assistanttools.WorkspaceTools {
 	tools := assistanttools.NewWorkspaceTools(turn, target, a.workspaceInventory, a.prepareWorkspaceConnection, a.selectWorkspaceTab, func(target terminalcontrol.Target) *assistanttools.TerminalTools {
 		terminal := a.assistantTerminalTools(turn, target)
+		if cfg, ok := a.getConfig(target.SessionID); ok {
+			terminal.Location = fmt.Sprintf("%s@%s:%d", cfg.User, cfg.Host, cfg.Port)
+		}
 		if len(reviewers) > 0 {
 			terminal.Review = reviewers[0]
 		}
@@ -236,7 +239,15 @@ func (a *App) assistantWorkspaceTools(turn *assistantcontrol.Turn, target termin
 	}
 	tools.Database = a.assistantDatabaseTools(turn)
 	tools.Files = a.assistantFileTools(turn)
+	if len(reviewers) > 0 {
+		tools.Review = reviewers[0]
+		tools.Database.Review = reviewers[0]
+		tools.Files.Review = reviewers[0]
+	}
 	tools.LocalDirectories = &assistanttools.LocalDirectoryTools{Turn: turn, Projects: a.assistantLocalProjectStore()}
+	if len(reviewers) > 0 {
+		tools.LocalDirectories.Review = reviewers[0]
+	}
 	tools.References = &assistanttools.ReferenceTools{Turn: turn, KnowledgeDirectory: a.resolveKnowledgeBase, Commands: a.assistantReferenceCommands}
 	return tools
 }

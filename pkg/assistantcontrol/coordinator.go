@@ -76,6 +76,7 @@ type Turn struct {
 	segmentID         string
 	timing            turnClock
 	operationRevision uint64
+	rejectedActions   map[[32]byte]bool
 }
 
 func active(phase string) bool { return phase == "running" || phase == "waiting" }

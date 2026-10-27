@@ -2,27 +2,16 @@ package main
 
 import (
 	"context"
-	"sync"
 
-	"opscopilot/pkg/agenttransport/acp"
 	"opscopilot/pkg/assistantcontrol"
-	"opscopilot/pkg/assistantreview"
 )
 
-func (a *App) assistantReviewer(turn *assistantcontrol.Turn, managed acp.ManagedConfig, question string) assistantcontrol.Reviewer {
-	var fast assistantreview.Classifier
-	if a.configMgr != nil && a.configMgr.Config != nil {
-		config := a.configMgr.Config.LLM
-		// Only the explicitly configured fast model is used for direct review.
-		// The conversation itself continues to use the native iCode model.
-		fast = assistantreview.NewFastClassifier(config.BaseURL, config.APIKey, config.FastModel)
+// assistantRiskFloor is only used inside Ops-owned execution paths, after
+// iCode's own approval. Explicit host-side risk checks take precedence and
+// request a human decision. This function never calls a model.
+func assistantRiskFloor(ctx context.Context, _ assistantcontrol.ReviewInput) assistantcontrol.ReviewVerdict {
+	if ctx.Err() != nil {
+		return assistantcontrol.ReviewVerdict{Reason: "本轮已停止"}
 	}
-	var noticeOnce sync.Once
-	review := assistantreview.Service{Fast: fast, Fallback: func(ctx context.Context, input assistantcontrol.ReviewInput) assistantcontrol.ReviewVerdict {
-		return acp.ReviewAction(ctx, managed, input)
-	}, OnFallback: func(notice string) { noticeOnce.Do(func() { turn.Record("review_fallback", notice) }) }}
-	return func(ctx context.Context, input assistantcontrol.ReviewInput) assistantcontrol.ReviewVerdict {
-		input.UserRequest = question
-		return review.Review(ctx, input)
-	}
+	return assistantcontrol.ReviewVerdict{LowRisk: true, InScope: true, Reason: "未触发明确的高风险兜底规则"}
 }

@@ -160,6 +160,12 @@ func validateHistory(s ConversationSnapshot) error {
 			return bad
 		}
 		ids[m.ID] = true
+		if ValidatePageReferences(m.References) != nil {
+			return bad
+		}
+		for _, r := range m.References {
+			total += len(r.Kind) + len(r.TabID) + len(r.ConnectionID) + len(r.Title)
+		}
 		total += len(m.Content)
 		op := m.Operation
 		if op.DurationMs < 0 || op.DurationMs > 1<<53-1 {
@@ -186,6 +192,10 @@ func RecoveryContext(s ConversationSnapshot) string {
 	used := 0
 	for i := len(s.Messages) - 1; i >= 0; i-- {
 		m := s.Messages[i]
+		for _, r := range m.References {
+			m.Content += "\n历史引用页签：" + r.Title + "（" + r.Kind + "，需重新核实）"
+		}
+		m.References = nil // Historical handles must not become current tool targets.
 		// Native handles are never supplied as recovered tool targets.
 		if m.Kind == "operation" {
 			if m.Operation.Action != "" {

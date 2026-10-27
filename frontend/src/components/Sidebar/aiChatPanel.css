@@ -108,6 +108,9 @@
 @media (hover:none) { .ai-message-meta > button { opacity:1; } }
 @media (prefers-reduced-motion:reduce) { .ai-process-chevron, .ai-message-meta > button { transition:none; } }
 .ai-operation-receipt { margin: 8px 0 12px; padding: 5px 0 5px 12px; border-left: 2px solid var(--border); color: var(--text-muted); font-size: 12px; line-height: 1.55; }
+.ai-operation-denied { display: flex; align-items: center; gap: 7px; min-height: 28px; color: var(--text-muted); font-size: 12px; }
+.ai-operation-denied > svg { flex-shrink: 0; }
+.ai-operation-denied time { margin-left: auto; font-size: 10px; white-space: nowrap; opacity: .65; }
 .ai-operation-line { display: flex; align-items: center; gap: 7px; min-height: 28px; }
 .ai-operation-line > svg { flex-shrink: 0; }
 .ai-operation-line > span { min-width: 0; overflow-wrap: anywhere; }

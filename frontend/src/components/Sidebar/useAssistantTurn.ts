@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { AssistantAnswer, AssistantTarget, AssistantTurnState, AssistantRuntime, AssistantMessage } from '../../../../frontend-shell/src/assistant/runtime';
+import type { AssistantAnswer, AssistantTarget, AssistantTurnState, AssistantRuntime, AssistantMessage, AssistantPageReference } from '../../../../frontend-shell/src/assistant/runtime';
 
 interface Operation {
     live: boolean;
@@ -30,7 +30,7 @@ export function useAssistantTurn(runtime?: AssistantRuntime) {
         return () => { mounted.current = false; release(); window.removeEventListener('pagehide', release); };
     }, [runtime]);
 
-    async function ask(question: string, target?: AssistantTarget) {
+    async function ask(question: string, target?: AssistantTarget, references?: AssistantPageReference[]) {
         if (!runtime) throw Error('AI 助手暂不可用');
         let markReady!: () => void;
         const ready = new Promise<void>(resolve => { markReady = resolve; });
@@ -39,7 +39,9 @@ export function useAssistantTurn(runtime?: AssistantRuntime) {
         current.current = operation;
         let observed:AssistantTurnState | undefined;
         try {
-            observed = await runtime.start(question, target ? { ...target } : undefined);
+            observed = references?.length
+                ? await runtime.start(question, target ? { ...target } : undefined, references.map(ref => ({...ref})))
+                : await runtime.start(question, target ? { ...target } : undefined);
             operation.turnId = observed.turnId;
             operation.markReady();
             if (!operation.live || !mounted.current) {

@@ -43,7 +43,7 @@ func TestFileTransferApprovalCannotExecuteBeforeConfirmationOrAfterStop(t *testi
 	if err = service.Take(turn.Context(), w.ID, turn.ID()); err != nil {
 		t.Fatal(err)
 	}
-	f := &FileTools{Turn: turn, Service: service, current: w.ID}
+	f := &FileTools{Turn: turn, Service: service, current: w.ID, Review: lowRiskFixture}
 	defer f.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -92,3 +92,60 @@ func TestFileTransferApprovalCannotExecuteBeforeConfirmationOrAfterStop(t *testi
 	}
 }
 func quoteJSON(s string) string { data, _ := json.Marshal(s); return string(data) }
+
+func TestFileTransferRefusalCreatesCompactDeniedReceipt(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	c := &assistantcontrol.Coordinator{}
+	turn, _ := c.Begin(ctx, assistantcontrol.Target{}, nil)
+	defer turn.Finish("completed", "")
+	backend := &fileBackendFixture{}
+	service := filecontrol.New(backend, fileJournalFixture{})
+	w, err := service.Open(ctx, filecontrol.Endpoint{SessionID: "session", ConnectionID: "actual", Identity: "operator"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = service.Take(turn.Context(), w.ID, turn.ID()); err != nil {
+		t.Fatal(err)
+	}
+	f := &FileTools{Turn: turn, Service: service, current: w.ID, Review: lowRiskFixture}
+	defer f.Close()
+	go func() {
+		for ctx.Err() == nil {
+			if snapshot, e := service.Snapshot(w.ID); e == nil && snapshot.Pending != "" {
+				_ = service.Acknowledge(w.ID, snapshot.Pending, snapshot.Endpoint.ConnectionID)
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}()
+	args := `{"direction":"upload","local_path":` + quoteJSON(filepath.Join(t.TempDir(), "package.zip")) + `,"remote_path":"/package.zip","purpose":"测试传输"}`
+	done := make(chan error, 1)
+	go func() { _, err := f.Call(ctx, "file_transfer", args); done <- err }()
+	prompt := waitPrompt(t, c)
+	if err = c.Respond(turn.ID(), prompt.Prompt.ID, assistantcontrol.Answer{Selected: []string{"reject"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err = <-done; !errors.Is(err, assistantcontrol.ErrActionDenied) || backend.transfers.Load() != 0 {
+		t.Fatal("refused upload ran", err)
+	}
+	var receipt assistantcontrol.Message
+	for _, message := range c.Snapshot().Messages {
+		if message.Kind == "operation" {
+			receipt = message
+		}
+	}
+	if receipt.Content != "文件传输" || receipt.Operation.Status != "denied" || receipt.Operation.Detail != "" || receipt.Operation.Next != "" {
+		t.Fatal("refusal was presented as a failure", receipt)
+	}
+}
+
+func TestSensitiveFilePathsTriggerHostFloor(t *testing.T) {
+	for _, path := range []string{"/root/.ssh/id_rsa", `C:\Users\me\.ssh\id_rsa`} {
+		if !sensitiveFilePath(path) {
+			t.Fatalf("sensitive path missed: %s", path)
+		}
+	}
+	if sensitiveFilePath("/tmp/service.log") {
+		t.Fatal("ordinary log was flagged")
+	}
+}

@@ -26,7 +26,16 @@ func (a *App) StartAssistantTurnOnPage(question, sessionID, connectionID, client
 	}
 	return a.startAssistantTurn(question, sessionID, connectionID, client)
 }
-func (a *App) startAssistantTurn(question, sessionID, connectionID, client string) (assistantcontrol.State, error) {
+func (a *App) StartAssistantTurnWithReferencesOnPage(question, client string, refs []assistantcontrol.PageReference) (assistantcontrol.State, error) {
+	if client == "" {
+		return assistantcontrol.State{}, errors.New("消息缺少发起页面，请刷新后重试")
+	}
+	if err := assistantcontrol.ValidatePageReferences(refs); err != nil {
+		return assistantcontrol.State{}, err
+	}
+	return a.startAssistantTurn(question, "", "", client, refs...)
+}
+func (a *App) startAssistantTurn(question, sessionID, connectionID, client string, refs ...assistantcontrol.PageReference) (assistantcontrol.State, error) {
 	question = strings.TrimSpace(question)
 	if question == "" || len(question) > 16384 || !utf8.ValidString(question) {
 		return assistantcontrol.State{}, errors.New("请输入不超过 16 KB 的问题")
@@ -57,6 +66,16 @@ func (a *App) startAssistantTurn(question, sessionID, connectionID, client strin
 			return assistantcontrol.State{}, err
 		}
 	}
+	refs, err = a.resolveAssistantPageReferences(refs)
+	if err != nil {
+		return assistantcontrol.State{}, err
+	}
+	for _, ref := range refs {
+		if ref.Kind == "terminal" {
+			target = terminalcontrol.Target{SessionID: ref.TabID, ConnectionID: ref.ConnectionID}
+			break
+		}
+	}
 	// Questions wait for an explicit answer/stop; resource leases and individual
 	// operations keep their own bounded deadlines.
 	ctx, cancel := context.WithCancel(a.ctx)
@@ -66,7 +85,7 @@ func (a *App) startAssistantTurn(question, sessionID, connectionID, client strin
 		return assistantcontrol.State{}, err
 	}
 	turn.SetSource("assistant")
-	a.assistantHistory.Begin(turn.ID(), question)
+	a.assistantHistory.Begin(turn.ID(), question, refs...)
 	a.assistantSelectedModel = managed.LocalModel
 	if err = a.saveAssistantHistoryLocked(true, nil); err != nil {
 		turn.Finish("failed", "尚未执行操作："+a.assistantSaveWarning)
@@ -89,16 +108,22 @@ func (a *App) startAssistantTurn(question, sessionID, connectionID, client strin
 	a.assistantRunning = true
 	done := make(chan struct{})
 	a.assistantDone = done
-	reviewer := a.assistantReviewer(turn, managed, question)
+	pageContext := ""
+	if len(refs) == 0 {
+		pageContext = a.assistantPageContext(target)
+	} else {
+		pageContext = a.assistantReferencedPageContext(refs)
+	}
+	reviewer := assistantRiskFloor
 	tools := a.assistantWorkspaceTools(turn, target, reviewer)
-	tools.InitialPageContext = a.assistantPageContext(target)
+	tools.InitialPageContext = pageContext
 	checkpointStop := make(chan struct{})
 	go a.checkpointAssistant(turn, checkpointStop)
 	go func() {
 		defer close(checkpointStop)
 		defer cancel()
 		defer tools.Close()
-		err := conversation.RunWithReviewer(a.ctx, managed, turn, tools, question, reviewer)
+		err := conversation.Run(a.ctx, managed, turn, tools, question)
 		// Revoke application authority before publishing final completion.
 		tools.Close()
 		a.assistantConversationMu.Lock()
@@ -263,6 +288,6 @@ func (a *App) assistantTerminalTools(turn *assistantcontrol.Turn, target termina
 		if view.LastPrompt == nil {
 			return nil, terminalcontrol.ErrNeedConfirmation
 		}
-		return a.newTerminalAccess(ctx, terminalcontrol.AccessScope{Actor: "desktop-chrys", Expires: time.Now().Add(10 * time.Minute), Targets: []terminalcontrol.AccessTarget{{Target: target, UID: view.LastPrompt.UID, RoutineDiagnostics: true}}})
+		return a.newTerminalAccess(ctx, terminalcontrol.AccessScope{Actor: "desktop-chrys", RequireActionReview: true, Expires: time.Now().Add(10 * time.Minute), Targets: []terminalcontrol.AccessTarget{{Target: target, UID: view.LastPrompt.UID, RoutineDiagnostics: true}}})
 	}}
 }

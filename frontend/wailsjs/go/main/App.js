@@ -770,6 +770,10 @@ export function StartAssistantTurnOnPage(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['StartAssistantTurnOnPage'](arg1, arg2, arg3, arg4);
 }
 
+export function StartAssistantTurnWithReferencesOnPage(arg1, arg2, arg3) {
+  return window['go']['main']['App']['StartAssistantTurnWithReferencesOnPage'](arg1, arg2, arg3);
+}
+
 export function StartScriptRecording(arg1, arg2, arg3) {
   return window['go']['main']['App']['StartScriptRecording'](arg1, arg2, arg3);
 }

@@ -14,6 +14,28 @@ function execution(id: string, status = 'completed', turnId = 'turn'): Assistant
 }
 
 describe('应用读取记录与耗时', () => {
+    it.each([
+        {kind:'file', status:'denied', stage:'', detail:'', content:'文件传输'},
+        {kind:'file', status:'failed', stage:'传输准备', detail:'用户未批准本次操作', content:'文件操作未完成'},
+    ])('用户拒绝传输以一行呈现，兼容已有记录', ({kind, status, stage, detail, content}) => {
+        render(<AIChatTimeline messages={[{...message('denied','operation',content),operation:{kind,workspaceId:'',status,stage,detail,outcome:'本次工具调用未完成；此前的任务结果保留在传输记录中。',next:'核对诊断详情与传输队列后再决定下一步。'}}]}/>);
+        expect(screen.getByText('文件传输 · 已拒绝')).toBeVisible();
+        expect(screen.queryByText(/本次工具调用未完成/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/核对诊断详情/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/诊断详情/)).not.toBeInTheDocument();
+    });
+    it('被拒绝的命令保持紧凑并可展开原命令，其他失败仍显示诊断', () => {
+        render(<AIChatTimeline messages={[
+            {...execution('denied','denied'), content:'执行 SQL',operation:{kind:'database',workspaceId:'db',status:'denied',action:'DELETE FROM orders'}},
+            {...message('failure','operation','文件操作未完成'),operation:{kind:'file',workspaceId:'',status:'failed',detail:'连接已断开',outcome:'传输未开始。',next:'检查连接。'}},
+        ]}/>);
+        const row=screen.getByRole('button',{name:/执行 SQL，已拒绝，展开执行详情/});
+        expect(screen.getByText('DELETE FROM orders')).not.toBeVisible();
+        fireEvent.click(row);
+        expect(screen.getByText('DELETE FROM orders')).toBeVisible();
+        expect(screen.getByText('检查连接。')).toBeVisible();
+        expect(screen.getByText('诊断详情')).toBeInTheDocument();
+    });
     it('读取默认合成一行，展开后显示各自结果及分开的整轮耗时', () => {
         const timing='本轮 18.00 秒 · 助手响应 17.99 秒 · 工具执行 0.010 秒 · 等待确认 0.00 秒';
         render(<AIChatTimeline messages={[

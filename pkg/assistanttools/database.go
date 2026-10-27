@@ -24,6 +24,7 @@ type DatabaseTools struct {
 	lease     context.Context
 	consented map[string]bool
 	denied    map[string]bool
+	Review    assistantcontrol.Reviewer
 }
 
 func (d *DatabaseTools) Close() {
@@ -36,6 +37,10 @@ func (d *DatabaseTools) Call(ctx context.Context, name, argument string) (value 
 	recorded := false
 	defer func() {
 		if callErr != nil && !recorded && !hasCallReceipt(ctx) {
+			if errors.Is(callErr, assistantcontrol.ErrActionDenied) {
+				d.Turn.ObserveOperation("database-error-"+fmt.Sprint(len(d.Turn.Snapshot().Messages)), "数据库操作", assistantcontrol.Operation{Kind: "database", Status: "denied"})
+				return
+			}
 			d.Turn.ObserveOperation("database-error-"+fmt.Sprint(len(d.Turn.Snapshot().Messages)), "数据库操作未完成", assistantcontrol.Operation{Kind: "database", Status: "failed", Stage: databaseStage(name), Outcome: "此步骤未完成；此前已完成的操作仍保留。", Next: "展开诊断详情核对原因，再决定下一步。", Detail: callErr.Error()})
 		}
 	}()
@@ -86,11 +91,13 @@ func (d *DatabaseTools) Call(ctx context.Context, name, argument string) (value 
 			return nil, err
 		}
 		if d.denied[w.ID] {
-			return nil, errors.New("本轮已拒绝这个数据库页签的授权")
+			return nil, fmt.Errorf("%w：本轮已拒绝这个数据库页签的授权", assistantcontrol.ErrActionDenied)
 		}
 		if !d.consented[w.ID] {
 			if err = d.confirm(ctx, "允许助手使用这个数据库页签？", "允许读取该会话的表结构、查询区与结果，并执行常规查询；数据修改和未知 SQL 仍逐次确认。", w.Profile.Name, ""); err != nil {
-				d.denied[w.ID] = true
+				if errors.Is(err, assistantcontrol.ErrActionDenied) {
+					d.denied[w.ID] = true
+				}
 				return nil, err
 			}
 			d.consented[w.ID] = true
@@ -121,6 +128,12 @@ func (d *DatabaseTools) Call(ctx context.Context, name, argument string) (value 
 	stop := context.AfterFunc(ctx, cancel)
 	defer stop()
 	if name == "database_context" || name == "database_tables" || name == "database_structure" {
+		if d.Review != nil {
+			location := fmt.Sprintf("%s · %s:%d · 会话 %s / %s", w.Profile.Name, w.Profile.Host, w.Profile.Port, w.Session.ID, in.Database)
+			if err = d.confirm(lease, "读取数据库信息", "只读操作："+name+"；目标表："+in.Table, location, ""); err != nil {
+				return nil, err
+			}
+		}
 		if err = d.Service.Record(lease, w.ID, d.Turn.ID(), name); err != nil {
 			d.Close()
 			d.Turn.Finish("failed", err.Error())
@@ -137,7 +150,7 @@ func (d *DatabaseTools) Call(ctx context.Context, name, argument string) (value 
 	case "database_execute":
 		refusalKey := fmt.Sprintf("%s:%x", w.ID, sha256.Sum256([]byte(in.SQL)))
 		if d.deniedSQL[refusalKey] {
-			return nil, errors.New("本轮已拒绝这条 SQL，不再重复申请")
+			return nil, fmt.Errorf("%w：本轮已拒绝这条 SQL，不再重复申请", assistantcontrol.ErrActionDenied)
 		}
 		dialect, err := d.Service.DB.Dialect(w.Session.ID)
 		if err != nil {
@@ -155,13 +168,15 @@ func (d *DatabaseTools) Call(ctx context.Context, name, argument string) (value 
 		receipt := assistantcontrol.Operation{Kind: "database", WorkspaceID: w.ID, ItemID: b.ID, Status: "not_executed", Stage: "SQL 执行", Outcome: "SQL 原文已保留，尚未提交数据库。"}
 		receipt.Action, receipt.Location = in.SQL, w.Profile.Name
 		d.Turn.ObserveOperation(b.ID, "SQL 尚未执行", receipt)
-		if !read {
+		if !read || d.Review != nil {
 			d.Service.SetBlock(w.ID, b.ID, "awaiting_approval", dbworkspace.QueryResult{}, "")
 			if err = d.confirm(lease, "确认这一次数据库操作", reason, w.Profile.Name+" / "+in.Database, in.SQL); err != nil {
 				d.Service.SetBlock(w.ID, b.ID, "not_executed", dbworkspace.QueryResult{}, "未获得本次批准")
-				d.deniedSQL[refusalKey] = true
-				receipt.Next = "需要执行时，请重新发起并明确批准。"
-				d.Turn.ObserveOperation(b.ID, "SQL 未获批准，未执行", receipt)
+				if errors.Is(err, assistantcontrol.ErrActionDenied) {
+					d.deniedSQL[refusalKey] = true
+					receipt.Status = "denied"
+				}
+				d.Turn.ObserveOperation(b.ID, "执行 SQL", receipt)
 				d.Close()
 				return nil, err
 			}
@@ -257,15 +272,12 @@ func databaseStage(name string) string {
 	return "读取数据库信息"
 }
 func (d *DatabaseTools) confirm(ctx context.Context, title, description, location, sql string) error {
-	answer, err := d.Turn.Request(ctx, assistantcontrol.Prompt{Kind: "approval", Title: title, Description: description, Command: sql, Details: []assistantcontrol.Detail{{Label: "执行位置", Value: location}}, Choices: []assistantcontrol.Choice{{ID: "reject", Label: "取消"}, {ID: "allow", Label: "允许本次"}}, Expires: time.Now().Add(5 * time.Minute)})
-	if err != nil {
-		return err
+	humanReason := ""
+	if sql != "" && dbworkspace.AssistantSQLRequiresHuman(sql) {
+		humanReason = "SQL 涉及业务数据或结构修改、敏感访问或其他明确风险，需要人工确认"
 	}
-	if len(answer.Selected) != 1 || answer.Selected[0] != "allow" {
-		return errors.New("用户未批准本次数据库操作")
+	if title == "关闭这个数据库连接？" {
+		humanReason = "关闭连接可能回滚未提交事务，需要人工确认"
 	}
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-	return d.Turn.Context().Err()
+	return d.Turn.Authorize(ctx, d.Review, assistantcontrol.ReviewInput{Tool: "database", Location: location, Action: title + "\n" + description + "\n" + sql}, assistantcontrol.Prompt{Kind: "approval", Title: title, Description: description, Command: sql, Details: []assistantcontrol.Detail{{Label: "执行位置", Value: location}}, Choices: []assistantcontrol.Choice{{ID: "reject", Label: "取消"}, {ID: "allow", Label: "允许本次"}}, Expires: time.Now().Add(5 * time.Minute)}, humanReason)
 }

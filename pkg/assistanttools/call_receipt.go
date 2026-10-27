@@ -3,11 +3,16 @@ package assistanttools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"opscopilot/pkg/assistantcontrol"
+	"opscopilot/pkg/dbcontrol"
+	"opscopilot/pkg/filecontrol"
+	"opscopilot/pkg/filetransfer"
+	"opscopilot/pkg/terminalcontrol"
 )
 
 type callReceiptKey struct{}
@@ -56,6 +61,7 @@ func (w *WorkspaceTools) newCallReceipt(name, argument string, start time.Time) 
 		key = "file-task-status"
 	}
 	op := assistantcontrol.Operation{Kind: "application", Status: "running", Stage: title, Action: title, Location: "OpsCopilot"}
+	w.readReceiptTarget(name, &op)
 	if strings.HasPrefix(name, "knowledge_") {
 		op.Kind = "knowledge"
 	}
@@ -80,7 +86,11 @@ func (w *WorkspaceTools) newCallReceipt(name, argument string, start time.Time) 
 		op.Measured, op.DurationMs = true, time.Since(start).Milliseconds()
 		op.Status = "completed"
 		if err != nil {
-			op.Status, op.Detail, op.Outcome, op.Next = "failed", err.Error(), "本次调用未完成。", "核对原因后再继续。"
+			if errors.Is(err, assistantcontrol.ErrActionDenied) {
+				op.Status = "denied"
+			} else {
+				op.Status, op.Detail, op.Outcome, op.Next = "failed", err.Error(), "本次调用未完成。", "核对原因后再继续。"
+			}
 		} else {
 			op.Result = callResultSummary(name, result)
 		}
@@ -91,7 +101,77 @@ func (w *WorkspaceTools) newCallReceipt(name, argument string, start time.Time) 
 	}
 }
 
+func (w *WorkspaceTools) readReceiptTarget(name string, op *assistantcontrol.Operation) {
+	switch name {
+	case "terminal_context":
+		if w.current == nil || w.current.Target.SessionID == "" {
+			return
+		}
+		target := w.current.Target
+		op.Kind, op.WorkspaceID, op.ConnectionID = "terminal", target.SessionID, target.ConnectionID
+		op.Location = "远程终端 · " + target.SessionID
+		if w.list != nil {
+			if view, err := w.list(w.turn.Context()); err == nil {
+				for _, tab := range view.Tabs {
+					if tab.TabID == target.SessionID && tab.ConnectionID == target.ConnectionID {
+						op.Location = "远程终端 · " + tab.Title
+					}
+				}
+			}
+		}
+	case "database_context", "database_tables", "database_structure":
+		if w.Database != nil && w.Database.Service != nil {
+			if view, err := w.Database.Service.Snapshot(w.Database.current); err == nil {
+				op.Kind, op.WorkspaceID, op.ConnectionID = "database", view.ID, view.Session.ID
+				op.Location = view.Profile.Name + " · " + view.Profile.Host
+			}
+		}
+	case "file_list":
+		if w.Files != nil && w.Files.Service != nil {
+			if view, err := w.Files.Service.Snapshot(w.Files.current); err == nil {
+				op.Kind, op.WorkspaceID, op.ConnectionID = "file", view.ID, view.Endpoint.ConnectionID
+				op.Location = "文件 · " + view.Endpoint.Title + " · " + view.Endpoint.Identity
+			}
+		}
+	}
+}
+
 func callResultSummary(name string, result any) string {
+	// Capture the actual bounded result, not a later re-read of the live page.
+	// Whitelist content fields rather than serializing sessions/configuration.
+	switch view := result.(type) {
+	case terminalcontrol.TerminalContext:
+		text := fmt.Sprintf("屏幕片段 · 字节 %d–%d", view.Output.From, view.Output.To)
+		if view.Output.Truncated {
+			text += "（终端输出已截断）"
+		}
+		return text + "\n" + view.Output.Text
+	case dbcontrol.Workspace:
+		if name == "database_context" {
+			return fmt.Sprintf("%s · 已记录 %d 次 SQL\n查询区：\n%s", view.Profile.Name, len(view.Blocks), view.SQL)
+		}
+	case filecontrol.Workspace:
+		if name == "file_list" {
+			var lines []string
+			lines = append(lines, "本地目录："+view.LocalPath, "远程目录："+view.RemotePath)
+			for _, group := range []struct {
+				label   string
+				entries []filetransfer.Entry
+			}{
+				{"本地", view.LocalEntries}, {"远程", view.RemoteEntries},
+			} {
+				lines = append(lines, fmt.Sprintf("%s：%d 项", group.label, len(group.entries)))
+				for i, entry := range group.entries {
+					if i == 10 {
+						lines = append(lines, "[其余条目已省略]")
+						break
+					}
+					lines = append(lines, entry.Name)
+				}
+			}
+			return strings.Join(lines, "\n")
+		}
+	}
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		return "调用已完成"
@@ -103,6 +183,9 @@ func callResultSummary(name string, result any) string {
 			return fmt.Sprintf("返回 %d 项", len(rows))
 		}
 		return "调用已完成"
+	}
+	if string(fields["truncated"]) == "true" {
+		return "返回内容超出工具上限，已截断；请查看原页签或缩小查询范围。此记录未保存完整内容。"
 	}
 	if name == "quick_command_read" {
 		var c ReferenceCommand

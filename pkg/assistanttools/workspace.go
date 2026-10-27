@@ -47,6 +47,7 @@ type WorkspaceTools struct {
 	deniedTargets      map[terminalcontrol.Target]terminalDenials
 	OnOperation        func(action, phase string, target terminalcontrol.Target)
 	InitialPageContext string
+	Review             assistantcontrol.Reviewer
 }
 
 func (w *WorkspaceTools) MessageContext() string { return w.InitialPageContext }
@@ -218,14 +219,10 @@ func (w *WorkspaceTools) call(ctx context.Context, generation uint64, name, argu
 			for _, hop := range plan.Connection.Route {
 				route = append(route, fmt.Sprintf("%s@%s:%d", hop.User, hop.Host, hop.Port))
 			}
-			answer, requestErr := w.turn.Request(ctx, assistantcontrol.Prompt{Kind: "approval", Title: "打开这个 SSH 连接？", Description: "使用已保存的连接配置打开独立终端，不继承原终端的目录、环境或切换后的账号。读取屏幕和执行命令仍分别确认。", Details: []assistantcontrol.Detail{{Label: "连接", Value: plan.Connection.Name}, {Label: "访问路径", Value: strings.Join(route, " → ")}}, Choices: []assistantcontrol.Choice{{ID: "reject", Label: "取消"}, {ID: "allow", Label: "打开连接"}}, Expires: time.Now().Add(5 * time.Minute)})
+			requestErr := w.turn.Authorize(ctx, w.Review, assistantcontrol.ReviewInput{Tool: "workspace_open", Location: strings.Join(route, " → "), Action: "使用已保存配置打开 SSH 连接：" + plan.Connection.Name + "；只建立连接和页签，不执行业务命令。"}, assistantcontrol.Prompt{Kind: "approval", Title: "打开这个 SSH 连接？", Description: "使用已保存的连接配置打开独立终端，不继承原终端的目录、环境或切换后的账号。", Details: []assistantcontrol.Detail{{Label: "连接", Value: plan.Connection.Name}, {Label: "访问路径", Value: strings.Join(route, " → ")}}, Choices: []assistantcontrol.Choice{{ID: "reject", Label: "取消"}, {ID: "allow", Label: "打开连接"}}, Expires: time.Now().Add(5 * time.Minute)}, "")
 			if requestErr != nil {
-				return nil, requestErr
-			}
-			if len(answer.Selected) != 1 || answer.Selected[0] != "allow" {
 				w.denied[argument] = true
-				phase = "denied"
-				return nil, terminalcontrol.ErrDenied
+				return nil, requestErr
 			}
 			if ctx.Err() != nil || w.turn.Context().Err() != nil {
 				return nil, assistantcontrol.ErrStale

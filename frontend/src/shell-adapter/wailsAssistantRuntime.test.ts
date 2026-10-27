@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
     WorkspaceRegisterPage: vi.fn(async () => 'sender-document'),
     WorkspacePull: vi.fn(async () => []), WorkspaceDetach: vi.fn(async () => {}), WorkspaceAcknowledge: vi.fn(),
     StartAssistantTurnOnPage: vi.fn(async () => ({turnId:'turn',phase:'running'})),
+    StartAssistantTurnWithReferencesOnPage: vi.fn(async () => ({turnId:'turn',phase:'running'})),
     RestoreAssistantConversationOnPage: vi.fn(async () => ({id:'conversation',messages:[],truncated:false})),
     NewAssistantConversation: vi.fn(), AssistantControlState: vi.fn(), StopAssistantTurn: vi.fn(), RespondAssistantInteraction: vi.fn(),
 }));
@@ -25,6 +26,9 @@ it('publishes the sender snapshot and includes its document identity in every su
     expect(api.WorkspacePull).toHaveBeenCalledWith(client,view);
     expect(api.StartAssistantTurnOnPage).toHaveBeenCalledWith('这个机器的 TMP 有什么？','selected','actual',client);
     expect(api.WorkspacePull.mock.invocationCallOrder[0]).toBeLessThan(api.StartAssistantTurnOnPage.mock.invocationCallOrder[0]);
+    const refs=[{kind:'terminal' as const,tabId:'selected',connectionId:'actual',title:'remote'}];
+    await wailsAssistantRuntime.start('只看这个页签',undefined,refs);
+    expect(api.StartAssistantTurnWithReferencesOnPage).toHaveBeenCalledWith('只看这个页签',client,refs);
     await wailsAssistantRuntime.restoreConversation?.();
     expect(api.RestoreAssistantConversationOnPage).toHaveBeenCalledWith(client);
     await wailsAssistantRuntime.revealResult?.('record-id');

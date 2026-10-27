@@ -3,6 +3,7 @@ package acp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -10,7 +11,6 @@ import (
 	"time"
 
 	"opscopilot/pkg/assistantcontrol"
-	"opscopilot/pkg/terminalcontrol"
 )
 
 // Interactions adapts only explicit user questions/one-shot permissions. It
@@ -26,7 +26,6 @@ type Interactions struct {
 	DenyPermissions bool
 	DenyRequests    bool
 	Audit           func(event, status string, data json.RawMessage) error
-	Review          assistantcontrol.Reviewer
 	sessionMu       sync.RWMutex
 }
 
@@ -175,9 +174,10 @@ func (b *Interactions) Request(ctx context.Context, method string, data json.Raw
 		}
 		var permission struct {
 			ToolCall struct {
-				Title string          `json:"title"`
-				Kind  string          `json:"kind"`
-				Input json.RawMessage `json:"rawInput"`
+				Title  string          `json:"title"`
+				Kind   string          `json:"kind"`
+				Input  json.RawMessage `json:"rawInput"`
+				Output string          `json:"rawOutput"`
 			} `json:"toolCall"`
 			Options []struct {
 				ID   string `json:"optionId"`
@@ -204,45 +204,22 @@ func (b *Interactions) Request(ctx context.Context, method string, data json.Raw
 				return nil, err
 			}
 		}
-		details := []assistantcontrol.Detail{{Label: "执行位置", Value: "本机（不是 SSH 服务器）"}}
-		if b.Review != nil {
-			b.Turn.SetActivity("reviewing")
-			verdict := b.Review(ctx, assistantcontrol.ReviewInput{Location: "本机", Tool: permission.ToolCall.Kind, Action: string(permission.ToolCall.Input)})
-			if ctx.Err() != nil || b.Turn.Context().Err() != nil {
-				return nil, assistantcontrol.ErrStale
-			}
-			// File writes never qualify for read-only automatic permission.
-			kind := permission.ToolCall.Kind
-			approved := verdict.Allowed() && (kind == "read" || kind == "search" || kind == "execute") && !terminalcontrol.RequiresHumanReview(string(permission.ToolCall.Input))
-			if verdict.Allowed() && !approved {
-				verdict.Reason = "操作类型或敏感目标触及人工确认边界"
-			}
-			status := "human_required"
-			if approved {
-				status = "auto_allowed"
-			}
-			if b.Audit != nil {
-				encoded, _ := json.Marshal(map[string]any{"action": json.RawMessage(data), "verdict": verdict})
-				if err := b.Audit("self_review", status, encoded); err != nil {
-					return nil, err
-				}
-			}
-			b.Turn.Record("review", map[bool]string{true: "只读自审通过：", false: "需要人工确认："}[approved]+verdict.Reason)
-			if approved {
-				return map[string]any{"outcome": map[string]string{"outcome": "selected", "optionId": allow}}, nil
-			}
-			details = append(details, assistantcontrol.Detail{Label: "AI 自审", Value: verdict.Reason})
-			if verdict.Notice != "" {
-				details = append(details, assistantcontrol.Detail{Label: "自审方式", Value: verdict.Notice})
-			}
+		details := []assistantcontrol.Detail{}
+		if permission.ToolCall.Output != "" {
+			details = append(details, assistantcontrol.Detail{Label: "iCode 提示", Value: assistantcontrol.DisplayExcerpt(permission.ToolCall.Output, 512)})
 		}
-		a, err := request(assistantcontrol.Prompt{Kind: "approval", Title: permission.ToolCall.Title, Command: string(permission.ToolCall.Input), Description: "此操作需要你确认。授权仅对本次操作有效。", Details: details, Choices: []assistantcontrol.Choice{{ID: "reject", Label: "拒绝"}, {ID: "allow", Label: "允许本次"}}, Expires: time.Now().Add(5 * time.Minute)})
+		input := assistantcontrol.ReviewInput{Tool: permission.ToolCall.Kind, Action: string(permission.ToolCall.Input)}
+		err := b.Turn.ConfirmAction(ctx, input, assistantcontrol.Prompt{Kind: "approval", Title: permission.ToolCall.Title, Command: string(permission.ToolCall.Input), Description: "iCode 需要你确认这次操作；请核对操作内容和目标。", Details: details, Choices: []assistantcontrol.Choice{{ID: "reject", Label: "拒绝"}, {ID: "allow", Label: "允许本次"}}, Expires: time.Now().Add(5 * time.Minute)}, assistantcontrol.ReviewVerdict{})
+		id := allow
 		if err != nil {
-			return nil, err
-		}
-		id := reject
-		if len(a.Selected) == 1 && a.Selected[0] == "allow" {
-			id = allow
+			if !errors.Is(err, assistantcontrol.ErrActionDenied) {
+				if b.Audit != nil {
+					_ = b.Audit("permission", "cancelled", data)
+				}
+				b.Turn.Finish("stopped", "确认未完成，未作选择或授权")
+				return nil, err
+			}
+			id = reject
 		}
 		if b.Audit != nil {
 			status := "rejected"

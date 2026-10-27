@@ -159,6 +159,13 @@ func (b appFileBackend) Transfer(ctx context.Context, e filecontrol.Endpoint, ta
 	if err := b.Check(ctx, e); err != nil {
 		return filetransfer.TransferResult{}, err
 	}
+	if task.Direction == "download" && task.NoOverwrite {
+		return filetransfer.DownloadNewFile(ctx, task.LocalPath, func(staged string) (filetransfer.TransferResult, error) {
+			task.LocalPath, task.NoOverwrite = staged, false
+			return b.Transfer(ctx, e, task, progress)
+		})
+	}
+
 	// Exact file destinations only: directory merge/recursive transfer is not
 	// implicitly granted by approving a software/log archive file.
 	if task.Direction == "upload" {

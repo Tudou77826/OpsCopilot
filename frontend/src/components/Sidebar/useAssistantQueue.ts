@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { AssistantMessage, AssistantRuntime, AssistantTarget } from '../../../../frontend-shell/src/assistant/runtime';
+import type { AssistantMessage, AssistantRuntime, AssistantTarget, AssistantPageReference } from '../../../../frontend-shell/src/assistant/runtime';
 import { useAssistantTurn } from './useAssistantTurn';
 
 export interface QueuedAssistantMessage {
@@ -7,6 +7,7 @@ export interface QueuedAssistantMessage {
     question: string;
     target?: AssistantTarget;
     title?: string;
+    references?: AssistantPageReference[];
 }
 
 /** Window-local FIFO. The host remains the authority for single-turn admission.
@@ -69,10 +70,10 @@ export function useAssistantQueue(runtime: AssistantRuntime) {
                 const message = queue.current.shift()!;
                 publishQueue();
                 setCurrent(message);
-                const submitted: AssistantMessage = { id: `local-${++sequence.current}`, role: 'user', content: message.question, time:new Date().toISOString() };
+                const submitted: AssistantMessage = { id: `local-${++sequence.current}`, role: 'user', content: message.question, references: message.references, time:new Date().toISOString() };
                 setMessages(previous => [...previous, submitted]);
                 try {
-                    const result = await turn.ask(message.question, message.target);
+                    const result = await turn.ask(message.question, message.target, message.references);
                     if (!mounted.current) return;
                     const answer: AssistantMessage = { id: `local-${++sequence.current}`, role: 'ai', content: result.output, phase: result.phase, time:new Date().toISOString() };
                     setMessages(previous => [...previous, ...(result.messages?.length ? result.messages : [answer])]);
@@ -90,15 +91,16 @@ export function useAssistantQueue(runtime: AssistantRuntime) {
             if (mounted.current) setCurrent(undefined);
         });
     }
-    function enqueue(question: string, target?: AssistantTarget, title?: string) {
+    function enqueue(question: string, target?: AssistantTarget, title?: string, references?: AssistantPageReference[]) {
         if (restoreBlocked.current) throw Error('请先完成对话恢复，或新建对话');
         const text = question.trim();
         if (!text) return;
         if (new TextEncoder().encode(text).length > 16384) throw Error('请输入不超过 16 KB 的问题');
         if (queue.current.length >= 20) throw Error('最多排队 20 条消息，请先处理或移除已有消息');
+        if ((references?.length || 0) > 8) throw Error('每条消息最多引用 8 个页签');
         // A fresh explicit message after an empty stopped queue is a new intent.
         if (!worker.current && !queue.current.length && !transition.current) pause(false);
-        queue.current.push({ id: ++sequence.current, question: text, target: target ? { ...target } : undefined, title: target ? title : undefined });
+        queue.current.push({ id: ++sequence.current, question: text, target: target ? { ...target } : undefined, title: target ? title : undefined, references: references?.map(ref => ({...ref})) });
         publishQueue();
         pump();
     }

@@ -6,6 +6,36 @@ import (
 	"strings"
 )
 
+// AssistantSQLRequiresHuman is only the explicit high-risk floor. Unknown
+// read-oriented expressions (including IN and dialect functions) go to review.
+// This does not authorize or execute SQL and is separate from server read-only policy.
+func AssistantSQLRequiresHuman(text string) bool {
+	lower := strings.ToLower(strings.TrimSpace(text))
+	for strings.HasPrefix(lower, "--") || strings.HasPrefix(lower, "#") {
+		i := strings.IndexByte(lower, '\n')
+		if i < 0 {
+			return true
+		}
+		lower = strings.TrimSpace(lower[i+1:])
+	}
+	words := strings.Fields(lower)
+	if len(words) == 0 {
+		return true
+	}
+	switch words[0] {
+	case "select", "with", "show", "describe", "desc", "explain":
+	default:
+		return true
+	}
+	// Quoted string values are data, not mutation verbs. Unrecognized SQL still
+	// goes to semantic review; this helper only identifies definite risk markers.
+	lower = sqlLiteral.ReplaceAllString(lower, " ")
+	return sqlRiskMarker.MatchString(lower)
+}
+
+var sqlLiteral = regexp.MustCompile(`'(?:[^']|'')*'`)
+var sqlRiskMarker = regexp.MustCompile(`\b(insert|update|delete|drop|alter|truncate|grant|revoke|into|outfile|dumpfile|pg_authid|pg_shadow|credential|password|passwd|secret|token|pg_read_file|lo_export|lo_import|load_file|dblink_exec|pg_terminate_backend|pg_cancel_backend|set_config)\b`)
+
 // AssistantSQL validates boundaries, not SQL semantics. Unknown/dialect-specific
 // effects require exact approval; result-returning SQL is not necessarily read-only.
 func AssistantSQL(text, dialect string) (readOnly bool, reason string, err error) {

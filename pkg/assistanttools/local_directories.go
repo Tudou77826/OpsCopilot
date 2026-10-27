@@ -14,6 +14,7 @@ import (
 type LocalDirectoryTools struct {
 	Turn     *assistantcontrol.Turn
 	Projects *assistantlocal.Projects
+	Review   assistantcontrol.Reviewer
 	denied   bool
 }
 
@@ -58,13 +59,11 @@ func (l *LocalDirectoryTools) Call(ctx context.Context, name, argument string) (
 	for _, p := range paths {
 		details = append(details, assistantcontrol.Detail{Label: "本地目录", Value: p})
 	}
-	answer, err := l.Turn.Request(ctx, assistantcontrol.Prompt{Kind: "approval", Title: "将本地目录加入项目「" + project.Name + "」", Description: "用途：" + in.Purpose + "\n目录将保存到此项目，新建对话不清空。不自动读取内容，文件修改、命令执行及敏感内容访问仍按现有规则确认。", Details: details, Choices: []assistantcontrol.Choice{{ID: "reject", Label: "拒绝"}, {ID: "allow", Label: "添加到此项目"}}, Expires: time.Now().Add(5 * time.Minute)})
+	data, _ := json.Marshal(map[string]any{"projectId": project.ID, "projectName": project.Name, "directories": paths, "purpose": in.Purpose})
+	err = l.Turn.Authorize(ctx, l.Review, assistantcontrol.ReviewInput{Tool: "local_add_directories", Location: "本机项目目录配置", Action: string(data)}, assistantcontrol.Prompt{Kind: "approval", Title: "将本地目录加入项目「" + project.Name + "」", Description: "用途：" + in.Purpose + "\n目录将保存到此项目，新建对话不清空。不自动读取内容，文件修改、命令执行及敏感内容访问仍按现有规则确认。", Details: details, Choices: []assistantcontrol.Choice{{ID: "reject", Label: "拒绝"}, {ID: "allow", Label: "添加到此项目"}}, Expires: time.Now().Add(5 * time.Minute)}, "")
 	if err != nil {
-		return nil, err
-	}
-	if len(answer.Selected) != 1 || answer.Selected[0] != "allow" {
 		l.denied = true
-		return nil, errors.New("未添加本地目录")
+		return nil, err
 	}
 	if ctx.Err() != nil || l.Turn.Context().Err() != nil {
 		return nil, assistantcontrol.ErrStale

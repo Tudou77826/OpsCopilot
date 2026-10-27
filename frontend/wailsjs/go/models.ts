@@ -94,11 +94,16 @@ export namespace achievements {
 }
 
 export namespace acp {
+
 	export class ContextUsage {
 	    known: boolean;
 	    used: number;
 	    size: number;
-	    static createFrom(source: any = {}) { return new ContextUsage(source); }
+
+	    static createFrom(source: any = {}) {
+	        return new ContextUsage(source);
+	    }
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.known = source["known"];
@@ -106,7 +111,6 @@ export namespace acp {
 	        this.size = source["size"];
 	    }
 	}
-
 	export class LocalModelOption {
 	    id: string;
 	    name: string;
@@ -220,6 +224,24 @@ export namespace assistantcontrol {
 	        this.label = source["label"];
 	    }
 	}
+	export class PageReference {
+	    kind: string;
+	    tabId: string;
+	    connectionId: string;
+	    title: string;
+
+	    static createFrom(source: any = {}) {
+	        return new PageReference(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.tabId = source["tabId"];
+	        this.connectionId = source["connectionId"];
+	        this.title = source["title"];
+	    }
+	}
 	export class Operation {
 	    measured?: boolean;
 	    durationMs?: number;
@@ -242,6 +264,8 @@ export namespace assistantcontrol {
 
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.measured = source["measured"];
+	        this.durationMs = source["durationMs"];
 	        this.kind = source["kind"];
 	        this.workspaceId = source["workspaceId"];
 	        this.itemId = source["itemId"];
@@ -254,8 +278,6 @@ export namespace assistantcontrol {
 	        this.action = source["action"];
 	        this.result = source["result"];
 	        this.location = source["location"];
-	        this.measured = source["measured"];
-	        this.durationMs = source["durationMs"];
 	    }
 	}
 	export class Message {
@@ -268,6 +290,7 @@ export namespace assistantcontrol {
 	    // Go type: time
 	    time: any;
 	    operation?: Operation;
+	    references?: PageReference[];
 
 	    static createFrom(source: any = {}) {
 	        return new Message(source);
@@ -283,6 +306,7 @@ export namespace assistantcontrol {
 	        this.kind = source["kind"];
 	        this.time = this.convertValues(source["time"], null);
 	        this.operation = this.convertValues(source["operation"], Operation);
+	        this.references = this.convertValues(source["references"], PageReference);
 	    }
 
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -353,6 +377,7 @@ export namespace assistantcontrol {
 	        this.value = source["value"];
 	    }
 	}
+
 
 
 	export class Prompt {

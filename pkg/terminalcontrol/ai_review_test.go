@@ -11,7 +11,7 @@ func TestAIReviewRetainsLeaseExactCommandAndSeparateAudit(t *testing.T) {
 	a, s, c, w, target := protectedFixture(t, j)
 	run := retainedTake(t, a, target)
 	id := requireReview(t, run, context.Background(), "printf hello")
-	if err := a.RecordAIReview(id, true); err != nil {
+	if err := a.RecordPolicyReview(id, true); err != nil {
 		t.Fatal(err)
 	}
 	op, err := a.ApproveReadOnlyReview(id, "仅输出诊断文本")
@@ -30,7 +30,7 @@ func TestAIReviewRetainsLeaseExactCommandAndSeparateAudit(t *testing.T) {
 	}
 	found := false
 	for _, event := range j.snapshot() {
-		if event.Phase == "dispatch_intent" && event.Reason == "ai_read_only_review" {
+		if event.Phase == "dispatch_intent" && event.Reason == "host_policy_review" {
 			found = true
 		}
 	}

@@ -5,6 +5,7 @@ import './App.css';
 import { ProductFrame, ProductToolbar, ProductNavigation } from '../../frontend-shell/src/ui/product/ProductChrome';
 import { TerminalRef } from './components/Terminal/Terminal';
 import FlexLayoutAdapter from './components/FlexLayout/FlexLayoutAdapter';
+import type { AssistantPageOption } from '../../frontend-shell/src/assistant/runtime';
 import { useTerminalReconnect } from './components/TerminalHandoff/useTerminalReconnect';
 import QuickCommandPanel from './components/QuickCommandPanel/QuickCommandPanel';
 import BottomBar from './components/BottomBar/BottomBar';
@@ -84,6 +85,15 @@ function App() {
     const [workspaceClient,setWorkspaceClient]=useState('');
     const assistantDatabase=useAssistantDatabaseWorkspaces(workspaceClient,workspaceController);
     const assistantFiles=useAssistantFileWorkspaces(workspaceClient,workspaceController);
+    const assistantPages: AssistantPageOption[] = [
+        ...terminals.map(tab=>({kind:'terminal' as const,tabId:tab.id,connectionId:tab.connectionId || '',title:tab.title,
+            description:tab.config?.host ? `${tab.config.host}:${tab.config.port || 22}` : 'SSH 终端',
+            unavailable:tab.connectionId && tab.status==='connected'?undefined:'未连接'})),
+        ...assistantDatabase.items.filter(w=>!w.dismissed).map(w=>({kind:'database' as const,tabId:w.id,connectionId:w.session.id,title:w.profile.name,
+            description:`${w.profile.host}:${w.profile.port}`,unavailable:w.connected?undefined:'未连接'})),
+        ...assistantFiles.items.filter(w=>!w.dismissed).map(w=>({kind:'file' as const,tabId:w.id,connectionId:w.endpoint.connectionId,title:`文件 · ${w.endpoint.title}`,
+            description:w.remotePath || '文件工作区',unavailable:terminals.some(tab=>tab.id===w.endpoint.sessionId&&tab.connectionId===w.endpoint.connectionId&&tab.status==='connected')?undefined:'未连接'})),
+    ];
     const databaseWorkspaces=useMemo(()=>[
         ...assistantFiles.items.map(w=>({id:w.id,restore:true,title:`文件 · ${w.endpoint.title}`,request:w.pending?w.revision:0,onClose:()=>{
             if(w.ownerTurn){void FileWorkspaceTakeover(w.id).catch(error=>setStatus(String(error)));return;}
@@ -779,6 +789,8 @@ function App() {
                     activeTerminalId={workspaceKind === 'terminal' ? activeTerminalId : null}
                     activeWorkspaceTitle={databaseWorkspaces.find(workspace=>workspace.id===workspaceKind)?.title}
                     terminals={terminals}
+                    pageOptions={assistantPages}
+                    activePageReference={workspaceKind==='terminal'?undefined:assistantPages.find(page=>page.tabId===workspaceKind)}
                     onTypeCommand={handleQuickCommand}
                     onOpenKnowledgeSource={handleOpenKnowledgeSource}
                     knowledgeTarget={knowledgeTarget}

@@ -20,7 +20,6 @@ type managedBinding struct {
 type managedRouter struct {
 	mu           sync.RWMutex
 	current      *managedBinding
-	review       assistantcontrol.Reviewer
 	denyRequests bool
 	observeUsage func(json.RawMessage)
 }
@@ -72,7 +71,6 @@ func (r *managedRouter) bind(turn *assistantcontrol.Turn, tools ManagedTools, se
 			feed.observe(turn, raw)
 		}
 	}}
-	b.bridge.Review = r.review
 	b.bridge.DenyRequests = r.denyRequests
 	if len(audit) > 0 {
 		b.bridge.Audit = audit[0]

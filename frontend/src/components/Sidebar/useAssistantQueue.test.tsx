@@ -26,6 +26,20 @@ function fixture() {
 }
 
 describe('助手消息调度', () => {
+    it('排队引用在入队时固定，之后修改原数组或切换页签不影响消息', async () => {
+        const f=fixture();
+        const {result}=renderHook(()=>useAssistantQueue(f.host));
+        const refs=[{kind:'terminal' as const,tabId:'background',connectionId:'original',title:'后台页签'}];
+        act(()=>{result.current.enqueue('先聊天');result.current.enqueue('检查引用页签',undefined,undefined,refs);});
+        refs[0].connectionId='changed';refs[0].title='changed';refs.length=0;
+        expect(result.current.pending[0].references?.[0].title).toBe('后台页签');
+        f.finish();
+        await waitFor(()=>expect(f.host.start).toHaveBeenCalledTimes(2));
+        expect(f.host.start).toHaveBeenLastCalledWith('检查引用页签',undefined,[{kind:'terminal',tabId:'background',connectionId:'original',title:'后台页签'}]);
+        expect(result.current.messages.find(m=>m.content==='检查引用页签')?.references?.[0].connectionId).toBe('original');
+        f.finish();
+        await waitFor(()=>expect(result.current.current).toBeUndefined());
+    });
     it('忙时新建明确失败，不让界面误以为上下文已清空', async () => {
         const f=fixture();
         const {result}=renderHook(()=>useAssistantQueue(f.host));

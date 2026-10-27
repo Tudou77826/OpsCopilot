@@ -100,7 +100,7 @@ func TestDatabaseWritesWaitForExactApprovalAndKeepOriginalOnRefusal(t *testing.T
 				}
 				want := "completed"
 				if answer == "reject" {
-					want = "not_executed"
+					want = "denied"
 				}
 				if receipt.Status != want {
 					t.Fatal("wrong SQL receipt", receipt)

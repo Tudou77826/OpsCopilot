@@ -14,7 +14,7 @@ func TestManagedProfileExposesReadOnlyApplicationReferences(t *testing.T) {
 	approval := profile["approval"].(map[string]any)["overrides"].(map[string]string)
 	instructions := profile["instructions"].(string)
 	for _, name := range mcp.ReferenceToolNames() {
-		if !slices.Contains(tools, name) || approval[name] != "skip" || !strings.Contains(instructions, name) {
+		if !slices.Contains(tools, name) || approval[name] == "skip" || !strings.Contains(instructions, name) {
 			t.Fatal("tool omitted from managed runtime", name)
 		}
 	}

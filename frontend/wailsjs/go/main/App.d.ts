@@ -402,6 +402,8 @@ export function StartAssistantTurn(arg1:string,arg2:string,arg3:string):Promise<
 
 export function StartAssistantTurnOnPage(arg1:string,arg2:string,arg3:string,arg4:string):Promise<assistantcontrol.State>;
 
+export function StartAssistantTurnWithReferencesOnPage(arg1:string,arg2:string,arg3:Array<assistantcontrol.PageReference>):Promise<assistantcontrol.State>;
+
 export function StartScriptRecording(arg1:string,arg2:string,arg3:string):Promise<script.Script>;
 
 export function StartSession(arg1:string):Promise<string>;

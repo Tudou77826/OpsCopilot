@@ -15,6 +15,7 @@ import { ConnectionConfig } from '../../types';
 import { useToast } from '../Toast/Toast';
 import { confirmDialog } from '../ConfirmDialog/ConfirmDialog';
 import { KnowledgeTarget } from '../AI';
+import type { AssistantPageOption, AssistantPageReference } from '../../../../frontend-shell/src/assistant/runtime';
 
 type SidebarTab = ProductTab;
 
@@ -37,13 +38,15 @@ interface SidebarProps {
     activeTerminalId: string | null;
     terminals: TerminalSessionLite[];
     activeWorkspaceTitle?: string;
+    pageOptions?: AssistantPageOption[];
+    activePageReference?: AssistantPageReference;
     onTypeCommand?: (command: string) => void;
     onOpenKnowledgeSource?: (target: Omit<KnowledgeTarget, 'requestId'>) => void;
     knowledgeTarget?: KnowledgeTarget | null;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
-    isOpen, activeTab, onToggle, onConnect, activeTerminalId, terminals, activeWorkspaceTitle,
+    isOpen, activeTab, onToggle, onConnect, activeTerminalId, terminals, activeWorkspaceTitle, pageOptions, activePageReference,
     onTypeCommand, onOpenKnowledgeSource, knowledgeTarget, companionHost, socialHost, companionEnabled, onManageCompanion,
 }) => {
     const [editingScriptId, setEditingScriptId] = useState<string | null>(null);
@@ -115,6 +118,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <div style={{ display: activeTab === 'chat' ? 'flex' : 'none', flex: 1, flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
                             <AIChatPanel
                                 terminalTabs={terminals}
+                                pageOptions={pageOptions}
+                                activePageReference={activePageReference}
                                 renderHeader={actions => <CompanionAssistantHeader actions={actions} socialHost={socialHost} host={companionHost} enabled={companionEnabled} visible={isOpen && activeTab === 'chat'} onManage={onManageCompanion}/>}
                                 onClose={onToggle}
                                 activeTerminalTitle={terminals.find(terminal => terminal.id === activeTerminalId)?.title}

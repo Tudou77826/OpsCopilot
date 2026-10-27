@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { TbArrowUpRight, TbCheck, TbCopy, TbDatabase, TbTransfer, TbTerminal2, TbAlertCircle, TbChevronRight, TbBook2, TbCommand, TbLayout } from 'react-icons/tb';
+import { TbArrowUpRight, TbCheck, TbCopy, TbDatabase, TbTransfer, TbTerminal2, TbAlertCircle, TbChevronRight, TbBook2, TbCommand, TbLayout, TbCircleMinus } from 'react-icons/tb';
 import { IconButton } from '@opscopilot/shell-terminal/ui';
 import type { AssistantOperation } from '../../../../frontend-shell/src/assistant/runtime';
 
@@ -14,8 +14,11 @@ export function AssistantOperationReceipt({ id, content, operation, time, onReve
     const [expanded, setExpanded] = useState(false);
     const detailsId = useId();
     const preview = operation.result?.split('\n').find(line => line.trim())?.replace(/^结果 \d+：/, '') || '';
-    const status = ({completed:'完成',done:'完成',failed:'失败',warning:'需核对',unknown:'结果未确认',not_executed:'未执行',running:'进行中',cancelling:'停止中',cancelled:'已取消'} as Record<string,string>)[operation.status];
-    const problem = ['failed', 'cancelled', 'unknown', 'warning'].includes(operation.status);
+    // Earlier saved conversations recorded an explicit refusal as a generic
+    // file failure. Match only that exact host-generated error, not free text.
+    const denied = operation.status === 'denied' || (operation.status === 'failed' && operation.detail === '用户未批准本次操作');
+    const status = denied ? '已拒绝' : ({completed:'完成',done:'完成',failed:'失败',warning:'需核对',unknown:'结果未确认',not_executed:'未执行',running:'进行中',cancelling:'停止中',cancelled:'已取消'} as Record<string,string>)[operation.status];
+    const problem = !denied && ['failed', 'cancelled', 'unknown', 'warning'].includes(operation.status);
     const label = operation.kind === 'database' ? operation.itemId ? '查看 SQL' : '查看数据库页签' : operation.kind === 'file' ? '查看传输' : '查看终端';
     const Icon = operation.kind === 'database' ? TbDatabase : operation.kind === 'file' ? TbTransfer : operation.kind === 'knowledge' ? TbBook2 : operation.kind === 'reference' ? TbCommand : operation.kind === 'application' ? TbLayout : TbTerminal2;
     const elapsed = operation.measured && Number.isSafeInteger(operation.durationMs ?? 0) && (operation.durationMs ?? 0)>=0
@@ -36,6 +39,14 @@ export function AssistantOperationReceipt({ id, content, operation, time, onReve
         <IconButton label="复制诊断" title={copied ? '已复制' : '复制诊断'} onClick={() => void copy()}>{copied ? <TbCheck size={15} /> : <TbCopy size={15} />}</IconButton>
     </details>;
     const navigation = operation.workspaceId && onReveal && <IconButton className="ai-execution-reveal" label={label} title={busy ? '正在定位…' : label} disabled={busy} onClick={() => void reveal()}><TbArrowUpRight size={16} /></IconButton>;
+    if (denied && !execution) {
+        const action = operation.kind === 'file' && (operation.stage === '传输准备' || content === '文件传输') ? '文件传输' : content.replace(/未完成$/, '').trim();
+        return <article className="ai-operation-denied" data-testid="message-item">
+            <TbCircleMinus size={14} aria-hidden="true" />
+            <span>{action} · 已拒绝</span>
+            {time && <time dateTime={time} title={new Date(time).toLocaleString()}>{new Date(time).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}</time>}
+        </article>;
+    }
     if (execution) return <article className={`ai-operation-receipt is-execution${problem ? ' has-problem' : ''}`} data-testid="message-item">
         <div className="ai-execution-row">
             <button className="ai-execution-toggle" type="button" aria-expanded={expanded} aria-controls={detailsId}

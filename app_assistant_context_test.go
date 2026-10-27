@@ -29,6 +29,44 @@ func TestAssistantPageContextUsesSelectedRemoteMetadataWithoutSecrets(t *testing
 	}
 }
 
+func TestExplicitPageReferencesUseExactIdentityAndDoNotFollowActivePage(t *testing.T) {
+	a := newLifecycleApp()
+	a.activeConfigs = map[string]ConnectConfig{"one": {Host: "10.1.1.1", Port: 22, Password: "never-include-password"}}
+	client := a.workspaceService().Attach()
+	_, err := a.workspaceService().Pull(client, workspace.Snapshot{Tabs: []workspace.Tab{
+		{Target: workspace.Target{TabID: "one", ConnectionID: "first"}, Title: "同名节点", Status: "connected"},
+		{Target: workspace.Target{TabID: "two", ConnectionID: "second"}, Title: "同名节点", Status: "connected"},
+	}, Active: workspace.Target{TabID: "two", ConnectionID: "second"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	refs, err := a.resolveAssistantPageReferences([]assistantcontrol.PageReference{{Kind: "terminal", TabID: "one", ConnectionID: "first", Title: "client supplied title"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if refs[0].Title != "同名节点" {
+		t.Fatal("client metadata was trusted")
+	}
+	encoded := a.assistantReferencedPageContext(refs)
+	if !strings.Contains(encoded, "10.1.1.1") || strings.Contains(encoded, "never-include-password") {
+		t.Fatal("metadata was missing or credentials leaked")
+	}
+	if !strings.Contains(encoded, `"tabId":"one"`) || strings.Contains(encoded, `"tabId":"two"`) {
+		t.Fatal("reference followed active tab", encoded)
+	}
+	refs[0].ConnectionID = "replaced"
+	if _, err = a.resolveAssistantPageReferences(refs); err == nil {
+		t.Fatal("reconnected identity accepted")
+	}
+	refs[0].TabID = "closed"
+	if _, err = a.resolveAssistantPageReferences(refs); err == nil {
+		t.Fatal("closed reference accepted")
+	}
+	if s := a.assistantCoordinator().Snapshot(); s.TurnID != "" {
+		t.Fatal("selecting references started a turn or took ownership")
+	}
+}
+
 func TestAssistantDisconnectedSelectedPageDoesNotFallBackToLocal(t *testing.T) {
 	a := newLifecycleApp()
 	client := a.workspaceService().Attach()

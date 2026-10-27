@@ -90,5 +90,9 @@ func (t *Turn) OperationRevision() uint64 {
 
 func messageBytes(m Message) int {
 	op := m.Operation
-	return len(m.Content) + len(op.Kind) + len(op.WorkspaceID) + len(op.ItemID) + len(op.ConnectionID) + len(op.Status) + len(op.Stage) + len(op.Outcome) + len(op.Next) + len(op.Detail) + len(op.Action) + len(op.Result) + len(op.Location)
+	referenceBytes := 0
+	for _, r := range m.References {
+		referenceBytes += len(r.Kind) + len(r.TabID) + len(r.ConnectionID) + len(r.Title)
+	}
+	return referenceBytes + len(m.Content) + len(op.Kind) + len(op.WorkspaceID) + len(op.ItemID) + len(op.ConnectionID) + len(op.Status) + len(op.Stage) + len(op.Outcome) + len(op.Next) + len(op.Detail) + len(op.Action) + len(op.Result) + len(op.Location)
 }

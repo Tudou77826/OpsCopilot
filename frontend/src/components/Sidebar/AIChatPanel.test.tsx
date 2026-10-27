@@ -108,6 +108,46 @@ describe('统一 AI 对话', () => {
         resolve(completed());
         await screen.findByText('助手的回答');
     });
+    it('可明确引用多个同名页签，引用保留在消息里且选择时不启动助手', async () => {
+        const host=runtime();
+        const pages=[{kind:'terminal' as const,tabId:'one',connectionId:'first',title:'业务节点',description:'10.0.0.1'},
+            {kind:'terminal' as const,tabId:'two',connectionId:'second',title:'业务节点',description:'10.0.0.2'}];
+        render(<AIChatPanel runtime={host} pageOptions={pages} activeTerminalTarget={{tabId:'two',connectionId:'second'}}/>);
+        fireEvent.click(screen.getByRole('button',{name:'引用页签'}));
+        const choices=screen.getAllByRole('checkbox');
+        fireEvent.click(choices[0]);fireEvent.click(choices[1]);
+        expect(host.start).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('button',{name:'完成引用'}));
+        submit('比较这两个节点');
+        await waitFor(()=>expect(host.start).toHaveBeenCalledWith('比较这两个节点',{tabId:'one',connectionId:'first'},pages.map(({description,...ref})=>ref)));
+        expect(await screen.findByText('助手的回答')).toBeVisible();
+        const message=screen.getByText('比较这两个节点').closest('.ai-user-message');
+        expect(message?.querySelectorAll('.ai-page-reference-tags > span')).toHaveLength(2);
+    });
+    it('引用失效不会退回当前终端，也不会清空用户草稿', () => {
+        const host=runtime();
+        const page={kind:'terminal' as const,tabId:'one',connectionId:'first',title:'业务节点'};
+        const view=render(<AIChatPanel runtime={host} pageOptions={[page]}/>);
+        fireEvent.click(screen.getByRole('button',{name:'引用页签'}));
+        fireEvent.click(screen.getByRole('checkbox'));
+        fireEvent.click(screen.getByRole('button',{name:'完成引用'}));
+        view.rerender(<AIChatPanel runtime={host} pageOptions={[{...page,connectionId:'reconnected'}]} activeTerminalTarget={{tabId:'other',connectionId:'other'}}/>);
+        submit('检查日志');
+        expect(host.start).not.toHaveBeenCalled();
+        expect(screen.getByRole('alert')).toHaveTextContent('引用页签已关闭');
+        expect(screen.getByPlaceholderText('输入问题…')).toHaveValue('检查日志');
+    });
+    it('输入 @ 打开引用菜单，选中后保留原文，Escape 不发送消息', () => {
+        const host=runtime();
+        render(<AIChatPanel runtime={host} pageOptions={[{kind:'database',tabId:'db',connectionId:'db-session',title:'订单库'}]}/>);
+        fireEvent.change(screen.getByPlaceholderText('输入问题…'),{target:{value:'看看 @'}});
+        expect(screen.getByRole('dialog',{name:'引用页签'})).toBeVisible();
+        fireEvent.click(screen.getByRole('checkbox'));
+        expect(screen.getByPlaceholderText('输入问题…')).toHaveValue('看看 ');
+        fireEvent.keyDown(screen.getByLabelText('搜索页签'),{key:'Escape'});
+        expect(screen.queryByRole('dialog',{name:'引用页签'})).not.toBeInTheDocument();
+        expect(host.start).not.toHaveBeenCalled();
+    });
     it('纯聊天也能停止，不需要终端页签', async () => {
         let state:AssistantTurnState = {...completed(),phase:'running',output:''};
         const host = runtime();

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { TbArrowUp, TbChevronDown, TbPlayerPlay, TbX } from 'react-icons/tb';
 import { IconButton } from '@opscopilot/shell-terminal/ui';
 import type { QueuedAssistantMessage } from './useAssistantQueue';
+import { PageReferenceTags } from './AssistantPageReferences';
 
 interface Props {
     messages: QueuedAssistantMessage[];
@@ -25,6 +26,7 @@ export function AssistantMessageQueue({ messages, paused, disabled, resumeDisabl
         </div>
         <ol>{visible.map(message => <li key={message.id}>
             <div className="ai-chat-queue-content"><p title={message.question}>{message.question}</p>
+                <PageReferenceTags references={message.references || []}/>
                 {message.title && message.title !== currentTitle && <small title={message.title}>{message.title}</small>}
             </div>
             <div className="ai-chat-queue-actions">
