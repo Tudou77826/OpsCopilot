@@ -83,12 +83,32 @@
   background: var(--bg-secondary);
 }
 .oc-db-explorer > header {
-  height: 42px;
+  min-height: 42px;
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
   align-items: center;
-  padding: 0 8px 0 12px;
+  padding: 6px 8px 6px 12px;
   border-bottom: 1px solid var(--border);
+}
+.oc-db-explorer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.oc-db-explorer-actions > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+  flex-shrink: 0;
 }
 .oc-db-explorer > header strong {
   display: flex;

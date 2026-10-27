@@ -33,7 +33,7 @@ export function JDBCDriverDialog({
 }: {
   runtime: DatabaseRuntime;
   onClose(): void;
-  onChanged(status: DatabaseJDBCStatus): void;
+  onChanged?(status: DatabaseJDBCStatus): void;
   onSelect?(driver: DatabaseJDBCDriver): void;
 }) {
   const [status, setStatus] = useState<DatabaseJDBCStatus>();
@@ -47,7 +47,7 @@ export function JDBCDriverDialog({
   async function refresh() {
     const next = await runtime.jdbcStatus();
     setStatus(next);
-    onChanged(next);
+    onChanged?.(next);
     return next;
   }
   useEffect(() => {
@@ -77,7 +77,7 @@ export function JDBCDriverDialog({
   return (
     <DatabaseDialog
       title="驱动管理"
-      subtitle="管理本机 JDBC 驱动，连接信息在返回后继续填写。"
+      subtitle={onSelect ? '管理本机 JDBC 驱动，连接信息在返回后继续填写。' : '查看已安装的 JDBC 驱动，或导入厂商提供的 JAR 文件。'}
       onClose={onClose}
       busy={busy}
       onSubmit={() => {

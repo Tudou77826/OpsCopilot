@@ -13,6 +13,7 @@ import {
   TbDots,
   TbFolder,
   TbPlus,
+  TbPackage,
   TbRefresh,
   TbSearch,
   TbTable,
@@ -23,6 +24,7 @@ import {
   type DatabaseTreeController,
 } from './DatabaseConnectionTree';
 import { ConnectionDialog, emptyProfile } from './ConnectionDialog';
+import { JDBCDriverDialog } from './JDBCDriverDialog';
 import { DatabaseGroupDialog } from './DatabaseGroupDialog';
 import {
   DatabaseFolderDialog,
@@ -57,6 +59,7 @@ export function DatabaseExplorer({
   editing: DatabaseProfile | null;
   setEditing(p: DatabaseProfile | null): void;
 }) {
+  const [managingDrivers, setManagingDrivers] = useState(false);
   const [selected, setSelected] = useState('');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [collapsedGroups, setCollapsedGroups] = useState<
@@ -443,27 +446,37 @@ export function DatabaseExplorer({
           <TbDatabase size={16} />
           数据库
         </strong>
-        <button
-          title="添加数据库连接"
-          aria-label="添加数据库连接"
-          onClick={() => setEditing(emptyProfile())}
-        >
-          <TbPlus size={17} />
-        </button>
-        <button
-          aria-label="刷新连接列表"
-          title="刷新连接列表"
-          onClick={() => void m.loadProfiles()}
-        >
-          <TbRefresh size={15} />
-        </button>
-        <button
-          title="对象树选项"
-          aria-label="对象树选项"
-          onClick={(e) => openMenu(e)}
-        >
-          <TbDots size={16} />
-        </button>
+        <div className="oc-db-explorer-actions">
+          <button
+            title="添加数据库连接"
+            aria-label="添加数据库连接"
+            onClick={() => setEditing(emptyProfile())}
+          >
+            <TbPlus size={17} />
+          </button>
+          <button
+            type="button"
+            title="驱动管理 · 查看、导入和移除 JDBC 驱动"
+            aria-label="驱动管理"
+            onClick={() => setManagingDrivers(true)}
+          >
+            <TbPackage size={17} />
+          </button>
+          <button
+            aria-label="刷新连接列表"
+            title="刷新连接列表"
+            onClick={() => void m.loadProfiles()}
+          >
+            <TbRefresh size={15} />
+          </button>
+          <button
+            title="对象树选项"
+            aria-label="对象树选项"
+            onClick={(e) => openMenu(e)}
+          >
+            <TbDots size={16} />
+          </button>
+        </div>
       </header>
       <div className="oc-db-search">
         <TbSearch size={14} />
@@ -662,6 +675,12 @@ export function DatabaseExplorer({
             setEditing(null);
             void m.saved(p, connect);
           }}
+        />
+      )}
+      {managingDrivers && (
+        <JDBCDriverDialog
+          runtime={runtime}
+          onClose={() => setManagingDrivers(false)}
         />
       )}
     </aside>
