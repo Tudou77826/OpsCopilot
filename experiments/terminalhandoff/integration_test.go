@@ -260,3 +260,47 @@ func TestRealPTYHandoff(t *testing.T) {
 		})
 	}
 }
+
+// Regression: Bash/readline may redraw and split a prompt's invisible control
+// marker when the terminal is narrow unless the marker is marked non-printing.
+func TestRealPTYNarrowBashPrompt(t *testing.T) {
+	if os.Getenv("OPSCOPILOT_HANDOFF_FIXTURE") == "" {
+		t.Skip("isolated real-PTY fixture not enabled")
+	}
+	var bash string
+	for _, shell := range strings.Split(os.Getenv("OPSCOPILOT_HANDOFF_SHELLS"), ";") {
+		if strings.HasSuffix(shell, "/bash") {
+			bash = shell
+			break
+		}
+	}
+	if bash == "" {
+		t.Skip("Bash fixture not available")
+	}
+	c, v, server := startLab(t, bash)
+	if err := server.client.Resize(41, 30); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	before := v.size()
+	setup := `PS1='[\u@\h \W]\$ '; PROMPT_COMMAND='printf "\033]0;lab\007"'; printf '\nNARROW_READY\n'` + "\n"
+	if err := c.HumanWrite([]byte(setup)); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.wait(ctx, before, "NARROW_READY\r\n"); err != nil {
+		t.Fatalf("prepare shell: %v", err)
+	}
+	if _, err := c.Bootstrap(ctx, true); err != nil {
+		t.Fatalf("bootstrap narrow Bash: %v; output=%q", err, v.text())
+	}
+	lease, err := c.Acquire()
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := c.Execute(ctx, lease, "printf NARROW_COMMAND_OK")
+	if err != nil || result.ExitCode != 0 || !strings.Contains(v.text(), "NARROW_COMMAND_OK") {
+		t.Fatalf("execute after bootstrap: %+v, %v", result, err)
+	}
+	c.Revoke()
+}

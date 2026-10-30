@@ -26,7 +26,15 @@ type Interactions struct {
 	DenyPermissions bool
 	DenyRequests    bool
 	Audit           func(event, status string, data json.RawMessage) error
-	sessionMu       sync.RWMutex
+	// PermissionReview is supplied only by adapters that need host-side review.
+	// It has no effect on iCode's own approval path.
+	PermissionReview assistantcontrol.Reviewer
+	UserRequest      string
+	AgentName        string
+	// Defer host-tool approvals to the actual MCP invocation. Returning true
+	// does not authorize the action: the host must still ask before dispatch.
+	DeferHostPermission func(string, json.RawMessage) bool
+	sessionMu           sync.RWMutex
 }
 
 func (b *Interactions) SetSessionID(id string) {
@@ -174,10 +182,16 @@ func (b *Interactions) Request(ctx context.Context, method string, data json.Raw
 		}
 		var permission struct {
 			ToolCall struct {
+				Name   string          `json:"name"`
 				Title  string          `json:"title"`
 				Kind   string          `json:"kind"`
 				Input  json.RawMessage `json:"rawInput"`
 				Output string          `json:"rawOutput"`
+				Meta   struct {
+					Chrys struct {
+						ToolName string `json:"toolName"`
+					} `json:"chrys"`
+				} `json:"_meta"`
 			} `json:"toolCall"`
 			Options []struct {
 				ID   string `json:"optionId"`
@@ -204,12 +218,48 @@ func (b *Interactions) Request(ctx context.Context, method string, data json.Raw
 				return nil, err
 			}
 		}
+		if b.AgentName != "" && b.Turn.ApprovalMode() == "bypass" {
+			if b.Audit != nil {
+				if err := b.Audit("permission", "allowed", data); err != nil {
+					return nil, err
+				}
+			}
+			return map[string]any{"outcome": map[string]string{"outcome": "selected", "optionId": allow}}, nil
+		}
+		hostName := permission.ToolCall.Meta.Chrys.ToolName
+		if hostName == "" && strings.HasPrefix(permission.ToolCall.Name, "opscopilot_") {
+			hostName = permission.ToolCall.Name
+		}
+		if b.DeferHostPermission != nil && b.DeferHostPermission(hostName, permission.ToolCall.Input) {
+			if b.Audit != nil {
+				if err := b.Audit("permission", "deferred_to_host", data); err != nil {
+					return nil, err
+				}
+			}
+			return map[string]any{"outcome": map[string]string{"outcome": "selected", "optionId": allow}}, nil
+		}
 		details := []assistantcontrol.Detail{}
 		if permission.ToolCall.Output != "" {
-			details = append(details, assistantcontrol.Detail{Label: "iCode 提示", Value: assistantcontrol.DisplayExcerpt(permission.ToolCall.Output, 512)})
+			label := "iCode 提示"
+			if b.AgentName != "" {
+				label = b.AgentName + " 提示"
+			}
+			details = append(details, assistantcontrol.Detail{Label: label, Value: assistantcontrol.DisplayExcerpt(permission.ToolCall.Output, 512)})
 		}
-		input := assistantcontrol.ReviewInput{Tool: permission.ToolCall.Kind, Action: string(permission.ToolCall.Input)}
-		err := b.Turn.ConfirmAction(ctx, input, assistantcontrol.Prompt{Kind: "approval", Title: permission.ToolCall.Title, Command: string(permission.ToolCall.Input), Description: "iCode 需要你确认这次操作；请核对操作内容和目标。", Details: details, Choices: []assistantcontrol.Choice{{ID: "reject", Label: "拒绝"}, {ID: "allow", Label: "允许本次"}}, Expires: time.Now().Add(5 * time.Minute)}, assistantcontrol.ReviewVerdict{})
+		input := assistantcontrol.ReviewInput{UserRequest: b.UserRequest, Tool: permission.ToolCall.Kind, Action: string(permission.ToolCall.Input), Location: "本机"}
+		verdict := assistantcontrol.ReviewVerdict{}
+		if b.PermissionReview != nil && b.Turn.ApprovalMode() == "auto" {
+			var reviewErr error
+			verdict, reviewErr = b.Turn.ReviewAction(ctx, b.PermissionReview, input, "")
+			if reviewErr != nil {
+				return nil, reviewErr
+			}
+		}
+		agentName := b.AgentName
+		if agentName == "" {
+			agentName = "iCode"
+		}
+		err := b.Turn.ConfirmAction(ctx, input, assistantcontrol.Prompt{Kind: "approval", Title: permission.ToolCall.Title, Command: string(permission.ToolCall.Input), Description: agentName + " 需要你确认这次操作；请核对操作内容和目标。", Details: details, Choices: []assistantcontrol.Choice{{ID: "reject", Label: "拒绝"}, {ID: "allow", Label: "允许本次"}}, Expires: time.Now().Add(5 * time.Minute)}, verdict)
 		id := allow
 		if err != nil {
 			if !errors.Is(err, assistantcontrol.ErrActionDenied) {

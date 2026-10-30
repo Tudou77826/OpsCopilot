@@ -64,3 +64,39 @@ func InspectRuntime(ctx context.Context, executable string) RuntimeReport {
 	report.Ready = true
 	return report
 }
+
+// InspectOpenCodeRuntime exercises the same isolated session startup used by
+// chat, but never prompts the model or invokes an Ops tool.
+func InspectOpenCodeRuntime(ctx context.Context, executable string) RuntimeReport {
+	report := RuntimeReport{Executable: executable, Checks: []RuntimeCheck{
+		{ID: "process", Label: "运行环境启动", Status: "skipped"},
+		{ID: "handshake", Label: "ACP 握手", Status: "skipped"},
+		{ID: "capabilities", Label: "MCP stdio 配置", Status: "skipped"},
+		{ID: "session", Label: "会话与模型选项", Status: "skipped"},
+	}}
+	current := 0
+	c := &Conversation{onStartupStage: func(stage string) {
+		for i, check := range report.Checks {
+			if check.ID == stage {
+				if i > current {
+					report.Checks[current].Status = "passed"
+				}
+				current = i
+				break
+			}
+		}
+	}}
+	defer c.Close()
+	err := c.start(ctx, ctx, ManagedConfig{AgentKind: "opencode", Executable: executable})
+	report.Name, report.Version, report.ProtocolVersion = c.runtimeInfo.AgentInfo.Name, c.runtimeInfo.AgentInfo.Version, c.runtimeInfo.ProtocolVersion
+	if err != nil {
+		report.Checks[current].Status = "failed"
+		report.Checks[current].Detail = err.Error()
+		report.Advice = "请检查 OpenCode 安装与本地模型配置后重新检测。"
+		return report
+	}
+	report.Checks[current].Status = "passed"
+	report.Ready = true
+	report.Advice = "检测未调用模型或实际工具；模型服务和工具调用将在实际对话中验证。"
+	return report
+}

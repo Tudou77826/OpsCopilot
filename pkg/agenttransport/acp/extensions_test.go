@@ -13,7 +13,7 @@ func TestManagedCapabilitiesFailBeforeConfiguringIncompatibleRuntime(t *testing.
 		{"current", `{"mcpCapabilities":{"http":true},"_meta":{"chrys":{"apiVersion":1,"methods":["profiles/models/write","profiles/agents/write","settings/reload","future/method"]}}}`, ""},
 		{"legacy", `{}`, "apiVersion"},
 		{"future", `{"_meta":{"chrys":{"apiVersion":2}}}`, "apiVersion"},
-		{"no-http", `{"_meta":{"chrys":{"apiVersion":1}}}`, "HTTP MCP"},
+		{"no-http", `{"_meta":{"chrys":{"apiVersion":1,"methods":["profiles/models/write","profiles/agents/write","settings/reload"]}}}`, ""},
 		{"missing-reload", `{"mcpCapabilities":{"http":true},"_meta":{"chrys":{"apiVersion":1,"methods":["profiles/models/write","profiles/agents/write"]}}}`, "settings/reload"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

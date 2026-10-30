@@ -135,6 +135,16 @@ export function useAssistantQueue(runtime: AssistantRuntime) {
         queue.current = queue.current.filter(message => message.id !== id);
         publishQueue();
     }
+    // The queue is also consumed synchronously by pump. A stale click cannot
+    // retrieve a message that has already been admitted to a turn.
+    function takeForEdit(id: number): QueuedAssistantMessage | undefined {
+        if (transition.current) return undefined;
+        const index = queue.current.findIndex(message => message.id === id);
+        if (index < 0) return undefined;
+        const [message] = queue.current.splice(index, 1);
+        publishQueue();
+        return message;
+    }
     function resume() {
         if (worker.current || transition.current) return;
         pause(false);
@@ -159,5 +169,5 @@ export function useAssistantQueue(runtime: AssistantRuntime) {
             if (mounted.current) setTransitioning(false);
         }
     }
-    return { state: turn.state, respond: turn.respond, current, pending, messages, paused, transitioning, restoring, restoreError, truncated, recoveryNote, restore, enqueue, sendNow, remove, resume, stop, newConversation };
+    return { state: turn.state, respond: turn.respond, current, pending, messages, paused, transitioning, restoring, restoreError, truncated, recoveryNote, restore, enqueue, sendNow, remove, takeForEdit, resume, stop, newConversation };
 }

@@ -41,7 +41,7 @@ it('切换失败保留原模型并呈现错误，读取失败允许重试', asyn
     fireEvent.click(screen.getByRole('option',{name:'Fast'}));
     await waitFor(()=>expect(props.onError).toHaveBeenCalledWith(expect.stringContaining('未接受切换')));
     expect(select).toHaveTextContent('Default');
-    fireEvent.click(screen.getByRole('button',{name:'重新读取 iCode 模型'}));
+    fireEvent.click(screen.getByRole('button',{name:'重新读取模型'}));
     await waitFor(()=>expect(props.runtime.modelOptions).toHaveBeenCalledTimes(2));
 });
 
@@ -52,7 +52,7 @@ it('菜单定位在触发器上方，并通过独立浮层避开输入框裁切'
     await waitFor(()=>expect(trigger).toBeEnabled());
     vi.spyOn(trigger,'getBoundingClientRect').mockReturnValue({left:320,right:430,top:700,bottom:728,width:110,height:28,x:320,y:700,toJSON:()=>({})});
     fireEvent.click(trigger);
-    const popup=screen.getByRole('listbox',{name:'iCode 模型'});
+    const popup=screen.getByRole('listbox',{name:'助手模型'});
     expect(popup.parentElement).toBe(document.body);
     expect(view.container).not.toContainElement(popup);
     expect(popup).toHaveStyle({bottom:`${window.innerHeight-694}px`,left:'270px',width:'160px',maxHeight:'300px'});
@@ -116,7 +116,7 @@ it('读取失败后可重试，拿到配置前不会显示可选菜单', async (
     props.runtime.modelOptions=vi.fn().mockRejectedValueOnce(Error('配置暂不可用')).mockResolvedValueOnce({models,current:models[0]});
     render(<AssistantModelPicker {...props} busy={false} revision={0}/>);
     const trigger=screen.getByRole('combobox',{name:'助手模型'});
-    const retry=await screen.findByRole('button',{name:'重新读取 iCode 模型'});
+    const retry=await screen.findByRole('button',{name:'重新读取模型'});
     expect(trigger).toBeDisabled();
     fireEvent.click(retry);
     await waitFor(()=>expect(trigger).toBeEnabled());

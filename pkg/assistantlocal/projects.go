@@ -259,3 +259,23 @@ func (p *Projects) Remove(id, path string) (ProjectState, error) {
 		return errors.New("项目不存在")
 	})
 }
+
+// SetPrimary makes an existing directory the first (primary) workspace root.
+func (p *Projects) SetPrimary(id, path string) (ProjectState, error) {
+	return p.transaction(func(s *ProjectState) error {
+		for i, project := range s.Projects {
+			if project.ID != id {
+				continue
+			}
+			for j, dir := range project.Directories {
+				if same(dir, path) {
+					roots := append([]string{dir}, project.Directories[:j]...)
+					s.Projects[i].Directories = append(roots, project.Directories[j+1:]...)
+					return nil
+				}
+			}
+			return errors.New("目录不属于该项目")
+		}
+		return errors.New("项目不存在")
+	})
+}

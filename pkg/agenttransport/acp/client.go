@@ -307,6 +307,9 @@ func (c *Client) handle(request envelope) {
 type InitializeResult struct {
 	ProtocolVersion   int `json:"protocolVersion"`
 	AgentCapabilities struct {
+		SessionCapabilities struct {
+			AdditionalDirectories json.RawMessage `json:"additionalDirectories"`
+		} `json:"sessionCapabilities"`
 		MCP struct {
 			HTTP bool `json:"http"`
 		} `json:"mcpCapabilities"`

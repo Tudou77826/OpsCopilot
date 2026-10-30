@@ -155,3 +155,21 @@ func TestLiveICodeInheritedModelAuthenticationAndIsolation(t *testing.T) {
 		t.Fatal("native model changed during isolated conversation")
 	}
 }
+
+func TestLocalProjectTrustReadsOnlyExplicitUserChoices(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "settings.yaml"), []byte("project:\n  skills_enabled: true\n  config_enabled: false\n  hooks_enabled: true\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	skills, project, err := LocalProjectTrust(dir)
+	if err != nil || !skills || project {
+		t.Fatalf("trust: %v %v %v", skills, project, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "settings.yaml"), []byte("project.skills_enabled: false\nproject.config_enabled: true\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	skills, project, err = LocalProjectTrust(dir)
+	if err != nil || skills || !project {
+		t.Fatalf("flat trust: %v %v %v", skills, project, err)
+	}
+}

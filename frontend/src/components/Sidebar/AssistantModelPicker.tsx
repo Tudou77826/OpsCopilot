@@ -139,13 +139,13 @@ export function AssistantModelPicker({runtime, busy, revision, onChanging, onErr
     }
     if (!runtime.modelOptions || !runtime.selectModel) return null;
     const detail = error || state.detail;
-    const label = changing ? '正在切换模型…' : loading ? '正在读取模型…' : current ? `当前模型：${modelLabel(current)}${modelLabel(current) !== current.modelId ? ` · ${current.modelId}` : ''}（iCode）` : '选择 iCode 中已配置的模型';
+    const label = changing ? '正在切换模型…' : loading ? '正在读取模型…' : current ? `当前模型：${modelLabel(current)}${modelLabel(current) !== current.modelId ? ` · ${current.modelId}` : ''}` : '选择当前 Agent 的模型';
     return <div className="ai-model-picker">
         <button ref={trigger} type="button" role="combobox" className="ai-model-select" aria-label="助手模型" aria-haspopup="listbox" aria-expanded={open && !disabled} aria-controls={open && !disabled ? menuId : undefined} aria-activedescendant={open && !disabled ? `${menuId}-${active}` : undefined} disabled={disabled} title={busy ? `${label}；助手空闲后可切换` : label} onKeyDown={onKeyDown} onClick={() => open ? setOpen(false) : showMenu()}>
             <span>{changing ? '切换模型…' : current ? modelLabel(current) : loading ? '读取模型…' : '选择模型'}</span>
             <TbChevronUp size={12} aria-hidden="true"/>
         </button>
-        {open && !disabled && createPortal(<div ref={menu} id={menuId} className="ai-model-menu" role="listbox" aria-label="iCode 模型" style={position}>
+        {open && !disabled && createPortal(<div ref={menu} id={menuId} className="ai-model-menu" role="listbox" aria-label="助手模型" style={position}>
             {options.map((model,index) => {
                 const name = modelLabel(model);
                 const description = [name, name !== model.modelId ? model.modelId : '', missing && model.id === current?.id ? '当前会话' : ''].filter(Boolean).join(' · ');
@@ -155,7 +155,7 @@ export function AssistantModelPicker({runtime, busy, revision, onChanging, onErr
                 </button>;
             })}
         </div>, portalRoot)}
-        {!!detail && <IconButton label="重新读取 iCode 模型" title={detail} disabled={busy || changing || loading} onClick={() => void refresh()}><TbRefresh size={15}/></IconButton>}
+        {!!detail && <IconButton label="重新读取模型" title={detail} disabled={busy || changing || loading} onClick={() => void refresh()}><TbRefresh size={15}/></IconButton>}
         {changing && <span className="ai-model-status" role="status">正在切换模型，保留当前对话…</span>}
     </div>;
 }

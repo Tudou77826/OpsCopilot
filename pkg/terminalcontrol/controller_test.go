@@ -99,6 +99,48 @@ func TestCancelledBootstrapDoesNotWrite(t *testing.T) {
 	}
 }
 
+func TestAssessedTakeNeverWritesAfterObservationChanges(t *testing.T) {
+	for _, change := range []string{"input", "output", "output-after-reserve"} {
+		t.Run(change, func(t *testing.T) {
+			var written bytes.Buffer
+			c, err := New(&written)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.Feed([]byte("$ "))
+			state, _, err := c.Observe(0, 128)
+			if err != nil {
+				t.Fatal(err)
+			}
+			revision := state.Revision
+			if change == "output-after-reserve" {
+				if err := c.reserve(&revision); err != nil {
+					t.Fatal(err)
+				}
+				c.Feed([]byte("new output"))
+				if _, err := c.bootstrap(context.Background(), true, &revision); !errors.Is(err, ErrObservationStale) {
+					t.Fatal(err)
+				}
+			} else {
+				if change == "input" {
+					if err := c.HumanWrite([]byte("x")); err != nil {
+						t.Fatal(err)
+					}
+					written.Reset()
+				} else {
+					c.Feed([]byte("new output"))
+				}
+				if err := c.reserve(&revision); !errors.Is(err, ErrObservationStale) {
+					t.Fatal(err)
+				}
+			}
+			if written.Len() != 0 {
+				t.Fatal("stale observation caused terminal input")
+			}
+		})
+	}
+}
+
 func TestPartialHumanInputCannotBeOverriddenByLatePrompt(t *testing.T) {
 	var written bytes.Buffer
 	c := readyController(t, &written)

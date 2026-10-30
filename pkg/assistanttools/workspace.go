@@ -52,6 +52,27 @@ type WorkspaceTools struct {
 
 func (w *WorkspaceTools) MessageContext() string { return w.InitialPageContext }
 
+// ApprovalLocation returns host-resolved display information for the pending
+// operation; it does not grant authority or expose connection credentials.
+func (w *WorkspaceTools) ApprovalLocation(name string) string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if strings.HasPrefix(name, "terminal_") && w.current != nil {
+		return w.current.Location
+	}
+	if strings.HasPrefix(name, "database_") && w.Database != nil && w.Database.Service != nil && w.Database.current != "" {
+		if item, err := w.Database.Service.Snapshot(w.Database.current); err == nil {
+			return item.Profile.Name
+		}
+	}
+	if strings.HasPrefix(name, "file_") && w.Files != nil && w.Files.Service != nil && w.Files.current != "" {
+		if item, err := w.Files.Service.Snapshot(w.Files.current); err == nil {
+			return item.Endpoint.Title
+		}
+	}
+	return ""
+}
+
 func NewWorkspaceTools(turn *assistantcontrol.Turn, target terminalcontrol.Target, list func(context.Context) (workspace.Inventory, error), prepare func(context.Context, string) (ConnectionPlan, error), selectTab func(context.Context, string) (workspace.Tab, error), terminal func(terminalcontrol.Target) *TerminalTools) *WorkspaceTools {
 	return &WorkspaceTools{turn: turn, list: list, prepare: prepare, selectTab: selectTab, terminal: terminal, current: terminal(target), denied: make(map[string]bool), deniedTargets: make(map[terminalcontrol.Target]terminalDenials)}
 }

@@ -86,6 +86,7 @@ type commandReview struct {
 	resolved        bool
 	selfReviewed    bool
 	lowRiskReviewed bool
+	unrestricted    bool
 	heldRun         *Run
 }
 
@@ -241,6 +242,9 @@ func (a *Access) authorize(ctx, caller context.Context, run *Run, id string, req
 			return nil, ErrStaleApproval
 		}
 		reason = "explicit_approval"
+		if run.approval.review.unrestricted {
+			reason = "full_access"
+		}
 		if run.approval.review.selfReviewed {
 			reason = "host_policy_review"
 			if run.approval.review.lowRiskReviewed {
@@ -377,7 +381,7 @@ func (a *Access) RecordPolicyReview(id string, allowed bool) error {
 // Approve belongs only to the trusted user approval path; ACP tool-success or
 // a model's approved=true is not a substitute. Calling it never executes SQL/SSH.
 func (a *Access) Approve(id string, allow bool) (ApprovedOperation, error) {
-	return a.resolveReview(id, allow, "", false)
+	return a.resolveReview(id, allow, "", false, false)
 }
 
 // ApproveReadOnlyReview retains scope, identity, expiry and exact-command binding.
@@ -385,7 +389,7 @@ func (a *Access) ApproveReadOnlyReview(id, reason string) (ApprovedOperation, er
 	if strings.TrimSpace(reason) == "" || len(reason) > 1024 {
 		return nil, ErrDenied
 	}
-	return a.resolveReview(id, true, reason, false)
+	return a.resolveReview(id, true, reason, false, false)
 }
 
 // ApproveLowRiskReview is host-only; target, UID, shell sequence, lease and
@@ -394,12 +398,18 @@ func (a *Access) ApproveLowRiskReview(id, reason string) (ApprovedOperation, err
 	if strings.TrimSpace(reason) == "" || len(reason) > 1024 {
 		return nil, ErrDenied
 	}
-	return a.resolveReview(id, true, reason, true)
+	return a.resolveReview(id, true, reason, true, false)
+}
+
+// ApproveUnrestrictedReview is used only by the host after the user selected
+// full access. It retains the exact-command, target and lifetime checks.
+func (a *Access) ApproveUnrestrictedReview(id string) (ApprovedOperation, error) {
+	return a.resolveReview(id, true, "", false, true)
 }
 
 var legacyWriteWords = regexp.MustCompile(`(?i)(^|[^a-z0-9_])(mv|cp|tee|sed|touch|mkdir|set-content|add-content|out-file)([^a-z0-9_]|$)`)
 
-func (a *Access) resolveReview(id string, allow bool, aiReason string, lowRisk bool) (ApprovedOperation, error) {
+func (a *Access) resolveReview(id string, allow bool, aiReason string, lowRisk, unrestricted bool) (ApprovedOperation, error) {
 	a.mu.Lock()
 	review := a.reviews[id]
 	if review == nil || review.resolved || review.invalid || a.ctx.Err() != nil || review.caller.Err() != nil || !review.details.Expires.After(time.Now()) {
@@ -412,6 +422,7 @@ func (a *Access) resolveReview(id string, allow bool, aiReason string, lowRisk b
 	}
 	review.selfReviewed = aiReason != ""
 	review.lowRiskReviewed = lowRisk
+	review.unrestricted = unrestricted
 	review.resolved = true
 	if !allow {
 		review.invalid = true
@@ -434,6 +445,9 @@ func (a *Access) resolveReview(id string, allow bool, aiReason string, lowRisk b
 	event := ExecutionAudit{Time: time.Now().UTC(), Actor: a.scope.Actor, Target: review.details.Target, RunID: review.details.RunID, OperationID: review.details.OperationID, ApprovalID: id, CommandHash: digest(review.request.Command), CommandBytes: len(review.request.Command), UID: review.snapshot.UID, PID: review.snapshot.PID, Sequence: review.snapshot.Sequence, DirectoryHash: digest(review.snapshot.Directory), Phase: "approval_denied"}
 	if allow {
 		event.Phase = "approval_granted"
+		if review.unrestricted {
+			event.Phase, event.Reason = "mode_granted", "full_access"
+		}
 		if review.selfReviewed {
 			event.Phase = "ai_review_granted"
 			event.Reason = "host_policy_review"

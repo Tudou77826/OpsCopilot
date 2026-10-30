@@ -25,6 +25,10 @@ chmod +x opscopilot-cli
 
 ZIP 包中的二进制解压到 Linux 后需要补执行权限。包不包含部署密钥、连接数据、iCode、JDBC 驱动或 Java。将 `skills/opscopilot-server/` 安装到该 iCode 支持的 Skill 目录，并在运行环境将程序目录加入 PATH。
 
+完整 Linux 发行包为 `.tar.gz`，包含同架构 Java 21 和 JDBC helper，解压后程序旁的 `jdbc-runtime/` 即可被自动找到；使用时仍需自行导入驱动和配置上述环境变量。完整包的构建入口为 `scripts/build-server-cli-release.py`，不会包含密钥、用户数据或厂商驱动。
+
+选择与 `uname -m` 一致的包：`x86_64` 用 `amd64`，`aarch64` 用 `arm64`。运行包内程序不需要安装 Go、Maven 或系统 Java；随包 Java 使用 glibc，目标系统须与该运行环境兼容。解压后可用 `./opscopilot-cli help` 验证程序启动；随后按下文配置 Session 目录、密钥、知识库和驱动目录。请把 `skills/opscopilot-server` 安装到 iCode 使用的 Skill 目录，并让 iCode 能从 PATH 找到该程序。
+
 Python Skill 脚本需兼容部署机器的解释器；iCode 可能优先使用 PATH 中的系统 Python，而非自身打包的解释器。JDBC helper 需要 Java 21，不能据系统安装了 Java 就认定版本满足要求；使用独立运行目录可避免更改系统默认 Java。
 
 由部署账号准备以下变量，再由平台传给每次工具调用：
@@ -55,9 +59,18 @@ Session 使用 AES-256-GCM 加密，标识绑定为认证数据；文件写入�
 
 JDBC 使用 Java 21 运行组件；可将已有 Linux Java 21 目录链接为 `jdbc-runtime/runtime`，将本仓库 `jdbc-helper` 构建的 `jdbc-helper.jar` 放入同目录。使用与目标 Linux libc、架构匹配的 Java，不能复用 Windows Java。部署人员通过 `driver import --input -` 导入厂商 JAR，工具不会下载驱动。
 
-**只读兼容范围：**当前经过服务端事务只读适配的是 MySQL 方言。通用 JDBC（包括尚未做方言适配的 Zenith）会明确拒绝程序只读连接；不会取消保护或将 `Connection.setReadOnly` 提示当作服务端强制保护。新增数据库方言需要适配并验证只读事务。建议同时使用数据库只读账号。
+GaussDB 100 驱动导入示例（JAR 路径由部署者填写）：
 
-`driver list` 保留 `available`、`message`、`drivers`，并提供 `serverCapabilities`：按 `driverId` 标明 `readOnlyAdapted` 及原因。`available` 只表示运行组件文件存在；`readOnlyAdapted` 只表示方言已适配，二者都不能替代真实驱动加载、Java 版本、连接与权限验证。
+```sh
+opscopilot-cli driver import --input - <<'JSON'
+{"name":"GaussDB 100","className":"com.huawei.gauss.jdbc.ZenithDriver","urlTemplate":"jdbc:zenith:@{host}:{port}","dialect":"generic","paths":["/opt/drivers/gauss.jar"]}
+JSON
+opscopilot-cli driver list
+```
+
+**只读兼容范围：**MySQL 使用数据库服务端只读事务。GaussDB 100 的 `com.huawei.gauss.jdbc.ZenithDriver` 使用普通连接，并对 SQL 做保守检查，只允许常规 SELECT，拒绝函数、序列和锁定等不确定语法；此检查不等于数据库强制只读，必须使用数据库只读账号。其他通用 JDBC 仍会拒绝自动定位。GaussDB 100 须在实际驱动和数据库版本上验证连接、元数据与查询。
+
+`driver list` 保留 `available`、`message`、`drivers`，并提供 `serverCapabilities`：`querySupported` 标明是否支持查询，`readOnlyMode` 标明 `transaction`、`sql_guard` 或 `unsupported`，`readOnlyAdapted` 仅表示事务级只读适配。`available` 只表示运行组件文件存在；这些字段均不能替代真实驱动加载、Java 版本、连接与权限验证。
 
 ## Session 和节点
 

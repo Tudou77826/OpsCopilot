@@ -46,6 +46,12 @@ type JDBCStatus struct {
 
 const zenithURLTemplate = "jdbc:zenith:@{host}:{port}"
 
+// IsZenithDriver identifies GaussDB 100 without changing the persisted generic
+// dialect used by existing desktop profiles and SQL parsing.
+func IsZenithDriver(d JDBCDriver) bool {
+	return d.Dialect == "generic" && d.ClassName == "com.huawei.gauss.jdbc.ZenithDriver" && d.URLTemplate == zenithURLTemplate
+}
+
 func normalizeJDBC(d *JDBCDriver) {
 	if d.ClassName == "com.huawei.gauss.jdbc.ZenithDriver" {
 		d.URLTemplate = zenithURLTemplate

@@ -114,3 +114,37 @@ func TestPassiveContextNeverOpensInputAccessAndExecuteNeedsTake(t *testing.T) {
 		t.Fatal(observed.Load(), opened.Load())
 	}
 }
+
+func TestAssessedTakeRequiresRecentObservationAndHostOptIn(t *testing.T) {
+	c := &assistantcontrol.Coordinator{}
+	turn, _ := c.Begin(context.Background(), assistantcontrol.Target{}, nil)
+	defer turn.Finish("completed", "")
+	expected := errors.New("assessment reached host")
+	var assessed atomic.Int32
+	b := &TerminalTools{Turn: turn, Target: terminalcontrol.Target{SessionID: "tab", ConnectionID: "connection"}, Review: lowRiskFixture,
+		Observe: func(context.Context) (terminalcontrol.TerminalContext, error) {
+			return terminalcontrol.TerminalContext{Revision: 42, Output: terminalcontrol.Observation{Text: "user@host:~$ "}}, nil
+		},
+		OpenAssessed: func(_ context.Context, revision uint64) (*terminalcontrol.Access, error) {
+			if revision != 42 {
+				t.Errorf("wrong revision %d", revision)
+			}
+			assessed.Add(1)
+			return nil, expected
+		},
+	}
+	if _, err := b.Call(turn.Context(), "terminal_context", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Call(turn.Context(), "terminal_take", "idle_shell"); !errors.Is(err, expected) || assessed.Load() != 1 || c.Snapshot().Prompt != nil {
+		t.Fatal(err)
+	}
+	// An assessment cannot be reused, and uncertain foregrounds still ask.
+	done := make(chan error, 1)
+	go func() { _, err := b.Call(turn.Context(), "terminal_take", "uncertain"); done <- err }()
+	state := waitPrompt(t, c)
+	_ = c.Respond(turn.ID(), state.Prompt.ID, assistantcontrol.Answer{Selected: []string{"reject"}})
+	if err := <-done; !errors.Is(err, terminalcontrol.ErrDenied) || assessed.Load() != 1 {
+		t.Fatal(err)
+	}
+}

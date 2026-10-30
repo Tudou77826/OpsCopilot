@@ -222,9 +222,9 @@ func (a *App) openWorkspaceConnection(ctx context.Context, client string, cfg Co
 		return result.tab, result.err
 	}
 }
-func (a *App) assistantWorkspaceTools(turn *assistantcontrol.Turn, target terminalcontrol.Target, reviewers ...assistantcontrol.Reviewer) *assistanttools.WorkspaceTools {
+func (a *App) assistantWorkspaceTools(turn *assistantcontrol.Turn, target terminalcontrol.Target, allowAssessed bool, reviewers ...assistantcontrol.Reviewer) *assistanttools.WorkspaceTools {
 	tools := assistanttools.NewWorkspaceTools(turn, target, a.workspaceInventory, a.prepareWorkspaceConnection, a.selectWorkspaceTab, func(target terminalcontrol.Target) *assistanttools.TerminalTools {
-		terminal := a.assistantTerminalTools(turn, target)
+		terminal := a.assistantTerminalTools(turn, target, allowAssessed)
 		if cfg, ok := a.getConfig(target.SessionID); ok {
 			terminal.Location = fmt.Sprintf("%s@%s:%d", cfg.User, cfg.Host, cfg.Port)
 		}

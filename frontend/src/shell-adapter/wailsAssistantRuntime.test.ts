@@ -4,6 +4,9 @@ import { wailsWorkspaceHost } from './wailsWorkspaceHost';
 import { provideWorkspaceSnapshot } from './workspaceIdentity';
 
 const api = vi.hoisted(() => ({
+    AssistantAgentCommands: vi.fn(async () => []),
+    AssistantAgentKind: vi.fn(async () => 'icode'),
+    AssistantApprovalMode: vi.fn(), SelectAssistantApprovalMode: vi.fn(),
     AssistantContextUsage: vi.fn(async () => ({known:false,used:0,size:0})),
     AssistantModelOptions: vi.fn(), SelectAssistantModel: vi.fn(),
     RevealAssistantResult: vi.fn(async () => {}),

@@ -158,3 +158,38 @@ func TestUnverifiedDialectCannotDisableReadOnlyProtection(t *testing.T) {
 		t.Fatalf("unverified dialect did not fail closed: %v", err)
 	}
 }
+
+func TestServerReadOnlyDriverIdentity(t *testing.T) {
+	for _, tc := range []struct {
+		driver dbworkspace.JDBCDriver
+		want   bool
+	}{
+		{dbworkspace.JDBCDriver{Dialect: "mysql"}, true},
+		{dbworkspace.JDBCDriver{Dialect: "generic", ClassName: "com.huawei.gauss.jdbc.ZenithDriver", URLTemplate: "jdbc:zenith:@{host}:{port}"}, false},
+		{dbworkspace.JDBCDriver{Dialect: "generic", ClassName: "example.Driver", URLTemplate: "jdbc:zenith:@{host}:{port}"}, false},
+		{dbworkspace.JDBCDriver{Dialect: "generic"}, false},
+	} {
+		if got := supportsServerReadOnly(tc.driver); got != tc.want {
+			t.Fatalf("driver %+v: got %v", tc.driver, got)
+		}
+	}
+}
+
+func TestZenithQueryGuard(t *testing.T) {
+	for _, tc := range []struct {
+		sql     string
+		allowed bool
+	}{
+		{"SELECT * FROM orders WHERE id = 1", true},
+		{"SELECT COUNT(*) FROM orders", true},
+		{"UPDATE orders SET id = 2", false},
+		{"SELECT seq.nextval FROM dual", false},
+		{"SELECT * FROM orders FOR\nUPDATE", false},
+		{"SELECT do_write() FROM dual", false},
+		{"SELECT * FROM orders; DELETE FROM orders", false},
+	} {
+		if got := validateZenithQuery(tc.sql) == nil; got != tc.allowed {
+			t.Errorf("%q: allowed=%v", tc.sql, got)
+		}
+	}
+}

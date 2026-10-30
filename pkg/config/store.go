@@ -33,8 +33,20 @@ type AppConfig struct {
 }
 
 type AssistantRuntimeConfig struct {
-	Executable  string `json:"executable"`
-	ModelSource string `json:"model_source,omitempty"`
+	Kind              string                 `json:"kind,omitempty"`
+	Executable        string                 `json:"executable"`
+	Arguments         []string               `json:"arguments,omitempty"`
+	CustomAgents      []AssistantCustomAgent `json:"custom_agents,omitempty"`
+	CustomAgentID     string                 `json:"custom_agent_id,omitempty"`
+	PresetExecutables map[string]string      `json:"preset_executables,omitempty"`
+	ModelSource       string                 `json:"model_source,omitempty"`
+}
+
+type AssistantCustomAgent struct {
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	Executable string   `json:"executable"`
+	Arguments  []string `json:"arguments,omitempty"`
 }
 
 const DefaultCLIExecTimeoutSec = 120

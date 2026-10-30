@@ -45,14 +45,19 @@ func (p *protocol) bootstrap() string {
 	// Self-contained expansion also works when PS1 is inherited across su but
 	// shell functions are not. A login shell that clears PS1 still needs a new
 	// explicit ordinary-shell confirmation; no blind reattachment is attempted.
-	quoted := shellQuote(p.promptProbe())
-	return fmt.Sprintf(`case "${PS1-}" in %s*) ;; *) PS1=%s"${PS1-}" ;; esac`, quoted, quoted)
+	probe := shellQuote(p.promptProbe())
+	// Bash/readline must know the marker has no visible width. Otherwise it
+	// may insert redraw bytes into the frame when the prompt wraps.
+	bashProbe := shellQuote(`\[` + p.promptProbe() + `\]`)
+	return fmt.Sprintf(`case "${BASH_VERSION-}" in '') case "${PS1-}" in %s*) ;; *) PS1=%s"${PS1-}" ;; esac ;; *) case "${PS1-}" in %s*) ;; %s*) PS1=%s"${PS1#%s}" ;; *) PS1=%s"${PS1-}" ;; esac ;; esac`, probe, probe, bashProbe, probe, bashProbe, probe, bashProbe)
 }
 
 func (p *protocol) uninstall() string {
 	// Strip only our exact prefix, including in an inherited child shell; no
 	// backup variables or functions need to cross an account boundary.
-	return fmt.Sprintf(`PS1=${PS1#%s}`, shellQuote(p.promptProbe()))
+	probe := shellQuote(p.promptProbe())
+	bashProbe := shellQuote(`\[` + p.promptProbe() + `\]`)
+	return fmt.Sprintf(`case "${PS1-}" in %s*) PS1=${PS1#%s} ;; %s*) PS1=${PS1#%s} ;; esac`, bashProbe, bashProbe, probe, probe)
 }
 
 func (p *protocol) promptProbe() string {

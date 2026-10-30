@@ -9,6 +9,19 @@ import (
 
 var ErrActionDenied = errors.New("用户未批准本次操作")
 
+type callApprovalKey struct{}
+
+// WithCallApproval records an exact host-confirmed MCP invocation. The value is
+// scoped to this call's context and is never accepted from tool arguments.
+func WithCallApproval(ctx context.Context) context.Context {
+	return context.WithValue(ctx, callApprovalKey{}, true)
+}
+
+func CallApproved(ctx context.Context) bool {
+	approved, _ := ctx.Value(callApprovalKey{}).(bool)
+	return approved
+}
+
 // ReviewAction is the shared desktop decision boundary. The caller supplies
 // host-observed targets/effects, never a model's claim that it has permission.
 // Decisions are exact-action, turn-bound and deliberately not cached as grants.
@@ -21,6 +34,9 @@ func (t *Turn) ReviewAction(ctx context.Context, reviewer Reviewer, input Review
 	t.owner.mu.Unlock()
 	if denied {
 		return ReviewVerdict{}, ErrActionDenied
+	}
+	if t.ApprovalMode() == "bypass" || CallApproved(ctx) {
+		return ReviewVerdict{LowRisk: true, InScope: true, Reason: "本次调用已按当前权限模式授权"}, nil
 	}
 	verdict := ReviewVerdict{}
 	if humanReason != "" {

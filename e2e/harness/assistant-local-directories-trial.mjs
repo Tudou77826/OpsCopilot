@@ -18,8 +18,8 @@ export async function runLocalDirectoriesTrial({page,appDir,runDir,modelFixture,
   const projects=()=>page.evaluate(()=>window.go.main.App.AssistantLocalProjects());
   async function openChat(){if(!await chat.isVisible())await page.getByRole('button',{name:'AI 助手',exact:true}).click();await expect(chat.getByPlaceholder('输入问题…')).toBeEnabled({timeout:20000});}
   async function openProjects(){await chat.getByRole('button',{name:'本地项目',exact:true}).click();await expect(dialog).toBeVisible();}
-  async function addDirectory(dir){await dialog.getByLabel('添加目录',{exact:true}).fill(dir);await dialog.getByRole('button',{name:'添加本地目录',exact:true}).click();await expect(dialog.getByText(dir,{exact:true})).toBeVisible();}
-  async function createProject(name){await dialog.getByLabel('项目名称',{exact:true}).fill(name);await dialog.getByRole('button',{name:'保存项目',exact:true}).click();await expect(dialog.getByLabel('添加目录',{exact:true})).toBeVisible();return (await projects()).activeId;}
+  async function addDirectory(dir){const saved=await projects();const project=saved.projects.find(p=>p.id===saved.activeId);const tree=dialog.getByRole('region',{name:`项目 ${project.name}`});await tree.getByRole('button',{name:'输入路径'}).click();await tree.getByLabel('添加工作目录',{exact:true}).fill(dir);await tree.getByRole('button',{name:'添加本地目录',exact:true}).click();await expect(tree.getByText(dir,{exact:true})).toBeVisible();}
+  async function createProject(name){await dialog.getByLabel('项目名称',{exact:true}).fill(name);await dialog.getByRole('button',{name:'保存项目',exact:true}).click();await expect(dialog.getByRole('region',{name:`项目 ${name}`})).toBeVisible();return (await projects()).activeId;}
   await openChat();await openProjects();
   const bID=await createProject('B项目');await addDirectory(dirs[3]);
   await dialog.getByRole('button',{name:'新建项目',exact:true}).click();
@@ -52,13 +52,13 @@ export async function runLocalDirectoriesTrial({page,appDir,runDir,modelFixture,
   assert.ok(modelFixture.checks.commandResults.some(v=>String(v).includes(markerA)));
   let saved=await projects();assert.equal(saved.projects.find(p=>p.id===aID).directories.length,3);assert.equal(saved.projects.find(p=>p.id===bID).directories.length,1);
   checks.aThreeDirectoriesBOneDirectory=true;
-  await openProjects();await dialog.getByLabel('当前项目').selectOption(bID);await expect(dialog.getByRole('listitem')).toHaveCount(1);await dialog.getByRole('button',{name:'关闭本地项目'}).click();
+  await openProjects();await dialog.getByRole('button',{name:'选择项目 B项目'}).click();await dialog.getByRole('button',{name:'B项目',exact:true}).click();await expect(dialog.getByRole('region',{name:'项目 B项目'}).getByRole('listitem')).toHaveCount(1);await dialog.getByRole('button',{name:'关闭本地项目'}).click();
   modelFixture.localDirectories.readPath=bFile;
   await drive('E2E_LOCAL_DIRS_READ 读取当前项目的测试说明。',bFile);
   const latest=modelFixture.checks.questions.at(-1);assert.ok(latest.includes('B项目')&&latest.includes('business'));assert.ok(!latest.includes(dirs[0].replaceAll('\\','\\\\'))&&!latest.includes('A项目'));
   assert.ok(modelFixture.checks.commandResults.some(v=>String(v).includes(markerB)));checks.projectSwitchRefreshesModelContext=true;
-  await openProjects();await dialog.getByLabel('当前项目').selectOption(aID);await expect(dialog.getByRole('listitem')).toHaveCount(3);await dialog.getByRole('button',{name:'关闭本地项目'}).click();
-  await page.reload();await openChat();await openProjects();await expect(dialog.getByRole('listitem')).toHaveCount(3);
+  await openProjects();await dialog.getByRole('button',{name:'选择项目 A项目'}).click();await expect(dialog.getByRole('region',{name:'项目 A项目'}).getByRole('listitem')).toHaveCount(3);await dialog.getByRole('button',{name:'关闭本地项目'}).click();
+  await page.reload();await openChat();await openProjects();await expect(dialog.getByRole('region',{name:'项目 A项目'}).getByRole('listitem')).toHaveCount(3);
   await page.screenshot({path:path.join(runDir,'local-projects-restored.png')});await dialog.getByRole('button',{name:'关闭本地项目'}).click();
   checks.reloadPreservesSelectedProject=true;
   await chat.getByRole('button',{name:'新建对话',exact:true}).click();await expect(chat.getByRole('heading',{name:'有什么需要一起排查？'})).toBeVisible();

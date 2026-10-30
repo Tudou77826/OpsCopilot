@@ -9,8 +9,50 @@ import (
 var effectCommand = regexp.MustCompile(`(?i)(^|[;&|()\n])\s*(?:[\w./\\:-]+[/\\])?(rm|rmdir|unlink|shred|reboot|shutdown|kill|killall|pkill|stop-service|restart-service|remove-item|sudo|su|passwd|chmod|chown|usermod|useradd|truncate|dd|mkfs|mount|umount|cp|mv|tee)(\s|$)`)
 var serviceChange = regexp.MustCompile(`(?i)(^|[;&|()\n])\s*(systemctl\s+(restart|stop|start|reload|enable|disable|mask)|service\s+\S+\s+(restart|stop|start|reload))(\s|$)`)
 var inplaceEdit = regexp.MustCompile(`(?i)(^|[;&|()\n])\s*(?:[\w./\\:-]+[/\\])?sed\s+(?:[^;|\n]*\s)?-i(?:\s|=|$)`)
-var overwriteRedirect = regexp.MustCompile(`(^|[^>])>([^>&]|$)`)
 var pathOperand = regexp.MustCompile("(?:[A-Za-z]:[\\\\/]|~?/|\\.env\\b)[^\\s\"'`;,|()]+")
+
+// Only an exact unquoted /dev/null sink or a literal descriptor duplication
+// is known not to write a file. Everything else remains a high-risk redirect.
+func unsafeOutputRedirect(s string) bool {
+	boundary := func(b byte) bool {
+		return b == ' ' || b == '\t' || b == '\r' || b == '\n' || strings.ContainsRune(";|&()", rune(b))
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] != '>' || (i > 0 && s[i-1] == '>') {
+			continue
+		}
+		j := i + 1
+		if j < len(s) && s[j] == '>' {
+			j++
+		}
+		if j < len(s) && s[j] == '&' {
+			j++
+			start := j
+			for j < len(s) && s[j] >= '0' && s[j] <= '9' {
+				j++
+			}
+			if j == start && j < len(s) && s[j] == '-' {
+				j++
+			}
+			if j > start && (j == len(s) || boundary(s[j])) {
+				continue
+			}
+			return true
+		}
+		for j < len(s) && (s[j] == ' ' || s[j] == '\t') {
+			j++
+		}
+		const null = "/dev/null"
+		if strings.HasPrefix(s[j:], null) {
+			end := j + len(null)
+			if end == len(s) || boundary(s[end]) {
+				continue
+			}
+		}
+		return true
+	}
+	return false
+}
 
 // RequiresHumanReview is a narrow high-consequence floor, not a shell parser
 // or a proof of safety. Other effects are reviewed by iCode.
@@ -41,14 +83,17 @@ func RequiresHumanReview(action string) bool {
 		}
 	}
 	var outside strings.Builder
+	var redirects strings.Builder
 	var quote rune
 	escaped := false
 	for _, r := range action {
 		if escaped {
+			redirects.WriteRune('\x01')
 			escaped = false
 			continue
 		}
 		if r == '\\' && quote != '\'' {
+			redirects.WriteRune('\x01')
 			escaped = true
 			continue
 		}
@@ -56,16 +101,19 @@ func RequiresHumanReview(action string) bool {
 			if r == quote {
 				quote = 0
 				outside.WriteRune(' ')
+				redirects.WriteRune('\x01')
 			}
 			continue
 		}
 		if r == '\'' || r == '"' || r == '`' {
 			quote = r
 			outside.WriteRune(' ')
+			redirects.WriteRune('\x01')
 			continue
 		}
 		outside.WriteRune(r)
+		redirects.WriteRune(r)
 	}
 	text := outside.String()
-	return effectCommand.MatchString(text) || serviceChange.MatchString(text) || inplaceEdit.MatchString(text) || overwriteRedirect.MatchString(text) || strings.HasPrefix(strings.TrimSpace(strings.ToLower(text)), "printenv")
+	return effectCommand.MatchString(text) || serviceChange.MatchString(text) || inplaceEdit.MatchString(text) || unsafeOutputRedirect(redirects.String()) || strings.HasPrefix(strings.TrimSpace(strings.ToLower(text)), "printenv")
 }

@@ -62,7 +62,7 @@ func (f *FileTools) confirm(ctx context.Context, title, description string, deta
 		}
 		return err
 	}
-	f.downloadNoOverwrite = strings.HasPrefix(key, "download\x00") && verdict.Allowed()
+	f.downloadNoOverwrite = strings.HasPrefix(key, "download\x00") && verdict.Allowed() && f.Turn.ApprovalMode() != "bypass" && !assistantcontrol.CallApproved(ctx)
 	if ctx.Err() != nil || f.Turn.Context().Err() != nil {
 		return assistantcontrol.ErrStale
 	}

@@ -9,7 +9,11 @@ import (
 )
 
 func TestManagedProfileEnablesNativeToolsWithoutApprovalBypass(t *testing.T) {
-	profile := managedProfile("http://127.0.0.1:1234/mcp")
+	profile := managedProfile("/fixture/opscopilot")
+	tool := profile["tools"].(map[string]any)["mcp"].([]any)[0].(map[string]any)
+	if tool["transport"] != "stdio" || tool["command"] != "/fixture/opscopilot" {
+		t.Fatal("expected stdio tool bridge")
+	}
 	approval := profile["approval"].(map[string]any)
 	if approval["default"] != "require" || approval["user_can_override"] != false {
 		t.Fatal(approval)

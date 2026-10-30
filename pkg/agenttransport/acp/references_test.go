@@ -9,7 +9,7 @@ import (
 )
 
 func TestManagedProfileExposesReadOnlyApplicationReferences(t *testing.T) {
-	profile := managedProfile("http://127.0.0.1/fixture")
+	profile := managedProfile("/fixture/opscopilot")
 	tools := profile["tools"].(map[string]any)["mcp"].([]any)[0].(map[string]any)["allowed_tools"].([]string)
 	approval := profile["approval"].(map[string]any)["overrides"].(map[string]string)
 	instructions := profile["instructions"].(string)

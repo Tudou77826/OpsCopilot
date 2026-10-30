@@ -1,44 +1,79 @@
-.oc-runtime-settings { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px; background: var(--bg-secondary); min-width: 0; }
-.oc-runtime-heading, .oc-runtime-heading > div, .oc-runtime-path, .oc-runtime-actions, .oc-runtime-result-heading { display: flex; align-items: center; gap: 10px; }
-.oc-runtime-heading, .oc-runtime-actions, .oc-runtime-result-heading { justify-content: space-between; }
-.oc-runtime-heading > div { min-width: 0; }
-.oc-runtime-heading svg { color: var(--accent); flex: none; }
-.oc-runtime-heading h3 { margin: 0; font-size: var(--font-size-base); font-weight: 600; color: var(--text-primary); }
-.oc-runtime-product, .oc-runtime-status { font-size: var(--font-size-xs); color: var(--text-muted); white-space: nowrap; }
-.oc-runtime-product { padding-left: 10px; border-left: 1px solid var(--border); }
+.oc-runtime-settings { min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-secondary); }
+.oc-runtime-heading, .oc-runtime-heading-main, .oc-runtime-path, .oc-runtime-actions, .oc-runtime-result-heading, .oc-runtime-profile-edit { display: flex; align-items: center; gap: 10px; }
+.oc-runtime-heading { justify-content: space-between; gap: 16px; padding: 20px 22px; border-bottom: 1px solid var(--border); }
+.oc-runtime-heading-main { min-width: 0; }
+.oc-runtime-heading-icon { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border)); border-radius: 10px; color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.oc-runtime-heading h3 { margin: 0; color: var(--text-primary); font-size: var(--font-size-base); font-weight: 600; }
+.oc-runtime-heading p { margin: 4px 0 0; color: var(--text-muted); font-size: var(--font-size-xs); line-height: 1.45; }
+.oc-runtime-status { flex: none; padding: 4px 9px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: var(--font-size-xs); white-space: nowrap; }
 .oc-runtime-status.is-ready { color: var(--success); }
 .oc-runtime-status.is-failed { color: var(--warning); }
-.oc-runtime-description { margin: 10px 0 22px; color: var(--text-secondary); font-size: var(--font-size-sm); line-height: 1.6; }
-.oc-runtime-label { display: block; margin-bottom: 8px; color: var(--text-primary); font-size: var(--font-size-sm); }
-.oc-runtime-model-source { margin-bottom: 22px; }
-.oc-runtime-model-source select { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text-primary); font-size: var(--font-size-sm); }
-.oc-runtime-model-source p, .oc-runtime-model-result p { margin: 8px 0 0; color: var(--text-muted); font-size: var(--font-size-xs); line-height: 1.6; }
-.oc-runtime-model-result { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); font-size: var(--font-size-sm); color: var(--text-primary); }
-.oc-runtime-model-result.is-failed strong { color: var(--danger); }
-.oc-runtime-path input { min-width: 0; flex: 1; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text-primary); font-size: var(--font-size-sm); }
-.oc-runtime-path input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.oc-runtime-actions { margin-top: 12px; flex-wrap: wrap; }
+.oc-runtime-layout { display: grid; grid-template-columns: minmax(190px, 235px) minmax(0, 1fr); }
+.oc-runtime-selection { min-width: 0; padding: 20px; border-right: 1px solid var(--border); }
+.oc-runtime-configuration { min-width: 0; padding: 20px 22px 18px; }
+.oc-runtime-label { display: block; color: var(--text-primary); font-size: var(--font-size-sm); font-weight: 500; }
+.oc-runtime-label > select, .oc-runtime-label > input, .oc-runtime-label > textarea, .oc-runtime-path input { box-sizing: border-box; width: 100%; min-width: 0; padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text-primary); font: inherit; font-size: var(--font-size-sm); }
+.oc-runtime-label > select, .oc-runtime-label > input, .oc-runtime-label > textarea { display: block; margin-top: 8px; }
+.oc-runtime-label > textarea { min-height: 68px; resize: vertical; }
+.oc-runtime-label > select:focus-visible, .oc-runtime-label > input:focus-visible, .oc-runtime-label > textarea:focus-visible, .oc-runtime-path input:focus-visible, .oc-runtime-check:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.oc-runtime-agent-picker { display: flex; align-items: end; gap: 8px; }
+.oc-runtime-agent-picker > .oc-runtime-label { flex: 1; min-width: 0; }
+.oc-runtime-profile-edit { align-items: end; margin-top: 14px; }
+.oc-runtime-profile-edit .oc-runtime-label { flex: 1; min-width: 0; }
+.oc-runtime-selection-hint { margin: 8px 0 0; color: var(--text-muted); font-size: var(--font-size-xs); line-height: 1.5; }
+.oc-runtime-selection-note { margin: 20px 0 0; color: var(--text-muted); font-size: var(--font-size-xs); line-height: 1.6; }
+.oc-runtime-path { margin-top: 8px; }
+.oc-runtime-path input { flex: 1; }
+.oc-runtime-configuration > .oc-runtime-label:not(:first-child) { margin-top: 16px; }
+.oc-runtime-actions { justify-content: space-between; align-items: center; flex-wrap: wrap; margin-top: 14px; }
 .oc-runtime-actions > span, .oc-runtime-footnote, .oc-runtime-progress { color: var(--text-muted); font-size: var(--font-size-xs); line-height: 1.6; }
-.oc-runtime-check { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-hover); color: var(--text-primary); font: inherit; font-size: var(--font-size-sm); cursor: pointer; flex-shrink: 0; }
-.oc-runtime-check:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.oc-runtime-settings button:disabled, .oc-runtime-settings input:disabled { opacity: .55; cursor: not-allowed; }
+.oc-runtime-check { display: inline-flex; align-items: center; justify-content: center; flex: none; gap: 7px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-hover); color: var(--text-primary); font: inherit; font-size: var(--font-size-sm); cursor: pointer; }
+.oc-runtime-settings button:disabled, .oc-runtime-settings input:disabled, .oc-runtime-settings select:disabled, .oc-runtime-settings textarea:disabled { opacity: .55; cursor: not-allowed; }
+.oc-runtime-notice, .oc-runtime-inline-note { display: flex; align-items: flex-start; gap: 9px; color: var(--text-secondary); font-size: var(--font-size-xs); line-height: 1.6; }
+.oc-runtime-notice { margin-top: 20px; padding: 12px 14px; border: 1px solid var(--border); border-left: 2px solid var(--accent); border-radius: var(--radius-sm); background: var(--bg-primary); }
+.oc-runtime-notice > svg, .oc-runtime-inline-note > svg { flex: none; margin-top: 2px; color: var(--accent); }
+.oc-runtime-notice strong { color: var(--text-primary); font-size: var(--font-size-xs); }
+.oc-runtime-notice p { margin: 5px 0 0; }
+.oc-runtime-inline-note { margin: 17px 0 0; }
 .oc-runtime-result { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
-.oc-runtime-result-heading { font-size: var(--font-size-sm); }
+.oc-runtime-result-heading { justify-content: space-between; font-size: var(--font-size-sm); }
 .oc-runtime-metadata { display: grid; gap: 6px; margin: 8px 0 14px; color: var(--text-secondary); font-size: var(--font-size-xs); }
 .oc-runtime-metadata code { overflow-wrap: anywhere; white-space: normal; color: var(--text-muted); }
 .oc-runtime-checks { padding: 0; margin: 0; list-style: none; }
 .oc-runtime-checks li { display: flex; align-items: flex-start; gap: 9px; padding: 8px 0; color: var(--text-secondary); font-size: var(--font-size-sm); }
-.oc-runtime-checks li > svg { flex-shrink: 0; margin-top: 2px; }
+.oc-runtime-checks li > svg { flex: none; margin-top: 2px; }
 .oc-runtime-checks li > div { flex: 1; min-width: 0; }
-.oc-runtime-checks li > small { flex-shrink: 0; color: var(--text-muted); }
+.oc-runtime-checks li > small { flex: none; color: var(--text-muted); }
 .oc-runtime-checks li.is-passed > svg { color: var(--success); }
 .oc-runtime-checks li.is-failed > svg, .oc-runtime-checks li.is-failed > small { color: var(--danger); }
 .oc-runtime-checks li.is-skipped { color: var(--text-muted); }
-.oc-runtime-checks li p { margin: 6px 0 0; color: var(--danger); line-height: 1.6; overflow-wrap: anywhere; }
-.oc-runtime-advice { margin: 12px 0 0; color: var(--text-secondary); font-size: var(--font-size-sm); line-height: 1.6; }
-.oc-runtime-error { color: var(--danger); font-size: var(--font-size-sm); line-height: 1.6; }
-.oc-runtime-footnote { margin: 18px 0 0; }
+.oc-runtime-checks li p { margin: 6px 0 0; color: var(--text-muted); line-height: 1.6; overflow-wrap: anywhere; }
+.oc-runtime-checks li.is-failed p { color: var(--danger); }
+.oc-runtime-advice, .oc-runtime-error { margin: 12px 0 0; color: var(--text-secondary); font-size: var(--font-size-sm); line-height: 1.6; }
+.oc-runtime-error { color: var(--danger); }
+.oc-runtime-model-result { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); font-size: var(--font-size-sm); color: var(--text-primary); }
+.oc-runtime-model-result p { margin: 8px 0 0; color: var(--text-muted); font-size: var(--font-size-xs); line-height: 1.6; }
+.oc-runtime-model-result.is-failed strong { color: var(--danger); }
+.oc-runtime-footnote { margin: 17px 0 0; }
 @keyframes oc-runtime-spin { to { transform: rotate(360deg); } }
 .oc-runtime-check .is-spinning { animation: oc-runtime-spin 1s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .oc-runtime-check .is-spinning { animation: none; } }
-@media (max-width: 560px) { .oc-runtime-settings { padding: 16px; } .oc-runtime-product { display: none; } }
+@container (max-width: 560px) { .oc-runtime-layout { grid-template-columns: minmax(0, 1fr); } .oc-runtime-selection { border-right: 0; border-bottom: 1px solid var(--border); } }
+@media (max-width: 760px) { .oc-runtime-layout { grid-template-columns: minmax(0, 1fr); } .oc-runtime-selection { border-right: 0; border-bottom: 1px solid var(--border); } .oc-runtime-heading, .oc-runtime-configuration, .oc-runtime-selection { padding-left: 16px; padding-right: 16px; } }
+.oc-runtime-settings { container-type: inline-size; }
+.oc-ai-access-page { width: 100%; max-width: 1040px; margin: 0 auto; }
+.oc-ai-access-intro h2 { margin: 0; color: var(--text-primary); font-size: 20px; font-weight: 650; }
+.oc-ai-access-intro p { margin: 7px 0 0; color: var(--text-muted); font-size: var(--font-size-sm); line-height: 1.5; }
+.oc-ai-external-access { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-secondary); }
+.oc-ai-external-access > summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 22px; color: var(--text-primary); cursor: pointer; list-style: none; }
+.oc-ai-external-access > summary::-webkit-details-marker { display: none; }
+.oc-ai-external-access > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; border-radius: var(--radius-md); }
+.oc-ai-external-access > summary span:first-child { display: grid; gap: 5px; }
+.oc-ai-external-access > summary strong { font-size: var(--font-size-base); }
+.oc-ai-external-access > summary small { color: var(--text-muted); font-size: var(--font-size-xs); line-height: 1.5; }
+.oc-ai-external-summary-end { display: flex; align-items: center; gap: 12px; flex: none; }
+.oc-ai-external-status { color: var(--text-muted); font-size: var(--font-size-xs); }
+.oc-ai-external-chevron { color: var(--text-muted); font-size: 24px; line-height: 1; transition: transform .15s ease; }
+.oc-ai-external-access[open] .oc-ai-external-chevron { transform: rotate(90deg); }
+.oc-ai-external-content { display: grid; gap: 16px; padding: 18px; border-top: 1px solid var(--border); }
+@media (prefers-reduced-motion: reduce) { .oc-ai-external-chevron { transition: none; } }

@@ -1,23 +1,34 @@
 import { useEffect, useRef, useState } from "react";
 import { IconButton, ResourceLibraryIcon } from '@opscopilot/shell-terminal/ui';
 import type { AssistantCommand } from "./types";
+import type { AssistantAgentCommand } from '../../../../frontend-shell/src/assistant/runtime';
 
 export function CommandMenu({
   commands,
   query,
   onChoose,
   onManage,
+  agentCommands = [],
+  onAgentChoose,
 }: {
   commands: AssistantCommand[];
   query: string;
   onChoose(command: AssistantCommand): void;
   onManage(): void;
+  agentCommands?: AssistantAgentCommand[];
+  onAgentChoose?(command: AssistantAgentCommand): void;
 }) {
   const [active, setActive] = useState(0);
   const root = useRef<HTMLDivElement>(null);
-  const matches = commands.filter((c) =>
-    (c.name + " " + c.description).toLowerCase().includes(query.toLowerCase()),
-  );
+  const matches = [
+    ...commands.map(command => ({kind:'saved' as const, command})),
+    ...agentCommands.map(command => ({kind:'agent' as const, command})),
+  ].filter(({command}) => (command.name + " " + command.description).toLowerCase().includes(query.toLowerCase()));
+  const choose = (item: typeof matches[number]) => {
+    if (item.kind === 'agent' && !item.command.unavailable) onAgentChoose?.(item.command);
+    else if (item.kind === 'agent') return;
+    else onChoose(item.command);
+  };
   useEffect(() => {
     const node = root.current;
     const anchor = node?.parentElement;
@@ -64,7 +75,7 @@ export function CommandMenu({
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        if (matches[active]) onChoose(matches[active]);
+        if (matches[active]) choose(matches[active]);
       }
     };
     // Capture before the textarea's ordinary send handler.
@@ -79,17 +90,19 @@ export function CommandMenu({
       </header>
       <div>
         {matches.length ? (
-          matches.map((command, index) => (
+          matches.map((item, index) => (
             <button
               type="button"
               role="option"
               aria-selected={index === active}
-              key={command.name}
+              aria-disabled={item.kind === 'agent' && !!item.command.unavailable}
+              title={item.kind === 'agent' ? item.command.unavailable : undefined}
+              key={`${item.kind}:${item.command.name}`}
               onMouseEnter={() => setActive(index)}
-              onClick={() => onChoose(command)}
+              onClick={() => choose(item)}
             >
-              <strong>/{command.name}</strong>
-              <span>{command.description}</span>
+              <strong>/{item.command.name}</strong>
+              <span>{item.kind === 'agent' && item.command.unavailable ? item.command.unavailable : item.command.description}{item.kind === 'agent' ? ' · Agent' : ''}</span>
             </button>
           ))
         ) : (

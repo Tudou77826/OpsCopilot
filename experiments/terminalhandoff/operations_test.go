@@ -143,3 +143,46 @@ func TestRealPTYOperations(t *testing.T) {
 		})
 	}
 }
+
+func TestRealPTYAssessedTakeUsesUnchangedObservation(t *testing.T) {
+	if os.Getenv("OPSCOPILOT_HANDOFF_FIXTURE") == "" {
+		t.Skip("isolated PTY fixture disabled")
+	}
+	for _, shell := range strings.Split(os.Getenv("OPSCOPILOT_HANDOFF_SHELLS"), ";") {
+		t.Run(shell, func(t *testing.T) {
+			service := terminalcontrol.NewService(nil)
+			target := terminalcontrol.Target{SessionID: "assessed-lab", ConnectionID: "isolated"}
+			c, v, _ := startLabUsing(t, shell, func(stdin io.WriteCloser) (*Controller, error) {
+				controller, _, err := service.AttachConnection(target.SessionID, target.ConnectionID, stdin)
+				return controller, err
+			})
+			defer service.Detach(target.SessionID, nil)
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			if err := v.wait(ctx, 0, "LAB> "); err != nil {
+				t.Fatal(err)
+			}
+			view, err := service.Inspect(target, terminalcontrol.ReadOptions{})
+			if err != nil || view.Ready || view.Output.Text == "" {
+				t.Fatal(view, err)
+			}
+			c.Feed([]byte("changed foreground"))
+			if _, err = service.Take(ctx, terminalcontrol.TakeRequest{Target: target, ConfirmedOrdinaryShell: true, ExpectedRevision: &view.Revision}); !errors.Is(err, terminalcontrol.ErrObservationStale) {
+				t.Fatal("stale view accepted", err)
+			}
+			view, err = service.Inspect(target, terminalcontrol.ReadOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			run, err := service.Take(ctx, terminalcontrol.TakeRequest{Target: target, ConfirmedOrdinaryShell: true, ExpectedRevision: &view.Revision})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer run.Release()
+			result, err := run.Execute(ctx, terminalcontrol.CommandRequest{Command: "pwd"})
+			if err != nil || result.Completion != terminalcontrol.Completed {
+				t.Fatal(result, err)
+			}
+		})
+	}
+}

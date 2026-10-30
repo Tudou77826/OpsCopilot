@@ -36,7 +36,12 @@ export interface AssistantConversationSnapshot {
 export interface AssistantModelOption { id: string; name: string; modelId: string; provider: string; }
 export interface AssistantModels { models: AssistantModelOption[]; current?: AssistantModelOption; detail?: string; }
 export interface AssistantContextUsage { known: boolean; used: number; size: number; }
+export interface AssistantAgentCommand { name:string; description:string; unavailable?:string; }
 export interface AssistantRuntime {
+	agentKind?(): Promise<string>;
+	agentCommands?(): Promise<AssistantAgentCommand[]>;
+	approvalMode?(): Promise<string>;
+	selectApprovalMode?(mode: string): Promise<string>;
 	contextUsage?(): Promise<AssistantContextUsage>;
   revealResult?(messageId: string): Promise<void>;
   modelOptions?(): Promise<AssistantModels>;

@@ -53,11 +53,15 @@ type TerminalContext struct {
 	// current foreground program or execution identity has been recognized.
 	LastPrompt *ShellContext `json:"lastPrompt,omitempty"`
 	Output     Observation   `json:"output"`
+	Revision   uint64        `json:"-"` // host-only freshness fence
 }
 
 type TakeRequest struct {
 	Target                 Target
 	ConfirmedOrdinaryShell bool
+	// ExpectedRevision binds an assessed takeover to the exact host-observed
+	// terminal state. It is never accepted from the model or external JSON.
+	ExpectedRevision *uint64
 	// Zero uses 30 seconds. No lease survives longer than two minutes here;
 	// future agent liveness/renewal belongs to the application run coordinator.
 	Timeout time.Duration
@@ -116,6 +120,7 @@ type Run struct {
 	approval         *approvedCommand
 	retainOnApproval bool
 	pendingReview    *commandReview // guarded by command
+	expectedRevision *uint64
 }
 
 // AfterFunc wakes waiters, while Err checks both sources synchronously at the
@@ -139,7 +144,7 @@ func (r *Run) ID() string     { return r.id }
 func (r *Run) Target() Target { return r.target }
 
 func contextFrom(target Target, state Snapshot, output Observation) TerminalContext {
-	result := TerminalContext{Target: target, Ready: state.Ready && !state.Closed, Owned: state.Owned, Closed: state.Closed, Output: output}
+	result := TerminalContext{Target: target, Ready: state.Ready && !state.Closed, Owned: state.Owned, Closed: state.Closed, Output: output, Revision: state.Revision}
 	if state.Sequence != 0 {
 		result.LastPrompt = &ShellContext{UID: state.UID, PID: state.PID, Directory: state.Directory, LastExitCode: state.ExitCode, Sequence: state.Sequence}
 	}
@@ -220,11 +225,11 @@ func (s *Service) beginRun(ctx context.Context, request TakeRequest) (*Run, Stat
 	if s.active != "" {
 		return nil, State{}, errors.New("另一个终端正在接手，请先停止或等待完成")
 	}
-	if err := e.controller.Reserve(); err != nil {
+	if err := e.controller.reserve(request.ExpectedRevision); err != nil {
 		return nil, State{}, err
 	}
 	runCtx, cancel := context.WithTimeout(ctx, request.Timeout)
-	r := &Run{service: s, entry: e, target: request.Target, id: uuid.NewString(), ctx: runCtx, cancel: cancel, done: make(chan struct{}), access: request.access, approval: request.approval, retainOnApproval: request.RetainOnApproval}
+	r := &Run{service: s, entry: e, target: request.Target, id: uuid.NewString(), ctx: runCtx, cancel: cancel, done: make(chan struct{}), access: request.access, approval: request.approval, retainOnApproval: request.RetainOnApproval, expectedRevision: request.ExpectedRevision}
 	e.run, e.cancel = r, cancel
 	e.state = State{SessionID: r.target.SessionID, ConnectionID: r.target.ConnectionID, RunID: r.id, Phase: "preparing", Owned: true, Message: "正在接手当前命令行…"}
 	s.active = r.id
@@ -251,6 +256,9 @@ func (s *Service) take(ctx context.Context, request TakeRequest, access *Access,
 		return nil, err
 	}
 	s.audit(Audit{SessionID: r.target.SessionID, RunID: r.id, Action: "take", Phase: "accepted"})
+	if request.ExpectedRevision != nil {
+		s.audit(Audit{SessionID: r.target.SessionID, RunID: r.id, Action: "assessed_take", Phase: "accepted"})
+	}
 	r.command.Lock()
 	err = r.prepareLocked()
 	r.command.Unlock()
@@ -275,6 +283,7 @@ func (r *Run) prepareLocked() error {
 		return err
 	}
 	c := r.entry.controller
+	expected := r.expectedRevision
 	if r.approval != nil && !samePrompt(r.approval.review.snapshot, c.Snapshot()) {
 		return ErrStaleApproval
 	}
@@ -286,18 +295,22 @@ func (r *Run) prepareLocked() error {
 			return ErrNeedConfirmation
 		}
 		ctx, cancel := context.WithTimeout(r.ctx, 4*time.Second)
-		_, err := c.Bootstrap(ctx, true)
+		_, err := c.bootstrap(ctx, true, r.expectedRevision)
 		cancel()
 		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) && r.ctx.Err() == nil {
+				return fmt.Errorf("等待终端就绪超时，请确认当前是空闲的普通命令行后重试: %w", err)
+			}
 			return err
 		}
+		expected = nil // the successful probe itself changed terminal output
 	}
 	r.service.mu.Lock()
 	defer r.service.mu.Unlock()
 	if !r.currentLocked() {
 		return ErrRevoked
 	}
-	lease, err := c.Acquire()
+	lease, err := c.acquire(expected)
 	if err != nil {
 		return err
 	}

@@ -29,10 +29,10 @@ SSH 示例：
 	{"database query", "执行只读 SQL", "--session ID --node NODE (--sql SQL | --sql-file FILE|-) [--database DB] [--limit 1000] [--timeout-sec 120]", `--sql-file - 从 stdin 读取 SQL，适合多行内容；文件／stdin 最大 1 MiB，与 --sql 互斥。
 示例：opscopilot-cli database query --session issue-123 --node db-01 --sql 'SELECT 1' --limit 20
 返回行数 1–5000，超时 1–120 秒，输出最多约 32 KiB；截断后缩小查询范围。
-依赖部署导入的 JDBC 驱动和 Java 21。当前服务端只读适配仅支持 MySQL 方言；先用 driver list 检查 serverCapabilities。`},
-	{"database schemas", "列出数据库／Schema", "--session ID --node NODE [--timeout-sec 120]", "通过已导入的 JDBC 驱动读取元数据。当前服务端仅放行 MySQL 方言。"},
-	{"database tables", "列出表和视图", "--session ID --node NODE [--database DB] [--timeout-sec 120]", "--database 指定目标库／Schema；省略时沿用连接配置和驱动默认行为。当前服务端仅放行 MySQL 方言。"},
-	{"database structure", "查看字段、索引和已适配的 DDL", "--session ID --node NODE --table TABLE [--database DB] [--timeout-sec 120]", "通过驱动和数据库方言适配读取表结构。当前服务端仅放行 MySQL 方言。"},
+依赖部署导入的 JDBC 驱动和 Java 21。支持 MySQL 和 GaussDB 100；先用 driver list 检查 serverCapabilities。GaussDB 100 使用 SQL 检查，不开启只读事务，请使用数据库只读账号。`},
+	{"database schemas", "列出数据库／Schema", "--session ID --node NODE [--timeout-sec 120]", "通过已导入的 JDBC 驱动读取元数据。"},
+	{"database tables", "列出表和视图", "--session ID --node NODE [--database DB] [--timeout-sec 120]", "--database 指定目标库／Schema；省略时沿用连接配置和驱动默认行为。"},
+	{"database structure", "查看字段、索引和已适配的 DDL", "--session ID --node NODE --table TABLE [--database DB] [--timeout-sec 120]", "通过驱动和数据库方言适配读取表结构。"},
 	{"file download", "通过 SFTP 下载普通文件", "--session ID --node NODE --remote /path --local logs/file.log [--max-bytes 10485760] [--timeout-sec 120]", "--remote 必须为远端绝对路径；--local 是 Session 工作区内相对路径，不覆盖已有文件。使用 SSH 登录身份，受文件策略约束。大小范围 1–1073741824 字节，策略可进一步收紧；partial:true 表示文件不完整。"},
 	{"knowledge list", "列出知识服务、模块或场景", "[--service SERVICE --module MODULE]", "不需要 Session；--service 和 --module 必须一起提供。依赖 OPSCOPILOT_KNOWLEDGE_DIR。"},
 	{"knowledge search", "检索定位经验", "--query TEXT [--top 5]", "不需要 Session；依赖 OPSCOPILOT_KNOWLEDGE_DIR。示例：opscopilot-cli knowledge search --query '连接池 超时'"},

@@ -3,7 +3,7 @@ import { AIComposer } from '../AI';
 import { IconButton, ResourceLibraryIcon } from '@opscopilot/shell-terminal/ui';
 import { TbMessagePlus, TbPlayerStop, TbRefresh, TbX } from 'react-icons/tb';
 import { LatestMessageButton } from './LatestMessageButton';
-import type { AssistantRuntime, AssistantTarget, AssistantPageOption, AssistantPageReference } from '../../../../frontend-shell/src/assistant/runtime';
+import type { AssistantRuntime, AssistantTarget, AssistantPageOption, AssistantPageReference, AssistantAgentCommand } from '../../../../frontend-shell/src/assistant/runtime';
 import { wailsAssistantRuntime } from '../../shell-adapter/wailsAssistantRuntime';
 import { useAssistantQueue } from './useAssistantQueue';
 import { AssistantInteractionCard } from '../AssistantInteraction/AssistantInteractionCard';
@@ -21,7 +21,13 @@ import '../AssistantLibrary/assistantLibrary.css';
 import './aiChatPanel.css';
 import { AssistantModelPicker } from './AssistantModelPicker';
 import { AssistantContextUsage } from './AssistantContextUsage';
+import { AssistantApprovalMode } from './AssistantApprovalMode';
 import { AssistantPagePicker, PageReferenceTags, samePage } from './AssistantPageReferences';
+import { atHistoryBoundary } from '../AI/textareaHistoryBoundary';
+import type { AssistantMessage } from '../../../../frontend-shell/src/assistant/runtime';
+
+type InputHistoryDraft = { text: string; references: AssistantPageReference[] };
+type InputHistory = { entries: AssistantMessage[]; index: number; draft: InputHistoryDraft; edits: Map<string, InputHistoryDraft> };
 
 interface AIChatPanelProps {
     runtime?: AssistantRuntime;
@@ -42,12 +48,16 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
     const assistant = useAssistantQueue(runtime);
     const [controlError, setControlError] = useState('');
     const [input, setInput] = useState('');
+    const [focusRequest, setFocusRequest] = useState(0);
+    const [historySelection, setHistorySelection] = useState<{id:number; direction:'up'|'down'}>();
+    const inputHistory = useRef<InputHistory>();
     const [resetting, setResetting] = useState(false);
     const [modelChanging, setModelChanging] = useState(false);
     const [directoryRevision, setDirectoryRevision] = useState(0);
     const [showLatest, setShowLatest] = useState(false);
     const [libraryOpen,setLibraryOpen]=useState(false);
     const [library,setLibrary]=useState<LibraryState>({skills:[],commands:[]});
+    const [agentCommands,setAgentCommands]=useState<AssistantAgentCommand[]>([]);
     const [draft,setDraft]=useState<CommandDraft>();
     const [connections,setConnections]=useState<ConnectionChoice[]>([]);
     const [preparing,setPreparing]=useState(false);
@@ -78,12 +88,40 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
         void Promise.resolve().then(()=>libraryHost.read()).then(value=>{if(live)setLibrary(value);}).catch(()=>{/* A missing bridge is reported when the manager is opened. */});
         return()=>{live=false;prepareGeneration.current++;};
     },[libraryHost]);
-    function chooseCommand(command:AssistantCommand){setDraft({command,template:command.template,values:{}});setInput('');setControlError('');void Promise.resolve().then(()=>libraryHost.connections()).then(setConnections).catch(error=>setControlError(String(error)));}
+    function chooseCommand(command:AssistantCommand){inputHistory.current=undefined;setDraft({command,template:command.template,values:{}});setInput('');setControlError('');void Promise.resolve().then(()=>libraryHost.connections()).then(setConnections).catch(error=>setControlError(String(error)));}
     const showMenu=!draft&&!referenceOpen&&!menuDismissed&&/^\/[^\s]*$/.test(input);
+    useEffect(() => {
+        if (!showMenu || !runtime.agentCommands) return;
+        let live = true;
+        void runtime.agentCommands().then(commands => { if (live) setAgentCommands(commands || []); }).catch(() => { if (live) setAgentCommands([]); });
+        return () => { live = false; };
+    }, [showMenu, runtime, assistant.current]);
     const history = useRef<HTMLDivElement>(null);
     const followLatest = useRef(true);
     const busy = !!assistant.current;
     const messages = assistant.messages;
+    function navigateInputHistory(direction:'up'|'down', element:HTMLTextAreaElement): boolean {
+        if (draft || showMenu || referenceOpen || !atHistoryBoundary(element, direction)) return false;
+        let history = inputHistory.current;
+        if (!history) {
+            if (direction === 'down') return false;
+            const entries = messages.filter(message => message.role === 'user' && (!message.kind || message.kind === 'text') && message.content.trim());
+            if (!entries.length) return false;
+            history = {entries, index:entries.length, draft:{text:input, references:references.map(ref=>({...ref}))}, edits:new Map()};
+            inputHistory.current = history;
+        }
+        const next = Math.max(0, Math.min(history.entries.length, history.index + (direction === 'up' ? -1 : 1)));
+        if (next === history.index) return true;
+        if (history.index < history.entries.length) history.edits.set(history.entries[history.index].id, {text:input, references:references.map(ref=>({...ref}))});
+        history.index = next;
+        const entry = history.entries[next];
+        const recalled = entry ? history.edits.get(entry.id) || {text:entry.content, references:entry.references || []} : history.draft;
+        setInput(recalled.text); setReferences(recalled.references.map(ref=>({...ref})));
+        setMenuDismissed(true); setReferenceOpen(false); setReferenceQuery(''); setControlError('');
+        setHistorySelection(previous=>({id:(previous?.id || 0)+1, direction}));
+        if (!entry) inputHistory.current = undefined;
+        return true;
+    }
     const contextTitle = activeTerminalTitle;
     const contextLabel = contextTitle ? `远程 · ${contextTitle}${activeTerminalStatus === 'disconnected' || !activeTerminalTarget ? ' · 未连接' : ''}` : activeWorkspaceTitle ? `当前页 · ${activeWorkspaceTitle}` : undefined;
     const actualTarget=assistant.state?.target;
@@ -110,6 +148,7 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
             const refs=submittedReferences();
             const terminal=refs.find(ref=>ref.kind==='terminal');
             assistant.enqueue(question, refs.length ? terminal ? {tabId:terminal.tabId,connectionId:terminal.connectionId} : undefined : activeTerminalTarget, terminal?.title || activeTerminalTitle, refs);
+            inputHistory.current = undefined;
             setInput('');
             setReferences([]);
         } catch (error) {
@@ -129,7 +168,7 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
             const terminal=refs.find(ref=>ref.kind==='terminal');
             const question=await libraryHost.prepare(draft.command.name,draft.template,draft.values);
             if(generation!==prepareGeneration.current)return;
-            followLatest.current=true;assistant.enqueue(question,refs.length ? terminal ? {tabId:terminal.tabId,connectionId:terminal.connectionId} : undefined : target,terminal?.title || targetTitle,refs);setDraft(undefined);setInput('');setReferences([]);
+            followLatest.current=true;assistant.enqueue(question,refs.length ? terminal ? {tabId:terminal.tabId,connectionId:terminal.connectionId} : undefined : target,terminal?.title || targetTitle,refs);inputHistory.current=undefined;setDraft(undefined);setInput('');setReferences([]);
         }catch(error){if(generation===prepareGeneration.current)setControlError(String(error));}
         finally{if(generation===prepareGeneration.current){preparingRef.current=false;setPreparing(false);}}
     }
@@ -143,6 +182,23 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
         try { await assistant.sendNow(id); }
         catch (error) { setControlError(`尚未发送：${error instanceof Error ? error.message : String(error)}`); }
     }
+    function editQueued(id: number) {
+        if (preparingRef.current || modelChanging) return;
+        const message = assistant.takeForEdit(id);
+        if (!message) return;
+        inputHistory.current = undefined;
+        const refs = message.references?.map(ref => ({...ref})) || [];
+        // Older queued messages can have a captured terminal without an
+        // explicit page reference. Keep that target instead of adopting the
+        // page that happens to be active when the user resubmits.
+        if (!refs.length && message.target) {
+            const option = options.find(item => item.kind === 'terminal' && item.tabId === message.target!.tabId && item.connectionId === message.target!.connectionId);
+            refs.push({kind:'terminal', ...message.target, title:option?.title || message.title || '原终端'});
+        }
+        setDraft(undefined); setInput(message.question); setReferences(refs);
+        setReferenceOpen(false); setReferenceQuery(''); setMenuDismissed(true); setControlError('');
+        setFocusRequest(value => value + 1);
+    }
     async function newConversation() {
         if (busy || assistant.transitioning || assistant.restoring || preparingRef.current) return;
         setResetting(true);
@@ -151,6 +207,7 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
             await assistant.newConversation();
             setDirectoryRevision(value => value + 1);
             followLatest.current = true;
+            inputHistory.current = undefined;
             setInput(''); setDraft(undefined); setShowLatest(false); setReferences([]); setReferenceOpen(false);
         } catch (error) {
             setControlError(`无法新建对话：${error instanceof Error ? error.message : String(error)}`);
@@ -202,13 +259,13 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
             {assistant.state?.saveWarning && <p className="ai-chat-error" role="alert">{assistant.state.saveWarning}</p>}
             {assistant.restoreError && <div className="ai-restore-error" role="alert"><span>{assistant.restoreError}</span><IconButton label="重试恢复对话" onClick={()=>void assistant.restore()}><TbRefresh size={18}/></IconButton></div>}
             <div className="oc-command-composer" onKeyDown={event=>{if(event.key==='Escape')setMenuDismissed(true);}}>
-            {showMenu&&<CommandMenu commands={library.commands.filter(c=>!c.skill||library.skills.some(s=>s.name===c.skill&&s.enabled))} query={input.slice(1)} onChoose={chooseCommand} onManage={()=>{setMenuDismissed(true);setLibraryOpen(true);}}/>}
-            <AIComposer value={draft?draft.template:input} onChange={changeInput} onSend={send} disabled={assistant.transitioning||assistant.restoring||!!assistant.restoreError||preparing||modelChanging} sendDisabled={referenceOpen||showMenu||!!draft?.command.fields.some(field=>field.required&&!draft.values[field.key]?.trim())} busy={busy} queueWhileBusy queuePending={assistant.pending.length > 0} variant="conversation"
-                toolbarLeading={<><IconButton label="管理 Skills 和快捷命令" title="资源库 · Skills 与快捷命令" className="ai-composer-library" onClick={()=>setLibraryOpen(true)}><ResourceLibraryIcon/></IconButton><AssistantPagePicker options={options} selected={references} open={referenceOpen} onOpenChange={value=>{setReferenceOpen(value);if(value)setReferenceQuery('');}} onToggle={toggleReference} disabled={assistant.transitioning||assistant.restoring||preparing||modelChanging} query={referenceQuery} onQueryChange={setReferenceQuery}/><AssistantLocalDirectories compact={!!contextLabel || !!references.length} busy={busy || assistant.transitioning || assistant.restoring || resetting || modelChanging} revision={directoryRevision}/></>}
-                toolbarTrailing={<div className="ai-composer-model-controls"><AssistantContextUsage runtime={runtime} busy={busy} revision={`${directoryRevision}:${modelChanging}:${resetting}`}/><AssistantModelPicker runtime={runtime} busy={busy || assistant.transitioning || assistant.restoring || resetting || preparing || assistant.pending.length > 0} revision={directoryRevision} onChanging={setModelChanging} onError={setControlError}/></div>}
+            {showMenu&&<CommandMenu commands={library.commands.filter(c=>!c.skill||library.skills.some(s=>s.name===c.skill&&s.enabled))} agentCommands={agentCommands} query={input.slice(1)} onChoose={chooseCommand} onAgentChoose={command=>{inputHistory.current=undefined;setInput(`/${command.name} `);setMenuDismissed(true);setFocusRequest(n=>n+1);}} onManage={()=>{setMenuDismissed(true);setLibraryOpen(true);}}/>}
+            <AIComposer value={draft?draft.template:input} onChange={changeInput} onSend={send} focusRequest={focusRequest} onHistoryKey={navigateInputHistory} historySelection={historySelection} disabled={assistant.transitioning||assistant.restoring||!!assistant.restoreError||preparing||modelChanging} sendDisabled={referenceOpen||showMenu||!!draft?.command.fields.some(field=>field.required&&!draft.values[field.key]?.trim())} busy={busy} queueWhileBusy queuePending={assistant.pending.length > 0} variant="conversation"
+                toolbarLeading={<div className="ai-composer-actions"><IconButton label="管理 Skills 和快捷命令" title="资源库 · Skills 与快捷命令" className="ai-composer-library" onClick={()=>setLibraryOpen(true)}><ResourceLibraryIcon/></IconButton><AssistantPagePicker options={options} selected={references} open={referenceOpen} onOpenChange={value=>{setReferenceOpen(value);if(value)setReferenceQuery('');}} onToggle={toggleReference} disabled={assistant.transitioning||assistant.restoring||preparing||modelChanging} query={referenceQuery} onQueryChange={setReferenceQuery}/><AssistantLocalDirectories compact busy={busy || assistant.transitioning || assistant.restoring || resetting || modelChanging} revision={directoryRevision}/></div>}
+                toolbarTrailing={<div className="ai-composer-model-controls"><AssistantApprovalMode runtime={runtime} busy={busy || assistant.transitioning || assistant.restoring || resetting || preparing || assistant.pending.length > 0} revision={directoryRevision} onChanging={setModelChanging} onError={setControlError}/><AssistantContextUsage runtime={runtime} busy={busy} revision={`${directoryRevision}:${modelChanging}:${resetting}`}/><AssistantModelPicker runtime={runtime} busy={busy || assistant.transitioning || assistant.restoring || resetting || preparing || assistant.pending.length > 0} revision={directoryRevision} onChanging={setModelChanging} onError={setControlError}/></div>}
                 editor={draft?<CommandDraftEditor key={draft.command.name} draft={draft} connections={connections} disabled={assistant.transitioning||preparing} onChange={setDraft} onSend={send} onCancel={()=>{setDraft(undefined);setControlError('');}}/>:undefined}
-                header={<><AssistantMessageQueue messages={assistant.pending} paused={assistant.paused} disabled={assistant.transitioning} resumeDisabled={busy} currentTitle={contextTitle}
-                    onResume={() => { setControlError(''); assistant.resume(); }} onSendNow={id => void sendNow(id)} onRemove={assistant.remove} /><PageReferenceTags references={references} options={options} onRemove={ref=>setReferences(previous=>previous.filter(item=>!samePage(ref,item)))}/></>}
+                header={<><AssistantMessageQueue messages={assistant.pending} paused={assistant.paused} disabled={assistant.transitioning} editDisabled={preparing || modelChanging || assistant.restoring || !!assistant.restoreError} resumeDisabled={busy} currentTitle={contextTitle}
+                    onResume={() => { setControlError(''); assistant.resume(); }} onSendNow={id => void sendNow(id)} onRemove={assistant.remove} onEdit={editQueued} /><PageReferenceTags references={references} options={options} onRemove={ref=>setReferences(previous=>previous.filter(item=>!samePage(ref,item)))}/></>}
                 placeholder="输入问题…"
                 hint={busy ? 'Enter 加入队列 · 立即发送会先停止本轮' : assistant.paused && assistant.pending.length ? '队列已暂停，继续后按顺序处理' : undefined}
                 contexts={!references.length && contextLabel ? [{ id: 'target', label: contextLabel, active: true, kind:contextTitle ? 'terminal' : 'workspace' }] : []} />

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { TbCheck, TbCircleCheck, TbCircleX, TbCopy, TbFolderOpen, TbMinus, TbRefresh, TbRotate2, TbTerminal2 } from 'react-icons/tb';
+import { TbCheck, TbCircleCheck, TbCircleX, TbCopy, TbFolderOpen, TbInfoCircle, TbMinus, TbPlus, TbRefresh, TbRotate2, TbTerminal2, TbTrash } from 'react-icons/tb';
 import { IconButton } from '@opscopilot/shell-terminal/ui';
-import { CheckAssistantRuntime, InspectAssistantModel, SelectAssistantRuntimeExecutable } from '../../../wailsjs/go/main/App';
+import { CheckAssistantRuntime, CheckAssistantAgentRuntime, CheckCustomAssistantRuntime, InspectAssistantModel, SelectAssistantRuntimeExecutable } from '../../../wailsjs/go/main/App';
 import './assistantRuntime.css';
 
 export interface RuntimeReport {
@@ -17,14 +17,18 @@ export interface RuntimeReport {
 
 export interface RuntimeHost {
     check(path: string): Promise<RuntimeReport>;
+    checkAgent?(kind: string, path: string): Promise<RuntimeReport>;
+    checkCustom?(path: string, args: string[]): Promise<RuntimeReport>;
     select(): Promise<string>;
     model?(source: string): Promise<{ ready: boolean; name?: string; detail: string }>;
 }
-const host: RuntimeHost = { check: CheckAssistantRuntime, select: SelectAssistantRuntimeExecutable, model: InspectAssistantModel };
+type CustomAgent = { id:string; name:string; executable:string; arguments:string[] };
+const host: RuntimeHost = { check: CheckAssistantRuntime, checkAgent: CheckAssistantAgentRuntime, checkCustom: CheckCustomAssistantRuntime, select: SelectAssistantRuntimeExecutable, model: InspectAssistantModel };
 
-export default function AssistantRuntimePanel({ value, onChange, disabled = false, runtime = host }: {
-    value: string; onChange: (value: string) => void; disabled?: boolean; runtime?: RuntimeHost;
+export default function AssistantRuntimePanel({ value, onChange, kind = 'icode', onKindChange, arguments: args = [], onArgumentsChange, customAgents = [], customAgentId = '', onCustomAgentsChange, disabled = false, runtime = host }: {
+    value: string; onChange: (value: string) => void; kind?: string; onKindChange?: (kind:string)=>void; arguments?: string[]; onArgumentsChange?: (args:string[])=>void; customAgents?:CustomAgent[]; customAgentId?:string; onCustomAgentsChange?: (agents:CustomAgent[], id:string)=>void; disabled?: boolean; runtime?: RuntimeHost;
 }) {
+    const product = kind === 'opencode' ? 'OpenCode' : kind === 'custom' ? '自定义 ACP Agent' : 'iCode';
     const [report, setReport] = useState<RuntimeReport | null>(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
@@ -35,13 +39,13 @@ export default function AssistantRuntimePanel({ value, onChange, disabled = fals
         generation.current++;
         setReport(null); setModelReport(null); setError(''); setBusy(false); setCopied(false);
         return () => { generation.current++; };
-    }, [value]);
+    }, [value, kind, args.join('\n')]);
 
     async function check() {
         const id = ++generation.current;
         setBusy(true); setError(''); setReport(null); setCopied(false);
         try {
-            const [result, model] = await Promise.all([runtime.check(value.trim()), runtime.model?.('icode')]);
+            const [result, model] = await Promise.all([kind === 'icode' ? runtime.check(value.trim()) : kind === 'custom' ? runtime.checkCustom?.(value.trim(), args) ?? Promise.reject() : runtime.checkAgent?.(kind, value.trim()) ?? Promise.reject(), kind === 'icode' ? runtime.model?.('icode') : undefined]);
             if (id === generation.current) { setReport(result); setModelReport(model || null); }
         } catch {
             if (id === generation.current) setError('环境检测未能完成，请重试。');
@@ -60,7 +64,7 @@ export default function AssistantRuntimePanel({ value, onChange, disabled = fals
     async function copy() {
         if (!report) return;
         const text = [
-            `iCode 环境检测：${report.ready ? '通过' : '未通过'}`,
+            `${product} 环境检测：${report.ready ? '通过' : '未通过'}`,
             `程序：${report.executable || '未找到'}`,
             `版本：${report.name || '未知'} ${report.version || ''} · ACP ${report.protocolVersion || '未知'} · 扩展 ${report.extensionApiVersion || '未知'}`,
             ...report.checks.map(item => `${item.label}：${item.status === 'passed' ? '通过' : item.status === 'failed' ? '失败' : '未检查'}${item.detail ? ` — ${item.detail}` : ''}`),
@@ -71,30 +75,49 @@ export default function AssistantRuntimePanel({ value, onChange, disabled = fals
         catch { setError('复制失败，请手动选择检测结果复制。'); }
     }
     const locked = disabled || busy;
+    const selectedAgent = customAgents.find(agent => agent.id === customAgentId);
+    const selectedValue = kind === 'custom' ? selectedAgent ? `custom:${selectedAgent.id}` : 'custom:unsaved' : kind;
     return <section className="oc-runtime-settings" aria-labelledby="assistant-runtime-heading" aria-busy={busy}>
         <header className="oc-runtime-heading">
-            <div><TbTerminal2 size={20} aria-hidden="true" /><h3 id="assistant-runtime-heading">内置 AI 助手</h3><span className="oc-runtime-product">iCode</span></div>
+            <div className="oc-runtime-heading-main"><span className="oc-runtime-heading-icon"><TbTerminal2 size={20} aria-hidden="true" /></span><div><h3 id="assistant-runtime-heading">助手运行环境</h3><p>选择助手使用的 Agent，并检测连接状态</p></div></div>
             <span className={`oc-runtime-status ${report ? report.ready ? 'is-ready' : 'is-failed' : ''}`}>
                 {busy ? '检测中' : report ? report.ready ? '检测通过' : '需要处理' : '未检测'}
             </span>
         </header>
-        <p className="oc-runtime-description">选择本机的 iCode 运行程序，检查它能否接入助手。</p>
-        <div className="oc-runtime-model-source">
-            <p>助手使用本机 iCode 已配置的模型与认证信息。请在 iCode 中管理模型；对话和操作授权仍独立。</p>
-        </div>
+        <div className="oc-runtime-layout"><div className="oc-runtime-selection">
+        {onKindChange && <div className="oc-runtime-agent-picker">
+            <label className="oc-runtime-label">当前 Agent<select aria-label="当前 Agent" value={selectedValue} disabled={locked} onChange={event => {
+                const next = event.target.value;
+                if (next.startsWith('custom:')) {
+                    if (next !== 'custom:unsaved') onCustomAgentsChange?.(customAgents, next.slice(7));
+                } else onKindChange(next);
+            }}><option value="icode">iCode</option><option value="opencode">OpenCode</option>{customAgents.map(agent => <option key={agent.id} value={`custom:${agent.id}`}>{agent.name || '未命名 Agent'}</option>)}{kind === 'custom' && !selectedAgent && <option value="custom:unsaved">未命名 Agent</option>}</select></label>
+            {onCustomAgentsChange && <IconButton label="添加 Agent" disabled={locked} onClick={() => {
+                const id = crypto.randomUUID();
+                const preserveDraft = kind === 'custom' && !selectedAgent;
+                onCustomAgentsChange([...customAgents, {id, name:'新 Agent', executable:preserveDraft ? value : '', arguments:preserveDraft ? args : []}], id);
+            }}><TbPlus size={17}/></IconButton>}
+        </div>}
+        {kind === 'custom' && onCustomAgentsChange && selectedAgent && <div className="oc-runtime-profile-edit"><label className="oc-runtime-label">Agent 名称<input aria-label="Agent 名称" value={selectedAgent.name} disabled={locked} onChange={event => onCustomAgentsChange(customAgents.map(agent => agent.id === customAgentId ? {...agent, name:event.target.value} : agent), customAgentId)} /></label><IconButton label="移除 Agent" disabled={locked} onClick={() => onCustomAgentsChange(customAgents.filter(agent => agent.id !== customAgentId), '')}><TbTrash size={17}/></IconButton></div>}
+        {onCustomAgentsChange && <p className="oc-runtime-selection-hint">{kind === 'custom' && !selectedAgent ? '点击 + 添加 Agent，并填写程序信息。' : '点击 + 添加其他 ACP Agent。'}</p>}
+        <p className="oc-runtime-selection-note">模型和认证使用 {product} 本机配置。</p>
+        </div><div className="oc-runtime-configuration">
         <label className="oc-runtime-label" htmlFor="assistant-runtime-path">程序路径</label>
         <div className="oc-runtime-path">
-            <input id="assistant-runtime-path" value={value} disabled={locked} placeholder="留空自动查找 iCode" spellCheck={false}
+            <input id="assistant-runtime-path" value={value} disabled={locked} placeholder={kind === 'custom' ? '填写 Agent 程序的完整路径' : `留空自动查找 ${product}`} spellCheck={false}
                 onChange={event => onChange(event.target.value)} />
-            <IconButton label="选择 iCode 程序" disabled={locked} onClick={() => void select()}><TbFolderOpen size={18} /></IconButton>
-            <IconButton label="使用自动查找" disabled={locked || !value} onClick={() => onChange('')}><TbRotate2 size={18} /></IconButton>
+            <IconButton label={`选择 ${product} 程序`} disabled={locked} onClick={() => void select()}><TbFolderOpen size={18} /></IconButton>
+            {kind !== 'custom' && <IconButton label="使用自动查找" disabled={locked || !value} onClick={() => onChange('')}><TbRotate2 size={18} /></IconButton>}
         </div>
+        {kind === 'custom' && <label className="oc-runtime-label">启动参数（每行一个）<textarea aria-label="Agent 启动参数" value={args.join('\n')} disabled={locked} placeholder="例如：acp" onChange={event => onArgumentsChange?.(event.target.value.split('\n'))} /></label>}
         <div className="oc-runtime-actions">
-            <span>{value ? '保存后优先使用此路径。' : '自动查找程序附带目录、环境变量和 PATH。'}</span>
+            <span>{value ? '保存后优先使用此路径。' : kind === 'custom' ? '需要填写程序路径；参数请逐行填写。' : '自动查找程序附带目录、环境变量和 PATH。'}</span>
             <button type="button" className="oc-runtime-check" disabled={locked} onClick={() => void check()}>
                 <TbRefresh size={16} className={busy ? 'is-spinning' : ''} aria-hidden="true" />{busy ? '正在检测…' : '检测环境'}
             </button>
         </div>
+        {kind === 'opencode' && <p className="oc-runtime-inline-note"><TbInfoCircle size={16}/><span>自动审批使用「模型服务」中的快速模型；不可用时会请你确认。</span></p>}
+        {kind === 'custom' && <div className="oc-runtime-notice"><TbInfoCircle size={17} aria-hidden="true"/><div><strong>使用前请了解</strong><p>Ops 操作受所选权限模式控制。Agent 的本机操作是否会请求确认取决于它自身的配置，请先核实；快速检测不能证明全部操作都会经过审批。</p><p>模型列表、上下文用量和 Agent 命令取决于其 ACP 支持情况；Ops 导入的 Skill 暂不会自动注入此 Agent。</p></div></div>}
         {busy && <p className="oc-runtime-progress" role="status">正在验证 ACP 与助手启动，最多等待约 45 秒…</p>}
         {report && <div className="oc-runtime-result" role="status">
             <div className="oc-runtime-result-heading">
@@ -118,5 +141,6 @@ export default function AssistantRuntimePanel({ value, onChange, disabled = fals
             <p>{modelReport.detail}</p>
         </div>}
         <p className="oc-runtime-footnote">检测不调用模型或连接业务服务器。修改路径后请保存设置，并新建 AI 对话使用。</p>
+        </div></div>
     </section>;
 }
