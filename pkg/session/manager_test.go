@@ -22,6 +22,7 @@ type mockConn struct {
 func (m *mockConn) StartShell(cols, rows int) (io.WriteCloser, io.Reader, error) {
 	return nil, nil, nil
 }
+func (m *mockConn) CloseShell() error { return nil }
 func (m *mockConn) Resize(cols, rows int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

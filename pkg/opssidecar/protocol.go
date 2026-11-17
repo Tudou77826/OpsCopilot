@@ -1,8 +1,9 @@
 // Package opssidecar 实现 ops-sidecar 的服务层：NDJSON over stdio 的常驻运维服务，
 // 供 AAW Desktop 的 remoteOps 插件驱动。协议约定：客户端按行发送
-// {"id","method","params"}，服务端按行回 {"id","ok","data","error"}。
-// 请求串行处理，保证连接树编辑与 exec 之间的顺序语义；stdout 只输出协议行，
-// 诊断信息一律走 stderr。
+// {"id","method","params"}，服务端按行回 {"id","ok","data","error"}；
+// 传输进度、终端输出等异步数据以 {"event","params"} 主动下发（无 id 配对）。
+// 控制类请求串行处理，保证连接树编辑与 exec 之间的顺序语义；stdout 只输出
+// 协议行，诊断信息一律走 stderr。
 package opssidecar
 
 import "encoding/json"
@@ -20,6 +21,12 @@ type Response struct {
 	OK    bool       `json:"ok"`
 	Data  any        `json:"data,omitempty"`
 	Error *ErrorWire `json:"error,omitempty"`
+}
+
+// Event 服务端主动事件行：无 id 配对，客户端按 Event 字段分发。
+type Event struct {
+	Event  string `json:"event"`
+	Params any    `json:"params,omitempty"`
 }
 
 // ErrorWire 结构化错误：Code 供前端分类渲染，Message 原文透传，Hint 可选指引。
@@ -40,7 +47,23 @@ const (
 	MethodMoveNode         = "connections/move-node"
 	MethodDeleteNode       = "connections/delete-node"
 	MethodExec             = "exec"
+	MethodTransferUpload   = "transfer/upload"
+	MethodTransferDownload = "transfer/download"
+	MethodTransferCancel   = "transfer/cancel"
+	MethodTerminalOpen     = "terminal/open"
+	MethodTerminalWrite    = "terminal/write"
+	MethodTerminalReady    = "terminal/ready"
+	MethodTerminalResize   = "terminal/resize"
+	MethodTerminalClose    = "terminal/close"
 	MethodShutdown         = "shutdown"
+)
+
+// 事件名常量。异步数据（传输进度、终端字节流）主动下发，客户端按名分发。
+const (
+	EventTerminalOutput   = "terminal.output"
+	EventTerminalClosed   = "terminal.closed"
+	EventTransferProgress = "transfer.progress"
+	EventTransferDone     = "transfer.done"
 )
 
 // 错误码。前端按码分类渲染（如 whitelist_denied 展示为"被白名单拦截"）。
@@ -52,5 +75,7 @@ const (
 	CodeNoPassword     = "no_password"
 	CodeConnectFailed  = "connect_failed"
 	CodeExecFailed     = "exec_failed"
+	CodeTransferFailed = "transfer_failed"
+	CodeTerminalBusy   = "terminal_busy"
 	CodeInternal       = "internal"
 )

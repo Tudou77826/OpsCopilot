@@ -159,6 +159,19 @@ func (c *Client) Resize(cols, rows int) error {
 	return nil
 }
 
+// CloseShell 实现 remote.Connection:关闭最近一次 StartShell 建立的 shell。
+// telnet 无会话层,连接本身即终端数据流,这里清理 shell 状态并关闭整条
+// 连接;连接池在下次使用时自动重连(与 ops.reconnect 语义一致)。
+func (c *Client) CloseShell() error {
+	c.lastShellMu.Lock()
+	c.lastShellStdin = nil
+	c.lastShellMu.Unlock()
+	if c.conn == nil {
+		return nil
+	}
+	return c.conn.Close()
+}
+
 // Healthy 实现 remote.Connection:发送 IAC NOP 探活。
 // NOP 不要求应答;若底层连接已关闭(写失败),返回 false。
 // 真正的健康度最终由后续 Read 是否返回错误反映。

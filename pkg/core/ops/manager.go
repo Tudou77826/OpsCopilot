@@ -130,6 +130,19 @@ func (m *Manager) GetAvailableServers() []*connectionstore.Node {
 	return m.sessionMgr.Snapshot()
 }
 
+// GetConnection 返回已建立的连接；未连接返回 nil。供需要会话级能力的
+// 调用方（如 sidecar 的交互终端）在 Connect 之后取用底层协议连接。
+// 命中时刷新 LastActive，避免会话使用期间被空闲回收器断开。
+func (m *Manager) GetConnection(serverName string) *Connection {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	conn := m.connections[serverName]
+	if conn != nil {
+		conn.LastActive.Store(time.Now().UnixNano())
+	}
+	return conn
+}
+
 // Shutdown 关闭管理器
 func (m *Manager) Shutdown() {
 	close(m.stopChan)

@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,13 +39,19 @@ type Service struct {
 	opsDirty           bool
 	execTimeout        time.Duration
 
+	// out 是 stdout 的唯一写入者：响应（串行路径）与事件（终端 pump、传输
+	// 进度 goroutine）经它整行落盘。
+	out       *lineEmitter
+	terminals *terminalManager
+	transfers *transferManager
+
 	mu sync.Mutex // 串行 dispatch 下的双保险，保护重建/查询与 Close 交错
 }
 
 // NewService 构造服务并加载全部配置。dataDir 与 OpsCopilot 桌面模式的数据目录
 // 约定一致：sessions.json、command_whitelist.json、file_access.json、config.json
-// 都在该目录下。
-func NewService(dataDir string) (*Service, error) {
+// 都在该目录下。out 为协议行输出目标（生产为 os.Stdout，测试可注入缓冲）。
+func NewService(dataDir string, out io.Writer) (*Service, error) {
 	s := &Service{dataDir: dataDir}
 
 	s.store = connectionstore.NewStoreWithPath(filepath.Join(dataDir, "sessions.json"))
@@ -66,7 +74,33 @@ func NewService(dataDir string) (*Service, error) {
 	if err := s.rebuildOpsLocked(); err != nil {
 		return nil, err
 	}
+	s.out = newLineEmitter(out)
+	s.terminals = newTerminalManager(s.emitEvent)
+	s.transfers = newTransferManager(s.emitEvent)
 	return s, nil
+}
+
+// emitEvent 供终端 pump 与传输 goroutine 下发异步事件。
+func (s *Service) emitEvent(event string, params any) {
+	s.out.line(Event{Event: event, Params: params})
+}
+
+// errServerNotFound 服务器节点解析失败的哨兵（节点缺失或非服务器节点）。
+var errServerNotFound = errors.New("服务器未找到")
+
+// resolveServer 按树节点 ID 解析出当前内核与主机地址。串行路径专用：
+// 持锁保证内核新鲜度（树变更重建）与快照读取的原子性。
+func (s *Service) resolveServer(serverID string) (*ops.Manager, string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.ensureOpsFreshLocked(); err != nil {
+		return nil, "", err
+	}
+	node := findNode(s.store.Snapshot(), serverID)
+	if node == nil || node.Type != connectionstore.KindConnection || node.Config == nil {
+		return nil, "", errServerNotFound
+	}
+	return s.ops, node.Config.Host, nil
 }
 
 // loadWhitelist 加载命令白名单；配置缺失或损坏时回退到内置默认策略，
@@ -140,6 +174,12 @@ func (s *Service) ensureOpsFreshLocked() error {
 func (s *Service) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.terminals != nil {
+		s.terminals.closeAll()
+	}
+	if s.transfers != nil {
+		s.transfers.cancelAll()
+	}
 	if s.ops != nil {
 		s.ops.Shutdown()
 		s.ops = nil
@@ -174,6 +214,22 @@ func (s *Service) handle(req Request) (resp Response, exit bool) {
 		return s.handleDeleteNode(req)
 	case MethodExec:
 		return s.handleExec(req)
+	case MethodTransferUpload:
+		return s.handleTransfer(req, transferKindUpload)
+	case MethodTransferDownload:
+		return s.handleTransfer(req, transferKindDownload)
+	case MethodTransferCancel:
+		return s.handleTransferCancel(req)
+	case MethodTerminalOpen:
+		return s.handleTerminalOpen(req)
+	case MethodTerminalWrite:
+		return s.handleTerminalWrite(req)
+	case MethodTerminalReady:
+		return s.handleTerminalSimple(req, false)
+	case MethodTerminalResize:
+		return s.handleTerminalResize(req)
+	case MethodTerminalClose:
+		return s.handleTerminalSimple(req, true)
 	default:
 		return errorResponse(req.ID, CodeMethodNotFound, "未知方法: "+req.Method, ""), false
 	}
@@ -343,6 +399,166 @@ func (s *Service) handleExec(req Request) (Response, bool) {
 	return okResponse(req.ID, result), false
 }
 
+// handleTransfer 启动异步传输任务（上传/下载），即刻返回任务 ID；
+// 进度与结果经 transfer.progress / transfer.done 事件下发。
+func (s *Service) handleTransfer(req Request, kind string) (Response, bool) {
+	var params struct {
+		ServerID   string `json:"serverId"`
+		LocalPath  string `json:"localPath"`
+		RemotePath string `json:"remotePath"`
+		MaxBytes   int    `json:"maxBytes"`
+		Backup     bool   `json:"backup"`
+		Mkdir      bool   `json:"mkdir"`
+	}
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		return invalidParams(req.ID, "params 解析失败: "+err.Error()), false
+	}
+	if params.ServerID == "" || params.LocalPath == "" || params.RemotePath == "" {
+		return invalidParams(req.ID, "serverId、localPath 与 remotePath 必填"), false
+	}
+	mgr, host, err := s.resolveServer(params.ServerID)
+	if err != nil {
+		return s.serverResolveError(req.ID, err), false
+	}
+	id, err := s.transfers.start(kind, mgr, host, params.LocalPath, params.RemotePath, params.MaxBytes, params.Backup, params.Mkdir)
+	if err != nil {
+		return errorResponse(req.ID, CodeInternal, err.Error(), ""), false
+	}
+	return okResponse(req.ID, map[string]any{"transferId": id}), false
+}
+
+// handleTransferCancel 取消在途传输任务。
+func (s *Service) handleTransferCancel(req Request) (Response, bool) {
+	var params struct {
+		TransferID string `json:"transferId"`
+	}
+	if err := json.Unmarshal(req.Params, &params); err != nil || params.TransferID == "" {
+		return invalidParams(req.ID, "transferId 必填"), false
+	}
+	if err := s.transfers.cancel(params.TransferID); err != nil {
+		return errorResponse(req.ID, CodeNotFound, err.Error(), ""), false
+	}
+	return okResponse(req.ID, nil), false
+}
+
+// handleTerminalOpen 打开（或按 sessionId 重连）交互终端会话。
+func (s *Service) handleTerminalOpen(req Request) (Response, bool) {
+	var params struct {
+		ServerID  string `json:"serverId"`
+		SessionID string `json:"sessionId"`
+		Cols      int    `json:"cols"`
+		Rows      int    `json:"rows"`
+	}
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		return invalidParams(req.ID, "params 解析失败: "+err.Error()), false
+	}
+	if params.ServerID == "" {
+		return invalidParams(req.ID, "serverId 必填"), false
+	}
+	mgr, host, err := s.resolveServer(params.ServerID)
+	if err != nil {
+		return s.serverResolveError(req.ID, err), false
+	}
+	// 惰性连接（幂等）：命中已有连接时刷新 LastActive，避免会话使用期间
+	// 被空闲回收器断开
+	if _, err := mgr.Connect(host); err != nil {
+		return errorResponse(req.ID, classifyExecError(err.Error()), err.Error(), ""), false
+	}
+	conn := mgr.GetConnection(host)
+	if conn == nil {
+		return errorResponse(req.ID, CodeInternal, "连接已建立但不可用", ""), false
+	}
+	data, err := s.terminals.open(conn, params.SessionID, params.Cols, params.Rows)
+	if err != nil {
+		code := CodeInternal
+		if errors.Is(err, errTerminalBusy) {
+			code = CodeTerminalBusy
+		} else if strings.Contains(err.Error(), "PTY") {
+			code = CodeConnectFailed
+		}
+		return errorResponse(req.ID, code, err.Error(), ""), false
+	}
+	return okResponse(req.ID, data), false
+}
+
+// handleTerminalWrite 向终端写入按键数据。
+func (s *Service) handleTerminalWrite(req Request) (Response, bool) {
+	var params struct {
+		SessionID string `json:"sessionId"`
+		Data      string `json:"data"`
+	}
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		return invalidParams(req.ID, "params 解析失败: "+err.Error()), false
+	}
+	if params.SessionID == "" {
+		return invalidParams(req.ID, "sessionId 必填"), false
+	}
+	if err := s.terminals.write(params.SessionID, params.Data); err != nil {
+		return terminalStateError(req.ID, err), false
+	}
+	return okResponse(req.ID, nil), false
+}
+
+// handleTerminalSimple 处理 terminal/ready（冲刷首段输出）与 terminal/close
+// （关闭会话）。
+func (s *Service) handleTerminalSimple(req Request, isClose bool) (Response, bool) {
+	var params struct {
+		SessionID string `json:"sessionId"`
+	}
+	if err := json.Unmarshal(req.Params, &params); err != nil || params.SessionID == "" {
+		return invalidParams(req.ID, "sessionId 必填"), false
+	}
+	var err error
+	if isClose {
+		err = s.terminals.close(params.SessionID)
+	} else {
+		err = s.terminals.ready(params.SessionID)
+	}
+	if err != nil {
+		return terminalStateError(req.ID, err), false
+	}
+	return okResponse(req.ID, nil), false
+}
+
+// handleTerminalResize 同步终端尺寸到远端。
+func (s *Service) handleTerminalResize(req Request) (Response, bool) {
+	var params struct {
+		SessionID string `json:"sessionId"`
+		Cols      int    `json:"cols"`
+		Rows      int    `json:"rows"`
+	}
+	if err := json.Unmarshal(req.Params, &params); err != nil || params.SessionID == "" {
+		return invalidParams(req.ID, "sessionId 必填"), false
+	}
+	if params.Cols <= 0 || params.Rows <= 0 {
+		return invalidParams(req.ID, "cols 与 rows 必须为正"), false
+	}
+	if err := s.terminals.resize(params.SessionID, params.Cols, params.Rows); err != nil {
+		return terminalStateError(req.ID, err), false
+	}
+	return okResponse(req.ID, nil), false
+}
+
+// serverResolveError 把服务器解析失败映射为结构化错误响应。
+func (s *Service) serverResolveError(id string, err error) Response {
+	if errors.Is(err, errServerNotFound) {
+		return errorResponse(id, CodeNotFound, err.Error(), "请先在连接面板中添加该服务器")
+	}
+	return errorResponse(id, CodeInternal, err.Error(), "")
+}
+
+// terminalStateError 把终端会话状态错误映射为结构化错误响应。
+func terminalStateError(id string, err error) Response {
+	switch {
+	case errors.Is(err, errTerminalUnknown):
+		return errorResponse(id, CodeNotFound, err.Error(), "")
+	case errors.Is(err, errTerminalDead):
+		return errorResponse(id, CodeConnectFailed, err.Error(), "请重新打开终端")
+	default:
+		return errorResponse(id, CodeInternal, err.Error(), "")
+	}
+}
+
 // markDirty 连接树变更后标记内核待重建。
 func (s *Service) markDirty() {
 	s.mu.Lock()
@@ -385,7 +601,7 @@ func classifyExecError(message string) string {
 // Run 启动 stdio 主循环：每行一个请求、串行处理；数据目录由 OPSCOPILOT_DATA_DIR
 // 注入，缺省退回 exe 同目录（与 OpsCopilot 桌面 CLI 的路径语义一致）。
 func Run() int {
-	svc, err := NewService(resolveDataDir())
+	svc, err := NewService(resolveDataDir(), os.Stdout)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ops-sidecar] 初始化失败: %v\n", err)
 		return 1
@@ -393,8 +609,6 @@ func Run() int {
 
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
-	writer := bufio.NewWriter(os.Stdout)
-	encoder := json.NewEncoder(writer)
 
 	for scanner.Scan() {
 		line := bytes.TrimSpace(scanner.Bytes())
@@ -403,19 +617,11 @@ func Run() int {
 		}
 		var req Request
 		if err := json.Unmarshal(line, &req); err != nil {
-			_ = encoder.Encode(errorResponse("", CodeInvalidParams, "请求不是合法 JSON: "+err.Error(), ""))
-			_ = writer.Flush()
+			svc.out.line(errorResponse("", CodeInvalidParams, "请求不是合法 JSON: "+err.Error(), ""))
 			continue
 		}
 		resp, exit := svc.handle(req)
-		if err := encoder.Encode(resp); err != nil {
-			fmt.Fprintf(os.Stderr, "[ops-sidecar] 写响应失败: %v\n", err)
-			return 1
-		}
-		if err := writer.Flush(); err != nil {
-			fmt.Fprintf(os.Stderr, "[ops-sidecar] 刷新输出失败: %v\n", err)
-			return 1
-		}
+		svc.out.line(resp)
 		if exit {
 			break
 		}

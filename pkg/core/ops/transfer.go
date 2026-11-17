@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -69,6 +70,11 @@ func closeSFTP(conn *Connection) {
 type DownloadOptions struct {
 	LocalPath string // 本地落地路径
 	MaxBytes  int    // 最大下载字节数，默认 10MB
+	// Progress 可选进度回调：done 为已传输字节数，total 为文件总大小。
+	// 由内核按拷贝节流触发（约每 128KB 一次），可为 nil。
+	Progress func(done, total int64)
+	// Context 可选取消信号：取消后拷贝尽快中止并返回错误。nil 等价 Background。
+	Context context.Context
 }
 
 // DownloadResult 下载结果
@@ -178,7 +184,7 @@ func (m *Manager) Download(serverName, remotePath string, opts DownloadOptions) 
 	}
 	defer localFile.Close()
 
-	written, err := io.Copy(localFile, io.LimitReader(remoteFile, int64(maxBytes)))
+	written, err := copyWithProgress(downloadContext(opts.Context), localFile, io.LimitReader(remoteFile, int64(maxBytes)), fileSize, opts.Progress)
 	if err != nil {
 		os.Remove(localPath)
 		return nil, fmt.Errorf("下载文件失败: %w", err)
@@ -206,6 +212,11 @@ type UploadOptions struct {
 	LocalPath string // 本地源文件路径
 	Backup    bool   // 覆盖前自动备份远程文件，默认 true
 	Mkdir     bool   // 自动创建远程目标目录，默认 false
+	// Progress 可选进度回调：done 为已传输字节数，total 为文件总大小。
+	// 由内核按拷贝节流触发（约每 128KB 一次），可为 nil。
+	Progress func(done, total int64)
+	// Context 可选取消信号：取消后拷贝尽快中止并返回错误。nil 等价 Background。
+	Context context.Context
 }
 
 // UploadResult 上传结果
@@ -314,7 +325,7 @@ func (m *Manager) Upload(serverName, remotePath string, opts UploadOptions) (*Up
 	}
 	defer remoteFile.Close()
 
-	written, err := io.Copy(remoteFile, localFile)
+	written, err := copyWithProgress(downloadContext(opts.Context), remoteFile, localFile, fileSize, opts.Progress)
 	if err != nil {
 		return nil, fmt.Errorf("上传文件失败: %w", err)
 	}
@@ -352,4 +363,45 @@ func sftpBackupFile(client *sftp.Client, src string, dst string) error {
 
 	_, err = io.Copy(dstFile, srcFile)
 	return err
+}
+
+// copyWithProgress 带取消与进度回调的拷贝：进度按字节步进节流（约每 128KB
+// 一次），拷贝正常结束后补发一次终值；ctx 每轮读取前检查，取消即中止。
+// progress 为 nil 时不做进度节流，其余语义不变。
+func copyWithProgress(ctx context.Context, dst io.Writer, src io.Reader, total int64, progress func(done, total int64)) (int64, error) {
+	buf := make([]byte, 32*1024)
+	var done, last int64
+	for {
+		if err := ctx.Err(); err != nil {
+			return done, err
+		}
+		n, readErr := src.Read(buf)
+		if n > 0 {
+			if _, writeErr := dst.Write(buf[:n]); writeErr != nil {
+				return done, writeErr
+			}
+			done += int64(n)
+			if progress != nil && done-last >= 128*1024 {
+				progress(done, total)
+				last = done
+			}
+		}
+		if readErr == io.EOF {
+			if progress != nil {
+				progress(done, total)
+			}
+			return done, nil
+		}
+		if readErr != nil {
+			return done, readErr
+		}
+	}
+}
+
+// downloadContext 归一化调用方传入的取消信号。
+func downloadContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
 }
