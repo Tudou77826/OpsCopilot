@@ -8,10 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"opscopilot/pkg/config"
@@ -19,6 +23,7 @@ import (
 	"opscopilot/pkg/core/ops"
 	"opscopilot/pkg/core/security"
 	"opscopilot/pkg/remote"
+	"opscopilot/pkg/terminalcontrol"
 )
 
 // Service 常驻运维服务。
@@ -44,8 +49,35 @@ type Service struct {
 	out       *lineEmitter
 	terminals *terminalManager
 	transfers *transferManager
+	tcSvc     *terminalcontrol.Service
+
+	// Agent 工具通道：MCP 桥监听与审计；lastTouch 供空闲退出判定。
+	auditMu        sync.Mutex
+	bridgeListener net.Listener
+	lastTouch      atomic.Int64
+
+	// 手工审批：同一时刻至多一条等待确认的终端写入。
+	pendingMu     sync.Mutex
+	pendingWrite  *pendingHandoff
+	pendingNotify chan struct{}
 
 	mu sync.Mutex // 串行 dispatch 下的双保险，保护重建/查询与 Close 交错
+}
+
+// pendingHandoff 一条等待用户确认的终端写入（manual 审批档位）。
+type pendingHandoff struct {
+	sessionID string
+	data      string
+	decided   chan bool
+}
+
+// ExecParams 执行参数（面板 exec 与 Agent 的 remote_exec 共用）。
+type ExecParams struct {
+	ServerID      string
+	Command       string
+	Intent        string
+	MaxLineLength int
+	TimeoutSec    int
 }
 
 // NewService 构造服务并加载全部配置。dataDir 与 OpsCopilot 桌面模式的数据目录
@@ -75,9 +107,86 @@ func NewService(dataDir string, out io.Writer) (*Service, error) {
 		return nil, err
 	}
 	s.out = newLineEmitter(out)
-	s.terminals = newTerminalManager(s.emitEvent)
+	s.tcSvc = terminalcontrol.NewService(func(a terminalcontrol.Audit) {
+		s.audit(auditRecord{
+			Time:   time.Now().Unix(),
+			Tool:   "terminal_control",
+			Server: a.SessionID,
+			Detail: a.Action + "@" + a.Phase,
+			OK:     true,
+		})
+	})
+	s.terminals = newTerminalManager(s.emitEvent, s.tcSvc)
 	s.transfers = newTransferManager(s.emitEvent)
+	s.lastTouch.Store(time.Now().Unix())
+	s.startBridge()
 	return s, nil
+}
+
+// touch 记录一次活动（任何请求或工具调用），推迟空闲退出。
+func (s *Service) touch() {
+	s.lastTouch.Store(time.Now().Unix())
+}
+
+// idleExitAfter 无活动且无占用多久后退出（下次请求自动重启，实现零常驻）。
+var idleExitAfter = 15 * time.Minute
+
+// idleCheck 达到空闲条件返回 true：无近期活动，且没有活跃 SSH 连接、
+// 终端会话与在途传输。
+func (s *Service) idleCheck() bool {
+	if time.Since(time.Unix(s.lastTouch.Load(), 0)) < idleExitAfter {
+		return false
+	}
+	s.mu.Lock()
+	mgr := s.ops
+	s.mu.Unlock()
+	if mgr != nil && mgr.ConnectionCount() > 0 {
+		return false
+	}
+	if s.terminals != nil && s.terminals.activeCount() > 0 {
+		return false
+	}
+	s.pendingMu.Lock()
+	busy := s.pendingWrite != nil
+	s.pendingMu.Unlock()
+	if busy {
+		return false
+	}
+	return true
+}
+
+// startBridge 启动 MCP 桥监听并落盘发现文件。端口被占（重复实例或冲突）
+// 时降级：面板功能不受影响，仅 Agent 工具不可用。
+func (s *Service) startBridge() {
+	token, err := ensureBridgeToken(s.dataDir)
+	if err != nil {
+		slog.Warn("[ops-sidecar] MCP 桥 token 生成失败，Agent 工具不可用", "error", err)
+		return
+	}
+	port := resolveBridgePort()
+	listener, err := net.Listen("tcp4", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+	if err != nil {
+		slog.Warn("[ops-sidecar] MCP 桥端口不可用，服务降级运行（面板可用）", "port", port, "error", err)
+		return
+	}
+	info := BridgeInfo{Port: port, Token: token, PID: os.Getpid()}
+	if err := writeBridgeInfo(s.dataDir, info); err != nil {
+		slog.Warn("[ops-sidecar] 服务发现文件写入失败，Agent 工具不可用", "error", err)
+		_ = listener.Close()
+		return
+	}
+	s.bridgeListener = listener
+	gateway := &mcpGateway{svc: s, token: token}
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go gateway.serveConn(conn)
+		}
+	}()
+	slog.Info("[ops-sidecar] MCP 桥已就绪", "port", port)
 }
 
 // emitEvent 供终端 pump 与传输 goroutine 下发异步事件。
@@ -174,16 +283,37 @@ func (s *Service) ensureOpsFreshLocked() error {
 func (s *Service) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.bridgeListener != nil {
+		_ = s.bridgeListener.Close()
+		s.bridgeListener = nil
+	}
+	removeBridgeInfo(s.dataDir)
 	if s.terminals != nil {
 		s.terminals.closeAll()
 	}
 	if s.transfers != nil {
 		s.transfers.cancelAll()
 	}
+	s.resolvePending(-1)
 	if s.ops != nil {
 		s.ops.Shutdown()
 		s.ops = nil
 	}
+}
+
+// resolvePending 结算待审批写入：approved>0 同意、<0 拒绝、0 保持等待。
+func (s *Service) resolvePending(approved int) {
+	s.pendingMu.Lock()
+	defer s.pendingMu.Unlock()
+	if s.pendingWrite == nil || approved == 0 {
+		return
+	}
+	if approved > 0 {
+		s.pendingWrite.decided <- true
+	} else {
+		s.pendingWrite.decided <- false
+	}
+	s.pendingWrite = nil
 }
 
 // handle 分发单个请求。返回 exit=true 表示客户端请求退出，主循环应优雅结束。
@@ -194,6 +324,7 @@ func (s *Service) handle(req Request) (resp Response, exit bool) {
 			exit = false
 		}
 	}()
+	s.touch()
 
 	switch req.Method {
 	case MethodShutdown:
@@ -230,6 +361,12 @@ func (s *Service) handle(req Request) (resp Response, exit bool) {
 		return s.handleTerminalResize(req)
 	case MethodTerminalClose:
 		return s.handleTerminalSimple(req, true)
+	case MethodTerminalApproveHandoff:
+		return s.handleTerminalApproveHandoff(req)
+	case MethodSettingsGet:
+		return s.handleSettingsGet(req)
+	case MethodSettingsSet:
+		return s.handleSettingsSet(req)
 	default:
 		return errorResponse(req.ID, CodeMethodNotFound, "未知方法: "+req.Method, ""), false
 	}
@@ -363,22 +500,39 @@ func (s *Service) handleExec(req Request) (Response, bool) {
 		return errorResponse(req.ID, CodeInternal, err.Error(), ""), false
 	}
 	node := findNode(s.store.Snapshot(), params.ServerID)
-	whitelist := s.whitelist
-	mgr := s.ops
 	s.mu.Unlock()
 
+	result, err := s.execByNode(node, ExecParams{
+		ServerID:      params.ServerID,
+		Command:       params.Command,
+		Intent:        params.Intent,
+		MaxLineLength: params.MaxLineLength,
+		TimeoutSec:    params.TimeoutSec,
+	})
+	if err != nil {
+		if errors.Is(err, errServerNotFound) {
+			return errorResponse(req.ID, CodeNotFound, "服务器未找到", "请先在连接面板中添加该服务器"), false
+		}
+		return errorResponse(req.ID, classifyExecError(err.Error()), err.Error(), ""), false
+	}
+	return okResponse(req.ID, result), false
+}
+
+// execByNode 执行语义单点：内核新鲜度 + 白名单预检（结构化拒绝文案与面板
+// 一致）+ 超时/行长归一。面板 exec 与 Agent 的 remote_exec 共用。
+func (s *Service) execByNode(node *connectionstore.Node, params ExecParams) (*ops.ExecResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.ensureOpsFreshLocked(); err != nil {
+		return nil, err
+	}
 	if node == nil || node.Type != connectionstore.KindConnection || node.Config == nil {
-		return errorResponse(req.ID, CodeNotFound, "服务器未找到", "请先在连接面板中添加该服务器"), false
+		return nil, errServerNotFound
 	}
 	host := node.Config.Host
-
-	// 白名单预检：执行内核内置同一道闸门（调用方绕不过），这里先挡一层，
-	// 为前端提供结构化的拒绝码与原因。
-	if check := whitelist.Check(params.Command, host); !check.Allowed {
-		return errorResponse(req.ID, CodeWhitelistDeny, check.Reason,
-			"可在 OpsCopilot 白名单配置中为该 IP 段放行对应命令"), false
+	if check := s.whitelist.Check(params.Command, host); !check.Allowed {
+		return nil, fmt.Errorf("%s（可在 OpsCopilot 白名单配置中为该 IP 段放行对应命令）", check.Reason)
 	}
-
 	timeout := s.execTimeout
 	if params.TimeoutSec > 0 {
 		timeout = time.Duration(params.TimeoutSec) * time.Second
@@ -387,16 +541,11 @@ func (s *Service) handleExec(req Request) (Response, bool) {
 	if maxLineLength <= 0 {
 		maxLineLength = 500
 	}
-
-	result, err := mgr.Exec(context.Background(), host, params.Command, ops.ExecOptions{
+	return s.ops.Exec(context.Background(), host, params.Command, ops.ExecOptions{
 		MaxLineLength: maxLineLength,
 		Timeout:       timeout,
 		Intent:        params.Intent,
 	})
-	if err != nil {
-		return errorResponse(req.ID, classifyExecError(err.Error()), err.Error(), ""), false
-	}
-	return okResponse(req.ID, result), false
 }
 
 // handleTransfer 启动异步传输任务（上传/下载），即刻返回任务 ID；
@@ -539,6 +688,96 @@ func (s *Service) handleTerminalResize(req Request) (Response, bool) {
 	return okResponse(req.ID, nil), false
 }
 
+// handleTerminalApproveHandoff 用户裁决待确认的终端写入（handoff 状态条）。
+func (s *Service) handleTerminalApproveHandoff(req Request) (Response, bool) {
+	var params struct {
+		SessionID string `json:"sessionId"`
+		Approved  bool   `json:"approved"`
+	}
+	if err := json.Unmarshal(req.Params, &params); err != nil || params.SessionID == "" {
+		return invalidParams(req.ID, "sessionId 必填"), false
+	}
+	s.pendingMu.Lock()
+	pending := s.pendingWrite
+	if pending != nil && pending.sessionID == params.SessionID {
+		s.pendingWrite = nil
+	} else {
+		pending = nil
+	}
+	s.pendingMu.Unlock()
+	if pending == nil {
+		return errorResponse(req.ID, CodeNotFound, "没有等待确认的终端写入", ""), false
+	}
+	pending.decided <- params.Approved
+	return okResponse(req.ID, nil), false
+}
+
+// terminalWriteForAgent Agent 写终端：manual 档位经 Desktop 审批（挂起等待
+// handoff 状态条裁决），auto 直接放行；全程审计。
+func (s *Service) terminalWriteForAgent(sessionID, data string) (map[string]any, error) {
+	if sessionID == "" || data == "" {
+		return nil, errors.New("session_id 与 data 必填")
+	}
+	mode := s.approvalMode()
+	if mode == "manual" {
+		s.pendingMu.Lock()
+		if s.pendingWrite != nil {
+			s.pendingMu.Unlock()
+			return nil, errors.New("已有等待用户确认的终端写入，请稍后重试")
+		}
+		pending := &pendingHandoff{sessionID: sessionID, data: data, decided: make(chan bool, 1)}
+		s.pendingWrite = pending
+		s.pendingMu.Unlock()
+		s.emitEvent(EventTerminalHandoff, map[string]any{
+			"sessionId": sessionID,
+			"data":      data,
+		})
+		select {
+		case approved := <-pending.decided:
+			if !approved {
+				return nil, errors.New("用户拒绝了本次终端写入")
+			}
+		case <-time.After(2 * time.Minute):
+			s.pendingMu.Lock()
+			if s.pendingWrite == pending {
+				s.pendingWrite = nil
+			}
+			s.pendingMu.Unlock()
+			return nil, errors.New("审批等待超时（2 分钟），写入已取消")
+		}
+	}
+	if err := s.terminals.write(sessionID, data); err != nil {
+		return nil, err
+	}
+	s.audit(auditRecord{
+		Time:   time.Now().Unix(),
+		Tool:   "terminal_write",
+		Server: sessionID,
+		Detail: fmt.Sprintf("%d 字节（%s 档位）", len(data), mode),
+		OK:     true,
+	})
+	return map[string]any{"session_id": sessionID, "written": len(data), "mode": mode}, nil
+}
+
+// handleSettingsGet 读取 Agent 工具相关设置（审批档位）。
+func (s *Service) handleSettingsGet(req Request) (Response, bool) {
+	return okResponse(req.ID, map[string]any{"approvalMode": s.approvalMode()}), false
+}
+
+// handleSettingsSet 更新审批档位（Desktop 设置项驱动）。
+func (s *Service) handleSettingsSet(req Request) (Response, bool) {
+	var params struct {
+		ApprovalMode string `json:"approvalMode"`
+	}
+	if err := json.Unmarshal(req.Params, &params); err != nil || params.ApprovalMode == "" {
+		return invalidParams(req.ID, "approvalMode 必填"), false
+	}
+	if err := s.setApprovalMode(params.ApprovalMode); err != nil {
+		return errorResponse(req.ID, CodeInvalidParams, err.Error(), ""), false
+	}
+	return okResponse(req.ID, nil), false
+}
+
 // serverResolveError 把服务器解析失败映射为结构化错误响应。
 func (s *Service) serverResolveError(id string, err error) Response {
 	if errors.Is(err, errServerNotFound) {
@@ -598,8 +837,10 @@ func classifyExecError(message string) string {
 	}
 }
 
-// Run 启动 stdio 主循环：每行一个请求、串行处理；数据目录由 OPSCOPILOT_DATA_DIR
-// 注入，缺省退回 exe 同目录（与 OpsCopilot 桌面 CLI 的路径语义一致）。
+// Run 启动 stdio 主循环：每行一个请求、串行处理；空闲超时（无活动且无
+// 占用）自动退出实现零常驻，下次请求由调用方按代次自动重启。数据目录由
+// OPSCOPILOT_DATA_DIR 注入，缺省退回 exe 同目录（与 OpsCopilot 桌面 CLI
+// 的路径语义一致）。
 func Run() int {
 	svc, err := NewService(resolveDataDir(), os.Stdout)
 	if err != nil {
@@ -607,30 +848,48 @@ func Run() int {
 		return 1
 	}
 
-	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	lines := make(chan []byte)
+	go func() {
+		scanner := bufio.NewScanner(os.Stdin)
+		scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+		for scanner.Scan() {
+			line := bytes.TrimSpace(scanner.Bytes())
+			if len(line) == 0 {
+				continue
+			}
+			lines <- append([]byte(nil), line...)
+		}
+		close(lines)
+	}()
 
-	for scanner.Scan() {
-		line := bytes.TrimSpace(scanner.Bytes())
-		if len(line) == 0 {
-			continue
-		}
-		var req Request
-		if err := json.Unmarshal(line, &req); err != nil {
-			svc.out.line(errorResponse("", CodeInvalidParams, "请求不是合法 JSON: "+err.Error(), ""))
-			continue
-		}
-		resp, exit := svc.handle(req)
-		svc.out.line(resp)
-		if exit {
-			break
+	idle := time.NewTicker(time.Minute)
+	defer idle.Stop()
+	for {
+		select {
+		case line, ok := <-lines:
+			if !ok {
+				svc.Close()
+				return 0
+			}
+			var req Request
+			if err := json.Unmarshal(line, &req); err != nil {
+				svc.out.line(errorResponse("", CodeInvalidParams, "请求不是合法 JSON: "+err.Error(), ""))
+				continue
+			}
+			resp, exit := svc.handle(req)
+			svc.out.line(resp)
+			if exit {
+				svc.Close()
+				return 0
+			}
+		case <-idle.C:
+			if svc.idleCheck() {
+				slog.Info("[ops-sidecar] 空闲超时，自动退出（下次使用自动重启）")
+				svc.Close()
+				return 0
+			}
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		fmt.Fprintf(os.Stderr, "[ops-sidecar] 读取请求失败: %v\n", err)
-	}
-	svc.Close()
-	return 0
 }
 
 func resolveDataDir() string {
@@ -641,6 +900,11 @@ func resolveDataDir() string {
 		return filepath.Dir(execPath)
 	}
 	return "."
+}
+
+// ResolveDataDir 数据目录解析的导出入口（--mcp 代理与 service 共用）。
+func ResolveDataDir() string {
+	return resolveDataDir()
 }
 
 func okResponse(id string, data any) Response {

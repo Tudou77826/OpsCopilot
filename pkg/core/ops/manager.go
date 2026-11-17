@@ -201,3 +201,10 @@ func (m *Manager) observe(kind string) {
 		m.config.Observe(kind)
 	}
 }
+
+// ConnectionCount 返回当前活跃连接数，供空闲判定使用。
+func (m *Manager) ConnectionCount() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return len(m.connections)
+}

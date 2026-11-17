@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"opscopilot/pkg/core/ops"
+	"opscopilot/pkg/terminalcontrol"
 )
 
 const (
@@ -47,18 +48,20 @@ type terminalSession struct {
 	deadAt time.Time
 	gate   *outputGate
 	ring   *ringBuffer
+	ctrl   *terminalcontrol.Controller
 }
 
 // terminalManager 终端会话注册表与字节流泵。
 type terminalManager struct {
-	emit func(event string, params any)
+	emit  func(event string, params any)
+	tcSvc *terminalcontrol.Service
 
 	mu       sync.Mutex
 	sessions map[string]*terminalSession
 }
 
-func newTerminalManager(emit func(event string, params any)) *terminalManager {
-	return &terminalManager{emit: emit, sessions: map[string]*terminalSession{}}
+func newTerminalManager(emit func(event string, params any), tcSvc *terminalcontrol.Service) *terminalManager {
+	return &terminalManager{emit: emit, tcSvc: tcSvc, sessions: map[string]*terminalSession{}}
 }
 
 // open 打开或重连终端会话。conn 由调用方保证已连接（Manager.Connect +
@@ -105,6 +108,16 @@ func (tm *terminalManager) open(conn *ops.Connection, sessionID string, cols, ro
 		alive: true,
 		gate:  newOutputGate(),
 		ring:  newRingBuffer(terminalRingCap),
+	}
+	// 接入终端控制通道（AI 读屏/审批写入的记账点）。失败降级为无控制通道
+	// 的普通终端，仅 Agent 观察工具不可用。
+	if tm.tcSvc != nil {
+		if ctrl, wrapped, attachErr := tm.tcSvc.AttachConnection(sessionID, uuid.NewString(), stdin); attachErr == nil {
+			sess.stdin = wrapped
+			sess.ctrl = ctrl
+		} else {
+			slog.Warn("terminal control attach failed", "sessionId", sessionID, "error", attachErr)
+		}
 	}
 	tm.mu.Lock()
 	tm.sessions[sessionID] = sess
@@ -220,8 +233,15 @@ func (tm *terminalManager) pump(sess *terminalSession, stdout io.Reader) {
 	}
 }
 
-// deliver 单段输出的一致出口：环形缓冲与事件按同序落盘；前端未就绪先入闸门。
+// deliver 单段输出的一致出口：控制通道 Feed 过滤 → 环形缓冲与事件按同序
+// 落盘；前端未就绪先入闸门。
 func (tm *terminalManager) deliver(sess *terminalSession, data []byte) {
+	if sess.ctrl != nil {
+		data = sess.ctrl.Feed(data)
+	}
+	if len(data) == 0 {
+		return
+	}
 	sess.gate.deliver(data, func(d []byte) {
 		sess.ring.append(d)
 		tm.emit(EventTerminalOutput, map[string]any{
@@ -311,9 +331,10 @@ func (tm *terminalManager) close(sessionID string) error {
 		return errTerminalUnknown
 	}
 	sess.mu.Lock()
-	stdin, conn := sess.stdin, sess.conn
+	stdin, conn, ctrl := sess.stdin, sess.conn, sess.ctrl
 	sess.alive = false
 	sess.stdin = nil
+	sess.ctrl = nil
 	sess.mu.Unlock()
 	sess.gate.close()
 	if stdin != nil {
@@ -321,6 +342,9 @@ func (tm *terminalManager) close(sessionID string) error {
 	}
 	if conn != nil {
 		_ = conn.Conn.CloseShell()
+	}
+	if ctrl != nil && tm.tcSvc != nil {
+		tm.tcSvc.Detach(sessionID, ctrl)
 	}
 	return nil
 }
@@ -373,4 +397,70 @@ func (tm *terminalManager) gcLocked() {
 			delete(tm.sessions, id)
 		}
 	}
+}
+
+// ---- Agent 工具（terminal_list / terminal_observe） ----
+
+// activeCount 存活会话数（空闲判定用）。
+func (tm *terminalManager) activeCount() int {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	count := 0
+	for _, sess := range tm.sessions {
+		sess.mu.Lock()
+		alive := sess.alive
+		sess.mu.Unlock()
+		if alive {
+			count++
+		}
+	}
+	return count
+}
+
+// listForAgent 当前终端会话清单（含死会话：可重连重放）。
+func (tm *terminalManager) listForAgent() ([]map[string]any, error) {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	result := []map[string]any{}
+	for _, sess := range tm.sessions {
+		sess.mu.Lock()
+		entry := map[string]any{"session_id": sess.id, "host": sess.host, "alive": sess.alive}
+		sess.mu.Unlock()
+		result = append(result, entry)
+	}
+	return result, nil
+}
+
+const observeLimitBytes = 16 << 10
+
+// observeForAgent 读屏：增量读控制器输出环（after = 上次 Sequence）。
+func (tm *terminalManager) observeForAgent(sessionID string, after int) (map[string]any, error) {
+	sess := tm.get(sessionID)
+	if sess == nil {
+		return nil, errTerminalUnknown
+	}
+	sess.mu.Lock()
+	ctrl := sess.ctrl
+	sess.mu.Unlock()
+	if ctrl == nil {
+		return nil, errors.New("该终端未接入控制通道（建立时间早于本能力或接入失败），请重开终端")
+	}
+	if after < 0 {
+		after = 0
+	}
+	snapshot, observation, err := ctrl.Observe(uint64(after), observeLimitBytes)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"session_id": sessionID,
+		"sequence":   snapshot.Sequence,
+		"revision":   snapshot.Revision,
+		"ready":      snapshot.Ready,
+		"owned":      snapshot.Owned,
+		"from":       observation.From,
+		"to":         observation.To,
+		"truncated":  observation.Truncated,
+		"text":       observation.Text,
+	}, nil
 }
