@@ -49,6 +49,23 @@ func (m *Manager) Connect(serverName string) (*ConnectResult, error) {
 		}, nil
 	}
 
+	conn, err := m.dial(serverName)
+	if err != nil {
+		return nil, err
+	}
+	m.connections[serverName] = conn
+
+	return &ConnectResult{
+		Success:     true,
+		Server:      serverName,
+		Message:     "连接成功",
+		HasRootAuth: conn.RootPassword != "",
+	}, nil
+}
+
+// dial 解析服务器配置并建立一条新连接（凭据 / 跳板机 / Dial），不写入连接池。
+// 持锁调用（Connect 与 ConnectIndependent 均在 m.mu 内）。
+func (m *Manager) dial(serverName string) (*Connection, error) {
 	// 从 sessions.json 查找服务器配置
 	serverConfig := findSessionConfig(m.sessionMgr.Snapshot(), serverName)
 	if serverConfig == nil {
@@ -126,14 +143,19 @@ func (m *Manager) Connect(serverName string) (*ConnectResult, error) {
 		ConnectedAt:  time.Now(),
 	}
 	conn.LastActive.Store(time.Now().UnixNano())
-	m.connections[serverName] = conn
+	return conn, nil
+}
 
-	return &ConnectResult{
-		Success:     true,
-		Server:      serverName,
-		Message:     "连接成功",
-		HasRootAuth: rootPassword != "",
-	}, nil
+// ConnectIndependent 为交互终端等会话级用途建立一条独立连接：不进共享池、
+// 不受空闲回收、生命周期完全归调用方（Close 即断）。对齐 OpsCopilot GUI
+// 「每页签一条连接」的模型——同服务器多终端互不影响。
+func (m *Manager) ConnectIndependent(serverName string) (*Connection, error) {
+	if serverName == "" {
+		return nil, fmt.Errorf("缺少 server 参数")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.dial(serverName)
 }
 
 // Disconnect 断开服务器连接

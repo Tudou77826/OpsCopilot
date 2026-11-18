@@ -1,7 +1,6 @@
 package opssidecar
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -26,20 +25,15 @@ const (
 var (
 	errTerminalUnknown = errors.New("终端会话不存在")
 	errTerminalDead    = errors.New("终端会话已断开")
-	errTerminalBusy    = errors.New("该服务器已有活动终端会话，请先关闭现有终端")
 )
 
-// terminalSession 一个交互终端会话。
-//
-// 与 OpsCopilot GUI 的「每页签独占连接」不同，sidecar 的终端与 exec/传输共享
-// Manager 连接池（凭据解析、跳板机、空闲回收全部单点复用）。代价是同一服务器
-// 同一时刻只允许一个活动终端：底层 sshclient 以 lastSession 归属 Resize 与
-// CloseShell，多个并发 PTY 会互相错伤。会话独立于 Desktop 侧连接存活——
-// webview 重载后按 sessionId 重放 ring 恢复现场；SSH 侧断开后会话标记 dead，
-// 同 sessionId 重开即重连服务器（先写模式复位序列再重放）。
+// terminalSession 一个交互终端会话（= 一条独立 SSH/telnet 连接，对齐
+// OpsCopilot「每页签一条连接」）。连接由 Manager.ConnectIndependent 拨出，
+// 不进共享池、不受空闲回收；关会话即关连接。同服务器多会话互不影响。
 type terminalSession struct {
-	id   string
-	host string
+	id       string
+	serverID string // 树节点 ID（重连时再拨号用）
+	host     string
 
 	mu     sync.Mutex
 	stdin  io.WriteCloser
@@ -55,62 +49,70 @@ type terminalSession struct {
 type terminalManager struct {
 	emit  func(event string, params any)
 	tcSvc *terminalcontrol.Service
+	dial  func(serverID string) (*ops.Connection, error) // ConnectIndependent 包装
 
 	mu       sync.Mutex
 	sessions map[string]*terminalSession
 }
 
-func newTerminalManager(emit func(event string, params any), tcSvc *terminalcontrol.Service) *terminalManager {
-	return &terminalManager{emit: emit, tcSvc: tcSvc, sessions: map[string]*terminalSession{}}
+func newTerminalManager(emit func(event string, params any), tcSvc *terminalcontrol.Service, dial func(string) (*ops.Connection, error)) *terminalManager {
+	return &terminalManager{emit: emit, tcSvc: tcSvc, dial: dial, sessions: map[string]*terminalSession{}}
 }
 
-// open 打开或重连终端会话。conn 由调用方保证已连接（Manager.Connect +
-// GetConnection）。sessionID 非空时按语义分流：存活会话重挂（重放 + 换新
-// 闸门），死会话同 id 重连服务器；空 id 新开。终端模式复位序列不经过
-// sidecar——Desktop 侧直接写本地 xterm 实例（OpsCopilot Issue #65/#67 的
-// 语义：复位的是本地实例的残留模式，与远端无关）。
-func (tm *terminalManager) open(conn *ops.Connection, sessionID string, cols, rows int) (map[string]any, error) {
+// open 打开（或按 sessionId 重连）终端会话。sessionID 非空且存在时为重挂/
+// 重连语义；空 id 新建。返回 sessionId 与重放内容（明文，可空）。
+func (tm *terminalManager) open(serverID, sessionID string, cols, rows int) (map[string]any, error) {
 	if cols <= 0 {
 		cols = 80
 	}
 	if rows <= 0 {
 		rows = 24
 	}
-
 	tm.mu.Lock()
 	tm.gcLocked()
+	existing := tm.sessions[sessionID]
 	tm.mu.Unlock()
 
-	if sessionID != "" {
-		tm.mu.Lock()
-		existing := tm.sessions[sessionID]
-		tm.mu.Unlock()
-		if existing != nil && existing.host == conn.Host {
-			return tm.reattach(existing, conn, sessionID, cols, rows)
-		}
-	}
-	if alive := tm.findAlive(conn.Host); alive != nil {
-		return nil, errTerminalBusy
+	if sessionID != "" && existing != nil {
+		return tm.reattach(existing, sessionID, cols, rows)
 	}
 	if sessionID == "" {
 		sessionID = uuid.NewString()
 	}
+	conn, err := tm.dial(serverID)
+	if err != nil {
+		return nil, err
+	}
+	sess, err := tm.startSession(sessionID, serverID, conn, cols, rows, "")
+	if err != nil {
+		_ = conn.Conn.Close()
+		return nil, err
+	}
+	tm.mu.Lock()
+	tm.sessions[sessionID] = sess
+	tm.mu.Unlock()
+	slog.Debug("terminal opened", "sessionId", sessionID, "server", serverID)
+	return map[string]any{"sessionId": sessionID}, nil
+}
 
+// startSession 在给定连接上启动 PTY 会话与读取泵；reset 为重连时的本地
+// 模式复位序列占位（实际复位由 Desktop 写本地 xterm，见 design）。
+func (tm *terminalManager) startSession(sessionID, serverID string, conn *ops.Connection, cols, rows int, _ string) (*terminalSession, error) {
 	stdin, stdout, err := conn.Conn.StartShell(cols, rows)
 	if err != nil {
 		return nil, fmt.Errorf("建立 PTY 会话失败: %w", err)
 	}
 	sess := &terminalSession{
-		id:    sessionID,
-		host:  conn.Host,
-		stdin: stdin,
-		conn:  conn,
-		alive: true,
-		gate:  newOutputGate(),
-		ring:  newRingBuffer(terminalRingCap),
+		id:       sessionID,
+		serverID: serverID,
+		host:     conn.Host,
+		stdin:    stdin,
+		conn:     conn,
+		alive:    true,
+		gate:     newOutputGate(),
+		ring:     newRingBuffer(terminalRingCap),
 	}
-	// 接入终端控制通道（AI 读屏/审批写入的记账点）。失败降级为无控制通道
-	// 的普通终端，仅 Agent 观察工具不可用。
+	// 接入终端控制通道（AI 读屏/审批写入的记账点）。失败降级为普通终端。
 	if tm.tcSvc != nil {
 		if ctrl, wrapped, attachErr := tm.tcSvc.AttachConnection(sessionID, uuid.NewString(), stdin); attachErr == nil {
 			sess.stdin = wrapped
@@ -119,56 +121,54 @@ func (tm *terminalManager) open(conn *ops.Connection, sessionID string, cols, ro
 			slog.Warn("terminal control attach failed", "sessionId", sessionID, "error", attachErr)
 		}
 	}
-	tm.mu.Lock()
-	tm.sessions[sessionID] = sess
-	tm.mu.Unlock()
-	slog.Debug("terminal opened", "sessionId", sessionID, "host", conn.Host)
 	go tm.pump(sess, stdout)
-	return map[string]any{"sessionId": sessionID}, nil
+	return sess, nil
 }
 
 // reattach 重挂会话：存活 → 换新闸门等 terminal/ready，环形缓冲整段重放；
-// 已死 → 同 sessionId 重连服务器并重放旧现场（模式复位由 Desktop 写本地
-// xterm，在 ready 前完成，顺序由闸门保证）。
-func (tm *terminalManager) reattach(sess *terminalSession, conn *ops.Connection, sessionID string, cols, rows int) (map[string]any, error) {
+// 已死 → 同 sessionId 重新独立拨号并重放旧现场（模式复位由 Desktop 写本地 xterm）。
+func (tm *terminalManager) reattach(sess *terminalSession, sessionID string, cols, rows int) (map[string]any, error) {
 	sess.mu.Lock()
-	defer sess.mu.Unlock()
-
 	if sess.alive {
 		old := sess.gate
 		sess.gate = newOutputGate()
 		replay := sess.ring.snapshot()
-		// 旧闸门内尚未冲刷的输出并入 ring 与重放，保证零丢失
 		for _, chunk := range old.markReady() {
 			sess.ring.append(chunk)
 			replay = append(replay, chunk...)
 		}
-		return map[string]any{
-			"sessionId": sessionID,
-			"replay":    base64.StdEncoding.EncodeToString(replay),
-		}, nil
+		sess.mu.Unlock()
+		return map[string]any{"sessionId": sessionID, "replay": string(replay)}, nil
 	}
+	serverID := sess.serverID
+	sess.mu.Unlock()
 
-	stdin, stdout, err := conn.Conn.StartShell(cols, rows)
+	conn, err := tm.dial(serverID)
 	if err != nil {
-		return nil, fmt.Errorf("重连 PTY 会话失败: %w", err)
+		return nil, fmt.Errorf("重连失败: %w", err)
 	}
-	sess.stdin = stdin
-	sess.conn = conn
-	sess.gate = newOutputGate()
-	sess.alive = true
-	sess.deadAt = time.Time{}
+	sess.mu.Lock()
 	replay := sess.ring.snapshot()
-	slog.Debug("terminal reconnected", "sessionId", sessionID, "host", conn.Host)
-	go tm.pump(sess, stdout)
-	return map[string]any{
-		"sessionId": sessionID,
-		"replay":    base64.StdEncoding.EncodeToString(replay),
-	}, nil
+	sess.mu.Unlock()
+	// 旧连接已死，直接整条替换；ring 保留继续累计
+	fresh, err := tm.startSession(sessionID, serverID, conn, cols, rows, "")
+	if err != nil {
+		_ = conn.Conn.Close()
+		return nil, err
+	}
+	sess.mu.Lock()
+	oldRing := sess.ring
+	sess.mu.Unlock()
+	fresh.ring = oldRing
+	tm.mu.Lock()
+	tm.sessions[sessionID] = fresh
+	tm.mu.Unlock()
+	slog.Debug("terminal reconnected", "sessionId", sessionID)
+	return map[string]any{"sessionId": sessionID, "replay": string(replay)}, nil
 }
 
 // pump 终端输出泵：32KB 读 → 256KB 合帧（或 40ms 延迟冲刷）→ 闸门/环形缓冲/
-// 事件。所有 frame 操作收敛在 pump goroutine 内，无需额外加锁。
+// terminal-data:{id} 事件（明文）。
 func (tm *terminalManager) pump(sess *terminalSession, stdout io.Reader) {
 	chunks := make(chan []byte)
 	errCh := make(chan error, 1)
@@ -234,7 +234,7 @@ func (tm *terminalManager) pump(sess *terminalSession, stdout io.Reader) {
 }
 
 // deliver 单段输出的一致出口：控制通道 Feed 过滤 → 环形缓冲与事件按同序
-// 落盘；前端未就绪先入闸门。
+// 落盘；前端未就绪先入闸门。事件名与载荷对齐 ops：terminal-data:{id} 明文。
 func (tm *terminalManager) deliver(sess *terminalSession, data []byte) {
 	if sess.ctrl != nil {
 		data = sess.ctrl.Feed(data)
@@ -244,15 +244,12 @@ func (tm *terminalManager) deliver(sess *terminalSession, data []byte) {
 	}
 	sess.gate.deliver(data, func(d []byte) {
 		sess.ring.append(d)
-		tm.emit(EventTerminalOutput, map[string]any{
-			"sessionId": sess.id,
-			"data":      base64.StdEncoding.EncodeToString(d),
-		})
+		tm.emit(EventTerminalDataPrefix+sess.id, string(d))
 	})
 }
 
-// finish SSH 流结束（EOF 或错误）后标记会话死亡并通知前端；会话记录保留
-// ring，供同 sessionId 重连重放。
+// finish SSH 流结束（EOF 或错误）：关闭整条独立连接，标记死会话（ring 保留
+// 供重连重放），下发 session-disconnected（载荷对齐 ops）。
 func (tm *terminalManager) finish(sess *terminalSession, err error) {
 	sess.mu.Lock()
 	if !sess.alive {
@@ -261,20 +258,27 @@ func (tm *terminalManager) finish(sess *terminalSession, err error) {
 	}
 	sess.alive = false
 	sess.stdin = nil
+	conn := sess.conn
+	sess.conn = nil
 	sess.deadAt = time.Now()
 	sess.mu.Unlock()
 
-	reason := "远程主机关闭了连接"
-	if err != nil && err != io.EOF {
-		reason = fmt.Sprintf("连接错误: %v", err)
+	if conn != nil {
+		_ = conn.Conn.Close()
 	}
-	tm.emit(EventTerminalClosed, map[string]any{
-		"sessionId": sess.id,
-		"reason":    reason,
+	reason, message := "eof", "远程主机关闭了连接"
+	if err != nil && err != io.EOF {
+		reason, message = "error", fmt.Sprintf("连接错误: %v", err)
+	}
+	tm.emit(EventSessionDisconnected, map[string]any{
+		"sessionId":   sess.id,
+		"reason":      reason,
+		"message":     message,
+		"timestamp":   time.Now().Unix(),
+		"recoverable": true,
 	})
 }
 
-// write 向终端写入按键数据。
 func (tm *terminalManager) write(sessionID, data string) error {
 	sess := tm.get(sessionID)
 	if sess == nil {
@@ -290,7 +294,7 @@ func (tm *terminalManager) write(sessionID, data string) error {
 	return err
 }
 
-// ready 前端监听就绪：冲刷闸门暂存的首段输出（ring 与事件同序补记）。
+// ready 前端监听就绪：冲刷闸门暂存的首段输出。
 func (tm *terminalManager) ready(sessionID string) error {
 	sess := tm.get(sessionID)
 	if sess == nil {
@@ -298,15 +302,11 @@ func (tm *terminalManager) ready(sessionID string) error {
 	}
 	for _, chunk := range sess.gate.markReady() {
 		sess.ring.append(chunk)
-		tm.emit(EventTerminalOutput, map[string]any{
-			"sessionId": sess.id,
-			"data":      base64.StdEncoding.EncodeToString(chunk),
-		})
+		tm.emit(EventTerminalDataPrefix+sess.id, string(chunk))
 	}
 	return nil
 }
 
-// resize 同步终端尺寸到远端（SSH WindowChange / telnet NAWS）。
 func (tm *terminalManager) resize(sessionID string, cols, rows int) error {
 	sess := tm.get(sessionID)
 	if sess == nil {
@@ -321,7 +321,7 @@ func (tm *terminalManager) resize(sessionID string, cols, rows int) error {
 	return conn.Conn.Resize(cols, rows)
 }
 
-// close 关闭并移除会话：会话级关闭不殃及共享连接（exec/传输继续可用）。
+// close 关闭并移除会话（整条独立连接随之断开）。
 func (tm *terminalManager) close(sessionID string) error {
 	tm.mu.Lock()
 	sess := tm.sessions[sessionID]
@@ -334,6 +334,7 @@ func (tm *terminalManager) close(sessionID string) error {
 	stdin, conn, ctrl := sess.stdin, sess.conn, sess.ctrl
 	sess.alive = false
 	sess.stdin = nil
+	sess.conn = nil
 	sess.ctrl = nil
 	sess.mu.Unlock()
 	sess.gate.close()
@@ -341,7 +342,7 @@ func (tm *terminalManager) close(sessionID string) error {
 		_ = stdin.Close()
 	}
 	if conn != nil {
-		_ = conn.Conn.CloseShell()
+		_ = conn.Conn.Close()
 	}
 	if ctrl != nil && tm.tcSvc != nil {
 		tm.tcSvc.Detach(sessionID, ctrl)
@@ -349,7 +350,6 @@ func (tm *terminalManager) close(sessionID string) error {
 	return nil
 }
 
-// closeAll 服务退出时关闭全部会话。
 func (tm *terminalManager) closeAll() {
 	tm.mu.Lock()
 	ids := make([]string, 0, len(tm.sessions))
@@ -359,43 +359,6 @@ func (tm *terminalManager) closeAll() {
 	tm.mu.Unlock()
 	for _, id := range ids {
 		_ = tm.close(id)
-	}
-}
-
-// cancelAll 预留对称出口（当前无异步任务，保持与服务 Close 的一致形态）。
-func (tm *terminalManager) cancelAll() {}
-
-func (tm *terminalManager) get(sessionID string) *terminalSession {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
-	return tm.sessions[sessionID]
-}
-
-func (tm *terminalManager) findAlive(host string) *terminalSession {
-	tm.mu.Lock()
-	defer tm.mu.Unlock()
-	for _, sess := range tm.sessions {
-		sess.mu.Lock()
-		alive := sess.alive
-		sess.mu.Unlock()
-		if alive && sess.host == host {
-			return sess
-		}
-	}
-	return nil
-}
-
-// gcLocked 丢弃超时的死会话（重放窗口有限，避免注册表无限增长）。
-func (tm *terminalManager) gcLocked() {
-	cutoff := time.Now().Add(-terminalDeadSessionTTL)
-	for id, sess := range tm.sessions {
-		sess.mu.Lock()
-		stale := !sess.alive && !sess.deadAt.IsZero() && sess.deadAt.Before(cutoff)
-		sess.mu.Unlock()
-		if stale {
-			sess.gate.close()
-			delete(tm.sessions, id)
-		}
 	}
 }
 
@@ -443,7 +406,7 @@ func (tm *terminalManager) observeForAgent(sessionID string, after int) (map[str
 	ctrl := sess.ctrl
 	sess.mu.Unlock()
 	if ctrl == nil {
-		return nil, errors.New("该终端未接入控制通道（建立时间早于本能力或接入失败），请重开终端")
+		return nil, errors.New("该终端未接入控制通道，请重开终端")
 	}
 	if after < 0 {
 		after = 0
@@ -463,4 +426,24 @@ func (tm *terminalManager) observeForAgent(sessionID string, after int) (map[str
 		"truncated":  observation.Truncated,
 		"text":       observation.Text,
 	}, nil
+}
+
+func (tm *terminalManager) get(sessionID string) *terminalSession {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	return tm.sessions[sessionID]
+}
+
+// gcLocked 丢弃超时的死会话（重放窗口有限，避免注册表无限增长）。
+func (tm *terminalManager) gcLocked() {
+	cutoff := time.Now().Add(-terminalDeadSessionTTL)
+	for id, sess := range tm.sessions {
+		sess.mu.Lock()
+		stale := !sess.alive && !sess.deadAt.IsZero() && sess.deadAt.Before(cutoff)
+		sess.mu.Unlock()
+		if stale {
+			sess.gate.close()
+			delete(tm.sessions, id)
+		}
+	}
 }

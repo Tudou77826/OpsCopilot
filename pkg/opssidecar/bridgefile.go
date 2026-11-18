@@ -1,52 +1,30 @@
 package opssidecar
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
-	"strconv"
+	"time"
 )
 
-// 服务发现文件：MCP 桥模式（--mcp）据此找到 service 进程的回环监听。
-// token 首次生成后持久化（0600），service 重启不换——代理进程的凭据
-// 跨重启有效；端口固定（可被 OPSCOPILOT_SIDECAR_PORT 覆盖），同一数据
-// 目录同时只允许一个 service 实例（端口占用即互斥）。
+// 服务发现文件：仅作 --mcp 代理的「拉起兜底」——service 空闲退出后，代理
+// 读该文件探测（不可连则拉起 service 子进程并重读）。主路径是 Desktop 经
+// bridge/info 取凭据、env 直传（见 mcpbridge.go 头注），不经过本文件。
+// 每次启动覆写：随机端口 + 新 token，双开实例各自一份（last-writer-wins，
+// 同数据目录功能等价）。
 
-const (
-	bridgeFileName    = "ops-sidecar-service.json"
-	defaultBridgePort = 47319
-	bridgePortEnv     = "OPSCOPILOT_SIDECAR_PORT"
-)
+const bridgeFileName = "ops-sidecar-service.json"
 
 type BridgeInfo struct {
-	Port  int    `json:"port"`
-	Token string `json:"token"`
-	PID   int    `json:"pid"`
+	Address string `json:"address"`
+	Token   string `json:"token"`
+	PID     int    `json:"pid"`
 }
 
-func (b BridgeInfo) address() string {
-	return net.JoinHostPort("127.0.0.1", strconv.Itoa(b.Port))
-}
+func bridgeFilePath(dataDir string) string { return filepath.Join(dataDir, bridgeFileName) }
 
-func bridgeFilePath(dataDir string) string {
-	return filepath.Join(dataDir, bridgeFileName)
-}
-
-// resolveBridgePort 端口来源：环境变量 > 固定默认值。
-func resolveBridgePort() int {
-	if raw := os.Getenv(bridgePortEnv); raw != "" {
-		if port, err := strconv.Atoi(raw); err == nil && port > 0 && port < 65536 {
-			return port
-		}
-	}
-	return defaultBridgePort
-}
-
-// loadBridgeInfo 读取发现文件；缺失或损坏返回错误。
 func loadBridgeInfo(dataDir string) (BridgeInfo, error) {
 	raw, err := os.ReadFile(bridgeFilePath(dataDir))
 	if err != nil {
@@ -56,14 +34,12 @@ func loadBridgeInfo(dataDir string) (BridgeInfo, error) {
 	if err := json.Unmarshal(raw, &info); err != nil {
 		return BridgeInfo{}, err
 	}
-	if info.Port <= 0 || len(info.Token) != 64 {
+	if info.Address == "" || len(info.Token) != 64 {
 		return BridgeInfo{}, fmt.Errorf("服务发现文件内容无效")
 	}
 	return info, nil
 }
 
-// writeBridgeInfo 落盘发现文件（数据目录内，与 sessions.json 同级；
-// 目录权限沿用现有约定，不额外收紧）。
 func writeBridgeInfo(dataDir string, info BridgeInfo) error {
 	raw, err := json.Marshal(info)
 	if err != nil {
@@ -72,14 +48,11 @@ func writeBridgeInfo(dataDir string, info BridgeInfo) error {
 	return os.WriteFile(bridgeFilePath(dataDir), raw, 0o600)
 }
 
-// removeBridgeInfo service 退出时清理，避免陈旧 PID 误导代理。
-func removeBridgeInfo(dataDir string) {
-	_ = os.Remove(bridgeFilePath(dataDir))
-}
+func removeBridgeInfo(dataDir string) { _ = os.Remove(bridgeFilePath(dataDir)) }
 
-// bridgeAlive 探测发现文件指向的 service 是否可连。
+// bridgeAlive 探测发现文件指向的 service 是否可连（拉起兜底用）。
 func bridgeAlive(info BridgeInfo) bool {
-	conn, err := net.DialTimeout("tcp4", info.address(), dialTimeout)
+	conn, err := net.DialTimeout("tcp4", info.Address, dialTimeout)
 	if err != nil {
 		return false
 	}
@@ -87,14 +60,17 @@ func bridgeAlive(info BridgeInfo) bool {
 	return true
 }
 
-// ensureBridgeToken 读取或首次生成 64 位十六进制 token（持久化，跨重启稳定）。
-func ensureBridgeToken(dataDir string) (string, error) {
-	if existing, err := loadBridgeInfo(dataDir); err == nil {
-		return existing.Token, nil
+// bridgeStalePID 发现文件里的进程已死（区分「service 没跑」与「文件陈旧」）。
+func bridgeStalePID(info BridgeInfo) bool {
+	if info.PID <= 0 {
+		return true
 	}
-	key := make([]byte, 32)
-	if _, err := rand.Read(key); err != nil {
-		return "", err
+	proc, err := os.FindProcess(info.PID)
+	if err != nil {
+		return true
 	}
-	return hex.EncodeToString(key), nil
+	// Windows 上 FindProcess 总成功；用信号 0 探活
+	return proc.Signal(os.Signal(nil)) != nil
 }
+
+var _ = time.Second
