@@ -123,13 +123,17 @@ func NewService(dataDir string, out io.Writer) (*Service, error) {
 	return s, nil
 }
 
-// dialTerminal 终端独立拨号（serverID = 树节点 ID；按 host 再拨）。
+// dialTerminal 终端独立拨号（serverID = 树节点 ID；按节点配置精确拨）。
+// 不能按 host 再拨：同 host 多节点（127.0.0.1 的 ssh/telnet 并存）时
+// findSessionConfig 的 host-first 匹配会永远命中第一条。
 func (s *Service) dialTerminal(serverID string) (*ops.Connection, error) {
-	mgr, host, err := s.resolveServer(serverID)
-	if err != nil {
-		return nil, err
+	s.mu.Lock()
+	node := findNode(s.store.Snapshot(), serverID)
+	s.mu.Unlock()
+	if node == nil || node.Type != connectionstore.KindConnection || node.Config == nil {
+		return nil, errServerNotFound
 	}
-	return mgr.ConnectIndependent(host)
+	return s.ops.ConnectIndependentNode(node)
 }
 
 // audit 追加一条审计记录到 ops-audit.jsonl。
@@ -152,7 +156,8 @@ func (s *Service) emitEvent(event string, params any) {
 
 var errServerNotFound = errors.New("服务器未找到")
 
-// resolveServer 按树节点 ID 解析当前内核与主机（串行路径专用）。
+// resolveServer 按树节点 ID 解析当前内核与主机（FT/MCP 等按 host 复用
+// 共享池配置的路径专用；终端独立拨号走 ConnectIndependentNode）。
 func (s *Service) resolveServer(serverID string) (*ops.Manager, string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

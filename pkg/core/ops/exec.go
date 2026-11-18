@@ -71,7 +71,12 @@ func (m *Manager) dial(serverName string) (*Connection, error) {
 	if serverConfig == nil {
 		return nil, fmt.Errorf("服务器 '%s' 未找到", serverName)
 	}
+	return m.dialConfig(serverName, serverConfig)
+}
 
+// dialConfig 按给定配置独立拨号（密码来源：secretstore → 配置明文）。
+// dial（host-first 查配置）与 ConnectIndependentNode（节点精确拨号）共用。
+func (m *Manager) dialConfig(serverName string, serverConfig *remote.ConnectConfig) (*Connection, error) {
 	// 从 secretstore 获取密码
 	password, err := m.secretStore.Get("opscopilot", serverConfig.Host+"_"+serverConfig.User)
 	if err != nil {
@@ -156,6 +161,27 @@ func (m *Manager) ConnectIndependent(serverName string) (*Connection, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.dial(serverName)
+}
+
+// ConnectIndependentNode 按树节点配置建立独立连接（会话级，语义同
+// ConnectIndependent）。dial 的 serverName → findSessionConfig 是 host-first
+// 匹配，同 host 多节点（127.0.0.1 的 ssh/telnet 并存）会永远命中第一条；
+// 终端按节点 ID 精确拨号必须携带节点自身的完整配置。
+func (m *Manager) ConnectIndependentNode(node *connectionstore.Node) (*Connection, error) {
+	if node == nil || node.Type != connectionstore.KindConnection || node.Config == nil {
+		return nil, fmt.Errorf("节点不是可拨号的连接")
+	}
+	cfg := node.Config
+	if cfg.Host == "" {
+		return nil, fmt.Errorf("节点缺少 host 配置")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	conn, err := m.dialConfig(cfg.Name, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
 }
 
 // Disconnect 断开服务器连接
