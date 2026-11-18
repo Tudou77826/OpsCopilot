@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"log/slog"
+	"net/http"
 	"strings"
 	"time"
 
@@ -119,6 +121,59 @@ func mcpError(id json.RawMessage, code int, message string) json.RawMessage {
 	})
 	return raw
 }
+
+// serveHTTP MCP Streamable HTTP 端点（POST /mcp）：Authorization 头携带
+// 组合 token（"hint.baseToken"，与 stdio 代理同一语义），body 为单条 JSON-RPC
+// 消息。OpenCode 等 ACP 宿主只声明 mcpCapabilities.http——HTTP 直连省去
+// stdio 代理中转，Desktop 经 mcpServers 直接下发本端点。
+func (g *mcpGateway) handleHTTP(w http.ResponseWriter, r *http.Request) {
+	slog.Info("[ops-mcp-http] 请求", "method", r.Method, "path", r.URL.Path, "auth", r.Header.Get("Authorization") != "")
+	if r.Method != http.MethodPost {
+		http.Error(w, "仅支持 POST", http.StatusMethodNotAllowed)
+		return
+	}
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	hint, matched := splitSessionToken(token, g.token)
+	if !matched && subtle.ConstantTimeCompare([]byte(token), []byte(g.token)) != 1 {
+		http.Error(w, "未授权", http.StatusUnauthorized)
+		return
+	}
+	raw, err := io.ReadAll(io.LimitReader(r.Body, mcpMaxMessage+1024))
+	if err != nil || len(raw) > mcpMaxMessage {
+		http.Error(w, "消息超长", http.StatusRequestEntityTooLarge)
+		return
+	}
+	reply, err := g.handleMessage(hint, raw)
+	if err != nil {
+		if err == errMCPNotification {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		http.Error(w, "消息解析失败", http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(reply)
+}
+
+// oneConnListener 把单个已建立连接包装成 http.Server 可 Serve 的监听器
+// （TCP 桥与 HTTP 端点共用同一端口的嗅探分派用）。
+type oneConnListener struct {
+	conn net.Conn
+	done chan struct{}
+}
+
+func (l *oneConnListener) Accept() (net.Conn, error) {
+	select {
+	case <-l.done:
+		return nil, io.EOF
+	default:
+		close(l.done)
+		return l.conn, nil
+	}
+}
+func (l *oneConnListener) Close() error   { return nil }
+func (l *oneConnListener) Addr() net.Addr { return l.conn.LocalAddr() }
 
 func (g *mcpGateway) handleMessage(hint string, raw []byte) (json.RawMessage, error) {
 	var req mcpRequest

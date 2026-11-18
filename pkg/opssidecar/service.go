@@ -12,6 +12,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -135,6 +136,29 @@ func (s *Service) dialTerminal(serverID string) (*ops.Connection, error) {
 	}
 	return s.ops.ConnectIndependentNode(node)
 }
+
+// looksLikeHTTP 判断连接首 8 字节是否为 HTTP 请求行（方法 + 空格 + 路径）。
+func looksLikeHTTP(head []byte) bool {
+	if len(head) < 8 {
+		return false
+	}
+	line := string(head)
+	for _, m := range []string{"GET ", "POST", "HEAD", "PUT ", "DELE", "OPTI"} {
+		if line[:4] == m {
+			return true
+		}
+	}
+	return false
+}
+
+// bufferedConn 用嗅探阶段建立的 bufio.Reader 包装连接（Peek 过的字节
+// 不丢失，后续读经由缓冲层继续）。
+type bufferedConn struct {
+	net.Conn
+	r *bufio.Reader
+}
+
+func (c *bufferedConn) Read(p []byte) (int, error) { return c.r.Read(p) }
 
 // audit 追加一条审计记录到 ops-audit.jsonl。
 func (s *Service) audit(rec auditRecord) {
@@ -320,13 +344,29 @@ func (s *Service) startBridge() {
 	s.bridgeTok = info.Token
 	s.bridgeMu.Unlock()
 	gateway := &mcpGateway{svc: s, token: info.Token}
+	httpSrv := &http.Server{Handler: http.HandlerFunc(gateway.handleHTTP)}
 	go func() {
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
 				return
 			}
-			go gateway.serveConn(conn)
+			go func() {
+				// 协议嗅探：HTTP 请求（POST/GET/OPTIONS）走 MCP HTTP 端点，
+				// 其余（NDJSON 信封）走 stdio 代理的 TCP 桥（遗留兼容）。
+				// Peek 不消费字节——HTTP 分支把带缓冲的连接交给 http.Server，
+				// 避免请求行被啃掉前 8 字节。
+				reader := bufio.NewReader(conn)
+				head, err := reader.Peek(8)
+				if err != nil || !looksLikeHTTP(head) {
+					gateway.serveConn(conn)
+					return
+				}
+				_ = httpSrv.Serve(&oneConnListener{
+					conn: &bufferedConn{Conn: conn, r: reader},
+					done: make(chan struct{}),
+				})
+			}()
 		}
 	}()
 	slog.Info("[ops-sidecar] MCP 桥已就绪", "address", info.Address)
