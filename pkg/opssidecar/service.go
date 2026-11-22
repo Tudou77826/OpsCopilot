@@ -26,6 +26,7 @@ import (
 	"opscopilot/pkg/core/ops"
 	"opscopilot/pkg/core/security"
 	"opscopilot/pkg/remote"
+	"opscopilot/pkg/secretstore"
 	"opscopilot/pkg/terminalcontrol"
 )
 
@@ -52,6 +53,8 @@ type Service struct {
 	terminals *terminalManager
 	ft        *ftHub
 	tcSvc     *terminalcontrol.Service
+	secrets   secretstore.SecretStore
+	projects  *projectPool
 
 	// MCP 桥（随机端口 + 内存态 token；Desktop 经 bridge/info 取凭据 env 直传）
 	bridgeMu   sync.Mutex
@@ -119,6 +122,8 @@ func NewService(dataDir string, out io.Writer) (*Service, error) {
 	})
 	s.terminals = newTerminalManager(s.emitEvent, s.tcSvc, s.dialTerminal)
 	s.ft = newFtHub(s, s.emitEvent)
+	s.secrets = secretstore.NewKeyringStore()
+	s.projects = newProjectPool()
 	s.lastTouch.Store(time.Now().Unix())
 	s.startBridge()
 	return s, nil
@@ -272,6 +277,9 @@ func (s *Service) Close() {
 	}
 	if s.ft != nil {
 		s.ft.cancelAll()
+	}
+	if s.projects != nil {
+		s.projects.closeAll()
 	}
 	s.rejectAllPendingLocked()
 	if s.ops != nil {
@@ -449,6 +457,24 @@ func (s *Service) handle(req Request) (resp Response, exit bool) {
 		return s.handleFileAccessGet(req)
 	case MethodFileAccessSet:
 		return s.handleFileAccessSet(req)
+	case MethodProjectConnectionsList:
+		return s.handleProjectConnectionsList(req)
+	case MethodProjectConnectionCreate:
+		return s.handleProjectConnectionCreate(req)
+	case MethodProjectConnectionUpdate:
+		return s.handleProjectConnectionUpdate(req)
+	case MethodProjectConnectionDelete:
+		return s.handleProjectConnectionDelete(req)
+	case MethodProjectConnectionTest:
+		return s.handleProjectConnectionTest(req)
+	case MethodProjectFSList:
+		return s.handleProjectFSList(req)
+	case MethodProjectFSStat:
+		return s.handleProjectFSStat(req)
+	case MethodProjectFSPreview:
+		return s.handleProjectFSPreview(req)
+	case MethodProjectFSListFiles:
+		return s.handleProjectFSListFiles(req)
 	case MethodBridgeInfo:
 		addr, token := s.bridgeInfo()
 		return okResponse(req.ID, map[string]any{"address": addr, "token": token}), false

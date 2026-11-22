@@ -101,6 +101,17 @@ const (
 	MethodFileAccessGet  = "file-access/get"
 	MethodFileAccessSet  = "file-access/set"
 
+	// 远程项目连接管理与只读文件浏览（AAW 远程项目）
+	MethodProjectConnectionsList  = "project/connections-list"
+	MethodProjectConnectionCreate = "project/connection-create"
+	MethodProjectConnectionUpdate = "project/connection-update"
+	MethodProjectConnectionDelete = "project/connection-delete"
+	MethodProjectConnectionTest   = "project/connection-test"
+	MethodProjectFSList           = "project/fs-list"
+	MethodProjectFSStat           = "project/fs-stat"
+	MethodProjectFSPreview        = "project/fs-preview"
+	MethodProjectFSListFiles      = "project/fs-list-files"
+
 	// MCP 桥（Desktop 经 env 把地址/token 直传给 --mcp 代理）
 	MethodBridgeInfo = "bridge/info"
 
@@ -128,8 +139,12 @@ const (
 	CodeNotFound       = "not_found"
 	CodeWhitelistDeny  = "whitelist_denied"
 	CodeNoPassword     = "no_password"
-	CodeConnectFailed  = "connect_failed"
-	CodeExecFailed     = "exec_failed"
+	CodeConnectFailed    = "connect_failed"
+	CodeHostKeyUntrusted = "host_key_untrusted"
+	CodeHostKeyMismatch  = "host_key_mismatch"
+	CodePermissionDenied = "permission_denied"
+	CodeUnsupported      = "unsupported"
+	CodeExecFailed       = "exec_failed"
 	CodeTransferFailed = "transfer_failed"
 	CodeInternal       = "internal"
 )
