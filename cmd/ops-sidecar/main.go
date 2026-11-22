@@ -14,6 +14,7 @@ import (
 	"syscall"
 
 	"opscopilot/pkg/opssidecar"
+	"opscopilot/pkg/projectspike"
 	// 空白 import 触发 sshclient/telnetclient 的 init()，向 remote 注册协议
 	// dialer。ops 包只依赖 remote 抽象，不直接 import 协议实现。
 	_ "opscopilot/pkg/sshclient"
@@ -21,6 +22,13 @@ import (
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--project-spike" {
+		if err := projectspike.Run(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) == 2 && os.Args[1] == "--mcp" {
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
@@ -31,7 +39,7 @@ func main() {
 		os.Exit(opssidecar.RunMCPProxy(os.Stdin, os.Stdout, opssidecar.ResolveDataDir()))
 	}
 	if len(os.Args) > 1 {
-		fmt.Fprintln(os.Stderr, "[ops-sidecar] 未知参数，仅支持 --mcp 或无参 service 模式")
+		fmt.Fprintln(os.Stderr, "[ops-sidecar] 未知参数，仅支持 --mcp、--project-spike 或无参 service 模式")
 		os.Exit(2)
 	}
 	sig := make(chan os.Signal, 1)
