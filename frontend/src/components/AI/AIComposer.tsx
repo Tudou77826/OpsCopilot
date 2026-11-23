@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef } from 'react';
+import React, { useEffect, useId, useLayoutEffect, useRef } from 'react';
 import { TbArrowUp, TbClockUp, TbPaperclip, TbPlayerStop, TbTerminal2, TbLayout } from 'react-icons/tb';
 import { IconButton } from '@opscopilot/shell-terminal/ui';
 import { AIContextChip } from './types';
@@ -23,6 +23,9 @@ interface AIComposerProps {
     sendDisabled?: boolean;
     toolbarLeading?: React.ReactNode;
     toolbarTrailing?: React.ReactNode;
+    focusRequest?: number;
+    onHistoryKey?: (direction: 'up' | 'down', input: HTMLTextAreaElement) => boolean;
+    historySelection?: {id: number; direction: 'up' | 'down'};
 }
 
 const AIComposer: React.FC<AIComposerProps> = ({
@@ -45,6 +48,9 @@ const AIComposer: React.FC<AIComposerProps> = ({
     sendDisabled = false,
     toolbarLeading,
     toolbarTrailing,
+    focusRequest = 0,
+    onHistoryKey,
+    historySelection,
 }) => {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const hintId = useId();
@@ -62,6 +68,17 @@ const AIComposer: React.FC<AIComposerProps> = ({
         textarea.style.height = '30px';
         textarea.style.height = `${Math.min(textarea.scrollHeight, 96)}px`;
     }, [value]);
+
+    useEffect(() => {
+        if (focusRequest > 0) textareaRef.current?.focus();
+    }, [focusRequest]);
+
+    useLayoutEffect(() => {
+        const textarea = textareaRef.current;
+        if (!textarea || !historySelection) return;
+        const position = historySelection.direction === 'up' ? 0 : textarea.value.length;
+        textarea.setSelectionRange(position, position);
+    }, [historySelection]);
 
     return (
         <div className={`ai-composer${conversation ? ' is-conversation' : ''}`}>
@@ -84,6 +101,11 @@ const AIComposer: React.FC<AIComposerProps> = ({
                     onChange={event => onChange(event.target.value)}
                     onKeyDown={event => {
                         if (event.nativeEvent.isComposing) return;
+                        if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey &&
+                            onHistoryKey?.(event.key === 'ArrowUp' ? 'up' : 'down', event.currentTarget)) {
+                            event.preventDefault();
+                            return;
+                        }
                         if (event.key === 'Enter' && !event.shiftKey) {
                             event.preventDefault();
                             if (value.trim() && !disabled && !sendDisabled && (!busy || queueWhileBusy)) onSend();

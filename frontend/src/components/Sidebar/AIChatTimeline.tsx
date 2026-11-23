@@ -2,6 +2,7 @@ import { useId, useState } from 'react';
 import type { AssistantMessage } from '../../../../frontend-shell/src/assistant/runtime';
 import { TbCheck, TbChevronRight, TbInfoCircle } from 'react-icons/tb';
 import { AIChatMessage } from './AIChatMessage';
+import { latestOperationSummary } from './assistantOperationSummary';
 
 const isProcess = (message: AssistantMessage) => message.kind === 'permission_answer' || (message.role !== 'user' &&
     (message.kind === 'review' || message.kind === 'review_fallback' || message.kind === 'permission' ||
@@ -67,7 +68,7 @@ function ActivityBlock({ messages, expanded, onToggle, onExpand, onReveal, timin
     const grouped = executions.length > 1;
     const active = [...executions].reverse().find(message => !['completed', 'done'].includes(message.operation!.status));
     const completed = executions.filter(message => ['completed', 'done'].includes(message.operation!.status)).length;
-    const latest = active || executions[executions.length - 1];
+    const summary = latestOperationSummary(executions);
     const label = active ? `正在执行 · 已完成 ${completed} 项` : `已完成 ${completed} 项操作`;
     const rows: { id: string; messages: AssistantMessage[]; process: boolean }[] = [];
     for (const message of messages) {
@@ -80,15 +81,14 @@ function ActivityBlock({ messages, expanded, onToggle, onExpand, onReveal, timin
     // Expanding a child opts this block open so arriving updates cannot hide it.
     return <div className={`ai-activity-block${grouped ? ' is-grouped' : ''}`}>
         {grouped && <button type="button" className="ai-execution-group-toggle" aria-expanded={expanded.has(groupId)} aria-controls={detailsId}
-            title={[label, latest?.content,timing].filter(Boolean).join(' · ')} onClick={() => onToggle(groupId)}>
+            title={[summary, label,timing].filter(Boolean).join(' · ')} onClick={() => onToggle(groupId)}>
             <TbChevronRight size={13} className="ai-execution-chevron" aria-hidden="true" />
             {active ? <i className="ai-execution-group-running" aria-hidden="true" /> : <TbCheck size={14} aria-hidden="true" />}
-            <span>{label}</span>
-            <small>{latest?.content}</small>
+            <span className="ai-execution-group-summary">{summary}</span>
+            <small className="ai-execution-group-count">{label}</small>
             {timing && <span className="ai-execution-duration">{timing.split(' · ')[0]}</span>}
         </button>}
         <div id={detailsId} className="ai-activity-items" hidden={grouped && !expanded.has(groupId)}>
-            {grouped && timing && <p className="ai-execution-timing" title="助手响应包含启动、网络和生成等等待，不是模型服务端推理计时。工具执行不含等待你确认的时间。">{timing}</p>}
             {rows.map(row => row.process
                 ? <ProcessLog key={row.id} messages={row.messages} expanded={expanded.has(`process-${row.id}`)} onToggle={() => {
                     if (!expanded.has(`process-${row.id}`)) onExpand(groupId);

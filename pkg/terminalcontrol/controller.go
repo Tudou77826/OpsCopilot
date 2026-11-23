@@ -16,6 +16,7 @@ var (
 	ErrOwned            = errors.New("页签已被 AI 占用")
 	ErrRevoked          = errors.New("本轮操作权已失效")
 	ErrBusy             = errors.New("上一条命令尚未完成")
+	ErrObservationStale = errors.New("终端现场已变化，请重新读取后再判断")
 )
 
 type Lease struct {
@@ -26,6 +27,7 @@ type Lease struct {
 type Snapshot struct {
 	Prompt
 	Sequence uint64
+	Revision uint64
 	Ready    bool
 	Owned    bool
 	Closed   bool
@@ -70,6 +72,9 @@ func (c *Controller) Snapshot() Snapshot { c.mu.Lock(); defer c.mu.Unlock(); ret
 func (c *Controller) Feed(data []byte) []byte {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if len(data) != 0 {
+		c.state.Revision++
+	}
 	visible, prompts := c.protocol.feed(data)
 	c.output.append(visible)
 	if !c.state.Closed {
@@ -126,6 +131,10 @@ func (c *Controller) WaitPrompt(ctx context.Context, after uint64) (Snapshot, er
 }
 
 func (c *Controller) Bootstrap(ctx context.Context, confirmedOrdinaryShell bool) (Snapshot, error) {
+	return c.bootstrap(ctx, confirmedOrdinaryShell, nil)
+}
+
+func (c *Controller) bootstrap(ctx context.Context, confirmedOrdinaryShell bool, expected *uint64) (Snapshot, error) {
 	if !confirmedOrdinaryShell {
 		return c.Snapshot(), ErrNeedConfirmation
 	}
@@ -140,6 +149,11 @@ func (c *Controller) Bootstrap(ctx context.Context, confirmedOrdinaryShell bool)
 		c.mu.Unlock()
 		c.dispatch.Unlock()
 		return c.Snapshot(), ErrNeedConfirmation
+	}
+	if expected != nil && c.state.Revision != *expected {
+		c.mu.Unlock()
+		c.dispatch.Unlock()
+		return c.Snapshot(), ErrObservationStale
 	}
 	before := c.state.Sequence
 	c.bootstrapPending = true
@@ -158,6 +172,10 @@ func (c *Controller) Bootstrap(ctx context.Context, confirmedOrdinaryShell bool)
 func (c *Controller) Uninstall() error { return c.HumanWrite([]byte(c.protocol.uninstall() + "\n")) }
 
 func (c *Controller) Acquire() (Lease, error) {
+	return c.acquire(nil)
+}
+
+func (c *Controller) acquire(expected *uint64) (Lease, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.state.Closed {
@@ -165,6 +183,9 @@ func (c *Controller) Acquire() (Lease, error) {
 	}
 	if c.state.Owned {
 		return Lease{}, ErrOwned
+	}
+	if expected != nil && c.state.Revision != *expected {
+		return Lease{}, ErrObservationStale
 	}
 	if !c.state.Ready || c.pending || c.bootstrapPending {
 		return Lease{}, ErrNeedConfirmation
@@ -212,6 +233,9 @@ func (c *Controller) HumanWrite(data []byte) error {
 		c.mu.Unlock()
 		return c.write(data)
 	}
+	if len(data) != 0 {
+		c.state.Revision++
+	}
 	// A late prompt must not make an unfinished human input line executable.
 	// Full terminal editing semantics are outside this experiment: uncertain
 	// edits conservatively remain dirty until Enter or Ctrl-C clears them.
@@ -232,6 +256,10 @@ func (c *Controller) HumanWrite(data []byte) error {
 // Reserve closes the human-input gate before asynchronous preparation starts.
 // It never writes to an unknown terminal; Bootstrap still requires confirmation.
 func (c *Controller) Reserve() error {
+	return c.reserve(nil)
+}
+
+func (c *Controller) reserve(expected *uint64) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.state.Closed {
@@ -239,6 +267,9 @@ func (c *Controller) Reserve() error {
 	}
 	if c.reserved || c.state.Owned || c.pending || c.bootstrapPending {
 		return ErrBusy
+	}
+	if expected != nil && c.state.Revision != *expected {
+		return ErrObservationStale
 	}
 	if c.inputDirty {
 		return errors.New("请先提交或取消终端中未完成的输入，再开始接手测试")

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -15,6 +16,26 @@ import (
 )
 
 func (a *App) assistantExecutable() (string, error) {
+	if a.assistantRuntimeKind() == "custom" {
+		if a.configMgr == nil || a.configMgr.Config == nil {
+			return "", errors.New("助手设置不可用")
+		}
+		path := strings.TrimSpace(a.configMgr.Config.AssistantRuntime.Executable)
+		if !filepath.IsAbs(path) {
+			return "", errors.New("请填写 Agent 程序的绝对路径")
+		}
+		if info, err := os.Stat(path); err != nil || info.IsDir() {
+			return "", errors.New("找不到指定的 Agent 程序")
+		}
+		return path, nil
+	}
+	if a.assistantRuntimeKind() == "opencode" {
+		configured := ""
+		if a.configMgr != nil && a.configMgr.Config != nil {
+			configured = strings.TrimSpace(a.configMgr.Config.AssistantRuntime.Executable)
+		}
+		return resolveOpenCodeExecutable(configured)
+	}
 	if a.configMgr != nil && a.configMgr.Config != nil {
 		if configured := strings.TrimSpace(a.configMgr.Config.AssistantRuntime.Executable); configured != "" {
 			application, _ := os.Executable()
@@ -22,6 +43,44 @@ func (a *App) assistantExecutable() (string, error) {
 		}
 	}
 	return findChrysExecutable()
+}
+
+func (a *App) assistantRuntimeKind() string {
+	if a.configMgr != nil && a.configMgr.Config != nil && a.configMgr.Config.AssistantRuntime.Kind != "" {
+		return a.configMgr.Config.AssistantRuntime.Kind
+	}
+	return "icode"
+}
+
+func (a *App) AssistantAgentKind() string { return a.assistantRuntimeKind() }
+
+func resolveOpenCodeExecutable(configured string) (string, error) {
+	if configured != "" {
+		if !filepath.IsAbs(configured) {
+			return "", errors.New("OpenCode 程序路径必须是绝对路径")
+		}
+		info, err := os.Stat(configured)
+		if err != nil || info.IsDir() {
+			return "", errors.New("找不到指定的 OpenCode 程序")
+		}
+		return configured, nil
+	}
+	if runtime.GOOS == "windows" {
+		candidates := []string{filepath.Join(os.Getenv("APPDATA"), "npm", "node_modules", "opencode-ai", "bin", "opencode.exe"), filepath.Join(os.Getenv("USERPROFILE"), ".opencode", "bin", "opencode.exe")}
+		for _, path := range candidates {
+			if filepath.IsAbs(path) {
+				if info, err := os.Stat(path); err == nil && !info.IsDir() {
+					return path, nil
+				}
+			}
+		}
+	}
+	if path, err := exec.LookPath("opencode"); err == nil {
+		if runtime.GOOS != "windows" || strings.EqualFold(filepath.Ext(path), ".exe") {
+			return filepath.Abs(path)
+		}
+	}
+	return "", errors.New("尚未找到 OpenCode 程序，请安装或选择程序路径")
 }
 
 func (a *App) assistantModelConfig(_ string) (acp.ManagedConfig, error) {
@@ -33,6 +92,22 @@ func (a *App) assistantModelConfig(_ string) (acp.ManagedConfig, error) {
 func (a *App) assistantModelConfigLocked() (acp.ManagedConfig, error) {
 	if err := a.ensureAssistantHistoryLocked(); err != nil {
 		return acp.ManagedConfig{}, err
+	}
+	if a.assistantRuntimeKind() == "opencode" {
+		return acp.ManagedConfig{AgentKind: "opencode"}, nil
+	}
+	if a.assistantRuntimeKind() == "custom" {
+		if a.configMgr == nil || a.configMgr.Config == nil {
+			return acp.ManagedConfig{}, errors.New("助手设置不可用")
+		}
+		args, err := json.Marshal(a.configMgr.Config.AssistantRuntime.Arguments)
+		if err != nil {
+			return acp.ManagedConfig{}, errors.New("Agent 启动参数无效")
+		}
+		return acp.ManagedConfig{AgentKind: "custom", ArgumentsJSON: string(args)}, nil
+	}
+	if a.assistantRuntimeKind() != "icode" {
+		return acp.ManagedConfig{}, errors.New("不支持的 Agent 底座")
 	}
 	// Legacy saved source values are ignored: the assistant always uses iCode.
 	if a.assistantSelectedModel.Profile != "" {
@@ -88,12 +163,58 @@ func (a *App) CheckAssistantRuntime(configured string) acp.RuntimeReport {
 	return acp.InspectRuntime(ctx, executable)
 }
 
+func (a *App) CheckAssistantAgentRuntime(kind, configured string) acp.RuntimeReport {
+	if kind == "" || kind == "icode" {
+		return a.CheckAssistantRuntime(configured)
+	}
+	if kind != "opencode" {
+		return acp.RuntimeReport{Advice: "不支持的 Agent 底座"}
+	}
+	executable, err := resolveOpenCodeExecutable(strings.TrimSpace(configured))
+	if err != nil {
+		return acp.RuntimeReport{Executable: configured, Checks: []acp.RuntimeCheck{{ID: "executable", Label: "程序路径", Status: "failed", Detail: err.Error()}}}
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	return acp.InspectOpenCodeRuntime(ctx, executable)
+}
+
+// CheckCustomAssistantRuntime inspects protocol startup only, not model access,
+// native permissions or actual Ops tool invocation.
+func (a *App) CheckCustomAssistantRuntime(path string, args []string) acp.RuntimeReport {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	filtered := make([]string, 0, len(args))
+	for _, arg := range args {
+		if strings.TrimSpace(arg) != "" {
+			filtered = append(filtered, arg)
+		}
+	}
+	result, err := acp.ProbeStandardAgent(ctx, strings.TrimSpace(path), filtered)
+	report := acp.RuntimeReport{Executable: path, Name: result.Name, Version: result.Version, ProtocolVersion: result.ProtocolVersion, Checks: result.Checks}
+	if err != nil {
+		report.Advice = err.Error()
+		return report
+	}
+	report.Ready = true
+	report.Advice = "已建立测试会话；模型连通、工具调用和 Agent 本机权限行为尚未验证。"
+	return report
+}
+
 func (a *App) SelectAssistantRuntimeExecutable() (string, error) {
 	pattern := "*"
 	if runtime.GOOS == "windows" {
 		pattern = "*.exe"
 	}
-	return wailsruntime.OpenFileDialog(a.ctx, wailsruntime.OpenDialogOptions{Title: "选择 iCode 程序", Filters: []wailsruntime.FileFilter{{DisplayName: "iCode 程序", Pattern: pattern}}})
+	return wailsruntime.OpenFileDialog(a.ctx, wailsruntime.OpenDialogOptions{Title: "选择 Agent 程序", Filters: []wailsruntime.FileFilter{{DisplayName: "Agent 程序", Pattern: pattern}}})
 }
 
 func findChrysExecutable() (string, error) {

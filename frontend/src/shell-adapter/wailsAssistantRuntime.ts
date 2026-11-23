@@ -1,11 +1,17 @@
 import type { AssistantRuntime } from '../../../frontend-shell/src/assistant/runtime';
-import { AssistantContextUsage, AssistantModelOptions, SelectAssistantModel, NewAssistantConversation, RestoreAssistantConversationOnPage, StartAssistantTurnOnPage, AssistantControlState, StopAssistantTurn, RespondAssistantInteraction } from '../../wailsjs/go/main/App';
+import { AssistantAgentCommands, AssistantContextUsage, AssistantModelOptions, SelectAssistantModel, NewAssistantConversation, RestoreAssistantConversationOnPage, StartAssistantTurnOnPage, AssistantControlState, StopAssistantTurn, RespondAssistantInteraction } from '../../wailsjs/go/main/App';
 import { currentWorkspaceIdentity, currentWorkspaceSnapshot } from './workspaceIdentity';
 import { pullWorkspace } from './wailsWorkspaceHost';
 import { RevealAssistantResult } from '../../wailsjs/go/main/App';
 import { StartAssistantTurnWithReferencesOnPage } from '../../wailsjs/go/main/App';
+import { AssistantApprovalMode, SelectAssistantApprovalMode } from '../../wailsjs/go/main/App';
+import { AssistantAgentKind } from '../../wailsjs/go/main/App';
 
 export const wailsAssistantRuntime: AssistantRuntime = {
+	agentKind: AssistantAgentKind,
+	agentCommands: AssistantAgentCommands,
+	approvalMode: AssistantApprovalMode,
+	selectApprovalMode: SelectAssistantApprovalMode,
 	contextUsage: AssistantContextUsage,
     revealResult: async (id) => RevealAssistantResult(await currentWorkspaceIdentity(), id),
     modelOptions: AssistantModelOptions,

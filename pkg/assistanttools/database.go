@@ -125,6 +125,9 @@ func (d *DatabaseTools) Call(ctx context.Context, name, argument string) (value 
 	}
 	lease, cancel := context.WithCancel(d.lease)
 	defer cancel()
+	if assistantcontrol.CallApproved(ctx) {
+		lease = assistantcontrol.WithCallApproval(lease)
+	}
 	stop := context.AfterFunc(ctx, cancel)
 	defer stop()
 	if name == "database_context" || name == "database_tables" || name == "database_structure" {

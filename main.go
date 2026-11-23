@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"opscopilot/internal/plugincontract"
 	"opscopilot/internal/shellsidecar"
+	"opscopilot/pkg/agenttransport/mcp"
 	"opscopilot/pkg/desktopruntime"
 	"opscopilot/pkg/installguard"
 	"os"
@@ -29,6 +30,13 @@ const teamsPluginMarker = plugincontract.Marker
 var desktopInstallationLease *installguard.Lease
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--assistant-mcp-stdio" {
+		if err := mcp.RunStdioProxy(context.Background(), os.Stdin, os.Stdout, os.Getenv(mcp.StdioAddressEnv), os.Getenv(mcp.StdioTokenEnv)); err != nil {
+			fmt.Fprintln(os.Stderr, "MCP stdio 桥接不可用")
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) >= 2 && os.Args[1] == "--plugin-info" {
 		_ = json.NewEncoder(os.Stdout).Encode(plugincontract.Info(Version))
 		return

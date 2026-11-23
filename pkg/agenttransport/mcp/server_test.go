@@ -70,6 +70,8 @@ func TestServerCapabilityAndStrictToolArguments(t *testing.T) {
 		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"shell","arguments":{}}}`,
 		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"terminal_execute","arguments":{"command":"pwd","purpose":null}}}`,
 		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"terminal_execute","arguments":{"command":"pwd","purpose":{},"approved":true}}}`,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"terminal_take","arguments":{"shell_state":"idle_shell","revision":42}}}`,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"terminal_take","arguments":{"shell_state":"sure"}}}`,
 	} {
 		_, response := requestTo(t, server, body, "Bearer "+server.Token, "")
 		if response["error"] == nil {

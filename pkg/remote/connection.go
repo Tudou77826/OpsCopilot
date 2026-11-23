@@ -22,6 +22,13 @@ type Connection interface {
 	// cols/rows 为初始终端尺寸。
 	StartShell(cols, rows int) (stdin io.WriteCloser, stdout io.Reader, err error)
 
+	// CloseShell 关闭最近一次 StartShell 建立的交互 shell 会话,连接本身
+	// 保持可用(后续 StartShell/Run/Resize 仍可正常使用)。未建立过 shell
+	// 或会话已结束时为安全空操作。
+	// 背景:连接池场景下(如 ops-sidecar)终端会话与命令执行共享同一条连接,
+	// 关闭单个终端必须收敛在会话级,不能殃及连接;重复 Close 应安全。
+	CloseShell() error
+
 	// Resize 调整远端终端尺寸。各协议映射到本协议的尺寸通知机制。
 	Resize(cols, rows int) error
 

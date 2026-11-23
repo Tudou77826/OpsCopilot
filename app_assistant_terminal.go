@@ -50,13 +50,75 @@ func (a *App) startAssistantTurn(question, sessionID, connectionID, client strin
 	if a.assistantRunning {
 		return assistantcontrol.State{}, assistantcontrol.ErrBusy
 	}
+	recovering := a.recoverUnavailableAssistantConversationLocked()
 	managed, err := a.assistantModelConfigLocked()
 	if err != nil {
 		return assistantcontrol.State{}, err
 	}
 	managed.Executable = executable
+	managed.ApprovalMode = a.assistantApprovalMode
 	managed.SkillsDirectory = filepath.Join(a.configMgr.Directory(), "assistant-skills")
 	managed.AuditDirectory = filepath.Join(a.configMgr.Directory(), "audit", "assistant")
+	if managed.AgentKind != "opencode" && managed.AgentKind != "custom" {
+		managed.ProjectSkillsEnabled, managed.ProjectConfigEnabled, err = acp.LocalProjectTrust(acp.LocalModelDirectory())
+		if err != nil {
+			return assistantcontrol.State{}, err
+		}
+	}
+	managed.WorkspaceJSON, err = a.assistantProjectWorkspaceJSON()
+	if err != nil {
+		return assistantcontrol.State{}, fmt.Errorf("项目工作目录不可用: %w", err)
+	}
+	if a.assistantConversation != nil {
+		currentKind := a.assistantConversation.AgentKind()
+		desiredKind := managed.AgentKind
+		if desiredKind == "" {
+			desiredKind = "icode"
+		}
+		if currentKind != "" && currentKind != desiredKind {
+			a.assistantConversation.Close()
+			a.assistantConversation = nil
+			a.assistantRecovered = true
+			a.assistantRecoveryNote = "Agent 底座已切换，将参考近期可见对话继续。"
+			recovering = true
+		}
+	}
+	if a.assistantConversation != nil {
+		if managed.AgentKind == "custom" && a.assistantConversation.CustomRuntimeChanged(managed) {
+			a.assistantConversation.Close()
+			a.assistantConversation = nil
+			a.assistantRecovered = true
+			a.assistantRecoveryNote = "Agent 配置已变更，将参考近期可见对话继续。"
+			recovering = true
+		}
+	}
+	if a.assistantConversation != nil {
+		workspace, started := a.assistantConversation.WorkspaceConfig()
+		oldSkills, oldConfig := a.assistantConversation.ProjectTrust()
+		if started && (oldSkills != managed.ProjectSkillsEnabled || oldConfig != managed.ProjectConfigEnabled) {
+			a.assistantConversation.Close()
+			a.assistantConversation = nil
+			a.assistantRecovered = true
+			a.assistantRecoveryNote = "iCode 项目信任设置已变更，将参考近期可见对话继续。"
+			recovering = true
+			started = false
+		}
+		if started && workspace != managed.WorkspaceJSON {
+			switchCtx, stopSwitch := context.WithTimeout(a.ctx, 30*time.Second)
+			switched, switchErr := a.assistantConversation.SwitchWorkspace(switchCtx, managed.WorkspaceJSON)
+			stopSwitch()
+			if switchErr != nil {
+				return assistantcontrol.State{}, switchErr
+			}
+			if !switched {
+				a.assistantConversation.Close()
+				a.assistantConversation = nil
+				a.assistantRecovered = true
+				a.assistantRecoveryNote = "项目工作区已变更，将参考近期可见对话继续；请核实旧项目中的结论。"
+				recovering = true
+			}
+		}
+	}
 	if client != "" {
 		state := a.assistantCoordinator().Snapshot()
 		if state.Phase == "running" || state.Phase == "waiting" {
@@ -85,6 +147,10 @@ func (a *App) startAssistantTurn(question, sessionID, connectionID, client strin
 		return assistantcontrol.State{}, err
 	}
 	turn.SetSource("assistant")
+	turn.SetApprovalMode(managed.ApprovalMode)
+	if recovering {
+		turn.Record("notice", a.assistantRecoveryNote)
+	}
 	a.assistantHistory.Begin(turn.ID(), question, refs...)
 	a.assistantSelectedModel = managed.LocalModel
 	if err = a.saveAssistantHistoryLocked(true, nil); err != nil {
@@ -105,6 +171,17 @@ func (a *App) startAssistantTurn(question, sessionID, connectionID, client strin
 		}
 	}
 	conversation := a.assistantConversation
+	var standardReviewer assistantcontrol.Reviewer
+	if managed.AgentKind == "opencode" || managed.AgentKind == "custom" {
+		baseReviewer := a.assistantAgentReviewer()
+		prior := assistantReviewContext(a.assistantHistory.Snapshot(), turn.ID())
+		standardReviewer = func(ctx context.Context, input assistantcontrol.ReviewInput) assistantcontrol.ReviewVerdict {
+			input.UserRequest = question
+			input.TaskContext = prior
+			return baseReviewer(ctx, input)
+		}
+		conversation.SetStandardReviewer(standardReviewer)
+	}
 	a.assistantRunning = true
 	done := make(chan struct{})
 	a.assistantDone = done
@@ -115,7 +192,10 @@ func (a *App) startAssistantTurn(question, sessionID, connectionID, client strin
 		pageContext = a.assistantReferencedPageContext(refs)
 	}
 	reviewer := assistantRiskFloor
-	tools := a.assistantWorkspaceTools(turn, target, reviewer)
+	if standardReviewer != nil {
+		reviewer = standardReviewer
+	}
+	tools := a.assistantWorkspaceTools(turn, target, managed.ApprovalMode == "bypass", reviewer)
 	tools.InitialPageContext = pageContext
 	checkpointStop := make(chan struct{})
 	go a.checkpointAssistant(turn, checkpointStop)
@@ -142,6 +222,21 @@ func (a *App) startAssistantTurn(question, sessionID, connectionID, client strin
 		turn.Finish("completed", "本轮已完成")
 	}()
 	return turn.Snapshot(), nil
+}
+
+// A stopped or failed iCode process cannot be reused. On the next explicit
+// message, rebuild only from the bounded visible history; never replay a turn.
+// Caller holds assistantConversationMu and has verified that no turn is running.
+func (a *App) recoverUnavailableAssistantConversationLocked() bool {
+	if a.assistantConversation == nil || !a.assistantConversation.Unusable() {
+		return false
+	}
+	a.assistantConversation.Close()
+	a.assistantConversation = nil
+	a.assistantApprovalMode = ""
+	a.assistantRecovered = true
+	a.assistantRecoveryNote = "原助手会话已结束，后续消息将参考近期可见对话；此前未完成的操作不会自动重试，当前状态需重新核实。"
+	return true
 }
 
 func (a *App) RestoreAssistantConversationOnPage(client string) (assistantcontrol.ConversationSnapshot, error) {
@@ -174,6 +269,7 @@ func (a *App) NewAssistantConversation() error {
 	// Keep the user's selection, but reload its credentials/settings for the
 	// next conversation instead of retaining a stale model snapshot forever.
 	a.assistantSelectedModel = acp.LocalModel{ID: a.assistantSelectedModel.ID}
+	a.assistantApprovalMode = ""
 	a.assistantCoordinator().ClearFinished(state.TurnID)
 	a.assistantRecoveryNote = ""
 	a.assistantRecovered = false
@@ -245,11 +341,26 @@ func (a *App) shutdownAssistant(ctx context.Context) {
 	a.shutdownDatabase(ctx)
 }
 
-func (a *App) assistantTerminalTools(turn *assistantcontrol.Turn, target terminalcontrol.Target) *assistanttools.TerminalTools {
+func (a *App) assistantTerminalTools(turn *assistantcontrol.Turn, target terminalcontrol.Target, allowAssessed ...bool) *assistanttools.TerminalTools {
 	// The tool adapter serializes calls, so observer creation is lazy and needs
 	// no separate mutex. No terminal, audit file or identity probe is opened for chat.
 	var observer *terminalcontrol.Observer
-	return &assistanttools.TerminalTools{Turn: turn, Target: target, Validate: func(ctx context.Context) error {
+	open := func(ctx context.Context, expected *uint64) (*terminalcontrol.Access, error) {
+		setup, err := a.terminalControlService().Take(ctx, terminalcontrol.TakeRequest{Target: target, ConfirmedOrdinaryShell: true, ExpectedRevision: expected})
+		if err != nil {
+			return nil, err
+		}
+		view, err := setup.Inspect(terminalcontrol.ReadOptions{Limit: 1})
+		_ = setup.Release()
+		if err != nil {
+			return nil, err
+		}
+		if view.LastPrompt == nil {
+			return nil, terminalcontrol.ErrNeedConfirmation
+		}
+		return a.newTerminalAccess(ctx, terminalcontrol.AccessScope{Actor: "desktop-chrys", RequireActionReview: true, Expires: time.Now().Add(10 * time.Minute), Targets: []terminalcontrol.AccessTarget{{Target: target, UID: view.LastPrompt.UID, RoutineDiagnostics: true}}})
+	}
+	tools := &assistanttools.TerminalTools{Turn: turn, Target: target, Validate: func(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -274,20 +385,12 @@ func (a *App) assistantTerminalTools(turn *assistantcontrol.Turn, target termina
 		}
 		return view, err
 	}, Open: func(ctx context.Context) (*terminalcontrol.Access, error) {
-		// Human consent has just confirmed an idle ordinary shell. Bootstrap
-		// only that original PTY, then bind the observed identity, not SSH login UID.
-		setup, err := a.terminalControlService().Take(ctx, terminalcontrol.TakeRequest{Target: target, ConfirmedOrdinaryShell: true})
-		if err != nil {
-			return nil, err
-		}
-		view, err := setup.Inspect(terminalcontrol.ReadOptions{Limit: 1})
-		_ = setup.Release()
-		if err != nil {
-			return nil, err
-		}
-		if view.LastPrompt == nil {
-			return nil, terminalcontrol.ErrNeedConfirmation
-		}
-		return a.newTerminalAccess(ctx, terminalcontrol.AccessScope{Actor: "desktop-chrys", RequireActionReview: true, Expires: time.Now().Add(10 * time.Minute), Targets: []terminalcontrol.AccessTarget{{Target: target, UID: view.LastPrompt.UID, RoutineDiagnostics: true}}})
+		return open(ctx, nil)
 	}}
+	if len(allowAssessed) > 0 && allowAssessed[0] {
+		tools.OpenAssessed = func(ctx context.Context, revision uint64) (*terminalcontrol.Access, error) {
+			return open(ctx, &revision)
+		}
+	}
+	return tools
 }

@@ -8,7 +8,7 @@ function validUsage(usage?: Usage): usage is Usage {
     return !!usage?.known && Number.isSafeInteger(usage.used) && Number.isSafeInteger(usage.size) && usage.used >= 0 && usage.size > 0;
 }
 
-/** A compact session-window gauge. Counts come exclusively from iCode. */
+/** A compact gauge based on the active agent's reported session usage. */
 export function AssistantContextUsage({ runtime, busy, revision }: Props) {
     const [usage, setUsage] = useState<Usage>();
     const [unavailable, setUnavailable] = useState(false);
@@ -37,7 +37,7 @@ export function AssistantContextUsage({ runtime, busy, revision }: Props) {
     const percent = known ? usage.used / usage.size * 100 : 0;
     const filled = Math.min(percent, 100);
     const label = known ? `上下文占用 ${percent.toFixed(1).replace(/\.0$/, '')}%` : unavailable ? '上下文用量暂不可用' : '上下文用量未知';
-    const title = known ? `${label}\n${usage.used.toLocaleString('en-US')} / ${usage.size.toLocaleString('en-US')} tokens\niCode 回传的当前上下文用量` : `${label} · 等待 iCode 回传，不代表 0%`;
+    const title = known ? `${label}\n${usage.used.toLocaleString('en-US')} / ${usage.size.toLocaleString('en-US')} tokens\nAgent 回传的当前上下文用量` : `${label} · 等待 Agent 回传，不代表 0%`;
     const level = !known ? 'unknown' : percent >= 90 ? 'high' : percent >= 75 ? 'warning' : 'normal';
     return <span className={`ai-context-usage is-${level}`} tabIndex={0} title={title}
         role={known ? 'meter' : 'img'} aria-label={label}

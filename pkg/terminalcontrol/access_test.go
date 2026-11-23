@@ -164,6 +164,41 @@ func TestAccessApprovalReleasesAndExecutesExactCommandOnce(t *testing.T) {
 	}
 }
 
+func TestFullAccessApprovesHighRiskOnceWithExplicitAudit(t *testing.T) {
+	j := &memoryJournal{}
+	a, _, c, w, target := protectedFixture(t, j)
+	run := protectedTake(t, a, target)
+	id := requireReview(t, run, context.Background(), "rm /tmp/test-only")
+	if _, err := a.ApproveLowRiskReview(id, "test"); !errors.Is(err, ErrDenied) {
+		t.Fatal("risk floor unexpectedly passed", err)
+	}
+	op, err := a.ApproveUnrestrictedReview(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan commandReply, 1)
+	go func() { result, err := op.Execute(context.Background()); done <- commandReply{result, err} }()
+	if wire := nextWrite(t, w); !strings.Contains(wire, "rm /tmp/test-only") {
+		t.Fatal(wire)
+	}
+	commandPrompt(c, 1, 0, "/retained", "")
+	if reply := awaitReply(t, done); reply.err != nil {
+		t.Fatal(reply.err)
+	}
+	if _, err := op.Execute(context.Background()); !errors.Is(err, ErrStaleApproval) {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, event := range j.snapshot() {
+		if event.Phase == "mode_granted" && event.Reason == "full_access" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("full-access decision not recorded")
+	}
+}
+
 func TestAccessStaleDeniedStoppedAndCanceledApprovalsCannotDispatch(t *testing.T) {
 	for _, mode := range []string{"denied", "stop", "caller_cancel", "access_cancel", "changed_prompt", "unknown_prompt", "identity", "replacement", "intervening_run", "expiry"} {
 		t.Run(mode, func(t *testing.T) {

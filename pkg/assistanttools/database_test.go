@@ -116,3 +116,50 @@ func TestDatabaseWritesWaitForExactApprovalAndKeepOriginalOnRefusal(t *testing.T
 		})
 	}
 }
+
+func TestDatabaseWriteUsesCurrentCallApprovalOrFullAccess(t *testing.T) {
+	for _, mode := range []string{"approved-call", "bypass"} {
+		t.Run(mode, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			c := &assistantcontrol.Coordinator{}
+			turn, _ := c.Begin(ctx, assistantcontrol.Target{}, nil)
+			defer turn.Finish("completed", "")
+			if mode == "bypass" {
+				turn.SetApprovalMode("bypass")
+			} else {
+				ctx = assistantcontrol.WithCallApproval(ctx)
+			}
+			db := &databaseToolFixture{}
+			service := dbcontrol.New(db, databaseJournalFixture{})
+			go func() {
+				for ctx.Err() == nil {
+					_, items := service.List(0)
+					for _, w := range items {
+						if w.Pending != "" {
+							_ = service.Acknowledge(w.ID, w.Pending, w.Session.ID, w.SQL)
+						}
+					}
+					time.Sleep(time.Millisecond)
+				}
+			}()
+			w, err := service.Open(ctx, dbworkspace.Profile{ID: "profile", Name: "orders"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			tools := &DatabaseTools{Turn: turn, Service: service}
+			defer tools.Close()
+			payload, _ := json.Marshal(map[string]string{"workspace_id": w.ID})
+			if _, err = tools.Call(ctx, "database_take", string(payload)); err != nil {
+				t.Fatal(err)
+			}
+			payload, _ = json.Marshal(map[string]string{"sql": "UPDATE orders SET status='review' WHERE id=17;", "purpose": "fixture"})
+			if _, err = tools.Call(ctx, "database_execute", string(payload)); err != nil {
+				t.Fatal(err)
+			}
+			if c.Snapshot().Prompt != nil || db.queries.Load() != 1 {
+				t.Fatal("database operation unexpectedly requested a second approval")
+			}
+		})
+	}
+}

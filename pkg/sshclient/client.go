@@ -322,6 +322,19 @@ func (c *Client) Resize(cols, rows int) error {
 	return session.WindowChange(rows, cols)
 }
 
+// CloseShell 实现 remote.Connection:关闭最近一次 StartShell 建立的交互
+// shell 会话,连接本身保持可用。未建立过 shell 或会话已关闭时为空操作。
+func (c *Client) CloseShell() error {
+	c.lastSessionMu.Lock()
+	session := c.lastSession
+	c.lastSession = nil
+	c.lastSessionMu.Unlock()
+	if session == nil {
+		return nil
+	}
+	return session.Close()
+}
+
 // Run 实现 remote.Connection:执行单条命令,返回 stdout。
 // 包装 RunWithContext(用 context.Background),保持与历史 Run 方法等价。
 func (c *Client) Run(ctx context.Context, cmd string) (string, error) {

@@ -31,7 +31,7 @@ import { TbArrowLeft, TbX } from 'react-icons/tb';
 import { IconButton } from '@opscopilot/shell-terminal/ui';
 
 interface AppConfig {
-    assistant_runtime?: { executable: string; model_source?: string };
+    assistant_runtime?: { executable: string; kind?: string; arguments?: string[]; model_source?: string; preset_executables?:Record<string,string>; custom_agent_id?: string; custom_agents?: {id:string;name:string;executable:string;arguments:string[]}[] };
     llm: {
         APIKey: string;
         BaseURL: string;
@@ -1547,9 +1547,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
             case 'aiagent':
                 return (
-                    <div style={styles.settingsGroup}>
-                        <AssistantRuntimePanel value={config.assistant_runtime?.executable || ''} disabled={loading}
-                            onChange={executable => setConfig({ ...config, assistant_runtime: { ...config.assistant_runtime, executable } })} />
+                    <div className="oc-ai-access-page" style={styles.settingsGroup}>
+                        <div className="oc-ai-access-intro"><h2>AI 接入</h2><p>配置助手使用的 Agent，或允许外部 Agent 使用 OpsCopilot。</p></div>
+                        <AssistantRuntimePanel value={config.assistant_runtime?.executable || ''} kind={config.assistant_runtime?.kind || 'icode'} arguments={config.assistant_runtime?.arguments || []} disabled={loading}
+                            customAgents={config.assistant_runtime?.custom_agents || []} customAgentId={config.assistant_runtime?.custom_agent_id || ''}
+                            onCustomAgentsChange={(agents, id) => { const runtime = config.assistant_runtime; const selected = agents.find(agent => agent.id === id); const oldKind = runtime?.kind || 'icode'; const presets = {...runtime?.preset_executables}; if (oldKind !== 'custom') presets[oldKind] = runtime?.executable || ''; else if (!runtime?.custom_agents?.some(agent => agent.id === runtime.custom_agent_id) && runtime?.custom_agents?.some(agent => agent.id === id) && (runtime?.executable || runtime?.arguments?.some(arg => arg.trim()))) agents = [...agents, {id: crypto.randomUUID(), name: '未命名 Agent', executable: runtime?.executable || '', arguments: runtime?.arguments || []}]; setConfig({ ...config, assistant_runtime: { ...runtime, kind: 'custom', preset_executables: presets, executable: selected?.executable || '', arguments: selected?.arguments || [], custom_agents: agents, custom_agent_id: id } }); }}
+                            onArgumentsChange={arguments_ => { const runtime = config.assistant_runtime; setConfig({ ...config, assistant_runtime: { ...runtime, executable: runtime?.executable || '', arguments: arguments_, custom_agents: runtime?.custom_agents?.map(agent => agent.id === runtime.custom_agent_id ? {...agent, arguments: arguments_} : agent) } }); }}
+                            onKindChange={kind => { const runtime = config.assistant_runtime; const presets = {...runtime?.preset_executables}; const oldKind = runtime?.kind || 'icode'; let agents = runtime?.custom_agents || []; let agentId = runtime?.custom_agent_id || ''; if (oldKind !== 'custom') presets[oldKind] = runtime?.executable || ''; else if (!agents.some(agent => agent.id === agentId) && (runtime?.executable || runtime?.arguments?.some(arg => arg.trim()))) { agentId = crypto.randomUUID(); agents = [...agents, {id: agentId, name: '未命名 Agent', executable: runtime?.executable || '', arguments: runtime?.arguments || []}]; } setConfig({ ...config, assistant_runtime: { ...runtime, kind, preset_executables: presets, custom_agents: agents, custom_agent_id: agentId, executable: presets[kind] || '', arguments: [] } }); }}
+                            onChange={executable => { const runtime = config.assistant_runtime; const currentKind = runtime?.kind || 'icode'; setConfig({ ...config, assistant_runtime: { ...runtime, executable, preset_executables: currentKind === 'custom' ? runtime?.preset_executables : {...runtime?.preset_executables, [currentKind]: executable}, custom_agents: runtime?.custom_agents?.map(agent => agent.id === runtime.custom_agent_id && currentKind === 'custom' ? {...agent, executable} : agent) } }); }} />
+                        <details className="oc-ai-external-access">
+                        <summary><span><strong>外部 Agent 接入</strong><small>让其他 AI 工具通过 Skill 调用 OpsCopilot</small></span><span className="oc-ai-external-summary-end"><span className="oc-ai-external-status">{skillEntries.some(entry => entry.dir.trim()) ? (skillNeedsAttention ? '需要检查' : `${skillEntries.filter(entry => entry.dir.trim()).length} 个目录`) : '按需配置'}</span><span className="oc-ai-external-chevron" aria-hidden="true">›</span></span></summary>
+                        <div className="oc-ai-external-content">
                         {renderSkillAttentionBanner()}
                         <div style={styles.card}>
                             <div style={styles.cardTitle}>外部 Agent · Skill 安装</div>
@@ -1655,6 +1663,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 </div>
                             </div>
                         </div>
+                        </div>
+                        </details>
                     </div>
                 );
 

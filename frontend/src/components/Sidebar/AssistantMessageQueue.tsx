@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { TbArrowUp, TbChevronDown, TbPlayerPlay, TbX } from 'react-icons/tb';
+import { TbArrowUp, TbChevronDown, TbPencil, TbPlayerPlay, TbX } from 'react-icons/tb';
 import { IconButton } from '@opscopilot/shell-terminal/ui';
 import type { QueuedAssistantMessage } from './useAssistantQueue';
 import { PageReferenceTags } from './AssistantPageReferences';
@@ -9,13 +9,15 @@ interface Props {
     paused: boolean;
     disabled: boolean;
     resumeDisabled?: boolean;
+    editDisabled?: boolean;
     currentTitle?: string;
     onResume: () => void;
     onSendNow: (id: number) => void;
     onRemove: (id: number) => void;
+    onEdit: (id: number) => void;
 }
 
-export function AssistantMessageQueue({ messages, paused, disabled, resumeDisabled, currentTitle, onResume, onSendNow, onRemove }: Props) {
+export function AssistantMessageQueue({ messages, paused, disabled, editDisabled, resumeDisabled, currentTitle, onResume, onSendNow, onRemove, onEdit }: Props) {
     const [expanded, setExpanded] = useState(false);
     if (!messages.length) return null;
     const visible = expanded ? messages : messages.slice(0, 2);
@@ -30,6 +32,7 @@ export function AssistantMessageQueue({ messages, paused, disabled, resumeDisabl
                 {message.title && message.title !== currentTitle && <small title={message.title}>{message.title}</small>}
             </div>
             <div className="ai-chat-queue-actions">
+                <IconButton title="编辑待发送消息" label={`编辑消息：${message.question}`} disabled={disabled || editDisabled} onClick={() => onEdit(message.id)}><TbPencil size={16}/></IconButton>
                 <IconButton title="立即发送：先停止本轮，再处理这条消息" label="立即发送" disabled={disabled} onClick={() => onSendNow(message.id)}><TbArrowUp size={16}/></IconButton>
                 <IconButton title="移除消息" label={`移除消息：${message.question}`} disabled={disabled} onClick={() => onRemove(message.id)}><TbX size={16}/></IconButton>
             </div>

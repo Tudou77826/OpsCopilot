@@ -116,6 +116,7 @@ type App struct {
 	assistantConversationMu   sync.Mutex
 	assistantConversation     *acp.Conversation
 	assistantSelectedModel    acp.LocalModel // pinned metadata and credentials, never serialized
+	assistantApprovalMode     string         // per conversation; never persisted
 	assistantHistory          assistantcontrol.History
 	assistantHistoryLoaded    bool
 	assistantHistoryLoadError error
@@ -686,6 +687,7 @@ func launchSelfUpdate(exePath, manifestPath string) error {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.startQuickApproval(ctx)
 	a.initServiceCenter()
 
 	// 快捷命令热加载：监听配置文件外部变化（多窗口互写），推送给前端
@@ -1794,6 +1796,27 @@ func (a *App) initFeedbackStore() {
 
 func (a *App) SaveSettings(cfg config.AppConfig) string {
 	cfg.AssistantRuntime.Executable = strings.TrimSpace(cfg.AssistantRuntime.Executable)
+	if cfg.AssistantRuntime.Kind != "" && cfg.AssistantRuntime.Kind != "icode" && cfg.AssistantRuntime.Kind != "opencode" && cfg.AssistantRuntime.Kind != "custom" {
+		return "不支持的 Agent 底座"
+	}
+	if len(cfg.AssistantRuntime.CustomAgents) > 32 {
+		return "自定义 Agent 配置最多支持 32 个"
+	}
+	seenAgents := map[string]bool{}
+	for _, agent := range cfg.AssistantRuntime.CustomAgents {
+		if strings.TrimSpace(agent.ID) == "" || len(agent.ID) > 128 || len(agent.Name) > 128 || len(agent.Executable) > 4096 || len(agent.Arguments) > 64 || seenAgents[agent.ID] {
+			return "自定义 Agent 配置无效"
+		}
+		for _, argument := range agent.Arguments {
+			if len(argument) > 4096 {
+				return "Agent 启动参数过长"
+			}
+		}
+		seenAgents[agent.ID] = true
+	}
+	if cfg.AssistantRuntime.CustomAgentID != "" && !seenAgents[cfg.AssistantRuntime.CustomAgentID] {
+		return "所选 Agent 配置不存在"
+	}
 	cfg.Terminal = config.NormalizeTerminalConfig(cfg.Terminal)
 	cfg.Appearance = config.NormalizeAppearanceConfig(cfg.Appearance)
 	cfg.PatchStore.Type = "git"

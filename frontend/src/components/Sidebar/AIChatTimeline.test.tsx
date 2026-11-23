@@ -14,6 +14,29 @@ function execution(id: string, status = 'completed', turnId = 'turn'): Assistant
 }
 
 describe('应用读取记录与耗时', () => {
+    it('折叠摘要显示实际命令与目标，运行中优先显示当前操作', () => {
+        const command = {...execution('cmd'), content:'检查错误日志', operation:{kind:'terminal', workspaceId:'ssh', status:'completed', location:'业务节点 A', action:'grep ERROR /var/log/app.log', result:'found'}};
+        const generic = {...execution('list'), content:'查看传输任务', operation:{kind:'application', workspaceId:'', status:'completed', location:'OpsCopilot', action:'查看传输任务'}};
+        const view = render(<AIChatTimeline messages={[command, generic]}/>);
+        const group = screen.getByRole('button', {name:/已完成 2 项操作/});
+        expect(group).toHaveTextContent('检查错误日志 · 业务节点 A · grep ERROR /var/log/app.log');
+        const active = {...execution('active', 'running'), content:'浏览文件目录', operation:{kind:'file', workspaceId:'file', status:'running', location:'业务节点 B', action:'浏览文件目录\n路径：/tmp\n位置：远端'}};
+        view.rerender(<AIChatTimeline messages={[command, generic, active]}/>);
+        expect(screen.getByRole('button', {name:/正在执行 · 已完成 2 项/})).toHaveTextContent('浏览文件目录 · 业务节点 B · 路径：/tmp 位置：远端');
+    });
+
+    it('单项操作展示实际 SQL，缺少目标时不编造', () => {
+        const sql = {...execution('sql'), content:'执行 SQL', operation:{kind:'database', workspaceId:'db', status:'completed', action:'SELECT *\nFROM orders'}};
+        render(<AIChatTimeline messages={[sql]}/>);
+        expect(screen.getByRole('button', {name:/执行 SQL，完成，展开执行详情/})).toHaveTextContent('执行 SQL · SELECT * FROM orders');
+    });
+    it('单项操作展开后也不显示整轮耗时统计', () => {
+        const timing = '本轮 18.00 秒 · 助手响应 17.99 秒 · 工具执行 0.010 秒 · 等待确认 0.00 秒';
+        render(<AIChatTimeline messages={[execution('one'), message('timing','timing',timing)]}/>);
+        fireEvent.click(screen.getByRole('button', {name:/检查 one.*展开执行详情/}));
+        expect(screen.getByText('ls /tmp/one')).toBeVisible();
+        expect(screen.queryByText(timing)).not.toBeInTheDocument();
+    });
     it.each([
         {kind:'file', status:'denied', stage:'', detail:'', content:'文件传输'},
         {kind:'file', status:'failed', stage:'传输准备', detail:'用户未批准本次操作', content:'文件操作未完成'},
@@ -36,7 +59,7 @@ describe('应用读取记录与耗时', () => {
         expect(screen.getByText('检查连接。')).toBeVisible();
         expect(screen.getByText('诊断详情')).toBeInTheDocument();
     });
-    it('读取默认合成一行，展开后显示各自结果及分开的整轮耗时', () => {
+    it('读取默认合成一行，展开后显示各自结果且不占用版面显示耗时统计', () => {
         const timing='本轮 18.00 秒 · 助手响应 17.99 秒 · 工具执行 0.010 秒 · 等待确认 0.00 秒';
         render(<AIChatTimeline messages={[
             {...execution('list'),content:'查询快捷指令列表',operation:{kind:'reference',workspaceId:'',status:'completed',action:'查询快捷指令列表',result:'共 2 条\nkk\naa',measured:true,durationMs:7}},
@@ -45,11 +68,11 @@ describe('应用读取记录与耗时', () => {
         ]}/>);
         const summary=screen.getByRole('button',{name:/已完成 2 项操作/});
         expect(summary).toHaveAttribute('title',expect.stringContaining(timing));
-        expect(screen.getByText(timing)).not.toBeVisible();
+        expect(screen.queryByText(timing)).not.toBeInTheDocument();
         expect(screen.getByText('新增了 aa，现在共 2 条。')).toBeVisible();
         expect(screen.queryByRole('button',{name:'查看终端'})).not.toBeInTheDocument();
         fireEvent.click(summary);
-        expect(screen.getByText(timing)).toBeVisible();
+        expect(screen.queryByText(timing)).not.toBeInTheDocument();
         expect(screen.getByText('7ms')).toBeVisible();
         fireEvent.click(screen.getByRole('button',{name:/读取快捷指令，完成，展开执行详情/}));
         expect(screen.getByText(/aa\s+aa test/)).toBeVisible();

@@ -66,6 +66,33 @@ func LocalModelDirectory() string {
 	return filepath.Join(home, ".chrys")
 }
 
+// LocalProjectTrust imports only explicit user-level project settings. A
+// missing setting remains off, and project files cannot enable themselves.
+func LocalProjectTrust(directory string) (skills, projectConfig bool, err error) {
+	data, err := readModelFile(filepath.Join(directory, "settings.yaml"))
+	if errors.Is(err, os.ErrNotExist) {
+		return false, false, nil
+	}
+	if err != nil {
+		return false, false, errors.New("无法读取 iCode 项目信任设置")
+	}
+	var settings map[string]any
+	if yaml.Unmarshal(data, &settings) != nil {
+		return false, false, errors.New("iCode 项目信任设置无法解析")
+	}
+	boolean := func(name string) bool {
+		value, ok := settings["project."+name]
+		if !ok {
+			if project, valid := settings["project"].(map[string]any); valid {
+				value = project[name]
+			}
+		}
+		result, _ := value.(bool)
+		return result
+	}
+	return boolean("skills_enabled"), boolean("config_enabled"), nil
+}
+
 // LoadLocalModel reads the same user-level active pointer as iCode. No agent,
 // hook, history, grant or global settings document is copied into the child.
 func LoadLocalModel(directory string) (LocalModel, error) {

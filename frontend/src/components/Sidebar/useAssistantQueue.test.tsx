@@ -26,6 +26,34 @@ function fixture() {
 }
 
 describe('助手消息调度', () => {
+    it('取回待发消息时保留引用和目标，并且不会自动发送取出的消息', async () => {
+        const f = fixture();
+        const {result} = renderHook(() => useAssistantQueue(f.host));
+        const refs = [{kind:'terminal', tabId:'tab', connectionId:'conn', title:'业务节点'}];
+        act(() => { result.current.enqueue('正在处理'); result.current.enqueue('待编辑', {tabId:'tab', connectionId:'conn'}, '业务节点', refs); });
+        const id = result.current.pending[0].id;
+        let taken: ReturnType<typeof result.current.takeForEdit>;
+        act(() => { taken = result.current.takeForEdit(id); });
+        expect(taken!).toMatchObject({question:'待编辑', target:{tabId:'tab', connectionId:'conn'}, references:refs});
+        expect(result.current.pending).toHaveLength(0);
+        expect(result.current.takeForEdit(id)).toBeUndefined();
+        f.finish();
+        await waitFor(() => expect(result.current.current).toBeUndefined());
+        expect(f.host.start).toHaveBeenCalledTimes(1);
+    });
+    it('消息已经开始发送时，迟到的编辑静默忽略，不影响当前轮次', async () => {
+        const f = fixture();
+        const {result} = renderHook(() => useAssistantQueue(f.host));
+        act(() => { result.current.enqueue('一'); result.current.enqueue('二'); });
+        const id = result.current.pending[0].id;
+        f.finish();
+        await waitFor(() => expect(f.host.start).toHaveBeenCalledTimes(2));
+        expect(result.current.takeForEdit(id)).toBeUndefined();
+        expect(f.host.stop).not.toHaveBeenCalled();
+        expect(result.current.current?.question).toBe('二');
+        f.finish();
+        await waitFor(() => expect(result.current.current).toBeUndefined());
+    });
     it('排队引用在入队时固定，之后修改原数组或切换页签不影响消息', async () => {
         const f=fixture();
         const {result}=renderHook(()=>useAssistantQueue(f.host));

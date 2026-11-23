@@ -35,6 +35,7 @@ func newFakeConnFull() *fakeConnFull {
 func (f *fakeConnFull) StartShell(cols, rows int) (io.WriteCloser, io.Reader, error) {
 	return f.stdinW, f.stdoutR, nil
 }
+func (f *fakeConnFull) CloseShell() error { return nil }
 func (f *fakeConnFull) Resize(cols, rows int) error {
 	f.mu.Lock()
 	f.resized = append(f.resized, [2]int{cols, rows})

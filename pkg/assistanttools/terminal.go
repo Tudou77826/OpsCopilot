@@ -32,17 +32,23 @@ type TerminalTools struct {
 	// Open must verify the actual connection and shell identity and create an
 	// audited Access. It runs only after explicit user consent, never from JSON.
 	Open func(context.Context) (*terminalcontrol.Access, error)
+	// OpenAssessed is host-enabled only for the user's current bypass mode.
+	// Its revision comes from a recent audited observation, never from the model.
+	OpenAssessed func(context.Context, uint64) (*terminalcontrol.Access, error)
 	// Observe returns an audited, read-only screen snapshot. It must never
 	// bootstrap a shell or acquire an input lease.
-	Observe     func(context.Context) (terminalcontrol.TerminalContext, error)
-	Review      assistantcontrol.Reviewer
-	Location    string
-	mu          sync.Mutex
-	access      *terminalcontrol.Access
-	run         terminalcontrol.ControlledTerminal
-	denied      bool
-	readAllowed bool
-	readDenied  bool
+	Observe          func(context.Context) (terminalcontrol.TerminalContext, error)
+	Review           assistantcontrol.Reviewer
+	Location         string
+	mu               sync.Mutex
+	access           *terminalcontrol.Access
+	run              terminalcontrol.ControlledTerminal
+	denied           bool
+	readAllowed      bool
+	readDenied       bool
+	observedRevision uint64
+	observedAt       time.Time
+	hasObservation   bool
 }
 
 // Yield gives the terminal back before an ACP question is shown. Concurrent
@@ -70,7 +76,7 @@ func (b *TerminalTools) Close() {
 	}
 	_ = b.release()
 }
-func (b *TerminalTools) prepare(ctx context.Context) error {
+func (b *TerminalTools) prepare(ctx context.Context, assessment string) error {
 	if b.Turn == nil || b.Turn.Context().Err() != nil {
 		return assistantcontrol.ErrStale
 	}
@@ -79,6 +85,18 @@ func (b *TerminalTools) prepare(ctx context.Context) error {
 	}
 	if b.access != nil {
 		return nil
+	}
+	if assessment == "idle_shell" && b.OpenAssessed != nil && b.hasObservation && time.Since(b.observedAt) < 90*time.Second {
+		b.hasObservation = false // one assessment applies to one attempt only
+		access, err := b.OpenAssessed(b.Turn.Context(), b.observedRevision)
+		if err == nil {
+			b.access = access
+			return nil
+		}
+		if errors.Is(err, terminalcontrol.ErrObservationStale) {
+			return err
+		}
+		return err
 	}
 	err := b.authorize(ctx, "terminal_take", "保护当前终端以执行用户任务；需要普通空闲命令行。", assistantcontrol.Prompt{Kind: "approval", Title: "允许助手接手当前终端？", Description: "请确认终端正停在普通命令行，未运行 vim、less、zsql 等交互程序。允许后，助手可读取当前屏幕和执行常规只读排查；其他命令仍逐次确认。屏幕和命令结果将发送给当前 AI 模型。", Choices: []assistantcontrol.Choice{{ID: "reject", Label: "暂不允许"}, {ID: "allow", Label: "允许本轮"}}, Expires: time.Now().Add(5 * time.Minute)})
 	if err != nil {
@@ -120,6 +138,9 @@ func (b *TerminalTools) observe(ctx context.Context) (terminalcontrol.TerminalCo
 	view, err := b.Observe(ctx)
 	if errors.Is(err, terminalcontrol.ErrExecutionAudit) {
 		b.Turn.Finish("failed", "终端读取审计未能保存，已停止本轮")
+	}
+	if err == nil && !view.Closed && view.Output.Text != "" {
+		b.observedRevision, b.observedAt, b.hasObservation = view.Revision, time.Now(), true
 	}
 	return view, err
 }
@@ -179,7 +200,11 @@ func (b *TerminalTools) CallWithPurpose(ctx context.Context, name, command, purp
 	if name == "terminal_execute" && b.run == nil {
 		return nil, errors.New("当前未占用终端，请先调用 terminal_take 并重新读取现场；读取屏幕不会自动占用")
 	}
-	if err := b.prepare(ctx); err != nil {
+	assessment := ""
+	if name == "terminal_take" {
+		assessment = command
+	}
+	if err := b.prepare(ctx, assessment); err != nil {
 		return nil, err
 	}
 	if b.run == nil {
@@ -226,6 +251,25 @@ func (b *TerminalTools) CallWithPurpose(ctx context.Context, name, command, purp
 		return nil, auditErr
 	}
 	if verdict.Allowed() {
+		if b.Turn.ApprovalMode() == "bypass" || assistantcontrol.CallApproved(ctx) {
+			var op terminalcontrol.ApprovedOperation
+			var approveErr error
+			if b.Turn.ApprovalMode() == "bypass" {
+				op, approveErr = b.access.ApproveUnrestrictedReview(required.ID)
+			} else {
+				op, approveErr = b.access.Approve(required.ID, true)
+			}
+			if approveErr != nil {
+				_ = b.release()
+				return nil, approveErr
+			}
+			result, execErr := op.Execute(ctx)
+			b.observeCommand(result, execErr, command, purpose)
+			if execErr != nil {
+				_ = b.release()
+			}
+			return result, execErr
+		}
 		approve := b.access.ApproveReadOnlyReview
 		if verdict.LowRisk || review.Assessment.ReadOnly {
 			approve = b.access.ApproveLowRiskReview

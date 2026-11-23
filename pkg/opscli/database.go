@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -24,6 +25,8 @@ const databaseOutputLimit = 32 * 1024
 type serverDriverCapability struct {
 	DriverID        string `json:"driverId"`
 	ReadOnlyAdapted bool   `json:"readOnlyAdapted"`
+	QuerySupported  bool   `json:"querySupported"`
+	ReadOnlyMode    string `json:"readOnlyMode"`
 	Reason          string `json:"reason"`
 }
 
@@ -34,6 +37,19 @@ type serverDriverStatus struct {
 
 func supportsServerReadOnly(driver dbworkspace.JDBCDriver) bool {
 	return driver.Dialect == "mysql"
+}
+
+var zenithSequence = regexp.MustCompile(`(?i)\bnextval\b`)
+
+// Zenith does not require a read-only transaction. Restrict SQL to the
+// conservative assistant SELECT subset; account permissions remain the
+// actual database-side enforcement boundary.
+func validateZenithQuery(sqlText string) error {
+	allowed, _, err := dbworkspace.AssistantSQL(sqlText, "generic")
+	if err != nil || !allowed || dbworkspace.AssistantSQLRequiresHuman(sqlText) || zenithSequence.MatchString(sqlText) {
+		return errors.New("GaussDB 100 仅允许常规只读 SELECT；函数、锁定、序列和其他不确定语法不支持，请使用数据库只读账号")
+	}
+	return nil
 }
 
 type opsCLIMemorySecrets struct{ values map[string]string }
@@ -89,8 +105,13 @@ func driverCommand(ctx context.Context, args []string, input io.Reader) (any, er
 		}
 		result := serverDriverStatus{JDBCStatus: status, ServerCapabilities: []serverDriverCapability{}}
 		for _, driver := range status.Drivers {
-			capability := serverDriverCapability{DriverID: driver.ID, ReadOnlyAdapted: supportsServerReadOnly(driver), Reason: "已适配 MySQL 服务端只读事务；连接、权限和目标版本仍需实际验证"}
-			if !capability.ReadOnlyAdapted {
+			capability := serverDriverCapability{DriverID: driver.ID, ReadOnlyAdapted: supportsServerReadOnly(driver), QuerySupported: supportsServerReadOnly(driver), ReadOnlyMode: "transaction", Reason: "已适配 MySQL 服务端只读事务；连接、权限和目标版本仍需实际验证"}
+			if dbworkspace.IsZenithDriver(driver) {
+				capability.QuerySupported = true
+				capability.ReadOnlyMode = "sql_guard"
+				capability.Reason = "GaussDB 100 使用 SQL 检查，不启用只读事务；请使用数据库只读账号"
+			} else if !capability.ReadOnlyAdapted {
+				capability.ReadOnlyMode = "unsupported"
 				capability.Reason = "尚未适配服务端强制只读事务，database 子命令暂不支持此驱动"
 			}
 			result.ServerCapabilities = append(result.ServerCapabilities, capability)
@@ -163,24 +184,31 @@ func queryDatabase(ctx context.Context, store *opssession.Store, session string,
 		return nil, err
 	}
 	found := false
+	zenith := false
 	for _, driver := range registry.Drivers {
 		if driver.ID != strings.TrimSpace(p.DriverID) {
 			continue
 		}
 		found = true
-		if !supportsServerReadOnly(driver) {
+		zenith = dbworkspace.IsZenithDriver(driver)
+		if !supportsServerReadOnly(driver) && !zenith {
 			return nil, errors.New("该 JDBC 方言尚未适配服务端强制只读事务，暂不支持自动定位；需要先完成并验证方言适配")
 		}
 	}
 	if !found {
 		return nil, errors.New("未找到节点指定的 driverId；请运行 driver list，选择已部署的驱动后用 connection put 更新该节点")
 	}
+	if zenith && action == "query" {
+		if err := validateZenithQuery(sqlText); err != nil {
+			return nil, err
+		}
+	}
 	// The profile belongs only to this invocation.  Save must create a fresh
 	// profile instead of treating an external node ID as an update target.
 	p.ID = ""
 	p.Revision = 0
 	p.Engine = "jdbc"
-	p.ReadOnly = true
+	p.ReadOnly = !zenith
 	p.DriverID = strings.TrimSpace(p.DriverID)
 	if p.GatewayID == "" {
 		p.GatewayID = strings.TrimSpace(node.GatewayID)

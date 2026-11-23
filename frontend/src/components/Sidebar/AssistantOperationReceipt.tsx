@@ -2,6 +2,7 @@ import { useId, useState } from 'react';
 import { TbArrowUpRight, TbCheck, TbCopy, TbDatabase, TbTransfer, TbTerminal2, TbAlertCircle, TbChevronRight, TbBook2, TbCommand, TbLayout, TbCircleMinus } from 'react-icons/tb';
 import { IconButton } from '@opscopilot/shell-terminal/ui';
 import type { AssistantOperation } from '../../../../frontend-shell/src/assistant/runtime';
+import { operationSummary } from './assistantOperationSummary';
 
 /** Compact, factual host receipt; model markdown cannot create an action. */
 export function AssistantOperationReceipt({ id, content, operation, time, onReveal, onExpand, timing }: {
@@ -11,6 +12,8 @@ export function AssistantOperationReceipt({ id, content, operation, time, onReve
     const [error, setError] = useState('');
     const [copied, setCopied] = useState(false);
     const execution = !!operation.action;
+    const summary = operationSummary(content, operation);
+    const summaryTitle = content.replace(/\s+/g, ' ').trim();
     const [expanded, setExpanded] = useState(false);
     const detailsId = useId();
     const preview = operation.result?.split('\n').find(line => line.trim())?.replace(/^结果 \d+：/, '') || '';
@@ -50,12 +53,12 @@ export function AssistantOperationReceipt({ id, content, operation, time, onReve
     if (execution) return <article className={`ai-operation-receipt is-execution${problem ? ' has-problem' : ''}`} data-testid="message-item">
         <div className="ai-execution-row">
             <button className="ai-execution-toggle" type="button" aria-expanded={expanded} aria-controls={detailsId}
-                aria-label={`${content}，${status || ''}，${expanded ? '收起' : '展开'}执行详情`}
-                title={[content, operation.location, preview, time && new Date(time).toLocaleString(),timing].filter(Boolean).join(' · ')}
+                aria-label={`${content}，${status || ''}，${expanded ? '收起' : '展开'}执行详情${summary !== summaryTitle ? ` · ${summary}` : ''}`}
+                title={[summary, preview, time && new Date(time).toLocaleString(),timing].filter(Boolean).join(' · ')}
                 onClick={() => { if (!expanded) onExpand?.(); setExpanded(value => !value); }}>
                 <TbChevronRight size={13} className="ai-execution-chevron" aria-hidden="true" />
                 <Icon size={14} aria-hidden="true" />
-                <span className="ai-execution-title">{content}</span>
+                <span className="ai-execution-title"><span>{summaryTitle}</span><span>{summary.slice(summaryTitle.length)}</span></span>
                 {preview && <span className="ai-execution-preview">{preview}</span>}
                 {elapsed && <small className="ai-execution-duration" title="本次调用用时（含调用中的确认等待）">{elapsed}</small>}
                 {operation.status === 'completed' || operation.status === 'done'
@@ -66,7 +69,6 @@ export function AssistantOperationReceipt({ id, content, operation, time, onReve
         </div>
         {problem && operation.next && <p className="ai-operation-next">{operation.next}</p>}
         <div id={detailsId} hidden={!expanded} className="ai-execution-details">
-            {timing && <p className="ai-execution-timing" title="助手响应包含启动、网络和生成等等待，不是模型服务端推理计时。工具执行不含等待你确认的时间。">{timing}</p>}
             <div className="ai-execution-location">{[operation.location, time && new Date(time).toLocaleString()].filter(Boolean).join(' · ')}</div>
             <pre className="ai-execution-action">{operation.action}</pre>
             {operation.result && <div className="ai-execution-result">

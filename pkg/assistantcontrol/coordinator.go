@@ -77,6 +77,7 @@ type Turn struct {
 	timing            turnClock
 	operationRevision uint64
 	rejectedActions   map[[32]byte]bool
+	approvalMode      string
 }
 
 func active(phase string) bool { return phase == "running" || phase == "waiting" }
@@ -97,6 +98,21 @@ func (c *Coordinator) Begin(ctx context.Context, target Target, yield func() err
 }
 func (t *Turn) ID() string               { return t.state.TurnID }
 func (t *Turn) Context() context.Context { return t.ctx }
+
+// SetApprovalMode is called by the host before starting the agent turn.
+func (t *Turn) SetApprovalMode(mode string) {
+	t.owner.mu.Lock()
+	defer t.owner.mu.Unlock()
+	if t.owner.current == t && active(t.state.Phase) {
+		t.approvalMode = mode
+	}
+}
+
+func (t *Turn) ApprovalMode() string {
+	t.owner.mu.Lock()
+	defer t.owner.mu.Unlock()
+	return t.approvalMode
+}
 
 // BindTarget is called only by the host when a tool first needs a resource.
 // Ordinary conversation has no target and does not depend on its lifecycle.

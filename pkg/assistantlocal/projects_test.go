@@ -186,3 +186,26 @@ func TestProjectAndDirectoryLimitsAreAtomic(t *testing.T) {
 		t.Fatal("project limit bypassed")
 	}
 }
+
+func TestPrimaryDirectoryReordersWithoutLosingOtherRoots(t *testing.T) {
+	store := &Projects{}
+	state, err := store.Create("service")
+	if err != nil {
+		t.Fatal(err)
+	}
+	roots := []string{t.TempDir(), t.TempDir(), t.TempDir()}
+	if _, err = store.Add(state.ActiveID, roots); err != nil {
+		t.Fatal(err)
+	}
+	state, err = store.SetPrimary(state.ActiveID, roots[2])
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := state.ActiveProject()
+	if len(got.Directories) != 3 || !same(got.Directories[0], roots[2]) || !same(got.Directories[1], roots[0]) || !same(got.Directories[2], roots[1]) {
+		t.Fatalf("incorrect primary order: %v", got.Directories)
+	}
+	if _, err = store.SetPrimary(state.ActiveID, t.TempDir()); err == nil {
+		t.Fatal("accepted a directory outside the project")
+	}
+}

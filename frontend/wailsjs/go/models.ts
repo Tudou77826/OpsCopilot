@@ -1287,7 +1287,12 @@ export namespace config {
 	    }
 	}
 	export class AssistantRuntimeConfig {
+	    kind?: string;
 	    executable: string;
+	    arguments?: string[];
+	    custom_agents?: any[];
+	    custom_agent_id?: string;
+	    preset_executables?: Record<string,string>;
 	    model_source?: string;
 
 	    static createFrom(source: any = {}) {
@@ -1297,6 +1302,11 @@ export namespace config {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.executable = source["executable"];
+	        this.kind = source["kind"];
+	        this.arguments = source["arguments"];
+	        this.custom_agents = source["custom_agents"];
+	        this.custom_agent_id = source["custom_agent_id"];
+	        this.preset_executables = source["preset_executables"];
 	        this.model_source = source["model_source"];
 	    }
 	}

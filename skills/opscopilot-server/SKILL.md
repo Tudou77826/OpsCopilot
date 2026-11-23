@@ -17,7 +17,7 @@ description: 服务端只读故障定位工具。问题平台提供 Session 和�
 
 1. 从平台获取稳定 Session ID 和业务环境。首次用 `session init --session ID --environment ENV`；恢复先 `session status --session ID`、`connection list --session ID`，直接使用已登记节点，不重复发现。
 2. 平台或脚本提供节点 JSON，通过 stdin 调 `connection put --session ID --input -`。SSH 字段为 `id,kind:"ssh",ssh:{host,port,user,password,root_password,bastion}`；`bastion` 可递归。数据库为 `id,kind:"database",password,gatewayId,database:{engine:"jdbc",driverId,host,port,user,database}`。`gatewayId` 引用同 Session SSH 节点，可省略直连。密码不放命令行、不写入结论。
-3. 节点以 ID 寻址，不能仅按 IP 合并。凭据过期只刷新对应节点，同目标省略密码会保留原值；更新包含主机、端口、账号等完整配置。数据库驱动通过部署好的 `driver list` 获取；检查 `serverCapabilities` 中对应 `driverId` 的 `readOnlyAdapted` 和原因，未适配时报告限制。`available` 只表示运行组件文件存在，不保证连接成功。任务不导入或修改驱动。
+3. 节点以 ID 寻址，不能仅按 IP 合并。凭据过期只刷新对应节点，同目标省略密码会保留原值；更新包含主机、端口、账号等完整配置。数据库驱动通过部署好的 `driver list` 获取；检查 `serverCapabilities` 中对应 `driverId` 的 `querySupported`、`readOnlyMode` 和原因。`available` 只表示运行组件文件存在，不保证连接成功。任务不导入或修改驱动。
 
 ## 工具调用
 
@@ -40,7 +40,7 @@ opscopilot-cli knowledge read --id SCENARIO_ID
 
 stdout 为 `{success,status,data,error,hint}`，后三项按需出现；退出码非 0 必须解析失败结果。SSH 真正退出码为 `data.exitCode`，`completionKnown:false` 或 `status:unknown` 表示无法确认，不猜测成功、不盲目重跑。`startAttempted:true` 但 `started:false` 可能是确认回包丢失，不能断定命令未执行。`truncated:true` 或结果集 `truncated:true` 表示输出有裁剪，改用更窄的时间范围、grep 条件、head/tail、SQL LIMIT；没有隐藏的完整输出读取入口。
 
-命令受部署白名单和文件策略约束，不能以 `sh -c`、改写脚本或其他通道绕过拒绝。数据库程序强制只读，目前支持 MySQL 方言；通用 JDBC 未适配时应报告能力限制，不能建议取消保护。
+命令受部署白名单和文件策略约束，不能以 `sh -c`、改写脚本或其他通道绕过拒绝。MySQL 使用数据库只读事务；GaussDB 100 不开启只读事务，仅允许常规 SELECT，使用数据库只读账号作为权限保障。其他通用 JDBC 暂不支持，不能建议绕过限制。
 
 ## 提问、异常和结束
 

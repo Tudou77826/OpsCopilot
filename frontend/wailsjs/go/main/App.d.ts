@@ -42,6 +42,8 @@ export function AskCompanionAI(arg1:string):Promise<string>;
 
 export function AskTroubleshoot(arg1:string):Promise<string>;
 
+export function AssistantApprovalMode():Promise<string>;
+
 export function AssistantCommandConnections():Promise<Array<main.AssistantConnectionChoice>>;
 
 export function AssistantContextUsage():Promise<acp.ContextUsage>;
@@ -54,6 +56,10 @@ export function AssistantLocalDirectories():Promise<Array<string>>;
 
 export function AssistantLocalProjects():Promise<assistantlocal.ProjectState>;
 
+export function AssistantProjectWorkspace():Promise<{state: string}>;
+
+export function SetAssistantProjectPrimaryDirectory(arg1:string,arg2:string):Promise<assistantlocal.ProjectState>;
+
 export function AssistantModelOptions():Promise<main.AssistantModels>;
 
 export function Broadcast(arg1:Array<string>,arg2:string):Promise<void>;
@@ -61,6 +67,10 @@ export function Broadcast(arg1:Array<string>,arg2:string):Promise<void>;
 export function CancelSession():Promise<string>;
 
 export function CheckAssistantRuntime(arg1:string):Promise<acp.RuntimeReport>;
+export function CheckAssistantAgentRuntime(arg1:string,arg2:string):Promise<acp.RuntimeReport>;
+export function CheckCustomAssistantRuntime(arg1:string,arg2:Array<string>):Promise<acp.RuntimeReport>;
+export function AssistantAgentKind():Promise<string>;
+export function AssistantAgentCommands():Promise<Array<{name:string;description:string}>>;
 
 export function CheckSkillStatus(arg1:string):Promise<string>;
 
@@ -361,6 +371,8 @@ export function SaveSettings(arg1:config.AppConfig):Promise<string>;
 export function SaveSharedSessionToLocal(arg1:string):Promise<string>;
 
 export function SaveTerminalConfig(arg1:config.TerminalConfig):Promise<string>;
+
+export function SelectAssistantApprovalMode(arg1:string):Promise<string>;
 
 export function SelectAssistantLocalDirectory():Promise<string>;
 

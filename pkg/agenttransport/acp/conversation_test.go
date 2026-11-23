@@ -1,20 +1,29 @@
 package acp
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
 
+	"opscopilot/pkg/agenttransport/mcp"
 	"opscopilot/pkg/assistantcontrol"
 )
 
 // Only the spawned test executable enters this minimal ACP peer. No model,
 // network service, user profile or business SSH endpoint is involved.
 func TestMain(m *testing.M) {
+	if len(os.Args) == 2 && os.Args[1] == "--assistant-mcp-stdio" {
+		if mcp.RunStdioProxy(context.Background(), os.Stdin, os.Stdout, os.Getenv(mcp.StdioAddressEnv), os.Getenv(mcp.StdioTokenEnv)) != nil {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 	if os.Getenv("ACP_CONVERSATION_TEST") == "1" && len(os.Args) > 1 && os.Args[1] == "acp" {
 		conversationPeer()
 		os.Exit(0)
@@ -59,9 +68,46 @@ func conversationPeer() {
 			} else {
 				reply(message.ID, map[string]any{})
 			}
+		case "session/set_config_option":
+			var params struct {
+				Value string `json:"value"`
+			}
+			_ = json.Unmarshal(message.Params, &params)
+			reply(message.ID, map[string]any{"configOptions": []any{map[string]any{"id": "model", "name": "Model", "category": "model", "type": "select", "currentValue": params.Value, "options": []any{map[string]string{"value": "first", "name": "First"}, map[string]string{"value": "second", "name": "Second"}}}}})
 		case "_profiles/agents/write":
 			reply(message.ID, map[string]any{})
 		case "session/new":
+			if os.Getenv("ACP_TEST_STDIO") == "1" {
+				var params struct {
+					Servers []struct {
+						Command string                         `json:"command"`
+						Args    []string                       `json:"args"`
+						Env     []struct{ Name, Value string } `json:"env"`
+					} `json:"mcpServers"`
+				}
+				_ = json.Unmarshal(message.Params, &params)
+				if len(params.Servers) != 1 {
+					return
+				}
+				server := params.Servers[0]
+				command := exec.Command(server.Command, server.Args...)
+				command.Env = os.Environ()
+				for _, entry := range server.Env {
+					command.Env = append(command.Env, entry.Name+"="+entry.Value)
+				}
+				input, inputErr := command.StdinPipe()
+				output, outputErr := command.StdoutPipe()
+				if inputErr != nil || outputErr != nil || command.Start() != nil {
+					return
+				}
+				_, _ = input.Write([]byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}` + "\n"))
+				line, readErr := bufio.NewReader(output).ReadString('\n')
+				_ = input.Close()
+				_ = command.Wait()
+				if readErr != nil || !strings.Contains(line, "workspace_list") {
+					return
+				}
+			}
 			if os.Getenv("ACP_CONVERSATION_NEW_FAILURE") == "1" {
 				_ = encoder.Encode(map[string]any{"jsonrpc": "2.0", "id": message.ID, "error": map[string]any{"code": -32603, "message": "fixture-session-failed"}})
 				continue
@@ -203,6 +249,9 @@ func TestConversationCancellationKeepsContextAndKillsUnresponsiveChild(t *testin
 			if _, err := c.router.Call(ctx, "terminal_context", ""); !errors.Is(err, assistantcontrol.ErrStale) {
 				t.Fatal("stopped tool authority survived", err)
 			}
+			if c.Unusable() != (scenario == "wait-ignore") {
+				t.Fatal("incorrect reusable state after stop")
+			}
 			next, _ := coordinator.Begin(ctx, assistantcontrol.Target{}, nil)
 			defer next.Finish("completed", "")
 			err := c.Run(ctx, config, next, tools, "after-stop")
@@ -216,6 +265,18 @@ func TestConversationCancellationKeepsContextAndKillsUnresponsiveChild(t *testin
 				t.Fatal("stop lost conversation", next.Snapshot(), err)
 			}
 		})
+	}
+}
+
+func TestConversationDetectsIdleTransportExit(t *testing.T) {
+	done := make(chan struct{})
+	c := &Conversation{client: &Client{done: done}}
+	if c.Unusable() {
+		t.Fatal("healthy transport marked unusable")
+	}
+	close(done)
+	if !c.Unusable() {
+		t.Fatal("closed transport was treated as reusable")
 	}
 }
 func TestManagedBindingCannotForwardLateUpdatesRequestsOrTools(t *testing.T) {

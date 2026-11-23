@@ -386,6 +386,22 @@ func TestZenithURLTemplateNormalization(t *testing.T) {
 	}
 }
 
+func TestZenithDriverIdentityRequiresExactClassAndGenericDialect(t *testing.T) {
+	base := JDBCDriver{ClassName: "com.huawei.gauss.jdbc.ZenithDriver", URLTemplate: zenithURLTemplate, Dialect: "generic"}
+	if !IsZenithDriver(base) {
+		t.Fatal("GaussDB 100 driver was not recognized")
+	}
+	for _, d := range []JDBCDriver{
+		{ClassName: "other.ZenithDriver", URLTemplate: zenithURLTemplate, Dialect: "generic"},
+		{ClassName: base.ClassName, URLTemplate: "jdbc:other:@{host}:{port}", Dialect: "generic"},
+		{ClassName: base.ClassName, URLTemplate: zenithURLTemplate, Dialect: "mysql"},
+	} {
+		if IsZenithDriver(d) {
+			t.Fatalf("unexpected Zenith driver match: %+v", d)
+		}
+	}
+}
+
 func TestProductionRequiresImportedDriverPreservingLegacyProfiles(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "profiles.json")
 	secrets := &memorySecrets{values: map[string]string{}}

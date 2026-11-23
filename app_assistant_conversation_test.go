@@ -43,6 +43,30 @@ func TestAssistantNewConversationClearsBackendOnlyWhenIdle(t *testing.T) {
 	}
 }
 
+func TestUnavailableAssistantConversationPreservesHistoryForNextExplicitTurn(t *testing.T) {
+	a := newLifecycleApp()
+	a.assistantHistory.Begin("old", "what is the next number?")
+	a.assistantHistory.Finish(assistantcontrol.State{TurnID: "old", Phase: "stopped", Message: "已停止"})
+	healthy := &acp.Conversation{}
+	a.assistantConversation = healthy
+	a.recoverUnavailableAssistantConversationLocked()
+	if a.assistantConversation != healthy || a.assistantRecovered {
+		t.Fatal("healthy conversation was replaced")
+	}
+	healthy.Close()
+	a.recoverUnavailableAssistantConversationLocked()
+	if a.assistantConversation != nil || !a.assistantRecovered || a.assistantRecoveryNote == "" {
+		t.Fatal("unavailable conversation was not prepared for recovery")
+	}
+	snapshot := a.assistantHistory.Snapshot()
+	if len(snapshot.Messages) == 0 || snapshot.Messages[0].Content != "what is the next number?" {
+		t.Fatal("visible history was lost", snapshot)
+	}
+	if a.assistantRunning {
+		t.Fatal("recovery started a turn without a user message")
+	}
+}
+
 func TestAssistantRestoreCancelsPendingApprovalAndDrainsBeforeHistory(t *testing.T) {
 	a := newLifecycleApp()
 	turn, _ := a.assistantCoordinator().Begin(context.Background(), assistantcontrol.Target{}, nil)

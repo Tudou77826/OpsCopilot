@@ -50,7 +50,7 @@ func TestLiveChrysManagedTools(t *testing.T) {
 		}
 		for _, tool := range request.Tools {
 			name := tool.Function.Name
-			if name == "read_file" || name == "write_file" || name == "edit_file" || name == "glob" || name == "grep" || name == "list_workspace_dirs" || name == "view_image" || name == "pwsh" || name == "powershell" || name == "git_bash" || name == "bash" || name == "zsh" || name == "sh" || name == "cmd" {
+			if name == "read_file" || name == "write_file" || name == "edit_file" || name == "glob" || name == "grep" || name == "list_workspace_dirs" || name == "view_image" || name == "pwsh" || name == "powershell" || name == "git_bash" || name == "bash" || name == "zsh" || name == "sh" || name == "cmd" || name == "sleep" {
 				continue
 			}
 			databaseTool := false

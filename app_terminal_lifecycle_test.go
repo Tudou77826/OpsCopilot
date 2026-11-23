@@ -30,6 +30,7 @@ func (c *lifecycleConn) StartShell(int, int) (io.WriteCloser, io.Reader, error) 
 	return &handoffTestWriter{}, strings.NewReader(""), nil
 }
 func (*lifecycleConn) Resize(int, int) error                       { return nil }
+func (*lifecycleConn) CloseShell() error                           { return nil }
 func (*lifecycleConn) Run(context.Context, string) (string, error) { return "", nil }
 func (*lifecycleConn) Healthy() bool                               { return true }
 func (*lifecycleConn) Protocol() string                            { return remote.ProtocolSSH }

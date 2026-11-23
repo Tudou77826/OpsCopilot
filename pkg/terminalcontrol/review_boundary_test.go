@@ -18,6 +18,43 @@ func TestHumanRiskFloorUsesOperationRatherThanSearchWords(t *testing.T) {
 	}
 }
 
+func TestNullOutputRedirectIsNotAFileWrite(t *testing.T) {
+	for _, command := range []string{
+		"ls -lh /tmp/opscopilot-linux-e2e-20261026 /tmp/hsperfdata_root; du -sh /tmp 2>/dev/null",
+		"du -sh /tmp 2> /dev/null", "ls /tmp >/dev/null 2>&1", "ls /tmp >>/dev/null",
+	} {
+		if RequiresHumanReview(command) {
+			t.Errorf("discarding output triggered approval: %q", command)
+		}
+	}
+	for _, command := range []string{
+		"printf data > /tmp/result", "printf data >> /tmp/result", "ls /tmp 2>/dev/null.other",
+		`ls /tmp 2>/dev/null"suffix"`, `ls /tmp 2>/dev/null\;suffix`, "ls /tmp 2>/dev/null$(printf x)",
+		"ls /tmp 2>/dev/null; rm /tmp/result", "ls /tmp 2>&1; printf x > /tmp/result",
+		`rm'' /tmp/result 2>/dev/null`,
+	} {
+		if !RequiresHumanReview(command) {
+			t.Errorf("unsafe redirect or deletion escaped approval: %q", command)
+		}
+	}
+}
+
+func TestReadOnlyCompositeCommandCanPassHostReview(t *testing.T) {
+	a, _, _, writer, target := protectedFixture(t, &memoryJournal{})
+	a.scope.RequireActionReview = true
+	run := retainedTake(t, a, target)
+	command := "ls -lh /tmp/opscopilot-linux-e2e-20261026 /tmp/hsperfdata_root; du -sh /tmp 2>/dev/null"
+	id := requireReview(t, run, context.Background(), command)
+	if _, err := a.ApproveLowRiskReview(id, "iCode allowed an ordinary directory inspection"); err != nil {
+		t.Fatalf("safe command rejected: %v", err)
+	}
+	select {
+	case <-writer.writes:
+		t.Fatal("approval alone must not execute the command")
+	default:
+	}
+}
+
 func TestReviewedScopeStillRequiredForLiteralCommand(t *testing.T) {
 	a, _, _, w, target := protectedFixture(t, &memoryJournal{})
 	a.scope.RequireActionReview = true

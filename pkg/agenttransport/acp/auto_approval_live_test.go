@@ -51,7 +51,7 @@ func TestLiveICodeAutoReviewsOpsToolAndForwardsRejection(t *testing.T) {
 		step := calls.Add(1)
 		message := map[string]any{"role": "assistant", "content": "DONE"}
 		finish := "stop"
-		if step == 1 || step == 3 || step == 5 {
+		if step == 1 || step == 3 || step == 5 || step == 7 || step == 9 {
 			name := ""
 			for _, tool := range req.Tools {
 				if tool.Function.Name == "terminal_execute" || strings.HasSuffix(tool.Function.Name, "_terminal_execute") {
@@ -65,7 +65,7 @@ func TestLiveICodeAutoReviewsOpsToolAndForwardsRejection(t *testing.T) {
 				return
 			}
 			command := "ls /tmp"
-			if phase.Load() == 2 {
+			if phase.Load() == 2 || phase.Load() == 4 {
 				command = "rm /tmp/fixture-only"
 			}
 			args, _ := json.Marshal(map[string]string{"command": command, "purpose": "isolated test"})
@@ -109,6 +109,9 @@ func TestLiveICodeAutoReviewsOpsToolAndForwardsRejection(t *testing.T) {
 	if p == nil || tools.calls.Load() != 1 {
 		t.Fatal("risk call was dispatched before confirmation")
 	}
+	if p.Title != "确认这一次终端操作" {
+		t.Fatalf("iCode permission was not joined to the host call: %q", p.Title)
+	}
 	if err := coordinator.Respond(second.ID(), p.ID, assistantcontrol.Answer{Selected: []string{"reject"}}); err != nil {
 		t.Fatal(err)
 	}
@@ -145,5 +148,53 @@ func TestLiveICodeAutoReviewsOpsToolAndForwardsRejection(t *testing.T) {
 	}
 	if judgments.Load() < 3 || tools.calls.Load() != 1 {
 		t.Fatal("judge failure bypassed review", judgments.Load(), tools.calls.Load())
+	}
+	third.Finish("completed", "")
+	if err := conversation.SwitchApprovalMode(ctx, "bypass"); err != nil {
+		t.Fatal(err)
+	}
+	config.ApprovalMode = "bypass"
+	phase.Store(4)
+	beforeJudgments := judgments.Load()
+	fourth, _ := coordinator.Begin(ctx, assistantcontrol.Target{}, nil)
+	defer fourth.Finish("completed", "")
+	if err := conversation.Run(ctx, config, fourth, tools, "查看目录"); err != nil {
+		t.Fatal(err)
+	}
+	if tools.calls.Load() != 2 || judgments.Load() != beforeJudgments || coordinator.Snapshot().Prompt != nil {
+		t.Fatal("bypass did not take effect for this session", tools.calls.Load(), judgments.Load())
+	}
+	fourth.Finish("completed", "")
+	if err := conversation.SwitchApprovalMode(ctx, "manual"); err != nil {
+		t.Fatal(err)
+	}
+	config.ApprovalMode = "manual"
+	phase.Store(5)
+	fifth, _ := coordinator.Begin(ctx, assistantcontrol.Target{}, nil)
+	fifth.SetApprovalMode("manual")
+	defer fifth.Finish("completed", "")
+	done = make(chan error, 1)
+	go func() { done <- conversation.Run(ctx, config, fifth, tools, "查看目录") }()
+	deadline = time.Now().Add(30 * time.Second)
+	for coordinator.Snapshot().Prompt == nil && time.Now().Before(deadline) {
+		select {
+		case err := <-done:
+			t.Fatalf("manual mode ended without confirmation: %v", err)
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	p = coordinator.Snapshot().Prompt
+	if p == nil || p.Title != "确认这一次终端操作" || tools.calls.Load() != 2 {
+		t.Fatal("manual action was not held for confirmation", p)
+	}
+	if err := coordinator.Respond(fifth.ID(), p.ID, assistantcontrol.Answer{Selected: []string{"allow"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if tools.calls.Load() != 3 || coordinator.Snapshot().Prompt != nil {
+		t.Fatal("manual action did not complete after one approval")
 	}
 }

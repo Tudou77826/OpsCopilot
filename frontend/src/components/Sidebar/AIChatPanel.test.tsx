@@ -14,6 +14,78 @@ const submit = (text: string) => {
 };
 
 describe('统一 AI 对话', () => {
+    it('上下浏览已发送消息，跳过回答和待发送项，并恢复当前草稿', async () => {
+        const host=runtime();
+        host.restoreConversation=vi.fn(async()=>({id:'saved',truncated:false,messages:[
+            {id:'one',role:'user',content:'第一条'},
+            {id:'question',role:'ai',kind:'question',content:'哪一天？'},
+            {id:'answer',role:'user',kind:'answer',content:'今天'},
+            {id:'two',role:'user',content:'第二条'},
+        ]}));
+        render(<AIChatPanel runtime={host}/>);
+        await screen.findByText('第二条');
+        const input=screen.getByPlaceholderText('输入问题…') as HTMLTextAreaElement;
+        fireEvent.change(input,{target:{value:'正在写的草稿'}});
+        input.setSelectionRange(0,0);
+        fireEvent.keyDown(input,{key:'ArrowUp'});
+        expect(input).toHaveValue('第二条');
+        fireEvent.keyDown(input,{key:'ArrowUp'});
+        expect(input).toHaveValue('第一条');
+        fireEvent.keyDown(input,{key:'ArrowDown'});
+        expect(input).toHaveValue('第二条');
+        fireEvent.keyDown(input,{key:'ArrowDown'});
+        expect(input).toHaveValue('正在写的草稿');
+        expect(host.start).not.toHaveBeenCalled();
+    });
+    it('多行光标正常移动，输入法组合和选择文本时不切换历史', async () => {
+        const host=runtime();
+        host.restoreConversation=vi.fn(async()=>({id:'saved',truncated:false,messages:[{id:'old',role:'user',content:'历史问题'}]}));
+        render(<AIChatPanel runtime={host}/>);
+        await screen.findByText('历史问题');
+        const input=screen.getByPlaceholderText('输入问题…') as HTMLTextAreaElement;
+        fireEvent.change(input,{target:{value:'第一行\n第二行'}});
+        input.setSelectionRange(5,5);
+        fireEvent.keyDown(input,{key:'ArrowUp'});
+        expect(input).toHaveValue('第一行\n第二行');
+        input.setSelectionRange(0,0);
+        fireEvent.keyDown(input,{key:'ArrowUp',isComposing:true});
+        expect(input).toHaveValue('第一行\n第二行');
+        input.setSelectionRange(0,2);
+        fireEvent.keyDown(input,{key:'ArrowUp'});
+        expect(input).toHaveValue('第一行\n第二行');
+        input.setSelectionRange(0,0);
+        fireEvent.keyDown(input,{key:'ArrowUp'});
+        expect(input).toHaveValue('历史问题');
+    });
+    it('找回原页签引用，失效引用不会被当前页替代', async () => {
+        const host=runtime();
+        const old={kind:'terminal' as const,tabId:'old',connectionId:'old-connection',title:'原节点'};
+        host.restoreConversation=vi.fn(async()=>({id:'saved',truncated:false,messages:[{id:'old',role:'user',content:'检查原节点',references:[old]}]}));
+        render(<AIChatPanel runtime={host} pageOptions={[{...old,connectionId:'new-connection'}]} activeTerminalTarget={{tabId:'another',connectionId:'another'}}/>);
+        await screen.findByText('检查原节点');
+        const input=screen.getByPlaceholderText('输入问题…');
+        fireEvent.keyDown(input,{key:'ArrowUp'});
+        expect(screen.getByRole('button',{name:'移除引用：原节点'})).toBeVisible();
+        fireEvent.keyDown(input,{key:'Enter'});
+        expect(screen.getByRole('alert')).toHaveTextContent('引用页签已关闭');
+        expect(host.start).not.toHaveBeenCalled();
+        expect(input).toHaveValue('检查原节点');
+    });
+    it('快捷命令或页签选择菜单打开时方向键不切换输入历史', async () => {
+        const host=runtime();
+        host.restoreConversation=vi.fn(async()=>({id:'saved',truncated:false,messages:[{id:'old',role:'user',content:'历史问题'}]}));
+        render(<AIChatPanel runtime={host} pageOptions={[{kind:'terminal',tabId:'t',connectionId:'c',title:'节点'}]}/>);
+        await screen.findByText('历史问题');
+        const input=screen.getByPlaceholderText('输入问题…');
+        fireEvent.change(input,{target:{value:'/'}});
+        expect(screen.getByRole('listbox',{name:'快捷命令'})).toBeVisible();
+        fireEvent.keyDown(input,{key:'ArrowUp'});
+        expect(input).toHaveValue('/');
+        fireEvent.change(input,{target:{value:'@'}});
+        expect(screen.getByRole('dialog',{name:'引用页签'})).toBeVisible();
+        fireEvent.keyDown(input,{key:'ArrowUp'});
+        expect(input).toHaveValue('@');
+    });
     it('将对话操作交给统一顶栏，不重复显示助手标题或操作按钮', () => {
         const close=vi.fn();
         render(<AIChatPanel runtime={runtime()} onClose={close} renderHeader={actions => <header aria-label="伙伴顶栏"><span>微光</span>{actions}</header>}/>);
@@ -86,7 +158,7 @@ describe('统一 AI 对话', () => {
         const legacy = vi.fn();
         registerWorkspaceIdentity('test-page'); markWorkspaceReady('test-page');
         const dispose = provideWorkspaceSnapshot(() => ({tabs:[],active:{tabId:'',connectionId:''}}));
-        window.go = { main:{ App:{RestoreAssistantConversationOnPage:vi.fn(async()=>({id:'test',messages:[],truncated:false})),StartAssistantTurnOnPage:start,WorkspacePull:vi.fn(async()=>[]),AskCompanionAI:legacy,StopAssistantTurn:vi.fn(async()=>undefined)} } } as any;
+        window.go = { main:{ App:{RestoreAssistantConversationOnPage:vi.fn(async()=>({id:'test',messages:[],truncated:false})),AssistantApprovalMode:vi.fn(async()=> 'auto'),StartAssistantTurnOnPage:start,WorkspacePull:vi.fn(async()=>[]),AskCompanionAI:legacy,StopAssistantTurn:vi.fn(async()=>undefined)} } } as any;
         render(<AIChatPanel/>);
         await waitFor(()=>expect(screen.getByPlaceholderText('输入问题…')).toBeEnabled());
         submit('你是谁？');
@@ -263,6 +335,39 @@ describe('统一 AI 对话', () => {
         expect(host.stop).toHaveBeenCalledWith('turn');
         expect(host.start).toHaveBeenCalledWith('只看今天的日志',undefined);
         expect(host.newConversation).not.toHaveBeenCalled();
+    });
+    it('编辑待发消息直接覆盖当前草稿，保留引用页签并可重新排队', async () => {
+        const host = runtime();
+        const state:AssistantTurnState = {...completed(), phase:'running', output:''};
+        host.start = vi.fn(async () => state);
+        host.state = vi.fn(async () => state);
+        const pages = [
+            {kind:'terminal' as const,tabId:'one',connectionId:'conn',title:'业务节点'},
+            {kind:'database' as const,tabId:'db',connectionId:'database',title:'订单库'},
+        ];
+        render(<AIChatPanel runtime={host} pageOptions={pages}/>);
+        submit('第一条问题');
+        await screen.findByRole('button',{name:'停止本轮'});
+        fireEvent.click(screen.getByRole('button',{name:'引用页签'}));
+        screen.getAllByRole('checkbox').forEach(choice => fireEvent.click(choice));
+        fireEvent.click(screen.getByRole('button',{name:'完成引用'}));
+        const input = screen.getByPlaceholderText('输入问题…');
+        fireEvent.change(input,{target:{value:'查询待编辑的内容'}});
+        fireEvent.keyDown(input,{key:'Enter'});
+        fireEvent.change(input,{target:{value:'会被覆盖的草稿'}});
+        fireEvent.click(screen.getByRole('button',{name:'编辑消息：查询待编辑的内容'}));
+        expect(input).toHaveValue('查询待编辑的内容');
+        expect(input).toHaveFocus();
+        expect(screen.queryByLabelText('待发送消息')).not.toBeInTheDocument();
+        expect(screen.getByRole('button',{name:'移除引用：业务节点'})).toBeVisible();
+        expect(screen.getByRole('button',{name:'移除引用：订单库'})).toBeVisible();
+        fireEvent.change(input,{target:{value:'编辑后查询'}});
+        fireEvent.keyDown(input,{key:'Enter'});
+        expect(screen.getByLabelText('待发送消息')).toHaveTextContent('编辑后查询');
+        expect(screen.getByLabelText('待发送消息')).toHaveTextContent('业务节点');
+        expect(screen.getByLabelText('待发送消息')).toHaveTextContent('订单库');
+        expect(host.start).toHaveBeenCalledTimes(1);
+        expect(host.stop).not.toHaveBeenCalled();
     });
     it('阅读历史时新回答不抢滚动，用户可主动回到最新', async () => {
         const host = runtime();

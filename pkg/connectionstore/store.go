@@ -468,6 +468,113 @@ func (s *Store) UpdateConnection(id string, cfg remote.ConnectConfig) error {
 	return s.saveLocked()
 }
 
+// CreateProjectConnection 新建一条远程项目 SSH 连接，允许同主机同端口使用不同账号或跳板配置。
+// 密码由调用方按连接 ID 存入系统凭据库，此处不将明文密码落入 sessions.json。
+func (s *Store) CreateProjectConnection(cfg remote.ConnectConfig, parentID string) (*Node, error) {
+	cfg.Protocol = normalizedProtocol(cfg.Protocol)
+	cfg.Host = strings.TrimSpace(cfg.Host)
+	cfg.User = strings.TrimSpace(cfg.User)
+	if cfg.Host == "" {
+		return nil, errors.New("主机地址不能为空")
+	}
+	if cfg.Port <= 0 {
+		return nil, errors.New("端口必须大于 0")
+	}
+	if cfg.User == "" {
+		return nil, errors.New("SSH 账号不能为空")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	release, err := s.beginMutation()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
+	siblings, err := s.childrenOfLocked(parentID)
+	if err != nil {
+		return nil, err
+	}
+
+	name := strings.TrimSpace(cfg.Name)
+	if name == "" {
+		name = fmt.Sprintf("%s@%s", cfg.User, cfg.Host)
+	}
+	cfg.Name = name
+	cfg.Group = ""
+	stripPlaintextPasswords(&cfg)
+
+	node := &Node{ID: uuid.New().String(), Name: name, Type: KindConnection, Config: &cfg}
+	*siblings = append(*siblings, node)
+	return cloneNode(node), s.saveLocked()
+}
+
+// UpdateProjectConnection 更新一条远程项目 SSH 连接，允许与其它连接共用同一主机和端口。
+// 调用方通过系统凭据库维护密码；此处保留已有 HostKey（除非调用方显式传入新值或清空）。
+func (s *Store) UpdateProjectConnection(id string, cfg remote.ConnectConfig) (*Node, error) {
+	cfg.Protocol = normalizedProtocol(cfg.Protocol)
+	cfg.Host = strings.TrimSpace(cfg.Host)
+	cfg.User = strings.TrimSpace(cfg.User)
+	if cfg.Host == "" {
+		return nil, errors.New("主机地址不能为空")
+	}
+	if cfg.Port <= 0 {
+		return nil, errors.New("端口必须大于 0")
+	}
+	if cfg.User == "" {
+		return nil, errors.New("SSH 账号不能为空")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	release, err := s.beginMutation()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
+	loc := locate(&s.nodes, id)
+	if loc == nil {
+		return nil, fmt.Errorf("%w: %s", ErrNotFound, id)
+	}
+	if loc.node.Type != KindConnection {
+		return nil, ErrNotConnection
+	}
+
+	name := strings.TrimSpace(cfg.Name)
+	if name == "" {
+		if loc.node.Name != "" {
+			name = loc.node.Name
+		} else {
+			name = fmt.Sprintf("%s@%s", cfg.User, cfg.Host)
+		}
+	}
+	cfg.Name = name
+	cfg.Group = ""
+	stripPlaintextPasswords(&cfg)
+
+	loc.node.Name = name
+	loc.node.Config = &cfg
+	if err := s.saveLocked(); err != nil {
+		return nil, err
+	}
+	return cloneNode(loc.node), nil
+}
+
+func stripPlaintextPasswords(cfg *remote.ConnectConfig) {
+	if cfg == nil {
+		return
+	}
+	cfg.Password = ""
+	cfg.RootPassword = ""
+	if cfg.Bastion != nil {
+		stripPlaintextPasswords(cfg.Bastion)
+	}
+}
+
 // MoveNode 把节点移动到 newParentID 下（空表示根）的第 index 位。
 //
 // index 的语义是"摘除待移动节点之后、目标兄弟列表中的插入位置"，取值超出范围
