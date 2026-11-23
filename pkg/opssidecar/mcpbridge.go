@@ -131,6 +131,10 @@ func (g *mcpGateway) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		g.svc.projectMCP.handleHTTP(w, r)
 		return
 	}
+	if r.URL.Path == "/project-askpass" && g.svc != nil && g.svc.projectAskpass != nil {
+		g.svc.projectAskpass.handleHTTP(w, r)
+		return
+	}
 	slog.Info("[ops-mcp-http] 请求", "method", r.Method, "path", r.URL.Path, "auth", r.Header.Get("Authorization") != "")
 	if r.Method != http.MethodPost {
 		http.Error(w, "仅支持 POST", http.StatusMethodNotAllowed)

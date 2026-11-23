@@ -58,6 +58,7 @@ type Service struct {
 	projectPathLocks *pathLockTable
 	projectOps       *projectOpTracker
 	projectMCP       *projectMCPManager
+	projectAskpass   *projectAskpassManager
 
 	// MCP 桥（随机端口 + 内存态 token；Desktop 经 bridge/info 取凭据 env 直传）
 	bridgeMu   sync.Mutex
@@ -130,6 +131,7 @@ func NewService(dataDir string, out io.Writer) (*Service, error) {
 	s.projectPathLocks = newPathLockTable()
 	s.projectOps = newProjectOpTracker()
 	s.projectMCP = newProjectMCPManager(s)
+	s.projectAskpass = newProjectAskpassManager()
 	s.lastTouch.Store(time.Now().Unix())
 	s.startBridge()
 	return s, nil
@@ -511,6 +513,8 @@ func (s *Service) handle(req Request) (resp Response, exit bool) {
 		return s.handleProjectMCPUnbind(req)
 	case MethodProjectApprovalReply:
 		return s.handleProjectApprovalReply(req)
+	case MethodProjectTerminalPrepare:
+		return s.handleProjectTerminalPrepare(req)
 	case MethodBridgeInfo:
 		addr, token := s.bridgeInfo()
 		return okResponse(req.ID, map[string]any{"address": addr, "token": token}), false

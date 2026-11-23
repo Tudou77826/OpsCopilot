@@ -20,16 +20,18 @@ package remote
 // 通信使用的 app.ConnectConfig 是独立结构体(驼峰 JSON tag),二者在
 // app.go 中显式转换,与历史行为保持一致。
 type ConnectConfig struct {
-	Name         string         `json:"name"`
-	Protocol     string         `json:"protocol,omitempty"` // 空值或 "ssh" 走 SSH;"telnet" 走 Telnet
-	Host         string         `json:"host"`
-	Port         int            `json:"port"`
-	User         string         `json:"user"`
-	Password     string         `json:"password"`
-	HostKey      string         `json:"host_key,omitempty"` // OpenSSH authorized-key form; pinned before authentication.
-	RootPassword string         `json:"root_password"`
-	Bastion      *ConnectConfig `json:"bastion"`
-	Group        string         `json:"group,omitempty"` // UI 分组
+	Name           string         `json:"name"`
+	Protocol       string         `json:"protocol,omitempty"` // 空值或 "ssh" 走 SSH;"telnet" 走 Telnet
+	Host           string         `json:"host"`
+	Port           int            `json:"port"`
+	User           string         `json:"user"`
+	AuthType       string         `json:"auth_type,omitempty"`        // 空值或 "password" | "key" | "agent"
+	PrivateKeyPath string         `json:"private_key_path,omitempty"` // 私钥文件路径（仅 auth_type=="key"）
+	Password       string         `json:"password"`
+	HostKey        string         `json:"host_key,omitempty"` // OpenSSH authorized-key form; pinned before authentication.
+	RootPassword   string         `json:"root_password"`
+	Bastion        *ConnectConfig `json:"bastion"`
+	Group          string         `json:"group,omitempty"` // UI 分组
 }
 
 // 协议常量。比较时统一使用这些常量,避免字符串散落。

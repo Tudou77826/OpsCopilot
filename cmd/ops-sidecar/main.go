@@ -22,6 +22,9 @@ import (
 )
 
 func main() {
+	if os.Getenv("AAW_ASKPASS_URL") != "" && os.Getenv("AAW_ASKPASS_TOKEN") != "" {
+		os.Exit(opssidecar.RunAskpass(os.Stdout))
+	}
 	if len(os.Args) == 2 && os.Args[1] == "--project-spike" {
 		if err := projectspike.Run(); err != nil {
 			fmt.Fprintln(os.Stderr, err)

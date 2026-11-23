@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 	"opscopilot/pkg/connectionstore"
 	"opscopilot/pkg/remote"
 	"opscopilot/pkg/secretstore"
@@ -25,27 +28,33 @@ const (
 )
 
 type projectBastionInput struct {
-	Host     string `json:"host"`
-	Port     int    `json:"port"`
-	User     string `json:"user"`
-	Password string `json:"password,omitempty"`
-	HostKey  string `json:"hostKey,omitempty"`
+	Host           string `json:"host"`
+	Port           int    `json:"port"`
+	User           string `json:"user"`
+	AuthType       string `json:"authType,omitempty"`
+	PrivateKeyPath string `json:"privateKeyPath,omitempty"`
+	Password       string `json:"password,omitempty"`
+	HostKey        string `json:"hostKey,omitempty"`
 }
 
 type projectConnectionInput struct {
-	Name     string               `json:"name"`
-	Host     string               `json:"host"`
-	Port     int                  `json:"port"`
-	User     string               `json:"user"`
-	Password string               `json:"password,omitempty"`
-	HostKey  string               `json:"hostKey,omitempty"`
-	Bastion  *projectBastionInput `json:"bastion,omitempty"`
+	Name           string               `json:"name"`
+	Host           string               `json:"host"`
+	Port           int                  `json:"port"`
+	User           string               `json:"user"`
+	AuthType       string               `json:"authType,omitempty"`
+	PrivateKeyPath string               `json:"privateKeyPath,omitempty"`
+	Password       string               `json:"password,omitempty"`
+	HostKey        string               `json:"hostKey,omitempty"`
+	Bastion        *projectBastionInput `json:"bastion,omitempty"`
 }
 
 type projectBastionDTO struct {
 	Host               string `json:"host"`
 	Port               int    `json:"port"`
 	User               string `json:"user"`
+	AuthType           string `json:"authType"`
+	PrivateKeyPath     string `json:"privateKeyPath,omitempty"`
 	HasPassword        bool   `json:"hasPassword"`
 	HostKey            string `json:"hostKey,omitempty"`
 	HostKeyFingerprint string `json:"hostKeyFingerprint,omitempty"`
@@ -57,11 +66,24 @@ type projectConnectionDTO struct {
 	Host               string             `json:"host"`
 	Port               int                `json:"port"`
 	User               string             `json:"user"`
+	AuthType           string             `json:"authType"`
+	PrivateKeyPath     string             `json:"privateKeyPath,omitempty"`
 	HasPassword        bool               `json:"hasPassword"`
 	HostKey            string             `json:"hostKey,omitempty"`
 	HostKeyFingerprint string             `json:"hostKeyFingerprint,omitempty"`
 	Bastion            *projectBastionDTO `json:"bastion,omitempty"`
 	Revision           uint64             `json:"revision"`
+}
+
+func normalizeAuthType(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "key", "private_key", "privatekey":
+		return "key"
+	case "agent", "ssh-agent":
+		return "agent"
+	default:
+		return "password"
+	}
 }
 
 type hostKeyChallenge struct {
@@ -219,6 +241,8 @@ func (s *Service) connectionToDTO(node *connectionstore.Node) projectConnectionD
 		Host:               cfg.Host,
 		Port:               port,
 		User:               cfg.User,
+		AuthType:           normalizeAuthType(cfg.AuthType),
+		PrivateKeyPath:     strings.TrimSpace(cfg.PrivateKeyPath),
 		HasPassword:        s.secretGet(node.ID, 0, cfg.Host, cfg.User, cfg.Password) != "",
 		HostKey:            strings.TrimSpace(cfg.HostKey),
 		HostKeyFingerprint: hostKeyFingerprint(cfg.HostKey),
@@ -233,6 +257,8 @@ func (s *Service) connectionToDTO(node *connectionstore.Node) projectConnectionD
 			Host:               cfg.Bastion.Host,
 			Port:               bPort,
 			User:               cfg.Bastion.User,
+			AuthType:           normalizeAuthType(cfg.Bastion.AuthType),
+			PrivateKeyPath:     strings.TrimSpace(cfg.Bastion.PrivateKeyPath),
 			HasPassword:        s.secretGet(node.ID, 1, cfg.Bastion.Host, cfg.Bastion.User, cfg.Bastion.Password) != "",
 			HostKey:            strings.TrimSpace(cfg.Bastion.HostKey),
 			HostKeyFingerprint: hostKeyFingerprint(cfg.Bastion.HostKey),
@@ -286,12 +312,17 @@ func buildConnectConfigFromInput(in projectConnectionInput) (remote.ConnectConfi
 		return remote.ConnectConfig{}, errors.New("端口必须在 1 到 65535 之间")
 	}
 	cfg := remote.ConnectConfig{
-		Name:     strings.TrimSpace(in.Name),
-		Protocol: remote.ProtocolSSH,
-		Host:     host,
-		Port:     port,
-		User:     user,
-		HostKey:  strings.TrimSpace(in.HostKey),
+		Name:           strings.TrimSpace(in.Name),
+		Protocol:       remote.ProtocolSSH,
+		Host:           host,
+		Port:           port,
+		User:           user,
+		AuthType:       normalizeAuthType(in.AuthType),
+		PrivateKeyPath: strings.TrimSpace(in.PrivateKeyPath),
+		HostKey:        strings.TrimSpace(in.HostKey),
+	}
+	if cfg.AuthType == "key" && cfg.PrivateKeyPath == "" {
+		return remote.ConnectConfig{}, errors.New("私钥认证需要填写私钥文件路径")
 	}
 	if in.Bastion != nil && strings.TrimSpace(in.Bastion.Host) != "" {
 		bPort := in.Bastion.Port
@@ -306,12 +337,14 @@ func buildConnectConfigFromInput(in projectConnectionInput) (remote.ConnectConfi
 			return remote.ConnectConfig{}, errors.New("跳板机端口必须在 1 到 65535 之间")
 		}
 		cfg.Bastion = &remote.ConnectConfig{
-			Name:     strings.TrimSpace(in.Bastion.Host),
-			Protocol: remote.ProtocolSSH,
-			Host:     strings.TrimSpace(in.Bastion.Host),
-			Port:     bPort,
-			User:     bUser,
-			HostKey:  strings.TrimSpace(in.Bastion.HostKey),
+			Name:           strings.TrimSpace(in.Bastion.Host),
+			Protocol:       remote.ProtocolSSH,
+			Host:           strings.TrimSpace(in.Bastion.Host),
+			Port:           bPort,
+			User:           bUser,
+			AuthType:       normalizeAuthType(in.Bastion.AuthType),
+			PrivateKeyPath: strings.TrimSpace(in.Bastion.PrivateKeyPath),
+			HostKey:        strings.TrimSpace(in.Bastion.HostKey),
 		}
 	}
 	return cfg, nil
@@ -422,11 +455,13 @@ func (s *Service) handleProjectConnectionDelete(req Request) (Response, bool) {
 }
 
 type resolvedDialHop struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
-	HostKey  string
+	Host           string
+	Port           int
+	User           string
+	AuthType       string
+	PrivateKeyPath string
+	Password       string
+	HostKey        string
 }
 
 func (s *Service) resolveProjectDialConfig(connectionID string, override *projectConnectionInput) (target resolvedDialHop, bastion *resolvedDialHop, err error) {
@@ -459,7 +494,13 @@ func (s *Service) resolveProjectDialConfig(connectionID string, override *projec
 		}
 		pwd := s.secretGet(connectionID, 0, fallbackHost, fallbackUser, inlinePwd)
 		target = resolvedDialHop{
-			Host: cfg.Host, Port: cfg.Port, User: cfg.User, Password: pwd, HostKey: hostKey,
+			Host:           cfg.Host,
+			Port:           cfg.Port,
+			User:           cfg.User,
+			AuthType:       normalizeAuthType(cfg.AuthType),
+			PrivateKeyPath: strings.TrimSpace(cfg.PrivateKeyPath),
+			Password:       pwd,
+			HostKey:        hostKey,
 		}
 		if cfg.Bastion != nil {
 			bHostKey := cfg.Bastion.HostKey
@@ -478,7 +519,13 @@ func (s *Service) resolveProjectDialConfig(connectionID string, override *projec
 			}
 			bPwd := s.secretGet(connectionID, 1, bFallbackHost, bFallbackUser, bInlinePwd)
 			bastion = &resolvedDialHop{
-				Host: cfg.Bastion.Host, Port: cfg.Bastion.Port, User: cfg.Bastion.User, Password: bPwd, HostKey: bHostKey,
+				Host:           cfg.Bastion.Host,
+				Port:           cfg.Bastion.Port,
+				User:           cfg.Bastion.User,
+				AuthType:       normalizeAuthType(cfg.Bastion.AuthType),
+				PrivateKeyPath: strings.TrimSpace(cfg.Bastion.PrivateKeyPath),
+				Password:       bPwd,
+				HostKey:        bHostKey,
 			}
 		}
 		return target, bastion, nil
@@ -492,11 +539,13 @@ func (s *Service) resolveProjectDialConfig(connectionID string, override *projec
 		port = 22
 	}
 	target = resolvedDialHop{
-		Host:     base.Host,
-		Port:     port,
-		User:     base.User,
-		Password: s.secretGet(connectionID, 0, base.Host, base.User, base.Password),
-		HostKey:  strings.TrimSpace(base.HostKey),
+		Host:           base.Host,
+		Port:           port,
+		User:           base.User,
+		AuthType:       normalizeAuthType(base.AuthType),
+		PrivateKeyPath: strings.TrimSpace(base.PrivateKeyPath),
+		Password:       s.secretGet(connectionID, 0, base.Host, base.User, base.Password),
+		HostKey:        strings.TrimSpace(base.HostKey),
 	}
 	if base.Bastion != nil && strings.TrimSpace(base.Bastion.Host) != "" {
 		bPort := base.Bastion.Port
@@ -504,11 +553,13 @@ func (s *Service) resolveProjectDialConfig(connectionID string, override *projec
 			bPort = 22
 		}
 		bastion = &resolvedDialHop{
-			Host:     base.Bastion.Host,
-			Port:     bPort,
-			User:     base.Bastion.User,
-			Password: s.secretGet(connectionID, 1, base.Bastion.Host, base.Bastion.User, base.Bastion.Password),
-			HostKey:  strings.TrimSpace(base.Bastion.HostKey),
+			Host:           base.Bastion.Host,
+			Port:           bPort,
+			User:           base.Bastion.User,
+			AuthType:       normalizeAuthType(base.Bastion.AuthType),
+			PrivateKeyPath: strings.TrimSpace(base.Bastion.PrivateKeyPath),
+			Password:       s.secretGet(connectionID, 1, base.Bastion.Host, base.Bastion.User, base.Bastion.Password),
+			HostKey:        strings.TrimSpace(base.Bastion.HostKey),
 		}
 	}
 	return target, bastion, nil
@@ -564,20 +615,56 @@ func dialSingleHop(ctx context.Context, via *ssh.Client, hop resolvedDialHop, ho
 	if err != nil {
 		return nil, err
 	}
-	// 当尚未信任主机密钥时，先不提供密码也允许进入握手阶段以获取远端公钥。
+	// 当尚未信任主机密钥时，先不加载凭据也允许进入握手阶段以获取远端公钥。
 	auth := []ssh.AuthMethod{}
-	if hop.Password != "" {
-		pwd := hop.Password
-		auth = append(auth,
-			ssh.Password(pwd),
-			ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) ([]string, error) {
-				answers := make([]string, len(questions))
-				for i := range questions {
-					answers[i] = pwd
-				}
-				return answers, nil
-			}),
-		)
+	var agentConn io.Closer
+	defer func() {
+		if agentConn != nil {
+			_ = agentConn.Close()
+		}
+	}()
+	authType := normalizeAuthType(hop.AuthType)
+	if strings.TrimSpace(hop.HostKey) != "" {
+		switch authType {
+		case "key":
+			keyBytes, readErr := os.ReadFile(strings.TrimSpace(hop.PrivateKeyPath))
+			if readErr != nil {
+				return nil, fmt.Errorf("无法读取私钥文件 %s: %w", hop.PrivateKeyPath, readErr)
+			}
+			var signer ssh.Signer
+			var parseErr error
+			if hop.Password != "" {
+				signer, parseErr = ssh.ParsePrivateKeyWithPassphrase(keyBytes, []byte(hop.Password))
+			} else {
+				signer, parseErr = ssh.ParsePrivateKey(keyBytes)
+			}
+			if parseErr != nil {
+				return nil, fmt.Errorf("解析私钥失败（加密私钥请填写口令）: %w", parseErr)
+			}
+			auth = append(auth, ssh.PublicKeys(signer))
+		case "agent":
+			conn, agentErr := dialLocalSSHAgent()
+			if agentErr != nil {
+				return nil, agentErr
+			}
+			agentConn = conn
+			ag := agent.NewClient(conn)
+			auth = append(auth, ssh.PublicKeysCallback(ag.Signers))
+		default:
+			if hop.Password != "" {
+				pwd := hop.Password
+				auth = append(auth,
+					ssh.Password(pwd),
+					ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) ([]string, error) {
+						answers := make([]string, len(questions))
+						for i := range questions {
+							answers[i] = pwd
+						}
+						return answers, nil
+					}),
+				)
+			}
+		}
 	}
 	sshCfg := &ssh.ClientConfig{
 		User:            hop.User,

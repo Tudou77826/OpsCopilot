@@ -120,6 +120,7 @@ const (
 	MethodProjectMCPBind          = "project/mcp-bind"
 	MethodProjectMCPUnbind        = "project/mcp-unbind"
 	MethodProjectApprovalReply    = "project/approval-reply"
+	MethodProjectTerminalPrepare  = "project/terminal-prepare"
 
 	// MCP 桥（Desktop 经 env 把地址/token 直传给 --mcp 代理）
 	MethodBridgeInfo = "bridge/info"
