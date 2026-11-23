@@ -227,7 +227,7 @@ func TestProjectConnections_TOFU_Mismatch_And_MultiAccountIsolation(t *testing.T
 	secrets := newMemorySecretStore()
 	svc.SetSecretStoreForTest(secrets)
 
-	// 1. 首次测试连接（无 hostKey）：应返回 host_key_untrusted 与指纹，不发送密码。
+	// 1. 首次测试连接（无需 hostKey）：跳过主机指纹校验，直接返回 status=ok。
 	testResp := mustDataMap(t, callRPC(t, svc, MethodProjectConnectionTest, map[string]any{
 		"config": map[string]any{
 			"name":     "Dev Alice",
@@ -237,22 +237,17 @@ func TestProjectConnections_TOFU_Mismatch_And_MultiAccountIsolation(t *testing.T
 			"password": "alice-secret",
 		},
 	}))
-	if testResp["status"] != "host_key_untrusted" {
-		t.Fatalf("expected host_key_untrusted, got %+v", testResp)
-	}
-	hostKey, _ := testResp["hostKey"].(string)
-	if !strings.HasPrefix(hostKey, "ssh-ed25519 ") {
-		t.Fatalf("unexpected hostKey: %q", hostKey)
+	if testResp["status"] != "ok" {
+		t.Fatalf("expected status=ok without hostKey prompt, got %+v", testResp)
 	}
 
-	// 2. 带上已确认的 hostKey 创建两条同主机不同账号的连接。
+	// 2. 创建两条同主机不同账号的连接（无需 hostKey）。
 	createAlice := mustDataMap(t, callRPC(t, svc, MethodProjectConnectionCreate, map[string]any{
 		"name":     "Dev Alice",
 		"host":     "127.0.0.1",
 		"port":     srv.hostPort,
 		"user":     "alice",
 		"password": "alice-secret",
-		"hostKey":  hostKey,
 	}))
 	aliceConn := createAlice["connection"].(map[string]any)
 	aliceID := aliceConn["id"].(string)
@@ -263,7 +258,6 @@ func TestProjectConnections_TOFU_Mismatch_And_MultiAccountIsolation(t *testing.T
 		"port":     srv.hostPort,
 		"user":     "bob",
 		"password": "bob-secret",
-		"hostKey":  hostKey,
 	}))
 	bobConn := createBob["connection"].(map[string]any)
 	bobID := bobConn["id"].(string)
@@ -333,21 +327,20 @@ func TestProjectConnections_TOFU_Mismatch_And_MultiAccountIsolation(t *testing.T
 		}
 	}
 
-	// 5. 服务端更换主机密钥后，连接测试与更新后的拨号均返回 host_key_mismatch。
+	// 5. 服务端更换主机密钥后，仍可直接连接成功（跳过主机密钥校验）。
 	srv.rotateHostKey(t)
-	mismatchResp := mustDataMap(t, callRPC(t, svc, MethodProjectConnectionTest, map[string]any{"connectionId": aliceID}))
-	if mismatchResp["status"] != "host_key_mismatch" {
-		t.Fatalf("expected host_key_mismatch after key rotation, got %+v", mismatchResp)
+	rotatedResp := mustDataMap(t, callRPC(t, svc, MethodProjectConnectionTest, map[string]any{"connectionId": aliceID}))
+	if rotatedResp["status"] != "ok" {
+		t.Fatalf("expected status=ok after key rotation, got %+v", rotatedResp)
 	}
 
 	// 6. 更新连接应递增 revision 并清理旧连接池。
 	updResp := mustDataMap(t, callRPC(t, svc, MethodProjectConnectionUpdate, map[string]any{
-		"id":      aliceID,
-		"name":    "Dev Alice Renamed",
-		"host":    "127.0.0.1",
-		"port":    srv.hostPort,
-		"user":    "alice",
-		"hostKey": mismatchResp["hostKey"].(string),
+		"id":   aliceID,
+		"name": "Dev Alice Renamed",
+		"host": "127.0.0.1",
+		"port": srv.hostPort,
+		"user": "alice",
 	}))
 	updated := updResp["connection"].(map[string]any)
 	if updated["name"] != "Dev Alice Renamed" || updated["revision"].(float64) < 1 {

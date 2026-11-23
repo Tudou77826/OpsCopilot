@@ -1,7 +1,6 @@
 package opssidecar
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -565,57 +564,8 @@ func (s *Service) resolveProjectDialConfig(connectionID string, override *projec
 	return target, bastion, nil
 }
 
-func makeStrictHostKeyCallback(hop resolvedDialHop, hopIndex int) (ssh.HostKeyCallback, error) {
-	var expected ssh.PublicKey
-	expectedFP := ""
-	if strings.TrimSpace(hop.HostKey) != "" {
-		parsed, _, _, _, err := ssh.ParseAuthorizedKey([]byte(hop.HostKey))
-		if err != nil {
-			return nil, fmt.Errorf("已保存的 SSH 主机密钥格式无效: %w", err)
-		}
-		expected = parsed
-		expectedFP = ssh.FingerprintSHA256(parsed)
-	}
-	return func(hostname string, remoteAddr net.Addr, key ssh.PublicKey) error {
-		actualFP := ssh.FingerprintSHA256(key)
-		actualAuthorized := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(key)))
-		if expected == nil {
-			return &hostKeyCheckError{
-				challenge: hostKeyChallenge{
-					Status:      "host_key_untrusted",
-					Host:        hop.Host,
-					Port:        hop.Port,
-					Hop:         hopIndex,
-					KeyType:     key.Type(),
-					Fingerprint: actualFP,
-					HostKey:     actualAuthorized,
-				},
-			}
-		}
-		if !bytes.Equal(expected.Marshal(), key.Marshal()) {
-			return &hostKeyCheckError{
-				challenge: hostKeyChallenge{
-					Status:              "host_key_mismatch",
-					Host:                hop.Host,
-					Port:                hop.Port,
-					Hop:                 hopIndex,
-					KeyType:             key.Type(),
-					Fingerprint:         actualFP,
-					HostKey:             actualAuthorized,
-					ExpectedFingerprint: expectedFP,
-				},
-			}
-		}
-		return nil
-	}, nil
-}
-
-func dialSingleHop(ctx context.Context, via *ssh.Client, hop resolvedDialHop, hopIndex int) (*ssh.Client, error) {
-	callback, err := makeStrictHostKeyCallback(hop, hopIndex)
-	if err != nil {
-		return nil, err
-	}
-	// 当尚未信任主机密钥时，先不加载凭据也允许进入握手阶段以获取远端公钥。
+func dialSingleHop(ctx context.Context, via *ssh.Client, hop resolvedDialHop, _ int) (*ssh.Client, error) {
+	// 跳过 SSH 主机密钥指纹校验，避免首次连接和重装主机时阻断流程。
 	auth := []ssh.AuthMethod{}
 	var agentConn io.Closer
 	defer func() {
@@ -624,58 +574,57 @@ func dialSingleHop(ctx context.Context, via *ssh.Client, hop resolvedDialHop, ho
 		}
 	}()
 	authType := normalizeAuthType(hop.AuthType)
-	if strings.TrimSpace(hop.HostKey) != "" {
-		switch authType {
-		case "key":
-			keyBytes, readErr := os.ReadFile(strings.TrimSpace(hop.PrivateKeyPath))
-			if readErr != nil {
-				return nil, fmt.Errorf("无法读取私钥文件 %s: %w", hop.PrivateKeyPath, readErr)
-			}
-			var signer ssh.Signer
-			var parseErr error
-			if hop.Password != "" {
-				signer, parseErr = ssh.ParsePrivateKeyWithPassphrase(keyBytes, []byte(hop.Password))
-			} else {
-				signer, parseErr = ssh.ParsePrivateKey(keyBytes)
-			}
-			if parseErr != nil {
-				return nil, fmt.Errorf("解析私钥失败（加密私钥请填写口令）: %w", parseErr)
-			}
-			auth = append(auth, ssh.PublicKeys(signer))
-		case "agent":
-			conn, agentErr := dialLocalSSHAgent()
-			if agentErr != nil {
-				return nil, agentErr
-			}
-			agentConn = conn
-			ag := agent.NewClient(conn)
-			auth = append(auth, ssh.PublicKeysCallback(ag.Signers))
-		default:
-			if hop.Password != "" {
-				pwd := hop.Password
-				auth = append(auth,
-					ssh.Password(pwd),
-					ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) ([]string, error) {
-						answers := make([]string, len(questions))
-						for i := range questions {
-							answers[i] = pwd
-						}
-						return answers, nil
-					}),
-				)
-			}
+	switch authType {
+	case "key":
+		keyBytes, readErr := os.ReadFile(strings.TrimSpace(hop.PrivateKeyPath))
+		if readErr != nil {
+			return nil, fmt.Errorf("无法读取私钥文件 %s: %w", hop.PrivateKeyPath, readErr)
+		}
+		var signer ssh.Signer
+		var parseErr error
+		if hop.Password != "" {
+			signer, parseErr = ssh.ParsePrivateKeyWithPassphrase(keyBytes, []byte(hop.Password))
+		} else {
+			signer, parseErr = ssh.ParsePrivateKey(keyBytes)
+		}
+		if parseErr != nil {
+			return nil, fmt.Errorf("解析私钥失败（加密私钥请填写口令）: %w", parseErr)
+		}
+		auth = append(auth, ssh.PublicKeys(signer))
+	case "agent":
+		conn, agentErr := dialLocalSSHAgent()
+		if agentErr != nil {
+			return nil, agentErr
+		}
+		agentConn = conn
+		ag := agent.NewClient(conn)
+		auth = append(auth, ssh.PublicKeysCallback(ag.Signers))
+	default:
+		if hop.Password != "" {
+			pwd := hop.Password
+			auth = append(auth,
+				ssh.Password(pwd),
+				ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) ([]string, error) {
+					answers := make([]string, len(questions))
+					for i := range questions {
+						answers[i] = pwd
+					}
+					return answers, nil
+				}),
+			)
 		}
 	}
 	sshCfg := &ssh.ClientConfig{
 		User:            hop.User,
 		Auth:            auth,
-		HostKeyCallback: callback,
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         projectDialTimeout,
 	}
 	host := strings.Trim(hop.Host, "[]")
 	addr := net.JoinHostPort(host, fmt.Sprint(hop.Port))
 
 	var rawConn net.Conn
+	var err error
 	if via != nil {
 		rawConn, err = via.DialContext(ctx, "tcp", addr)
 	} else {
@@ -794,16 +743,6 @@ func (s *Service) withProjectSFTP(connectionID string, fn func(client *sftp.Clie
 			if err != nil {
 				return err
 			}
-			if target.HostKey == "" {
-				return &hostKeyCheckError{
-					challenge: hostKeyChallenge{
-						Status: "host_key_untrusted",
-						Host:   target.Host,
-						Port:   target.Port,
-						Hop:    0,
-					},
-				}
-			}
 			ctx, cancel := context.WithTimeout(context.Background(), projectDialTimeout)
 			dialed, err := dialProjectSSHAndSFTP(ctx, target, bastion)
 			cancel()
@@ -870,16 +809,6 @@ func (s *Service) withProjectSSH(connectionID string, fn func(client *ssh.Client
 			target, bastion, err := s.resolveProjectDialConfig(connectionID, nil)
 			if err != nil {
 				return err
-			}
-			if target.HostKey == "" {
-				return &hostKeyCheckError{
-					challenge: hostKeyChallenge{
-						Status: "host_key_untrusted",
-						Host:   target.Host,
-						Port:   target.Port,
-						Hop:    0,
-					},
-				}
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), projectDialTimeout)
 			dialed, err := dialProjectSSHAndSFTP(ctx, target, bastion)

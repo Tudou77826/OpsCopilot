@@ -9,7 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -136,29 +136,16 @@ func (s *Service) handleProjectTerminalPrepare(req Request) (Response, bool) {
 		}
 		return errorResponse(req.ID, CodeInternal, err.Error(), ""), false
 	}
-	if target.HostKey == "" {
-		return errorResponse(req.ID, CodeHostKeyUntrusted, "请先在连接配置中确认 SSH 主机指纹", ""), false
-	}
-
-	knownDir := filepath.Join(s.dataDir, "known-hosts")
-	if err := os.MkdirAll(knownDir, 0o700); err != nil {
-		return errorResponse(req.ID, CodeInternal, "无法创建 known-hosts 目录: "+err.Error(), ""), false
-	}
-	var khBuf strings.Builder
-	khBuf.WriteString(formatKnownHostsLine(target.Host, target.Port, target.HostKey))
-	if bastion != nil && bastion.HostKey != "" {
-		khBuf.WriteString(formatKnownHostsLine(bastion.Host, bastion.Port, bastion.HostKey))
-	}
-	khPath := filepath.Join(knownDir, params.ConnectionID+".known_hosts")
-	if err := os.WriteFile(khPath, []byte(khBuf.String()), 0o600); err != nil {
-		return errorResponse(req.ID, CodeInternal, "无法写入 known_hosts: "+err.Error(), ""), false
+	nullKnownHosts := "/dev/null"
+	if runtime.GOOS == "windows" {
+		nullKnownHosts = "NUL"
 	}
 
 	args := []string{
 		"-t",
 		"-p", fmt.Sprint(target.Port),
-		"-o", "StrictHostKeyChecking=yes",
-		"-o", "UserKnownHostsFile=" + khPath,
+		"-o", "StrictHostKeyChecking=no",
+		"-o", "UserKnownHostsFile=" + nullKnownHosts,
 		"-o", "ServerAliveInterval=30",
 	}
 	if target.AuthType == "key" && strings.TrimSpace(target.PrivateKeyPath) != "" {
@@ -193,7 +180,7 @@ func (s *Service) handleProjectTerminalPrepare(req Request) (Response, bool) {
 	return okResponse(req.ID, map[string]any{
 		"sshArgs":         args,
 		"env":             env,
-		"knownHostsPath":  khPath,
+		"knownHostsPath":  "",
 		"authType":        target.AuthType,
 		"requiresAskpass": requiresAskpass,
 		"summary":         fmt.Sprintf("%s@%s:%d", target.User, target.Host, target.Port),

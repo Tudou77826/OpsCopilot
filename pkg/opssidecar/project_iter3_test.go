@@ -157,16 +157,20 @@ func TestProjectIter3_KeyAuth_And_TerminalPrepareAskpass(t *testing.T) {
 		t.Fatalf("expected encrypted key auth ok, got %+v", testEnc)
 	}
 
-	// project/terminal-prepare：生成 known_hosts + 一次性 askpass 票据
+	// project/terminal-prepare：跳过主机密钥校验 + 一次性 askpass 票据
 	prep := mustDataMap(t, callRPC(t, svc, MethodProjectTerminalPrepare, map[string]any{
 		"connectionId": encID,
 		"remoteRoot":   "/srv/app",
 	}))
-	khPath := prep["knownHostsPath"].(string)
-	khBytes, err := os.ReadFile(khPath)
-	if err != nil || !strings.Contains(string(khBytes), hostKey) {
-		t.Fatalf("expected pinned hostKey in %s, got err=%v content=%q", khPath, err, string(khBytes))
+	rawArgs, _ := prep["sshArgs"].([]any)
+	joinedArgs := make([]string, 0, len(rawArgs))
+	for _, a := range rawArgs {
+		joinedArgs = append(joinedArgs, a.(string))
 	}
+	if !strings.Contains(strings.Join(joinedArgs, " "), "StrictHostKeyChecking=no") {
+		t.Fatalf("expected StrictHostKeyChecking=no in sshArgs, got %+v", joinedArgs)
+	}
+	_ = hostKey
 	envMap := prep["env"].(map[string]any)
 	askURL := envMap["AAW_ASKPASS_URL"].(string)
 	askTok := envMap["AAW_ASKPASS_TOKEN"].(string)
