@@ -49,12 +49,15 @@ type Service struct {
 
 	// out 是 stdout 的唯一写入者：响应（串行路径）与事件（终端 pump、传输
 	// goroutine）经它整行落盘。
-	out       *lineEmitter
-	terminals *terminalManager
-	ft        *ftHub
-	tcSvc     *terminalcontrol.Service
-	secrets   secretstore.SecretStore
-	projects  *projectPool
+	out              *lineEmitter
+	terminals        *terminalManager
+	ft               *ftHub
+	tcSvc            *terminalcontrol.Service
+	secrets          secretstore.SecretStore
+	projects         *projectPool
+	projectPathLocks *pathLockTable
+	projectOps       *projectOpTracker
+	projectMCP       *projectMCPManager
 
 	// MCP 桥（随机端口 + 内存态 token；Desktop 经 bridge/info 取凭据 env 直传）
 	bridgeMu   sync.Mutex
@@ -124,6 +127,9 @@ func NewService(dataDir string, out io.Writer) (*Service, error) {
 	s.ft = newFtHub(s, s.emitEvent)
 	s.secrets = secretstore.NewKeyringStore()
 	s.projects = newProjectPool()
+	s.projectPathLocks = newPathLockTable()
+	s.projectOps = newProjectOpTracker()
+	s.projectMCP = newProjectMCPManager(s)
 	s.lastTouch.Store(time.Now().Unix())
 	s.startBridge()
 	return s, nil
@@ -281,6 +287,12 @@ func (s *Service) Close() {
 	if s.projects != nil {
 		s.projects.closeAll()
 	}
+	if s.projectOps != nil {
+		s.projectOps.cancelAll()
+	}
+	if s.projectMCP != nil {
+		s.projectMCP.closeAll()
+	}
 	s.rejectAllPendingLocked()
 	if s.ops != nil {
 		s.ops.Shutdown()
@@ -314,6 +326,12 @@ func (s *Service) idleCheck() bool {
 		return false
 	}
 	if s.terminals != nil && s.terminals.activeCount() > 0 {
+		return false
+	}
+	if s.projectMCP != nil && s.projectMCP.activeCount() > 0 {
+		return false
+	}
+	if s.projectOps != nil && s.projectOps.activeCount() > 0 {
 		return false
 	}
 	s.pendingMu.Lock()
@@ -475,6 +493,24 @@ func (s *Service) handle(req Request) (resp Response, exit bool) {
 		return s.handleProjectFSPreview(req)
 	case MethodProjectFSListFiles:
 		return s.handleProjectFSListFiles(req)
+	case MethodProjectFSRead:
+		return s.handleProjectFSRead(req)
+	case MethodProjectFSWrite:
+		return s.handleProjectFSWrite(req)
+	case MethodProjectExec:
+		return s.handleProjectExec(req)
+	case MethodProjectExecCancel:
+		return s.handleProjectExecCancel(req)
+	case MethodProjectGitStatus:
+		return s.handleProjectGitStatus(req)
+	case MethodProjectGitDiff:
+		return s.handleProjectGitDiff(req)
+	case MethodProjectMCPBind:
+		return s.handleProjectMCPBind(req)
+	case MethodProjectMCPUnbind:
+		return s.handleProjectMCPUnbind(req)
+	case MethodProjectApprovalReply:
+		return s.handleProjectApprovalReply(req)
 	case MethodBridgeInfo:
 		addr, token := s.bridgeInfo()
 		return okResponse(req.ID, map[string]any{"address": addr, "token": token}), false
@@ -1144,10 +1180,13 @@ func Run() int {
 
 	idle := time.NewTicker(time.Minute)
 	defer idle.Stop()
+	sem := make(chan struct{}, 16)
+	var wg sync.WaitGroup
 	for {
 		select {
 		case line, ok := <-lines:
 			if !ok {
+				wg.Wait()
 				svc.Close()
 				return 0
 			}
@@ -1156,12 +1195,32 @@ func Run() int {
 				svc.out.line(errorResponse("", CodeInvalidParams, "请求不是合法 JSON: "+err.Error(), ""))
 				continue
 			}
-			resp, exit := svc.handle(req)
-			svc.out.line(resp)
-			if exit {
+			if req.Method == MethodShutdown {
+				resp, _ := svc.handle(req)
+				svc.out.line(resp)
 				svc.Close()
 				return 0
 			}
+			// 审批回执与取消操作不排队，避免被长命令占满并发槽位导致死锁。
+			if req.Method == MethodProjectApprovalReply || req.Method == MethodProjectExecCancel || req.Method == MethodTerminalApproveHandoff {
+				wg.Add(1)
+				go func(r Request) {
+					defer wg.Done()
+					resp, _ := svc.handle(r)
+					svc.out.line(resp)
+				}(req)
+				continue
+			}
+			sem <- struct{}{}
+			wg.Add(1)
+			go func(r Request) {
+				defer func() {
+					<-sem
+					wg.Done()
+				}()
+				resp, _ := svc.handle(r)
+				svc.out.line(resp)
+			}(req)
 		case <-idle.C:
 			if svc.idleCheck() {
 				slog.Info("[ops-sidecar] 空闲超时，自动退出（下次使用自动重启）")

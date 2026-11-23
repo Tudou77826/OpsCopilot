@@ -392,6 +392,9 @@ func (s *Service) handleProjectConnectionUpdate(req Request) (Response, bool) {
 		}
 	}
 	s.projects.invalidate(node.ID)
+	if s.projectMCP != nil {
+		s.projectMCP.invalidateConnection(node.ID)
+	}
 	s.markDirty()
 	return okResponse(req.ID, map[string]any{"connection": s.connectionToDTO(node)}), false
 }
@@ -410,6 +413,9 @@ func (s *Service) handleProjectConnectionDelete(req Request) (Response, bool) {
 		return errorResponse(req.ID, CodeInternal, err.Error(), ""), false
 	}
 	s.projects.invalidate(params.ID)
+	if s.projectMCP != nil {
+		s.projectMCP.invalidateConnection(params.ID)
+	}
 	s.secretDelete(params.ID)
 	s.markDirty()
 	return okResponse(req.ID, map[string]any{"deleted": true}), false
@@ -746,6 +752,86 @@ func (s *Service) withProjectSFTP(connectionID string, fn func(client *sftp.Clie
 			return nil
 		}
 		// 若不是权限或不存在类业务错误，而是底层通道断开，清理缓存并重试一次。
+		if attempt == 0 && isTransportError(err) {
+			s.projects.mu.Lock()
+			if s.projects.conns[connectionID] == existing {
+				delete(s.projects.conns, connectionID)
+			}
+			s.projects.mu.Unlock()
+			existing.close()
+			continue
+		}
+		return err
+	}
+	return errors.New("SSH 连接重试失败")
+}
+
+// withProjectSSH 复用按 connectionId 池化的 SSH 客户端执行独立会话（命令、Git），
+// 不持 SFTP 互斥锁，因此长命令与文件浏览/预览可以并发执行。
+func (s *Service) withProjectSSH(connectionID string, fn func(client *ssh.Client) error) error {
+	connectionID = strings.TrimSpace(connectionID)
+	if connectionID == "" {
+		return errors.New("connectionId 必填")
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		s.projects.mu.Lock()
+		rev := s.projects.revisions[connectionID]
+		existing := s.projects.conns[connectionID]
+		s.projects.mu.Unlock()
+
+		if existing == nil || existing.revision != rev {
+			target, bastion, err := s.resolveProjectDialConfig(connectionID, nil)
+			if err != nil {
+				return err
+			}
+			if target.HostKey == "" {
+				return &hostKeyCheckError{
+					challenge: hostKeyChallenge{
+						Status: "host_key_untrusted",
+						Host:   target.Host,
+						Port:   target.Port,
+						Hop:    0,
+					},
+				}
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), projectDialTimeout)
+			dialed, err := dialProjectSSHAndSFTP(ctx, target, bastion)
+			cancel()
+			if err != nil {
+				return err
+			}
+			dialed.revision = rev
+			s.projects.mu.Lock()
+			if s.projects.revisions[connectionID] != rev {
+				s.projects.mu.Unlock()
+				dialed.close()
+				continue
+			}
+			if old := s.projects.conns[connectionID]; old != nil {
+				old.close()
+			}
+			s.projects.conns[connectionID] = dialed
+			existing = dialed
+			s.projects.mu.Unlock()
+		}
+
+		existing.mu.Lock()
+		sshClient := existing.client
+		existing.mu.Unlock()
+		if sshClient == nil {
+			s.projects.mu.Lock()
+			if s.projects.conns[connectionID] == existing {
+				delete(s.projects.conns, connectionID)
+			}
+			s.projects.mu.Unlock()
+			existing.close()
+			continue
+		}
+
+		err := fn(sshClient)
+		if err == nil {
+			return nil
+		}
 		if attempt == 0 && isTransportError(err) {
 			s.projects.mu.Lock()
 			if s.projects.conns[connectionID] == existing {

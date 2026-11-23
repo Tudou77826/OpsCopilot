@@ -101,7 +101,7 @@ const (
 	MethodFileAccessGet  = "file-access/get"
 	MethodFileAccessSet  = "file-access/set"
 
-	// 远程项目连接管理与只读文件浏览（AAW 远程项目）
+	// 远程项目连接管理、文件读写、命令、Git 与会话 MCP（AAW 远程项目）
 	MethodProjectConnectionsList  = "project/connections-list"
 	MethodProjectConnectionCreate = "project/connection-create"
 	MethodProjectConnectionUpdate = "project/connection-update"
@@ -111,6 +111,15 @@ const (
 	MethodProjectFSStat           = "project/fs-stat"
 	MethodProjectFSPreview        = "project/fs-preview"
 	MethodProjectFSListFiles      = "project/fs-list-files"
+	MethodProjectFSRead           = "project/fs-read"
+	MethodProjectFSWrite          = "project/fs-write"
+	MethodProjectExec             = "project/exec"
+	MethodProjectExecCancel       = "project/exec-cancel"
+	MethodProjectGitStatus        = "project/git-status"
+	MethodProjectGitDiff          = "project/git-diff"
+	MethodProjectMCPBind          = "project/mcp-bind"
+	MethodProjectMCPUnbind        = "project/mcp-unbind"
+	MethodProjectApprovalReply    = "project/approval-reply"
 
 	// MCP 桥（Desktop 经 env 把地址/token 直传给 --mcp 代理）
 	MethodBridgeInfo = "bridge/info"
@@ -130,6 +139,8 @@ const (
 	EventTransferProgress = "file-transfer-progress"
 	// EventTransferDone：载荷 {taskId, sessionId, ok, code?, message?, cancelled?}。
 	EventTransferDone = "file-transfer-done"
+	// EventProjectApprovalRequest：远程项目 MCP 操作需要 Desktop 会话权限判定。
+	EventProjectApprovalRequest = "project.approval.request"
 )
 
 // 错误码。前端按码分类渲染（如 whitelist_denied 展示为"被白名单拦截"）。
@@ -144,6 +155,9 @@ const (
 	CodeHostKeyMismatch  = "host_key_mismatch"
 	CodePermissionDenied = "permission_denied"
 	CodeUnsupported      = "unsupported"
+	CodeConflict         = "conflict"
+	CodeCancelled        = "cancelled"
+	CodeDenied           = "denied"
 	CodeExecFailed       = "exec_failed"
 	CodeTransferFailed = "transfer_failed"
 	CodeInternal       = "internal"

@@ -127,6 +127,10 @@ func mcpError(id json.RawMessage, code int, message string) json.RawMessage {
 // 消息。OpenCode 等 ACP 宿主只声明 mcpCapabilities.http——HTTP 直连省去
 // stdio 代理中转，Desktop 经 mcpServers 直接下发本端点。
 func (g *mcpGateway) handleHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/project-mcp" && g.svc != nil && g.svc.projectMCP != nil {
+		g.svc.projectMCP.handleHTTP(w, r)
+		return
+	}
 	slog.Info("[ops-mcp-http] 请求", "method", r.Method, "path", r.URL.Path, "auth", r.Header.Get("Authorization") != "")
 	if r.Method != http.MethodPost {
 		http.Error(w, "仅支持 POST", http.StatusMethodNotAllowed)
