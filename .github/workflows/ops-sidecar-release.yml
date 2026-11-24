@@ -1,0 +1,49 @@
+name: Release ops-sidecar
+
+on:
+  push:
+    tags:
+      - 'ops-sidecar-v*'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run ops-sidecar tests
+        run: go test ./pkg/opssidecar ./pkg/connectionstore ./pkg/remote
+
+      - name: Cross-compile ops-sidecar binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist-sidecar
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags '-s -w' -o dist-sidecar/ops-sidecar-windows-amd64.exe ./cmd/ops-sidecar
+          CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags '-s -w' -o dist-sidecar/ops-sidecar-linux-amd64       ./cmd/ops-sidecar
+          CGO_ENABLED=0 GOOS=darwin  GOARCH=arm64 go build -trimpath -ldflags '-s -w' -o dist-sidecar/ops-sidecar-darwin-arm64      ./cmd/ops-sidecar
+          CGO_ENABLED=0 GOOS=darwin  GOARCH=amd64 go build -trimpath -ldflags '-s -w' -o dist-sidecar/ops-sidecar-darwin-amd64      ./cmd/ops-sidecar
+          (cd dist-sidecar && sha256sum ops-sidecar-* > SHA256SUMS.txt)
+          cat dist-sidecar/SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist-sidecar/ops-sidecar-windows-amd64.exe
+            dist-sidecar/ops-sidecar-linux-amd64
+            dist-sidecar/ops-sidecar-darwin-arm64
+            dist-sidecar/ops-sidecar-darwin-amd64
+            dist-sidecar/SHA256SUMS.txt
