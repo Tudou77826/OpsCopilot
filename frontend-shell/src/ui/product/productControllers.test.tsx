@@ -52,7 +52,7 @@ describe('shared product controllers used by desktop and Teams',()=>{
     fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
     const input = screen.getByRole('textbox');
     fireEvent.change(input, { target: { value: '  show the current directory  ' } });
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '生成', exact: true })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /^生成$/ })); });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '重新生成' })); });
     await act(async () => { fireEvent.keyDown(input, { key: 'Enter' }); });
     expect(runtime.generate).toHaveBeenCalledTimes(3);
