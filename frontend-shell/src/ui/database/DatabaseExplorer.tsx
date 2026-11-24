@@ -575,7 +575,7 @@ export function DatabaseExplorer({
           <div className="oc-db-explorer-empty">
             还没有数据库连接
             <button onClick={() => setEditing(emptyProfile())}>
-              添加 MySQL 连接
+              添加数据库连接
             </button>
           </div>
         )}
