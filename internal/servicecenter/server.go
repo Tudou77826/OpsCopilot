@@ -505,23 +505,70 @@ func (s *Server) feedbackAttachment(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, filepath.Join(s.cfg.DataDir, "feedback", f.ID))
 }
 func (s *Server) stats(w http.ResponseWriter, r *http.Request) {
+	through := time.Now().UTC()
+	if date := r.URL.Query().Get("through"); date != "" {
+		var err error
+		through, err = time.Parse(time.DateOnly, date)
+		if err != nil {
+			respond(w, 400, map[string]string{"error": "统计日期格式应为 YYYY-MM-DD"})
+			return
+		}
+	}
+	lastDay := through.Format(time.DateOnly)
+	firstDay := through.AddDate(0, 0, -89).Format(time.DateOnly)
+
 	var events []protocol.Record
 	var aggregates []Aggregate
-	_ = s.list("events", &events)
-	_ = s.list("aggregates", &aggregates)
+	err := s.db.View(func(tx *bolt.Tx) error {
+		if err := tx.Bucket([]byte("events")).ForEach(func(_, value []byte) error {
+			var event protocol.Record
+			if err := json.Unmarshal(value, &event); err != nil {
+				return err
+			}
+			events = append(events, event)
+			return nil
+		}); err != nil {
+			return err
+		}
+		return tx.Bucket([]byte("aggregates")).ForEach(func(_, value []byte) error {
+			var day Aggregate
+			if err := json.Unmarshal(value, &day); err != nil {
+				return err
+			}
+			aggregates = append(aggregates, day)
+			return nil
+		})
+	})
+	if err != nil {
+		respond(w, 500, map[string]string{"error": "无法读取运营统计"})
+		return
+	}
+
 	versions := map[string]int{}
 	seen := map[string]bool{}
+	activeInstallations := map[string]struct{}{}
 	for _, r := range events {
-		if r.Kind == "daily" && !seen[r.InstallationID+":"+r.Version] {
+		if r.Kind != "daily" {
+			continue
+		}
+		if !seen[r.InstallationID+":"+r.Version] {
 			versions[r.Version]++
 			seen[r.InstallationID+":"+r.Version] = true
+		}
+		if r.Active == 1 && firstDay <= r.Date && r.Date <= lastDay {
+			activeInstallations[r.InstallationID] = struct{}{}
 		}
 	}
 	daily := aggregate(events)
 	for _, a := range aggregates {
 		daily[a.Date] = a
 	}
-	respond(w, 200, map[string]any{"coverage": "仅代表同意采集的安装实例；安装量不等于人数。最简授权仅计入活跃和版本分布，功能计数与升级结果仅来自常规授权。版本分布按90天内实例/版本去重。", "versions": versions, "daily": daily})
+	respond(w, 200, map[string]any{
+		"coverage": "仅代表同意采集的安装实例；安装量不等于人数。最简授权仅计入活跃和版本分布，功能计数与升级结果仅来自常规授权。版本分布按90天内实例/版本去重。",
+		"versions": versions,
+		"daily":    daily,
+		"activity": map[string]any{"through": lastDay, "activeInstallations90d": len(activeInstallations)},
+	})
 }
 func aggregate(events []protocol.Record) map[string]Aggregate {
 	out := map[string]Aggregate{}
@@ -539,9 +586,9 @@ func aggregate(events []protocol.Record) map[string]Aggregate {
 			if !exists || r.ConsentAt.After(old.ConsentAt) || (r.ConsentAt.Equal(old.ConsentAt) && r.Version > old.Version) {
 				modes[key] = r
 			}
-			if !seen[r.InstallationID+":"+r.Date] {
-				a.Active += r.Active
-				seen[r.InstallationID+":"+r.Date] = true
+			if r.Active == 1 && !seen[key] {
+				a.Active++
+				seen[key] = true
 			}
 			a.Connections += r.Connections
 			a.Connected += r.Connected

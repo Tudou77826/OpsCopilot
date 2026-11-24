@@ -5,6 +5,8 @@ const num=value=>Number(value||0).toLocaleString('zh-CN');
 const date=value=>!value||String(value).startsWith('0001-')?'暂无记录':new Date(value).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
 const bytes=value=>value>=1073741824?(value/1073741824).toFixed(2)+' GB':(value/1048576).toFixed(1)+' MB';
 const badge=(text,tone='')=>'<span class="badge '+tone+'"><i></i>'+esc(text)+'</span>';
+const today=()=>localDate(new Date()).slice(0,10);
+const daysAgo=(day,n)=>new Date(Date.parse(day+'T00:00:00Z')-n*86400000).toISOString().slice(0,10);
 let token='',demo=new URLSearchParams(location.search).get('demo')==='1',page='overview',data=null,loading=false,revision=0,statsDate='';
 const nav=[['overview','◫','服务总览'],['releases','↓','版本与安装包'],['announcements','≋','公告管理'],['feedback','▤','用户反馈'],['stats','▥','运营数据']];
 const usageOperations=[['gui_script','脚本执行'],['gui_diagnose','AI 定位'],['gui_archive','归档'],['gui_upload','文件上传'],['gui_download','文件下载'],['gui_generate','命令生成'],['cli_exec','exec'],['cli_upload','file 上传'],['cli_download','file 下载'],['cli_diagnose','diagnose'],['cli_knowledge_list','knowledge 列表'],['cli_knowledge_search','knowledge 搜索'],['cli_knowledge_read','knowledge 读取']];
@@ -32,9 +34,9 @@ function usagePanel(prefix,day){
 
 let samples;
 function mockData(){
- const now=new Date(); const ago=days=>new Date(now.getTime()-days*86400000).toISOString();
- const daily={};[92,106,101,124,138,127,146].forEach((v,i)=>{const d=ago(6-i).slice(0,10);daily[d]={reporting:{standard:v-24,minimal:24},Active:v,Connections:v*8+17,Connected:v*8-5,CtrlK:v*3+11,QuickCommands:v*4+9,usage:Object.fromEntries(usageOperations.flatMap(([key],j)=>[[key+'_started',v+j*3],[key+'_success',v+j*3-(key.startsWith('cli_')?6:8)],[key+'_failure',6],[key+'_cancelled',key.startsWith('cli_')?0:2]]).concat([['gui_script_created',v],['gui_knowledge_opened',v*2],['gui_knowledge_search',v],['gui_knowledge_found',v-9],['gui_knowledge_empty',9],['gui_command_typed',v],['cli_policy_command',12],['cli_policy_target',3],['cli_policy_path',5],['cli_policy_size',2],['cli_recovery_started',8],['cli_recovery_success',7],['cli_recovery_failure',1]])),upgrades:{'download:success':i*3+4,'install:success':i*2+3,'download:failure':i===4?2:0}}});
- return {status:{lastSuccess:ago(0),error:'',inProgress:false,storageBytes:824180736},releases:[['v1.10.5',0],['v1.10.4',4],['v1.10.3',12]].map(([v,n])=>({tag_name:v,name:v,published_at:ago(n),body:'演示更新说明：优化工作台交互与连接稳定性。',assets:[{name:'opscopilot-windows.zip',size:81264640},{name:'opscopilot.exe',size:146800640}]})),announcements:[{id:'notice-001',text:'新版本已同步，建议在完成当前操作后检查更新。',url:location.origin+'/#downloads',order:1,startsAt:ago(2),endsAt:ago(-12)},{id:'notice-002',text:'团队知识分享：排查完成后，记得补充根因与解决方案。',url:location.origin+'/help',order:2,startsAt:ago(1),endsAt:ago(-5)},{id:'notice-003',text:'服务维护提醒：请提前下载所需安装包，避免维护期间等待。',url:'',order:3,startsAt:ago(-2),endsAt:ago(-3)},{id:'notice-004',text:'欢迎参与 OpsCopilot 内网试用，问题与建议可通过反馈入口提交。',url:'',order:4,startsAt:ago(20),endsAt:ago(3)}],feedback:[{id:'FB-DEMO-008',content:'希望快捷命令支持按业务分组\n常用命令越来越多，按业务或环境分组会更方便查找。',createdAt:ago(0),status:'待处理',reply:''},{id:'FB-DEMO-007',content:'跳板机重连后，文件面板未自动刷新\n网络短暂中断后已恢复终端，文件列表需要手动刷新。',createdAt:ago(1),status:'处理中',reply:'已收到，正在检查连接恢复后的刷新流程。',attachment:'demo.txt'},{id:'FB-DEMO-006',content:'Ctrl+K 历史搜索希望支持关键词高亮',createdAt:ago(2),status:'待处理',reply:''},{id:'FB-DEMO-005',content:'内网下载体验很好，希望补充初次安装说明',createdAt:ago(3),status:'已解决',reply:'已在使用帮助中补充安装与连接说明。'},{id:'FB-DEMO-004',content:'建议公告支持直接打开使用帮助',createdAt:ago(5),status:'已解决',reply:'公告已支持设置同一内网服务地址的详情链接。'}],stats:{coverage:'仅代表同意采集的安装实例；安装量不等于人数。最简授权仅计入活跃与版本，功能计数仅来自常规授权。版本分布按90天内实例/版本去重。',versions:{'v1.10.5':186,'v1.10.4':52,'v1.10.3':18},daily}};
+  const now=new Date(),through=today(); const ago=days=>new Date(now.getTime()-days*86400000).toISOString();
+  const daily={};[65,72,68,78,81,62,null,70,88,74,85,96,73,69,93,85,101,110,95,null,96,112,98,92,106,101,124,138,127,89].forEach((v,i)=>{if(v===null)return;const d=daysAgo(through,29-i);daily[d]={reporting:{standard:v-24,minimal:24},Active:v,Connections:v*8+17,Connected:v*8-5,CtrlK:v*3+11,QuickCommands:v*4+9,usage:Object.fromEntries(usageOperations.flatMap(([key],j)=>[[key+'_started',v+j*3],[key+'_success',v+j*3-(key.startsWith('cli_')?6:8)],[key+'_failure',6],[key+'_cancelled',key.startsWith('cli_')?0:2]]).concat([['gui_script_created',v],['gui_knowledge_opened',v*2],['gui_knowledge_search',v],['gui_knowledge_found',v-9],['gui_knowledge_empty',9],['gui_command_typed',v],['cli_policy_command',12],['cli_policy_target',3],['cli_policy_path',5],['cli_policy_size',2],['cli_recovery_started',8],['cli_recovery_success',7],['cli_recovery_failure',1]])),upgrades:{'download:success':i*3+4,'install:success':i*2+3,'download:failure':i===4?2:0}}});
+ return {status:{lastSuccess:ago(0),error:'',inProgress:false,storageBytes:824180736},releases:[['v1.10.5',0],['v1.10.4',4],['v1.10.3',12]].map(([v,n])=>({tag_name:v,name:v,published_at:ago(n),body:'演示更新说明：优化工作台交互与连接稳定性。',assets:[{name:'opscopilot-windows.zip',size:81264640},{name:'opscopilot.exe',size:146800640}]})),announcements:[{id:'notice-001',text:'新版本已同步，建议在完成当前操作后检查更新。',url:location.origin+'/#downloads',order:1,startsAt:ago(2),endsAt:ago(-12)},{id:'notice-002',text:'团队知识分享：排查完成后，记得补充根因与解决方案。',url:location.origin+'/help',order:2,startsAt:ago(1),endsAt:ago(-5)},{id:'notice-003',text:'服务维护提醒：请提前下载所需安装包，避免维护期间等待。',url:'',order:3,startsAt:ago(-2),endsAt:ago(-3)},{id:'notice-004',text:'欢迎参与 OpsCopilot 内网试用，问题与建议可通过反馈入口提交。',url:'',order:4,startsAt:ago(20),endsAt:ago(3)}],feedback:[{id:'FB-DEMO-008',content:'希望快捷命令支持按业务分组\n常用命令越来越多，按业务或环境分组会更方便查找。',createdAt:ago(0),status:'待处理',reply:''},{id:'FB-DEMO-007',content:'跳板机重连后，文件面板未自动刷新\n网络短暂中断后已恢复终端，文件列表需要手动刷新。',createdAt:ago(1),status:'处理中',reply:'已收到，正在检查连接恢复后的刷新流程。',attachment:'demo.txt'},{id:'FB-DEMO-006',content:'Ctrl+K 历史搜索希望支持关键词高亮',createdAt:ago(2),status:'待处理',reply:''},{id:'FB-DEMO-005',content:'内网下载体验很好，希望补充初次安装说明',createdAt:ago(3),status:'已解决',reply:'已在使用帮助中补充安装与连接说明。'},{id:'FB-DEMO-004',content:'建议公告支持直接打开使用帮助',createdAt:ago(5),status:'已解决',reply:'公告已支持设置同一内网服务地址的详情链接。'}],stats:{coverage:'仅代表同意采集的安装实例；安装量不等于人数。最简授权仅计入活跃与版本，功能计数仅来自常规授权。版本分布按90天内实例/版本去重。',versions:{'v1.10.5':186,'v1.10.4':52,'v1.10.3':18},activity:{through,activeInstallations90d:232},daily}};
 }
 async function request(path,options={}){
  if(demo)throw Error('演示模式不会请求管理接口');
@@ -48,15 +50,52 @@ function toast(message){$('#toast').textContent=message;$('#toast').hidden=false
 function table(headers,rows,empty='暂无数据'){return '<div class="table-wrap"><table><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.join('')+'</tbody></table>'+(rows.length?'':'<div class="empty">'+esc(empty)+'</div>')+'</div>'}
 function panel(title,content,action='',note=''){return '<section class="panel"><div class="panel-head"><h2>'+title+'</h2>'+action+'</div>'+content+(note?'<div class="notice">'+esc(note)+'</div>':'')+'</section>'}
 function action(label,id,secondary=false){return '<button data-action="'+id+'"'+(secondary?' class="secondary"':'')+'>'+label+'</button>'}
-function heading(title,description,actions=''){return '<div class="page-heading"><div><h1>'+title+'</h1><p>'+description+'</p></div><div class="actions">'+actions+'</div></div>'}
-function metric(label,value,note){return '<article class="metric"><label>'+label+'</label><strong>'+esc(value)+'</strong><small>'+note+'</small></article>'}
+function heading(title,description,actions=''){return '<div class="page-heading"><div><h1>'+title+'</h1>'+(description?'<p>'+description+'</p>':'')+'</div><div class="actions">'+actions+'</div></div>'}
 function dates(){return Object.keys(data.stats.daily||{}).sort().reverse()}
-function latestDay(){return data.stats.daily?.[dates()[0]]||{}}
+function statsUnavailable(){return '<div class="empty">'+esc(data.statsError||'正在加载运营数据…')+'</div>'}
+function activityMetric(label,value,note){
+ return '<div class="activity-metric"><dt>'+label+'</dt><dd><div class="activity-value"><strong>'+ (value==null?'—':num(value)) +'</strong>'+ (value==null?'':'<span>个</span>') +'</div><small>'+esc(note)+'</small></dd></div>';
+}
+function activityOverview(){
+ if(!data.stats)return panel('授权安装活跃',statsUnavailable());
+ const {through,activeInstallations90d}=data.stats.activity,yesterday=daysAgo(through,1);
+ const current=data.stats.daily[through]?.Active||null,previous=data.stats.daily[yesterday]?.Active||null;
+ return '<section class="panel activity-overview" aria-labelledby="activity-heading"><div class="panel-head"><h2 id="activity-heading">授权安装活跃</h2></div><dl class="activity-metrics">'+
+  activityMetric('近 90 天累计活跃安装',activeInstallations90d,'按安装去重 · '+daysAgo(through,89).slice(5)+' 至 '+through.slice(5))+
+  activityMetric('今日活跃安装',current,through+' · '+(current===null?'暂无活跃上报':'统计进行中'))+
+  activityMetric('昨日活跃安装',previous,yesterday+(previous===null?' · 暂无活跃上报':''))+
+  '</dl><div class="notice">含常规与最简授权的安装；一人可能使用多个安装。</div></section>';
+}
 function announcementState(a){const now=Date.now();return new Date(a.startsAt)>now?['待生效','blue']:new Date(a.endsAt)<=now?['已结束','']:['展示中','good']}
 function syncSummary(){const s=data.status;return '<div class="panel-body"><dl class="summary-list"><div><dt>GitHub 同步</dt><dd>'+badge(s.inProgress?'同步中':s.error?'同步失败':'空闲',s.inProgress?'blue':s.error?'bad':'good')+'</dd></div><div><dt>最近成功同步</dt><dd>'+date(s.lastSuccess)+'</dd></div><div><dt>客户端当前版本</dt><dd>'+esc(s.latestVersion||'尚无版本')+'</dd></div><div><dt>存储占用</dt><dd>'+bytes(s.storageBytes)+'</dd></div></dl><div class="health-note">'+esc(s.error||'手工上传与 GitHub 同步均会在文件完整后发布；同步失败不会影响已发布版本。')+'</div></div>'}
-function trend(){const days=dates().slice(0,7).reverse(),max=Math.max(1,...days.map(d=>data.stats.daily[d].Active||0));if(!days.length)return '<div class="empty">暂无授权实例的日统计</div>';return '<div class="panel-body"><svg class="trend" viewBox="0 0 560 170" role="img" aria-label="最近七个有记录日期的活跃安装数柱状图">'+days.map((d,i)=>{const v=data.stats.daily[d].Active||0,h=v/max*105,x=i*78+20;return '<g><title>'+d+'：'+v+' 个活跃安装</title><text x="'+(x+23)+'" y="'+(133-h)+'" text-anchor="middle">'+v+'</text><rect x="'+x+'" y="'+(140-h)+'" width="46" height="'+h+'" rx="3" class="'+(i===days.length-1?'last':'')+'"></rect><text x="'+(x+23)+'" y="162" text-anchor="middle">'+d.slice(5)+'</text></g>'}).join('')+'</svg></div>'}
+function trend(){
+ const days=Array.from({length:30},(_,i)=>daysAgo(data.stats.activity.through,29-i));
+ const values=days.map(day=>data.stats.daily[day]?.Active||0);
+ const peak=Math.max(...values);
+ if(!peak)return '<div class="empty">近 30 天暂无活跃上报</div>';
+ const max=peak===1?1:Math.ceil(peak/2)*2;
+ const ticks=max>1?[max,Math.floor(max/2),0]:[max,0];
+ const height=128,step=22;
+ const columns=values.map((value,i)=>{
+  const h=value?Math.max(2,value/max*height):3;
+  const cssClass=value?(i===29?'current':'reported'):'unreported';
+  const label=value?num(value)+' 个活跃安装':'暂无活跃上报';
+  return '<rect x="'+(i*step+4)+'" y="'+(height-h)+'" width="14" height="'+h+'" rx="2" class="'+cssClass+'"><title>'+days[i]+' · '+label+'</title></rect>';
+ }).join('');
+ return '<figure class="panel-body activity-chart"><div class="activity-axis" aria-hidden="true">'+ticks.map(n=>'<span>'+num(n)+'</span>').join('')+
+  '</div><svg class="activity-bars" viewBox="0 0 660 128" preserveAspectRatio="none" role="img" aria-label="近 30 个自然日活跃安装数，每天按安装去重">'+
+  ticks.map(n=>{const y=height-n/max*height;return '<line x1="0" y1="'+y+'" x2="660" y2="'+y+'"/>'}).join('')+columns+'</svg>'+
+  '<div class="activity-dates">'+[0,7,14,21,29].map(i=>'<span>'+days[i].slice(5)+'</span>').join('')+
+  '</div><figcaption>短线表示当天暂无活跃上报 · 今日统计进行中</figcaption></figure>';
+}
 function versions(){const entries=Object.entries(data.stats.versions||{}).sort((a,b)=>b[1]-a[1]),total=entries.reduce((s,[,n])=>s+n,0);return '<div class="panel-body">'+(entries.length?entries.map(([v,n])=>'<div class="version-row"><div><strong>'+esc(v)+'</strong><span>'+num(n)+' 实例 / '+Math.round(n/total*100)+'%</span></div><progress max="'+total+'" value="'+n+'"></progress></div>').join(''):'<div class="empty">暂无版本分布数据</div>')+'</div>'}
-function overview(){const d=latestDay(),pending=data.feedback.filter(f=>f.status!=='已解决').length,active=data.announcements.filter(a=>announcementState(a)[0]==='展示中').length;return heading('服务总览','查看镜像服务状态、授权使用情况与待处理事项。',action('刷新数据','refresh',true))+ '<div class="metric-grid">'+metric('最近统计日活跃安装',num(d.Active),dates()[0]||'尚无统计')+metric('连接成功 / 发起',num(d.Connected)+' / '+num(d.Connections),d.Connections?'<em>'+((d.Connected/d.Connections)*100).toFixed(1)+'% 成功率</em>':'暂无连接计数')+metric('待跟进反馈',num(pending),data.feedback.filter(f=>f.status==='待处理').length+' 待处理 · '+data.feedback.filter(f=>f.status==='处理中').length+' 处理中')+metric('当前展示公告',num(active),data.announcements.length+' 条公告 · '+data.releases.length+' 个镜像版本')+'</div><div class="two-cols">'+panel('活跃安装趋势',trend(),'<span class="range-note">最近 7 个有记录日期</span>')+panel('镜像服务',syncSummary(),action('立即同步','sync',true))+'</div><div class="two-cols">'+panel('最近反馈',feedbackTable(data.feedback.slice(0,4)),action('查看全部','goto-feedback',true))+panel('版本分布',versions(),'<span class="range-note">近 90 天</span>',data.stats.coverage)+'</div>'}
+function overview(){
+ const pending=data.feedback.filter(f=>f.status!=='已解决');
+ const trendPanel=data.stats?panel('每日活跃安装',trend(),'<span class="range-note">近 30 天</span>'):'';
+ return heading('服务总览','',action('刷新数据','refresh',true))+activityOverview()+trendPanel+
+  '<div class="two-cols">'+panel('待跟进反馈 · '+num(pending.length),feedbackTable(pending.slice(0,4)),action('查看全部','goto-feedback',true))+
+  panel('镜像服务',syncSummary(),action('立即同步','sync',true))+'</div>';
+}
 function releasesPage(){return heading('版本与安装包','上传安装包直接发布到内网；也可从 GitHub 同步。客户端从本服务下载。',action('刷新','refresh',true)+action('从 GitHub 同步','sync',true)+action('上传新版本','upload-release'))+panel('发布概况',syncSummary())+panel('已发布版本',table(['版本','发布时间','来源','安装包','体积','操作'],data.releases.map(r=>'<tr><td><strong>'+esc(r.tag_name)+'</strong>'+(r.tag_name===data.status.latestVersion?'<small>客户端当前版本</small>':'')+'</td><td>'+date(r.published_at)+'</td><td>'+badge(r.source==='upload'?'手工上传':'GitHub 同步',r.source==='upload'?'blue':'good')+'</td><td>'+r.assets.map(a=>esc(a.name)).join('<br>')+'</td><td>'+r.assets.map(a=>bytes(a.size)).join('<br>')+'</td><td><button class="ghost" data-notes="'+esc(r.tag_name)+'">更新说明</button></td></tr>'),'尚无已发布版本'),'<span class="muted">'+data.releases.length+' 个版本</span>')}
 function announcementTable(){return table(['公告内容','展示状态','展示时间','排序','操作'],data.announcements.slice().sort((a,b)=>a.order-b.order).map(a=>{const [state,tone]=announcementState(a);return '<tr><td class="feedback-content"><strong>'+esc(a.text)+'</strong><small>'+esc(a.url||'未设置详情链接')+'</small></td><td>'+badge(state,tone)+'</td><td>'+date(a.startsAt)+'<small>至 '+date(a.endsAt)+'</small></td><td>'+a.order+'</td><td><button class="ghost" data-notice="'+esc(a.id)+'">编辑</button><button class="ghost danger" data-delete="'+esc(a.id)+'">删除</button></td></tr>'}),'暂无公告，点击“新建公告”发布第一条。')}
 function announcementsPage(){return heading('公告管理','设置客户端底栏展示的消息、详情链接及有效时间。',action('新建公告','new-notice'))+panel('公告列表',announcementTable(),'<span class="muted">'+data.announcements.length+' 条公告</span>','公告只在有效期内展示，按排序值从小到大排列。')}
@@ -68,6 +107,7 @@ function statsMetric(label,value,unit,note,comparison=''){
  return '<article class="metric stats-metric"><label>'+label+'</label><div class="metric-value"><strong>'+esc(value)+'</strong><span>'+unit+'</span></div><div class="metric-caption"><small>'+note+'</small>'+comparison+'</div></article>';
 }
 function statsPage(){
+ if(!data.stats)return heading('运营数据','',action('刷新数据','refresh',true))+panel('统计状态',statsUnavailable());
  const ds=dates();if(!ds.includes(statsDate))statsDate=ds[0]||'';
  const d=data.stats.daily[statsDate]||{},previous=data.stats.daily[ds[ds.indexOf(statsDate)+1]];
  const delta=key=>{if(!previous)return '';const n=(d[key]||0)-(previous[key]||0);return '<span class="metric-delta" title="较上一统计日 '+esc(ds[ds.indexOf(statsDate)+1])+'">'+(n>0?'↑ +':n<0?'↓ ':'→ ')+num(n)+'</span>'};
@@ -78,10 +118,10 @@ function statsPage(){
  '<div class="stats-toolbar"><div class="date-control"><label for="usage-date">统计日期</label><select id="usage-date"'+(!ds.length?' disabled':'')+'>'+(ds.length?ds.map(day=>'<option'+(day===statsDate?' selected':'')+'>'+esc(day)+'</option>').join(''):'<option>暂无数据</option>')+'</select><span class="date-scope">按日汇总 · 箭头对比上一统计日</span></div><span class="stats-scope"><i></i>仅统计授权安装</span></div>'+
  '<div class="metric-grid">'+statsMetric('活跃安装',value('Active'),'个','含常规与最简授权',delta('Active'))+statsMetric('连接发起',value('Connections'),'次',connectionNote,delta('Connections'))+statsMetric('Ctrl + K',value('CtrlK'),'次','不含输入内容',delta('CtrlK'))+statsMetric('快捷命令',value('QuickCommands'),'次','不含命令内容',delta('QuickCommands'))+'</div>'+
  panel('上报方式','<div class="reporting-grid"><div class="reporting-standard"><span>常规上报</span><strong>'+ (d.reporting?num(d.reporting.standard):'—') +'<small> 个安装</small></strong><p>分享活跃、版本与功能统计</p></div><div class="reporting-minimal"><span>最简上报</span><strong>'+ (d.reporting?num(d.reporting.minimal):'—') +'<small> 个安装</small></strong><p>仅分享活跃、版本及必要授权信息</p></div><div class="reporting-disabled"><span>完全关闭</span><strong>无法统计</strong><p>不发送数据，服务器无法获知选择</p></div></div>','<span class="range-note">所选统计日 · 按安装去重</span>','按当日收到的最新授权记录分类，不代表客户端此刻的设置；完全关闭与未授权不发送数据，不能由未上报推断为拒绝。旧的匿名汇总未保留分类时显示 —。')+
- '<div class="stats-analytics">'+panel('活跃安装趋势',trend(),'<span class="range-note">最近 7 个有记录日期 · 个</span>')+panel('版本分布',versions(),'<span class="range-note">近 90 天</span>','同一安装在不同版本分别计入，分布不等于当前在用版本。')+'</div>'+
+ '<div class="stats-analytics">'+panel('每日活跃安装',trend(),'<span class="range-note">近 30 天</span>')+panel('版本分布',versions(),'<span class="range-note">近 90 天</span>','同一安装在不同版本分别计入，分布不等于当前在用版本。')+'</div>'+
  '<div class="stats-section-heading"><h2>功能使用明细</h2><div class="stats-legend"><span><i class="legend-success"></i>完成</span><span><i class="legend-failure"></i>失败</span><span><i class="legend-cancelled"></i>取消</span></div></div><div class="stats-usage-grid" id="usage-panels">'+usagePanel('gui_',statsDate)+usagePanel('cli_',statsDate)+'</div>'+
  '<details class="stats-history panel"><summary><span>每日汇总</span><small>'+ds.length+' 个统计日 · 查看连接与升级明细</small><b aria-hidden="true">⌄</b></summary>'+history+'</details>'+
- '<details class="stats-definition"><summary>统计口径与数据范围</summary><p>'+esc(data.stats.coverage)+'</p><p>顶部指标和功能明细对应所选统计日；趋势固定显示最近 7 个有记录日期。箭头表示与上一有记录日期的数值变化。未上报的数据不在统计范围内，不能据此推算全部用户使用情况。</p></details></div>';
+ '<details class="stats-definition"><summary>统计口径与数据范围</summary><p>'+esc(data.stats.coverage)+'</p><p>顶部指标和功能明细对应所选统计日；趋势固定显示最近 30 个自然日。箭头表示与上一有记录日期的数值变化。未上报的数据不在统计范围内，不能据此推算全部用户使用情况。</p></details></div>';
 }
 function render(){
 	if(demo&&data?.status&&!data.status.latestVersion)data.status.latestVersion=data.releases[0]?.tag_name||'';
@@ -93,7 +133,28 @@ function render(){
  $('#workspace').innerHTML=banner+({overview,releases:releasesPage,announcements:announcementsPage,feedback:feedbackPage,stats:statsPage}[page])();
 }
 function login(){ $('#workspace').innerHTML='<div class="login"><section class="panel"><div class="panel-body"><div class="login-kicker">OPSCOPILOT / SERVICE CONSOLE</div><h1>管理内网服务</h1><p>查看版本同步、维护公告、处理反馈与了解授权使用情况。</p><form id="login-form"><label for="admin-token">管理员令牌</label><input id="admin-token" type="password" autocomplete="off" required placeholder="输入管理员令牌"><button type="submit">登录控制台</button><p id="login-error" class="error" role="alert"></p></form><p class="range-note">令牌仅保存在当前页面内存中，刷新后需要重新登录。</p></div><div class="sample"><h3>先看看完整管理效果</h3><p>使用模拟的版本、公告、反馈和运营统计，体验各个工作区。</p>'+action('打开演示控制台','enter-demo',true)+'</div></section></div>'; }
-async function load(){const version=++revision;loading=true;try{const values=await Promise.all(['/api/admin/status','/api/v1/releases','/api/admin/announcements','/api/admin/feedback','/api/admin/stats'].map(p=>request(p)));if(version!==revision)return;data={status:values[0],releases:values[1]||[],announcements:values[2]||[],feedback:(values[3]||[]).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)),stats:values[4]};render()}finally{loading=false}}
+async function load(){
+ const version=++revision;
+ loading=true;
+ const statsResult=request('/api/admin/stats?through='+today()).then(
+  stats=>({stats}),error=>({statsError:'运营数据暂不可用。'+error.message})
+ );
+ try{
+  const [status,releases,announcements,feedback]=await Promise.all(
+   ['/api/admin/status','/api/v1/releases','/api/admin/announcements','/api/admin/feedback'].map(p=>request(p))
+  );
+  if(version!==revision)return;
+  data={status,releases:releases||[],announcements:announcements||[],feedback:(feedback||[]).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))};
+  render();
+  void statsResult.then(result=>{
+   if(version!==revision)return;
+   Object.assign(data,result);
+   if(page==='overview'||page==='stats')render();
+  });
+ }finally{
+  loading=false;
+ }
+}
 function startDemo(){revision++;token='';demo=true;samples=mockData();data=samples;history.replaceState(null,'','/admin?demo=1');render()}
 function logout(){revision++;token='';data=null;demo=false;history.replaceState(null,'','/admin');page='overview';$('#editor').close();render()}
 async function afterWrite(message){try{await load();toast(message)}catch{render();toast(message+'；列表刷新失败，请手动刷新')}}

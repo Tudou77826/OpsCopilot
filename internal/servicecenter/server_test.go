@@ -34,6 +34,60 @@ func TestReportingModesDeduplicateByInstallationAndLatestConsent(t *testing.T) {
 	}
 }
 
+func TestStatsActiveInstallationsAcrossDaysAndVersions(t *testing.T) {
+	s := testServer(t)
+	through := time.Date(2026, time.November, 24, 0, 0, 0, 0, time.UTC)
+	today := through.Format(time.DateOnly)
+	yesterday := through.AddDate(0, 0, -1).Format(time.DateOnly)
+	rows := []protocol.Record{
+		{Kind: "daily", Date: today, InstallationID: "install-a", Version: "v1.0.0", Active: 0},
+		{Kind: "daily", Date: today, InstallationID: "install-a", Version: "v1.1.0", Active: 1},
+		{Kind: "daily", Date: today, InstallationID: "install-a", Version: "v1.2.0", Active: 1},
+		{Kind: "daily", Date: yesterday, InstallationID: "install-a", Version: "v1.0.0", Active: 1},
+		{Kind: "daily", Date: through.AddDate(0, 0, -89).Format(time.DateOnly), InstallationID: "install-b", Version: "v1.0.0", Active: 1},
+		{Kind: "daily", Date: through.AddDate(0, 0, -90).Format(time.DateOnly), InstallationID: "too-old", Version: "v1.0.0", Active: 1},
+		{Kind: "daily", Date: through.AddDate(0, 0, 1).Format(time.DateOnly), InstallationID: "future", Version: "v1.0.0", Active: 1},
+		{Kind: "daily", Date: yesterday, InstallationID: "no-active-marker", Version: "v1.0.0", Active: 0},
+	}
+	for _, row := range rows {
+		key := row.InstallationID + ":" + row.Date + ":" + row.Version
+		if err := s.put("events", key, row); err != nil {
+			t.Fatal(err)
+		}
+	}
+	oldDay := through.AddDate(0, 0, -100).Format(time.DateOnly)
+	if err := s.put("aggregates", oldDay, Aggregate{Date: oldDay, Active: 99}); err != nil {
+		t.Fatal(err)
+	}
+
+	w := request(s, "GET", "/api/admin/stats?through="+today, nil, true)
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	var stats struct {
+		Activity struct {
+			Through                string `json:"through"`
+			ActiveInstallations90d int    `json:"activeInstallations90d"`
+		}
+		Daily map[string]Aggregate
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &stats); err != nil {
+		t.Fatal(err)
+	}
+	if stats.Activity.Through != today || stats.Activity.ActiveInstallations90d != 2 {
+		t.Fatalf("unexpected activity summary: %+v", stats.Activity)
+	}
+	if stats.Daily[today].Active != 1 || stats.Daily[yesterday].Active != 1 || stats.Daily[oldDay].Active != 99 {
+		t.Fatalf("unexpected daily activity: %+v", stats.Daily)
+	}
+	if strings.Contains(w.Body.String(), "install-a") {
+		t.Fatal("stats exposed a raw installation identifier")
+	}
+	if invalid := request(s, "GET", "/api/admin/stats?through=2026-02-30", nil, true); invalid.Code != 400 {
+		t.Fatalf("invalid statistics date accepted: %d", invalid.Code)
+	}
+}
+
 func testServer(t *testing.T) *Server {
 	t.Helper()
 	s, e := New(Config{DataDir: t.TempDir(), PublicURL: "https://ops.internal", AdminToken: strings.Repeat("secret", 6)})
