@@ -10,8 +10,10 @@ import (
 	"opscopilot/pkg/servicecenter"
 )
 
+const defaultServiceCenterURL = "http://7.151.6.56:9080"
+
 func (a *App) initServiceCenter() {
-	a.serviceCenter = servicecenter.NewClient(filepath.Join(a.configMgr.Directory(), "service-center.json"), Version)
+	a.serviceCenter = servicecenter.NewClientWithDefault(filepath.Join(a.configMgr.Directory(), "service-center.json"), Version, defaultServiceCenterURL)
 	a.serviceCenter.SetStartupReadiness(func() bool {
 		if desktopruntime.ExpectedSHA256 == "" {
 			return true

@@ -14,6 +14,79 @@ import (
 	"time"
 )
 
+func TestDefaultAddressWorksBeforeSavingWithoutTelemetryConsent(t *testing.T) {
+	var telemetryRequests atomic.Int32
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/announcements" {
+			telemetryRequests.Add(1)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_ = json.NewEncoder(w).Encode([]Announcement{{
+			Text: "默认地址公告", StartsAt: time.Now().Add(-time.Hour), EndsAt: time.Now().Add(time.Hour),
+		}})
+	}))
+	defer s.Close()
+
+	path := filepath.Join(t.TempDir(), "service-center.json")
+	client := NewClientWithDefault(path, "v1.0.0", s.URL)
+	if settings := client.Settings(); settings.BaseURL != s.URL || !settings.NeedsConsent || settings.Ready {
+		t.Fatalf("unexpected initial settings: %+v", settings)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("expected no saved configuration: %v", err)
+	}
+	client.Refresh(context.Background())
+	if announcements := client.Announcements(context.Background()); len(announcements) != 1 || announcements[0].Text != "默认地址公告" {
+		t.Fatalf("default address did not serve announcements: %+v", announcements)
+	}
+	if telemetryRequests.Load() != 0 {
+		t.Fatal("requests for telemetry were made without consent")
+	}
+}
+
+func TestDefaultAddressWithExistingAndClearedSettings(t *testing.T) {
+	const defaultURL = "https://default.internal"
+	const customURL = "https://custom.internal"
+	path := filepath.Join(t.TempDir(), "service-center.json")
+	if err := os.WriteFile(path, []byte(`{"baseUrl":"","choice":"disabled"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	client := NewClientWithDefault(path, "v1.0.0", defaultURL)
+	if settings := client.Settings(); settings.BaseURL != defaultURL || settings.Choice != "disabled" {
+		t.Fatalf("unexpected legacy settings: %+v", settings)
+	}
+	otherWindow := NewClientWithDefault(path, "v1.0.0", defaultURL)
+	if _, err := client.Configure(customURL); err != nil {
+		t.Fatal(err)
+	}
+	if settings := otherWindow.Settings(); settings.BaseURL != customURL || settings.Choice != "disabled" {
+		t.Fatalf("custom address did not take precedence: %+v", settings)
+	}
+	if _, err := client.Configure(""); err != nil {
+		t.Fatal(err)
+	}
+	reopened := NewClientWithDefault(path, "v1.0.0", defaultURL)
+	for _, window := range []*Client{otherWindow, reopened} {
+		if settings := window.Settings(); settings.BaseURL != "" || settings.Choice != "disabled" {
+			t.Fatalf("explicitly cleared service address was restored: %+v", settings)
+		}
+	}
+}
+
+func TestDefaultAddressRequiresConsentForNewRecipient(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "service-center.json")
+	legacy := NewClient(path, "v1.0.0")
+	if _, err := legacy.Choose("standard"); err != nil {
+		t.Fatal(err)
+	}
+	const defaultURL = "https://default.internal"
+	client := NewClientWithDefault(path, "v1.0.0", defaultURL)
+	if settings := client.Settings(); settings.BaseURL != defaultURL || !settings.NeedsConsent || settings.Ready {
+		t.Fatalf("legacy consent applied to a new recipient: %+v", settings)
+	}
+}
+
 func TestConnectionIsReadOnly(t *testing.T) {
 	var requests atomic.Int32
 	s := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

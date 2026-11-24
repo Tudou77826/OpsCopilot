@@ -153,7 +153,13 @@ const CommandQueryOverlay: React.FC<CommandQueryOverlayProps> = ({
 
     if (!visible) return null;
 
+    const canGenerate = !loading && !!query.trim();
     const canOperate = !!result?.command && !loading;
+    const submitQuery = () => {
+        if (!canGenerate) return;
+        setShowHistory(false);
+        onGenerate();
+    };
 
     const sorted = [...history].sort((a, b) => {
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
@@ -179,14 +185,13 @@ const CommandQueryOverlay: React.FC<CommandQueryOverlayProps> = ({
                         onFocus={() => { if (!query.trim()) setShowHistory(true); }}
                         placeholder="描述你的诉求，例如：查端口是否被占用"
                         onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
+                            if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                                 e.preventDefault();
-                                setShowHistory(false);
-                                onGenerate();
+                                submitQuery();
                             }
                         }}
                     />
-                    <button style={styles.primaryBtn} onClick={onGenerate} disabled={loading || !query.trim()}>
+                    <button type="button" style={styles.primaryBtn} onClick={submitQuery} disabled={!canGenerate}>
                         {loading ? '生成中…' : '生成'}
                     </button>
                 </div>
@@ -250,7 +255,7 @@ const CommandQueryOverlay: React.FC<CommandQueryOverlayProps> = ({
                                 {copied ? '✓ 已复制' : '复制'}
                             </button>
                             <button style={styles.secondaryBtn} onClick={onType} disabled={!canOperate}>键入</button>
-                            <button style={styles.secondaryBtn} onClick={onRegenerate} disabled={loading || !query.trim()}>重新生成</button>
+                            <button type="button" style={styles.secondaryBtn} onClick={() => onRegenerate()} disabled={!canGenerate}>重新生成</button>
                         </div>
                     </div>
                 )}

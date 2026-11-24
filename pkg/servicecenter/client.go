@@ -19,10 +19,11 @@ import (
 )
 
 type State struct {
-	BaseURL       string    `json:"baseUrl"`
-	Choice        string    `json:"choice"`
-	PolicyVersion string    `json:"policyVersion"`
-	ConsentAt     time.Time `json:"consentAt"`
+	BaseURL        string    `json:"baseUrl"`
+	BaseURLCleared bool      `json:"baseUrlCleared"`
+	Choice         string    `json:"choice"`
+	PolicyVersion  string    `json:"policyVersion"`
+	ConsentAt      time.Time `json:"consentAt"`
 	// Explicit empty values allow three-way persistence to remove previous data.
 	ConsentRecipient string         `json:"consentRecipient"`
 	InstallationID   string         `json:"installationId"`
@@ -41,6 +42,7 @@ type Client struct {
 	mu            sync.Mutex
 	state         State
 	path, version string
+	defaultURL    string
 	http          *http.Client
 	readyUntil    time.Time
 	cancel        context.CancelFunc
@@ -57,7 +59,13 @@ func (c *Client) SetStartupReadiness(ready func() bool) {
 }
 
 func NewClient(path, version string) *Client {
-	c := &Client{path: path, version: version, http: &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
+	return NewClientWithDefault(path, version, "")
+}
+
+// NewClientWithDefault supplies an address for installations without a configured service.
+func NewClientWithDefault(path, version, defaultURL string) *Client {
+	base, _ := ValidateBase(defaultURL)
+	c := &Client{path: path, version: version, defaultURL: base, http: &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		if len(via) > 5 || !InternalURL(via[0].URL.Scheme+"://"+via[0].URL.Host, req.URL.String()) {
 			return fmt.Errorf("服务请求禁止跨站跳转")
 		}
@@ -70,12 +78,7 @@ func NewClient(path, version string) *Client {
 			c.state = State{}
 		}
 	}
-	base, e := ValidateBase(c.state.BaseURL)
-	if e != nil {
-		c.state = State{}
-	} else {
-		c.state.BaseURL = base
-	}
+	c.resolveAddress(&c.state)
 	if !reportingEnabled(c.state.Choice) && c.state.Choice != "disabled" {
 		c.state.Choice = ""
 	}
@@ -88,6 +91,18 @@ func NewClient(path, version string) *Client {
 	c.pruneLocked()
 	return c
 }
+
+func (c *Client) resolveAddress(state *State) {
+	base, err := ValidateBase(state.BaseURL)
+	if err != nil {
+		*state = State{}
+	}
+	if base == "" && !state.BaseURLCleared {
+		base = c.defaultURL
+	}
+	state.BaseURL = base
+}
+
 func (c *Client) settingsLocked() Settings {
 	return Settings{BaseURL: c.state.BaseURL, Choice: c.state.Choice, NeedsConsent: c.state.Choice == "", Policy: Policy{Version: PolicyVersion, Notice: Notice}, Ready: c.allowedLocked()}
 }
@@ -132,12 +147,7 @@ func (c *Client) reloadLocked() {
 		c.state.Choice = ""
 		return
 	}
-	base, err := ValidateBase(state.BaseURL)
-	if err != nil {
-		state = State{}
-	} else {
-		state.BaseURL = base
-	}
+	c.resolveAddress(&state)
 	if reportingEnabled(state.Choice) && (state.ConsentRecipient != state.BaseURL || state.PolicyVersion != consentVersion(state.Choice) || state.ConsentAt.IsZero() || state.InstallationID == "") {
 		state.Choice = ""
 		state.Records = nil
@@ -192,6 +202,7 @@ func (c *Client) Configure(base string) (Settings, error) {
 			c.state.Choice = ""
 		}
 	}
+	c.state.BaseURLCleared = normalized == ""
 	e = c.writeLocked()
 	if e != nil {
 		c.clearLocked()
@@ -583,6 +594,7 @@ func (c *Client) get(ctx context.Context, url string, out any) error {
 }
 func (c *Client) Announcements(ctx context.Context) []Announcement {
 	c.mu.Lock()
+	c.reloadLocked()
 	base := c.state.BaseURL
 	c.mu.Unlock()
 	if base == "" {
@@ -592,6 +604,7 @@ func (c *Client) Announcements(ctx context.Context) []Announcement {
 	err := c.get(ctx, base+"/api/v1/announcements", &all)
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.reloadLocked()
 	if base != c.state.BaseURL {
 		return []Announcement{}
 	}

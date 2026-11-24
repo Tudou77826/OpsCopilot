@@ -166,10 +166,23 @@ describe("startup reporting consent", () => {
     await waitFor(() => expect(bridge.choose).toHaveBeenCalledWith("disabled"));
     expect(await screen.findByRole("radio", { name: "完全关闭" })).toBeChecked();
   });
+  it("uses the client's default address before opening settings or saving", async () => {
+    const baseUrl = "http://7.151.6.56:9080";
+    bridge.settings.mockResolvedValue({ ...initial, baseUrl });
+    render(<ServiceLinks onConfigure={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "产品介绍" }));
+    await waitFor(() => expect(bridge.open).toHaveBeenCalledWith(""));
+    render(<ServiceCenterSettings />);
+    const field = await screen.findByLabelText("服务地址");
+    expect(field).toHaveValue(baseUrl);
+    expect(bridge.configure).not.toHaveBeenCalled();
+    expect(bridge.choose).not.toHaveBeenCalled();
+  });
   it("tests the entered address without saving it or changing consent", async () => {
     bridge.testConnection.mockResolvedValue(undefined);
     render(<ServiceCenterSettings />);
     const field = await screen.findByLabelText("服务地址");
+    expect(field).toHaveValue(initial.baseUrl);
     fireEvent.change(field, { target: { value: "https://other.internal" } });
     fireEvent.click(screen.getByRole("button", { name: "测试内网服务连接" }));
     expect(await screen.findByText("连接成功")).toBeInTheDocument();

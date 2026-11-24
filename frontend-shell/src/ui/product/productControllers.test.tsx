@@ -1,5 +1,6 @@
-import { act, cleanup, fireEvent, renderHook } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import CommandQueryOverlay from '../command/CommandQueryOverlay';
 import { useProductNavigation } from './useProductNavigation';
 import { useCommandQuery, type CommandQueryHost } from './useCommandQuery';
 
@@ -28,6 +29,36 @@ describe('shared product controllers used by desktop and Teams',()=>{
     expect(runtime.generate).toHaveBeenCalledWith('where am I');expect(result.current.result?.explanation).toBe('directory');
     await act(()=>result.current.copy());expect(runtime.copy).toHaveBeenCalledWith('pwd');
     act(()=>result.current.type());expect(runtime.type).toHaveBeenCalledWith('pwd');expect(result.current.visible).toBe(false);
+  });
+  it('submits the query from mouse clicks, Enter, and regeneration', async () => {
+    const runtime = host();
+    function Overlay() {
+      const query = useCommandQuery(runtime, 'terminal');
+      return <CommandQueryOverlay
+        visible={query.visible}
+        query={query.query}
+        loading={query.loading}
+        result={query.result}
+        error={query.error}
+        onQueryChange={query.setQuery}
+        onGenerate={query.generate}
+        onRegenerate={query.generate}
+        onCopy={query.copy}
+        onType={query.type}
+        onClose={() => query.setVisible(false)}
+      />;
+    }
+    render(<Overlay />);
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: '  show the current directory  ' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '生成', exact: true })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '重新生成' })); });
+    await act(async () => { fireEvent.keyDown(input, { key: 'Enter' }); });
+    expect(runtime.generate).toHaveBeenCalledTimes(3);
+    for (const call of vi.mocked(runtime.generate).mock.calls) {
+      expect(call).toEqual(['show the current directory']);
+    }
   });
   it('ignores stale responses after close or terminal change',async()=>{
     let resolve!: (value:{command:string})=>void;const runtime=host();runtime.generate=vi.fn(()=>new Promise<{command:string}>(r=>{resolve=r}));

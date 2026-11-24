@@ -254,13 +254,13 @@ export function ServiceCenterSettings() {
   return (
     <div className="sc-settings">
       <h2>内网服务</h2>
-      <p>请联系团队管理员获取内网服务地址，填写并保存后即可访问产品介绍、更新、公告和反馈。</p>
+      {!settings.baseUrl && <p>填写并保存服务地址后，即可使用内网更新、公告和反馈。</p>}
       <label htmlFor="sc-base">服务地址</label>
       <div className="sc-address-row">
       <input
         id="sc-base"
         value={base}
-        placeholder="请填写管理员提供的内网服务地址"
+        placeholder="请输入内网服务根地址"
         onChange={(e) => { setBase(e.target.value); setConnectionResult(""); setSaveResult(""); }}
       />
       <button
