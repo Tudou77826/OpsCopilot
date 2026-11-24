@@ -4,4 +4,4 @@ package acp
 
 import "os/exec"
 
-func hideWindow(*exec.Cmd) {}
+func prepareCommand(*exec.Cmd) error { return nil }

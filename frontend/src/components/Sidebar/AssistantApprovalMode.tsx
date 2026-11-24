@@ -34,7 +34,7 @@ export function AssistantApprovalMode({ runtime, busy, revision, onChanging, onE
     }, [runtime, revision, busy, onError]);
     useEffect(() => {
         let live = true;
-        if (runtime.agentKind) void Promise.resolve().then(() => runtime.agentKind!()).then(kind => { if (live) setUnverifiedNative(kind === 'custom'); }).catch(() => { if (live) setUnverifiedNative(true); });
+        if (runtime.agentKind) void Promise.resolve().then(() => runtime.agentKind!()).then(kind => { if (live) setUnverifiedNative(kind === 'custom' || kind === 'codeagent'); }).catch(() => { if (live) setUnverifiedNative(true); });
         return () => { live = false; };
     }, [runtime, revision, busy]);
     useEffect(() => { if (busy || changing) { setOpen(false); setConfirmBypass(false); } }, [busy, changing]);

@@ -11,6 +11,7 @@ import (
 
 	"opscopilot/pkg/agenttransport/acp"
 	"opscopilot/pkg/assistantcontrol"
+	"opscopilot/pkg/config"
 )
 
 func TestAssistantModelsSelectOnlyICodeProfilesWhenIdleAndPreserveHistory(t *testing.T) {
@@ -32,6 +33,14 @@ func TestAssistantModelsSelectOnlyICodeProfilesWhenIdleAndPreserveHistory(t *tes
 		}
 	}
 	a := newLifecycleApp()
+	// The iCode model catalog is legacy behavior; the default base is now the
+	// standard-ACP CodeAgent, so pin the kind under test explicitly.
+	mgr := config.NewManagerWithDir(t.TempDir())
+	if err := mgr.Load(); err != nil {
+		t.Fatal(err)
+	}
+	mgr.Config.AssistantRuntime.Kind = "icode"
+	a.configMgr = mgr
 	a.assistantHistory.Begin("old", "keep-this-question")
 	options, err := a.AssistantModelOptions()
 	if err != nil || len(options.Models) != 2 || options.Current.ID != "first" {

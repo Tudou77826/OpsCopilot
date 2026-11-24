@@ -59,7 +59,7 @@ func (a *App) startAssistantTurn(question, sessionID, connectionID, client strin
 	managed.ApprovalMode = a.assistantApprovalMode
 	managed.SkillsDirectory = filepath.Join(a.configMgr.Directory(), "assistant-skills")
 	managed.AuditDirectory = filepath.Join(a.configMgr.Directory(), "audit", "assistant")
-	if managed.AgentKind != "opencode" && managed.AgentKind != "custom" {
+	if !managed.IsStandardACP() {
 		managed.ProjectSkillsEnabled, managed.ProjectConfigEnabled, err = acp.LocalProjectTrust(acp.LocalModelDirectory())
 		if err != nil {
 			return assistantcontrol.State{}, err
@@ -73,7 +73,7 @@ func (a *App) startAssistantTurn(question, sessionID, connectionID, client strin
 		currentKind := a.assistantConversation.AgentKind()
 		desiredKind := managed.AgentKind
 		if desiredKind == "" {
-			desiredKind = "icode"
+			desiredKind = "codeagent"
 		}
 		if currentKind != "" && currentKind != desiredKind {
 			a.assistantConversation.Close()
@@ -84,7 +84,8 @@ func (a *App) startAssistantTurn(question, sessionID, connectionID, client strin
 		}
 	}
 	if a.assistantConversation != nil {
-		if managed.AgentKind == "custom" && a.assistantConversation.CustomRuntimeChanged(managed) {
+		// CustomRuntimeChanged only reports restartable custom/codeagent changes.
+		if a.assistantConversation.CustomRuntimeChanged(managed) {
 			a.assistantConversation.Close()
 			a.assistantConversation = nil
 			a.assistantRecovered = true
@@ -165,14 +166,15 @@ func (a *App) startAssistantTurn(question, sessionID, connectionID, client strin
 			// instruction is supplied once, at the end of the prompt.
 			history := a.assistantHistory.Snapshot()
 			history.Messages = history.Messages[:len(history.Messages)-1]
-			a.assistantConversation = acp.NewRecoveredConversation(assistantcontrol.RecoveryContext(history))
+			a.assistantConversation = acp.NewRecoveredConversation(assistantcontrol.RecoveryContext(history), a.assistantResumeSession)
+			a.assistantResumeSession = ""
 		} else {
 			a.assistantConversation = &acp.Conversation{}
 		}
 	}
 	conversation := a.assistantConversation
 	var standardReviewer assistantcontrol.Reviewer
-	if managed.AgentKind == "opencode" || managed.AgentKind == "custom" {
+	if managed.IsStandardACP() {
 		baseReviewer := a.assistantAgentReviewer()
 		prior := assistantReviewContext(a.assistantHistory.Snapshot(), turn.ID())
 		standardReviewer = func(ctx context.Context, input assistantcontrol.ReviewInput) assistantcontrol.ReviewVerdict {
@@ -231,6 +233,9 @@ func (a *App) recoverUnavailableAssistantConversationLocked() bool {
 	if a.assistantConversation == nil || !a.assistantConversation.Unusable() {
 		return false
 	}
+	// A standard agent that declares loadSession lets the rebuilt conversation
+	// continue its native session; prose recovery remains the fallback.
+	a.assistantResumeSession = a.assistantConversation.ResumeTarget()
 	a.assistantConversation.Close()
 	a.assistantConversation = nil
 	a.assistantApprovalMode = ""
@@ -273,6 +278,7 @@ func (a *App) NewAssistantConversation() error {
 	a.assistantCoordinator().ClearFinished(state.TurnID)
 	a.assistantRecoveryNote = ""
 	a.assistantRecovered = false
+	a.assistantResumeSession = ""
 	return nil
 }
 

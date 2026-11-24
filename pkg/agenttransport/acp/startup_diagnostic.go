@@ -62,9 +62,9 @@ func (d *startupDiagnostic) summary() string {
 	d.parseLine()
 	if d.module == "" {
 		if d.exited {
-			return fmt.Sprintf("iCode 在 ACP 握手前退出（退出码 %d），请到「AI 接入 → AI 接入」检测运行环境。", d.exitCode)
+			return fmt.Sprintf("Agent 进程在 ACP 握手前退出（退出码 %d）。", d.exitCode)
 		}
 		return ""
 	}
-	return "iCode 运行环境缺少 Python 模块「" + d.module + "」，尚未进入 ACP 握手。请补齐 iCode 安装依赖。"
+	return "Agent 运行环境缺少依赖模块「" + d.module + "」，尚未进入 ACP 握手。"
 }

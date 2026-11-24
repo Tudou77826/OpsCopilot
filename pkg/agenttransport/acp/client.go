@@ -7,13 +7,20 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"unicode/utf8"
 )
 
 var ErrClosed = errors.New("ACP 连接已结束")
+
+// maxMessageBytes bounds one newline-delimited JSON-RPC frame. 16 MB matches
+// the framing ceiling of reference ACP clients; large tool outputs must not
+// sever a healthy session the way the previous 1 MB limit could.
+const maxMessageBytes = 16 << 20
 
 type RPCError struct {
 	Code    int             `json:"code"`
@@ -54,6 +61,7 @@ type Client struct {
 	requests          chan struct{}
 	processDone       <-chan struct{}
 	startupDiagnostic *startupDiagnostic
+	noise             atomic.Uint64
 }
 
 func (c *Client) StartupDiagnostic() string {
@@ -136,8 +144,8 @@ func (c *Client) send(message envelope) error {
 	if err != nil {
 		return errors.New("ACP 消息无法编码")
 	}
-	if len(data) > 1<<20 {
-		return errors.New("ACP 消息超出上限")
+	if len(data) > maxMessageBytes {
+		return fmt.Errorf("ACP 消息超出 %d MB 上限", maxMessageBytes>>20)
 	}
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
@@ -238,12 +246,13 @@ func validID(id json.RawMessage) bool {
 func (c *Client) read() {
 	defer c.Close()
 	scanner := bufio.NewScanner(c.reader)
-	scanner.Buffer(make([]byte, 4096), 1<<20)
+	scanner.Buffer(make([]byte, 4096), maxMessageBytes)
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		var message envelope
 		if !utf8.Valid(line) || json.Unmarshal(line, &message) != nil || message.Version != "2.0" || !validID(message.ID) {
-			return
+			c.noteNoise(len(line))
+			continue
 		}
 		if message.Method != "" {
 			message.handler = c.handler
@@ -251,9 +260,11 @@ func (c *Client) read() {
 				message.handler = snapshot.Capture()
 			}
 			if len(message.ID) == 0 {
+				// Backpressure, never a dropped or fatal notification: tool updates
+				// are audited synchronously and can trail a burst from the agent.
 				select {
 				case c.notifications <- message:
-				default:
+				case <-c.ctx.Done():
 					return
 				}
 				continue
@@ -261,13 +272,14 @@ func (c *Client) read() {
 			select {
 			case c.requests <- struct{}{}:
 				go c.handle(message)
-			default:
+			case <-c.ctx.Done():
 				return
 			}
 			continue
 		}
 		if len(message.ID) == 0 || (len(message.Result) == 0) == (message.Error == nil) {
-			return
+			c.noteNoise(len(line))
+			continue
 		}
 		c.mu.Lock()
 		wait := c.waiters[string(message.ID)]
@@ -279,6 +291,17 @@ func (c *Client) read() {
 				return
 			}
 		}
+	}
+}
+
+// noteNoise records a line that is not a JSON-RPC 2.0 message. Agents may log
+// to stdout: CodeAgent announces its service address before the handshake,
+// and that must never end a session. Only the framing limit and EOF do.
+func (c *Client) noteNoise(size int) {
+	// The stream can carry third-party output, so the content stays out of the
+	// log; the first few counts are enough to notice a chatty agent.
+	if c.noise.Add(1) <= 4 {
+		slog.Warn("ACP 输出包含非协议内容，已忽略", "bytes", size)
 	}
 }
 func (c *Client) handle(request envelope) {
@@ -307,6 +330,7 @@ func (c *Client) handle(request envelope) {
 type InitializeResult struct {
 	ProtocolVersion   int `json:"protocolVersion"`
 	AgentCapabilities struct {
+		LoadSession         bool `json:"loadSession"`
 		SessionCapabilities struct {
 			AdditionalDirectories json.RawMessage `json:"additionalDirectories"`
 		} `json:"sessionCapabilities"`

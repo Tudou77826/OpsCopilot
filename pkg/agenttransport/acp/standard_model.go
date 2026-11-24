@@ -38,6 +38,17 @@ func (c *Conversation) SwitchStandardModel(ctx context.Context, id string) error
 	}
 	var result json.RawMessage
 	if err := c.client.Call(ctx, "session/set_config_option", map[string]string{"sessionId": c.sessionID, "configId": optionID, "value": id}, &result); err != nil {
+		// Legacy ACP agents advertise models without config options; only an
+		// explicit method-not-found justifies the older set_model call.
+		var rpc *RPCError
+		if errors.As(err, &rpc) && rpc.Code == -32601 {
+			if legacy := c.client.Call(ctx, "session/set_model", map[string]string{"sessionId": c.sessionID, "modelId": id}, nil); legacy != nil {
+				c.close()
+				return errors.New("模型切换未能确认，会话已停止；请重新选择")
+			}
+			c.resetContextUsage()
+			return nil
+		}
 		// A failed call could have reached the agent. Avoid presenting stale model
 		// state or continuing a conversation with unknown configuration.
 		c.close()

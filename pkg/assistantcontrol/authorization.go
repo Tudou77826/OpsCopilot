@@ -67,11 +67,24 @@ func actionKey(input ReviewInput) [32]byte {
 // ConfirmAction consumes a decision once. The caller must still validate the
 // physical resource and audit dispatch immediately before executing the action.
 func (t *Turn) ConfirmAction(ctx context.Context, input ReviewInput, prompt Prompt, verdict ReviewVerdict) error {
+	_, err := t.ConfirmActionChoice(ctx, input, prompt, verdict)
+	return err
+}
+
+// ConfirmActionChoice consumes a decision once and reports the exact choice ID
+// the user selected. Choices listed as extra approve choices (beyond "allow")
+// count as approval and are returned by ID; any other outcome, including no
+// selection, is recorded as a rejection and maps to ErrActionDenied.
+func (t *Turn) ConfirmActionChoice(ctx context.Context, input ReviewInput, prompt Prompt, verdict ReviewVerdict, extraApprove ...string) (string, error) {
+	approved := map[string]bool{"allow": true}
+	for _, choice := range extraApprove {
+		approved[choice] = true
+	}
 	if ctx.Err() != nil || t.Context().Err() != nil {
-		return ErrStale
+		return "", ErrStale
 	}
 	if verdict.Allowed() {
-		return nil
+		return "allow", nil
 	}
 	if verdict.Reason != "" {
 		prompt.Details = append([]Detail{{Label: "确认原因", Value: DisplayExcerpt(verdict.Reason, 512)}}, prompt.Details...)
@@ -81,10 +94,10 @@ func (t *Turn) ConfirmAction(ctx context.Context, input ReviewInput, prompt Prom
 	}
 	answer, err := t.Request(ctx, prompt)
 	if err != nil {
-		return err
+		return "", err
 	}
-	if len(answer.Selected) == 1 && answer.Selected[0] == "allow" {
-		return nil
+	if len(answer.Selected) == 1 && approved[answer.Selected[0]] {
+		return answer.Selected[0], nil
 	}
 	t.owner.mu.Lock()
 	if t.rejectedActions == nil {
@@ -92,7 +105,7 @@ func (t *Turn) ConfirmAction(ctx context.Context, input ReviewInput, prompt Prom
 	}
 	t.rejectedActions[actionKey(input)] = true
 	t.owner.mu.Unlock()
-	return ErrActionDenied
+	return "", ErrActionDenied
 }
 
 func (t *Turn) Authorize(ctx context.Context, reviewer Reviewer, input ReviewInput, prompt Prompt, humanReason string) error {

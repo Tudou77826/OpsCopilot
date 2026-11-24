@@ -42,6 +42,10 @@ export function AskCompanionAI(arg1:string):Promise<string>;
 
 export function AskTroubleshoot(arg1:string):Promise<string>;
 
+export function AssistantAgentCommands():Promise<Array<acp.AgentCommand>>;
+
+export function AssistantAgentKind():Promise<string>;
+
 export function AssistantApprovalMode():Promise<string>;
 
 export function AssistantCommandConnections():Promise<Array<main.AssistantConnectionChoice>>;
@@ -56,21 +60,19 @@ export function AssistantLocalDirectories():Promise<Array<string>>;
 
 export function AssistantLocalProjects():Promise<assistantlocal.ProjectState>;
 
-export function AssistantProjectWorkspace():Promise<{state: string}>;
-
-export function SetAssistantProjectPrimaryDirectory(arg1:string,arg2:string):Promise<assistantlocal.ProjectState>;
-
 export function AssistantModelOptions():Promise<main.AssistantModels>;
+
+export function AssistantProjectWorkspace():Promise<main.AssistantProjectWorkspaceStatus>;
 
 export function Broadcast(arg1:Array<string>,arg2:string):Promise<void>;
 
 export function CancelSession():Promise<string>;
 
-export function CheckAssistantRuntime(arg1:string):Promise<acp.RuntimeReport>;
 export function CheckAssistantAgentRuntime(arg1:string,arg2:string):Promise<acp.RuntimeReport>;
+
+export function CheckAssistantRuntime(arg1:string):Promise<acp.RuntimeReport>;
+
 export function CheckCustomAssistantRuntime(arg1:string,arg2:Array<string>):Promise<acp.RuntimeReport>;
-export function AssistantAgentKind():Promise<string>;
-export function AssistantAgentCommands():Promise<Array<{name:string;description:string}>>;
 
 export function CheckSkillStatus(arg1:string):Promise<string>;
 
@@ -395,6 +397,8 @@ export function SelectSessionImportDirectory():Promise<string>;
 export function SelectSessionImportFile():Promise<string>;
 
 export function SendCommand(arg1:string,arg2:string):Promise<void>;
+
+export function SetAssistantProjectPrimaryDirectory(arg1:string,arg2:string):Promise<assistantlocal.ProjectState>;
 
 export function SetReportingChoice(arg1:string):Promise<servicecenter.Settings>;
 

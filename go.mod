@@ -19,9 +19,7 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
-require (
-	filippo.io/edwards25519 v1.1.0 // indirect
-)
+require filippo.io/edwards25519 v1.1.0 // indirect
 
 require (
 	al.essio.dev/pkg/shellescape v1.5.1 // indirect

@@ -28,10 +28,11 @@ func (a *App) AssistantModelOptions() (AssistantModels, error) {
 }
 
 func (a *App) assistantModelsLocked() (AssistantModels, error) {
-	if a.assistantRuntimeKind() == "opencode" || a.assistantRuntimeKind() == "custom" {
+	if standardRuntimeKind(a.assistantRuntimeKind()) {
 		conversation, err := a.prepareOpenCodeForModelsLocked()
 		if err != nil {
-			return AssistantModels{Detail: err.Error()}, nil
+			// models must stay a non-null array: the frontend treats it as a list.
+			return AssistantModels{Models: []acp.LocalModelOption{}, Detail: err.Error()}, nil
 		}
 		return standardAssistantModels(conversation.SessionFeatures()), nil
 	}
@@ -93,7 +94,7 @@ func (a *App) prepareOpenCodeForModelsLocked() (*acp.Conversation, error) {
 	config.SkillsDirectory, config.AuditDirectory = filepath.Join(a.configMgr.Directory(), "assistant-skills"), filepath.Join(a.configMgr.Directory(), "audit", "assistant")
 	if a.assistantConversation == nil {
 		if a.assistantRecovered {
-			a.assistantConversation = acp.NewRecoveredConversation(assistantcontrol.RecoveryContext(a.assistantHistory.Snapshot()))
+			a.assistantConversation = acp.NewRecoveredConversation(assistantcontrol.RecoveryContext(a.assistantHistory.Snapshot()), "")
 		} else {
 			a.assistantConversation = &acp.Conversation{}
 		}
@@ -102,25 +103,25 @@ func (a *App) prepareOpenCodeForModelsLocked() (*acp.Conversation, error) {
 		a.assistantConversation.Close()
 		a.assistantRecovered = true
 		a.assistantRecoveryNote = "Agent 底座已切换，将参考近期可见对话继续。"
-		a.assistantConversation = acp.NewRecoveredConversation(assistantcontrol.RecoveryContext(a.assistantHistory.Snapshot()))
+		a.assistantConversation = acp.NewRecoveredConversation(assistantcontrol.RecoveryContext(a.assistantHistory.Snapshot()), "")
 	}
-	if config.AgentKind == "custom" && a.assistantConversation.CustomRuntimeChanged(config) {
+	if a.assistantConversation.CustomRuntimeChanged(config) {
 		a.assistantConversation.Close()
 		a.assistantRecovered = true
 		a.assistantRecoveryNote = "Agent 配置已变更，将参考近期可见对话继续。"
-		a.assistantConversation = acp.NewRecoveredConversation(assistantcontrol.RecoveryContext(a.assistantHistory.Snapshot()))
+		a.assistantConversation = acp.NewRecoveredConversation(assistantcontrol.RecoveryContext(a.assistantHistory.Snapshot()), "")
 	}
 	if previous, started := a.assistantConversation.WorkspaceConfig(); started && previous != workspace {
 		a.assistantConversation.Close()
 		a.assistantRecovered = true
 		a.assistantRecoveryNote = "项目工作区已变更，将参考近期可见对话继续；请核实旧项目中的结论。"
-		a.assistantConversation = acp.NewRecoveredConversation(assistantcontrol.RecoveryContext(a.assistantHistory.Snapshot()))
+		a.assistantConversation = acp.NewRecoveredConversation(assistantcontrol.RecoveryContext(a.assistantHistory.Snapshot()), "")
 	}
 	ctx := a.ctx
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	startup, cancel := context.WithTimeout(ctx, 45*time.Second)
+	startup, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	if err := a.assistantConversation.Prepare(ctx, startup, config); err != nil {
 		a.assistantConversation.Close()
@@ -140,7 +141,7 @@ func (a *App) SelectAssistantModel(id string) (AssistantModels, error) {
 	if a.assistantRunning || state.Phase == "running" || state.Phase == "waiting" {
 		return AssistantModels{}, assistantcontrol.ErrBusy
 	}
-	if a.assistantRuntimeKind() == "opencode" || a.assistantRuntimeKind() == "custom" {
+	if standardRuntimeKind(a.assistantRuntimeKind()) {
 		conversation, err := a.prepareOpenCodeForModelsLocked()
 		if err != nil {
 			return AssistantModels{}, err
@@ -149,7 +150,7 @@ func (a *App) SelectAssistantModel(id string) (AssistantModels, error) {
 		if ctx == nil {
 			ctx = context.Background()
 		}
-		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 		defer cancel()
 		if err = conversation.SwitchStandardModel(ctx, id); err != nil {
 			return AssistantModels{}, err
@@ -173,7 +174,7 @@ func (a *App) SelectAssistantModel(id string) (AssistantModels, error) {
 		if ctx == nil {
 			ctx = context.Background()
 		}
-		ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 		defer cancel()
 		if err = a.assistantConversation.SwitchLocalModel(ctx, model); err != nil {
 			return AssistantModels{}, err

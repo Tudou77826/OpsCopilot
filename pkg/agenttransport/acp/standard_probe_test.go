@@ -3,7 +3,6 @@ package acp
 import (
 	"context"
 	"os"
-	"strings"
 	"testing"
 	"time"
 )
@@ -26,16 +25,6 @@ func TestStandardProbeAcceptsAgentWithoutHTTPMCP(t *testing.T) {
 	report, err := ProbeStandardAgent(ctx, config.Executable, []string{"acp"})
 	if err != nil || report.HTTPMCP || report.Checks[2].Status != "skipped" || report.Checks[3].Status != "passed" {
 		t.Fatalf("probe = %+v, err = %v", report, err)
-	}
-}
-
-func TestProbeEnvironmentExcludesCredentials(t *testing.T) {
-	t.Setenv("CUSTOM_API_KEY", "secret")
-	t.Setenv("OPENCODE_CONFIG_CONTENT", "private")
-	for _, entry := range probeEnvironment(t.TempDir()) {
-		if strings.Contains(entry, "secret") || strings.Contains(entry, "private") {
-			t.Fatal("sensitive environment inherited")
-		}
 	}
 }
 

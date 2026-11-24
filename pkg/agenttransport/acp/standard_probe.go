@@ -6,7 +6,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -103,23 +102,4 @@ func ProbeStandardAgent(ctx context.Context, executable string, args []string) (
 		}
 	}
 	return report, nil
-}
-
-func probeEnvironment(dir string) []string {
-	// Preserve platform startup variables and remove common credential variables.
-	// XDG paths isolate test sessions, but agents can have other configuration
-	// locations; no prompt or tool execution is allowed during this probe.
-	var env []string
-	for _, entry := range os.Environ() {
-		key, _, _ := strings.Cut(entry, "=")
-		upper := strings.ToUpper(key)
-		if strings.HasPrefix(upper, "XDG_") || strings.HasPrefix(upper, "OPENCODE_") || strings.Contains(upper, "API_KEY") || strings.Contains(upper, "TOKEN") || strings.Contains(upper, "SECRET") || strings.Contains(upper, "PASSWORD") || upper == "HOME" {
-			continue
-		}
-		env = append(env, entry)
-	}
-	for _, key := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"} {
-		env = append(env, key+"="+filepath.Join(dir, strings.ToLower(key)))
-	}
-	return append(env, "HOME="+dir, "OPENCODE_DISABLE_AUTOUPDATE=true", "OPENCODE_DISABLE_MODELS_FETCH=true")
 }

@@ -50,6 +50,14 @@ export function AskTroubleshoot(arg1) {
   return window['go']['main']['App']['AskTroubleshoot'](arg1);
 }
 
+export function AssistantAgentCommands() {
+  return window['go']['main']['App']['AssistantAgentCommands']();
+}
+
+export function AssistantAgentKind() {
+  return window['go']['main']['App']['AssistantAgentKind']();
+}
+
 export function AssistantApprovalMode() {
   return window['go']['main']['App']['AssistantApprovalMode']();
 }
@@ -78,16 +86,12 @@ export function AssistantLocalProjects() {
   return window['go']['main']['App']['AssistantLocalProjects']();
 }
 
-export function AssistantProjectWorkspace() {
-  return window['go']['main']['App']['AssistantProjectWorkspace']();
-}
-
-export function SetAssistantProjectPrimaryDirectory(arg1, arg2) {
-  return window['go']['main']['App']['SetAssistantProjectPrimaryDirectory'](arg1, arg2);
-}
-
 export function AssistantModelOptions() {
   return window['go']['main']['App']['AssistantModelOptions']();
+}
+
+export function AssistantProjectWorkspace() {
+  return window['go']['main']['App']['AssistantProjectWorkspace']();
 }
 
 export function Broadcast(arg1, arg2) {
@@ -98,24 +102,16 @@ export function CancelSession() {
   return window['go']['main']['App']['CancelSession']();
 }
 
-export function CheckAssistantRuntime(arg1) {
-  return window['go']['main']['App']['CheckAssistantRuntime'](arg1);
-}
-
 export function CheckAssistantAgentRuntime(arg1, arg2) {
   return window['go']['main']['App']['CheckAssistantAgentRuntime'](arg1, arg2);
 }
 
+export function CheckAssistantRuntime(arg1) {
+  return window['go']['main']['App']['CheckAssistantRuntime'](arg1);
+}
+
 export function CheckCustomAssistantRuntime(arg1, arg2) {
   return window['go']['main']['App']['CheckCustomAssistantRuntime'](arg1, arg2);
-}
-
-export function AssistantAgentKind() {
-  return window['go']['main']['App']['AssistantAgentKind']();
-}
-
-export function AssistantAgentCommands() {
-  return window['go']['main']['App']['AssistantAgentCommands']();
 }
 
 export function CheckSkillStatus(arg1) {
@@ -764,6 +760,10 @@ export function SelectSessionImportFile() {
 
 export function SendCommand(arg1, arg2) {
   return window['go']['main']['App']['SendCommand'](arg1, arg2);
+}
+
+export function SetAssistantProjectPrimaryDirectory(arg1, arg2) {
+  return window['go']['main']['App']['SetAssistantProjectPrimaryDirectory'](arg1, arg2);
 }
 
 export function SetReportingChoice(arg1) {

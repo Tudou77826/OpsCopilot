@@ -10,14 +10,26 @@ type RuntimeCheck struct {
 }
 
 type RuntimeReport struct {
-	Ready               bool           `json:"ready"`
-	Executable          string         `json:"executable"`
-	Name                string         `json:"name,omitempty"`
-	Version             string         `json:"version,omitempty"`
-	ProtocolVersion     int            `json:"protocolVersion,omitempty"`
-	ExtensionAPIVersion int            `json:"extensionApiVersion,omitempty"`
-	Checks              []RuntimeCheck `json:"checks"`
-	Advice              string         `json:"advice,omitempty"`
+	Ready               bool                  `json:"ready"`
+	Executable          string                `json:"executable"`
+	Name                string                `json:"name,omitempty"`
+	Version             string                `json:"version,omitempty"`
+	ProtocolVersion     int                   `json:"protocolVersion,omitempty"`
+	ExtensionAPIVersion int                   `json:"extensionApiVersion,omitempty"`
+	Capabilities        *StandardCapabilities `json:"capabilities,omitempty"`
+	Checks              []RuntimeCheck        `json:"checks"`
+	Advice              string                `json:"advice,omitempty"`
+}
+
+// StandardCapabilities lists observed standard-ACP abilities for the settings
+// report card. Absent abilities degrade gracefully at runtime; presence here is
+// diagnostic, never an authorization.
+type StandardCapabilities struct {
+	LoadSession     bool `json:"loadSession"`
+	AdditionalRoots bool `json:"additionalRoots"`
+	HTTPMCP         bool `json:"httpMcp"`
+	ModelOptions    int  `json:"modelOptions"`
+	ModeOptions     int  `json:"modeOptions"`
 }
 
 // InspectRuntime exercises the real isolated startup, profiles and MCP binding.

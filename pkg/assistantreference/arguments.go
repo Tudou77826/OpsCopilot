@@ -14,6 +14,7 @@ type Arguments struct {
 	ID      string `json:"id,omitempty"`
 	Kind    string `json:"kind,omitempty"`
 	Group   string `json:"group,omitempty"`
+	File    string `json:"file,omitempty"`
 	Offset  int    `json:"offset,omitempty"`
 	Limit   int    `json:"limit,omitempty"`
 }
@@ -24,10 +25,12 @@ var referenceFields = map[string][]string{
 	"knowledge_read":     {"id"},
 	"quick_command_list": {"kind", "group", "query", "offset", "limit"},
 	"quick_command_read": {"kind", "id"},
+	"skill_list":         {"query", "offset", "limit"},
+	"skill_read":         {"id", "file"},
 }
 
 func ToolNames() []string {
-	return []string{"knowledge_list", "knowledge_search", "knowledge_read", "quick_command_list", "quick_command_read"}
+	return []string{"knowledge_list", "knowledge_search", "knowledge_read", "quick_command_list", "quick_command_read", "skill_list", "skill_read"}
 }
 
 // ParseArguments is shared by the transport and application boundary.
@@ -57,7 +60,7 @@ func ParseArguments(name, argument string) (Arguments, error) {
 	if json.Unmarshal([]byte(argument), &in) != nil {
 		return in, errors.New("参考资料参数类型无效")
 	}
-	for _, value := range []string{in.Query, in.Service, in.Module, in.ID, in.Kind, in.Group} {
+	for _, value := range []string{in.Query, in.Service, in.Module, in.ID, in.Kind, in.Group, in.File} {
 		if len(value) > 512 || !utf8.ValidString(value) || strings.ContainsAny(value, "\x00\r\n") {
 			return in, errors.New("参考资料参数过长或包含控制字符")
 		}
@@ -80,7 +83,7 @@ func ParseArguments(name, argument string) (Arguments, error) {
 	if name == "knowledge_search" && strings.TrimSpace(in.Query) == "" {
 		return in, errors.New("请提供检索词")
 	}
-	if (name == "knowledge_read" || name == "quick_command_read") && strings.TrimSpace(in.ID) == "" {
+	if (name == "knowledge_read" || name == "quick_command_read" || name == "skill_read") && strings.TrimSpace(in.ID) == "" {
 		return in, errors.New("请提供列表或搜索返回的 ID")
 	}
 	if name == "quick_command_read" && in.Kind == "" {

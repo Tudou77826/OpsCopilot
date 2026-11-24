@@ -1,74 +1,84 @@
-.oc-runtime-settings { min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-secondary); }
-.oc-runtime-heading, .oc-runtime-heading-main, .oc-runtime-path, .oc-runtime-actions, .oc-runtime-result-heading, .oc-runtime-profile-edit { display: flex; align-items: center; gap: 10px; }
-.oc-runtime-heading { justify-content: space-between; gap: 16px; padding: 20px 22px; border-bottom: 1px solid var(--border); }
-.oc-runtime-heading-main { min-width: 0; }
-.oc-runtime-heading-icon { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border)); border-radius: 10px; color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
-.oc-runtime-heading h3 { margin: 0; color: var(--text-primary); font-size: var(--font-size-base); font-weight: 600; }
-.oc-runtime-heading p { margin: 4px 0 0; color: var(--text-muted); font-size: var(--font-size-xs); line-height: 1.45; }
-.oc-runtime-status { flex: none; padding: 4px 9px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: var(--font-size-xs); white-space: nowrap; }
-.oc-runtime-status.is-ready { color: var(--success); }
-.oc-runtime-status.is-failed { color: var(--warning); }
-.oc-runtime-layout { display: grid; grid-template-columns: minmax(190px, 235px) minmax(0, 1fr); }
-.oc-runtime-selection { min-width: 0; padding: 20px; border-right: 1px solid var(--border); }
-.oc-runtime-configuration { min-width: 0; padding: 20px 22px 18px; }
-.oc-runtime-label { display: block; color: var(--text-primary); font-size: var(--font-size-sm); font-weight: 500; }
-.oc-runtime-label > select, .oc-runtime-label > input, .oc-runtime-label > textarea, .oc-runtime-path input { box-sizing: border-box; width: 100%; min-width: 0; padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text-primary); font: inherit; font-size: var(--font-size-sm); }
-.oc-runtime-label > select, .oc-runtime-label > input, .oc-runtime-label > textarea { display: block; margin-top: 8px; }
-.oc-runtime-label > textarea { min-height: 68px; resize: vertical; }
-.oc-runtime-label > select:focus-visible, .oc-runtime-label > input:focus-visible, .oc-runtime-label > textarea:focus-visible, .oc-runtime-path input:focus-visible, .oc-runtime-check:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.oc-runtime-agent-picker { display: flex; align-items: end; gap: 8px; }
-.oc-runtime-agent-picker > .oc-runtime-label { flex: 1; min-width: 0; }
-.oc-runtime-profile-edit { align-items: end; margin-top: 14px; }
-.oc-runtime-profile-edit .oc-runtime-label { flex: 1; min-width: 0; }
-.oc-runtime-selection-hint { margin: 8px 0 0; color: var(--text-muted); font-size: var(--font-size-xs); line-height: 1.5; }
-.oc-runtime-selection-note { margin: 20px 0 0; color: var(--text-muted); font-size: var(--font-size-xs); line-height: 1.6; }
-.oc-runtime-path { margin-top: 8px; }
-.oc-runtime-path input { flex: 1; }
-.oc-runtime-configuration > .oc-runtime-label:not(:first-child) { margin-top: 16px; }
-.oc-runtime-actions { justify-content: space-between; align-items: center; flex-wrap: wrap; margin-top: 14px; }
-.oc-runtime-actions > span, .oc-runtime-footnote, .oc-runtime-progress { color: var(--text-muted); font-size: var(--font-size-xs); line-height: 1.6; }
-.oc-runtime-check { display: inline-flex; align-items: center; justify-content: center; flex: none; gap: 7px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-hover); color: var(--text-primary); font: inherit; font-size: var(--font-size-sm); cursor: pointer; }
+/* 助手运行环境面板：单一职责的紧凑状态卡。
+   用户只要一个答案（当前 Agent 能不能用）：单行布局（标签、控件、说明同一行），
+   打开即自动检测，结论一行；路径/参数/环境变量折叠，失败时自动展开。
+   颜色一律语义令牌，主题自动切换。 */
+
+.oc-runtime-settings { min-width: 0; }
+
+.oc-runtime-titlebar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+/* 检测状态徽章：视线第一落点，标题行右侧 */
+.oc-runtime-status { flex: none; padding: 3px 10px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: var(--font-size-xs); white-space: nowrap; }
+.oc-runtime-status.is-ready { border-color: color-mix(in srgb, var(--success) 35%, transparent); color: var(--success); background: color-mix(in srgb, var(--success) 8%, transparent); }
+.oc-runtime-status.is-failed { border-color: color-mix(in srgb, var(--warning) 40%, transparent); color: var(--warning); background: color-mix(in srgb, var(--warning) 9%, transparent); }
+
+/* 单行紧凑行：标签 + 控件 + 说明同一行，行高约 36px */
+.oc-compact-row { display: flex; align-items: center; gap: 10px; min-width: 0; margin-top: 10px; }
+.oc-compact-label { flex: none; color: var(--text-secondary); font-size: var(--font-size-sm); font-weight: 500; white-space: nowrap; }
+.oc-compact-row .oc-runtime-field { flex: 0 1 280px; min-width: 140px; max-width: 320px; }
+.oc-compact-row .oc-runtime-path { flex: 0 1 420px; min-width: 200px; max-width: none; }
+.oc-compact-row > .oc-compact-grow { flex: 1 1 0; min-width: 120px; max-width: none; }
+.oc-compact-note { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: var(--font-size-xs); }
+.oc-compact-status { flex: 1 1 0; min-width: 0; color: var(--text-secondary); font-size: var(--font-size-sm); line-height: 1.5; overflow-wrap: anywhere; }
+.oc-compact-meta { color: var(--text-muted); font-size: var(--font-size-xs); }
+
+/* 行内控件：共享 inputStyle 令牌；紧凑行内由 .oc-compact-row 收窄 */
+.oc-runtime-field { box-sizing: border-box; flex: 1 1 0; min-width: 240px; max-width: 520px; padding: var(--space-8) var(--space-12); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text-primary); font: inherit; font-size: var(--font-size-base); }
+.oc-runtime-field:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.oc-runtime-textarea { min-height: 84px; resize: vertical; }
+.oc-runtime-path { display: flex; flex: 1 1 0; align-items: center; gap: 10px; min-width: 240px; max-width: 520px; }
+.oc-runtime-path input { box-sizing: border-box; flex: 1; min-width: 0; padding: var(--space-8) var(--space-12); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text-primary); font: inherit; font-size: var(--font-size-base); }
+.oc-runtime-path input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 .oc-runtime-settings button:disabled, .oc-runtime-settings input:disabled, .oc-runtime-settings select:disabled, .oc-runtime-settings textarea:disabled { opacity: .55; cursor: not-allowed; }
-.oc-runtime-notice, .oc-runtime-inline-note { display: flex; align-items: flex-start; gap: 9px; color: var(--text-secondary); font-size: var(--font-size-xs); line-height: 1.6; }
-.oc-runtime-notice { margin-top: 20px; padding: 12px 14px; border: 1px solid var(--border); border-left: 2px solid var(--accent); border-radius: var(--radius-sm); background: var(--bg-primary); }
-.oc-runtime-notice > svg, .oc-runtime-inline-note > svg { flex: none; margin-top: 2px; color: var(--accent); }
-.oc-runtime-notice strong { color: var(--text-primary); font-size: var(--font-size-xs); }
-.oc-runtime-notice p { margin: 5px 0 0; }
-.oc-runtime-inline-note { margin: 17px 0 0; }
-.oc-runtime-result { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
-.oc-runtime-result-heading { justify-content: space-between; font-size: var(--font-size-sm); }
-.oc-runtime-metadata { display: grid; gap: 6px; margin: 8px 0 14px; color: var(--text-secondary); font-size: var(--font-size-xs); }
-.oc-runtime-metadata code { overflow-wrap: anywhere; white-space: normal; color: var(--text-muted); }
-.oc-runtime-checks { padding: 0; margin: 0; list-style: none; }
-.oc-runtime-checks li { display: flex; align-items: flex-start; gap: 9px; padding: 8px 0; color: var(--text-secondary); font-size: var(--font-size-sm); }
-.oc-runtime-checks li > svg { flex: none; margin-top: 2px; }
-.oc-runtime-checks li > div { flex: 1; min-width: 0; }
-.oc-runtime-checks li > small { flex: none; color: var(--text-muted); }
-.oc-runtime-checks li.is-passed > svg { color: var(--success); }
-.oc-runtime-checks li.is-failed > svg, .oc-runtime-checks li.is-failed > small { color: var(--danger); }
-.oc-runtime-checks li.is-skipped { color: var(--text-muted); }
-.oc-runtime-checks li p { margin: 6px 0 0; color: var(--text-muted); line-height: 1.6; overflow-wrap: anywhere; }
-.oc-runtime-checks li.is-failed p { color: var(--danger); }
-.oc-runtime-advice, .oc-runtime-error { margin: 12px 0 0; color: var(--text-secondary); font-size: var(--font-size-sm); line-height: 1.6; }
-.oc-runtime-error { color: var(--danger); }
-.oc-runtime-model-result { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); font-size: var(--font-size-sm); color: var(--text-primary); }
-.oc-runtime-model-result p { margin: 8px 0 0; color: var(--text-muted); font-size: var(--font-size-xs); line-height: 1.6; }
-.oc-runtime-model-result.is-failed strong { color: var(--danger); }
-.oc-runtime-footnote { margin: 17px 0 0; }
+
+/* 高级折叠：默认收起，失败或已有内容时自动展开 */
+.oc-runtime-advanced { margin-top: 10px; }
+.oc-runtime-advanced > summary { padding: 4px 0; color: var(--text-secondary); font-size: var(--font-size-sm); cursor: pointer; list-style: none; }
+.oc-runtime-advanced > summary::-webkit-details-marker { display: none; }
+.oc-runtime-advanced > summary::before { content: '›'; display: inline-block; margin-right: 6px; color: var(--text-muted); transition: transform .15s ease; }
+.oc-runtime-advanced[open] > summary::before { transform: rotate(90deg); }
+.oc-runtime-advanced > summary:hover { color: var(--text-primary); }
+.oc-runtime-advanced-body { display: grid; gap: 12px; padding: 8px 0 2px; }
+.oc-runtime-advanced-label { display: block; color: var(--text-primary); font-size: var(--font-size-sm); font-weight: 500; }
+.oc-runtime-advanced-label > .oc-runtime-field { display: block; flex: none; width: 100%; max-width: 520px; min-width: 0; margin-top: 6px; }
+.oc-runtime-advanced-note { margin: 2px 0 0; color: var(--text-muted); font-size: var(--font-size-xs); line-height: 1.6; }
+@media (prefers-reduced-motion: reduce) { .oc-runtime-advanced > summary::before { transition: none; } }
+
+.oc-runtime-check { display: inline-flex; align-items: center; gap: 7px; }
+.oc-runtime-check > svg { color: var(--text-secondary); }
 @keyframes oc-runtime-spin { to { transform: rotate(360deg); } }
 .oc-runtime-check .is-spinning { animation: oc-runtime-spin 1s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .oc-runtime-check .is-spinning { animation: none; } }
-@container (max-width: 560px) { .oc-runtime-layout { grid-template-columns: minmax(0, 1fr); } .oc-runtime-selection { border-right: 0; border-bottom: 1px solid var(--border); } }
-@media (max-width: 760px) { .oc-runtime-layout { grid-template-columns: minmax(0, 1fr); } .oc-runtime-selection { border-right: 0; border-bottom: 1px solid var(--border); } .oc-runtime-heading, .oc-runtime-configuration, .oc-runtime-selection { padding-left: 16px; padding-right: 16px; } }
-.oc-runtime-settings { container-type: inline-size; }
-.oc-ai-access-page { width: 100%; max-width: 1040px; margin: 0 auto; }
-.oc-ai-access-intro h2 { margin: 0; color: var(--text-primary); font-size: 20px; font-weight: 650; }
-.oc-ai-access-intro p { margin: 7px 0 0; color: var(--text-muted); font-size: var(--font-size-sm); line-height: 1.5; }
-.oc-ai-external-access { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-secondary); }
-.oc-ai-external-access > summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 22px; color: var(--text-primary); cursor: pointer; list-style: none; }
+
+/* 检测结果：单行徽章 + 失败详情，只在失败或后端要求提示时出现 */
+.oc-runtime-advice, .oc-runtime-error { margin: 8px 0 0; color: var(--text-secondary); font-size: var(--font-size-sm); line-height: 1.6; }
+.oc-runtime-error { color: var(--danger); }
+
+.oc-runtime-result { margin-top: 8px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-primary); }
+.oc-runtime-result-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.oc-runtime-exe { display: block; margin: 8px 0 0; color: var(--text-muted); font-size: var(--font-size-xs); overflow-wrap: anywhere; }
+
+.oc-runtime-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 0; list-style: none; }
+.oc-runtime-chips li { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-secondary); font-size: var(--font-size-xs); white-space: nowrap; }
+.oc-runtime-chips li.is-passed > svg { color: var(--success); }
+.oc-runtime-chips li.is-failed { border-color: color-mix(in srgb, var(--danger) 40%, transparent); color: var(--danger); background: color-mix(in srgb, var(--danger) 7%, transparent); }
+.oc-runtime-chips li.is-skipped { color: var(--text-muted); }
+.oc-runtime-chips li small { color: inherit; opacity: .85; }
+.oc-runtime-failures p, .oc-runtime-caps { margin: 8px 0 0; font-size: var(--font-size-xs); line-height: 1.6; overflow-wrap: anywhere; }
+.oc-runtime-failures p { color: var(--danger); }
+.oc-runtime-caps { color: var(--text-muted); }
+
+.oc-runtime-model-result { margin-top: 8px; padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-primary); color: var(--text-primary); font-size: var(--font-size-sm); }
+.oc-runtime-model-result p { margin: 4px 0 0; color: var(--text-muted); font-size: var(--font-size-xs); line-height: 1.6; }
+.oc-runtime-model-result.is-failed strong { color: var(--danger); }
+
+/* 外部 Agent 接入折叠卡（AI 接入页第二张卡） */
+.oc-ai-external-access { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-dialog); }
+.oc-ai-external-access > summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 22px; color: var(--text-primary); cursor: pointer; list-style: none; }
 .oc-ai-external-access > summary::-webkit-details-marker { display: none; }
-.oc-ai-external-access > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; border-radius: var(--radius-md); }
-.oc-ai-external-access > summary span:first-child { display: grid; gap: 5px; }
+.oc-ai-external-access > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; border-radius: var(--radius-lg); }
+.oc-ai-external-access > summary span:first-child { display: grid; gap: 3px; }
 .oc-ai-external-access > summary strong { font-size: var(--font-size-base); }
 .oc-ai-external-access > summary small { color: var(--text-muted); font-size: var(--font-size-xs); line-height: 1.5; }
 .oc-ai-external-summary-end { display: flex; align-items: center; gap: 12px; flex: none; }

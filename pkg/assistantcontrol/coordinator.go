@@ -299,8 +299,8 @@ func validatePrompt(p Prompt) error {
 			return errors.New("交互详情过长")
 		}
 	}
-	if p.Kind == "approval" && (p.Multiple || len(p.Choices) != 2 || !seen["allow"] || !seen["reject"]) {
-		return errors.New("审批只能明确批准本次或拒绝")
+	if p.Kind == "approval" && (p.Multiple || len(p.Choices) > 3 || !seen["allow"] || !seen["reject"] || (len(p.Choices) == 3 && !seen["allow_always"])) {
+		return errors.New("审批只能明确批准本次、本会话内始终允许或拒绝")
 	}
 	if p.Kind == "database_connection" && (!json.Valid(p.Data) || p.Multiple || len(p.Choices) != 2 || !seen["allow"] || !seen["reject"]) {
 		return errors.New("连接表单请求无效")

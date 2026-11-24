@@ -36,6 +36,7 @@ type AssistantRuntimeConfig struct {
 	Kind              string                 `json:"kind,omitempty"`
 	Executable        string                 `json:"executable"`
 	Arguments         []string               `json:"arguments,omitempty"`
+	AgentEnv          map[string]string      `json:"agent_env,omitempty"`
 	CustomAgents      []AssistantCustomAgent `json:"custom_agents,omitempty"`
 	CustomAgentID     string                 `json:"custom_agent_id,omitempty"`
 	PresetExecutables map[string]string      `json:"preset_executables,omitempty"`

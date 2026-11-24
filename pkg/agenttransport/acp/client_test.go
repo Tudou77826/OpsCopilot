@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -158,17 +159,191 @@ func TestClientCloseWithdrawsPendingInteraction(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-func TestClientRejectsMalformedProtocol(t *testing.T) {
-	for _, payload := range []string{"not json\n", `{"jsonrpc":"1.0","id":1,"result":{}}` + "\n", strings.Repeat("x", (1<<20)+1) + "\n"} {
-		left, right := net.Pipe()
-		client := Connect(context.Background(), left, left, nil, nil)
-		go func() { _, _ = right.Write([]byte(payload)); _ = right.Close() }()
-		select {
-		case <-client.Done():
-		case <-time.After(time.Second):
-			client.Close()
-			t.Fatal("malformed stream remained active")
+func TestClientIgnoresNonProtocolOutput(t *testing.T) {
+	left, right := net.Pipe()
+	defer right.Close()
+	client := Connect(context.Background(), left, left, nil, nil)
+	defer client.Close()
+	serverDone := make(chan error, 1)
+	go func() {
+		// CodeAgent announces its service address on stdout before the handshake.
+		_, err := right.Write([]byte("[ACP] Server started: http://127.0.0.1:7725/\nnot json\n{\"jsonrpc\":\"1.0\",\"id\":1,\"result\":{}}\n"))
+		if err != nil {
+			serverDone <- err
+			return
 		}
+		decoder, encoder := json.NewDecoder(right), json.NewEncoder(right)
+		var initialize envelope
+		if err := decoder.Decode(&initialize); err != nil {
+			serverDone <- err
+			return
+		}
+		serverDone <- encoder.Encode(map[string]any{"jsonrpc": "2.0", "id": json.RawMessage(initialize.ID), "result": map[string]any{"protocolVersion": 1, "agentInfo": map[string]string{"name": "codeagent", "version": "1"}}})
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if result, err := client.Initialize(ctx); err != nil || result.AgentInfo.Name != "codeagent" {
+		t.Fatal(result, err)
+	}
+	select {
+	case <-client.Done():
+		t.Fatal("non-protocol output ended the session")
+	default:
+	}
+	if err := <-serverDone; err != nil {
+		t.Fatal(err)
+	}
+}
+func TestClientClosesOnOversizedLine(t *testing.T) {
+	left, right := net.Pipe()
+	client := Connect(context.Background(), left, left, nil, nil)
+	defer client.Close()
+	go func() { _, _ = right.Write([]byte(strings.Repeat("x", maxMessageBytes+1) + "\n")); _ = right.Close() }()
+	select {
+	case <-client.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("oversized line left the stream active")
+	}
+}
+
+// slowHandler stalls on every call until released, like a consumer waiting on
+// a synchronous audit write or a person.
+type slowHandler struct {
+	release  chan struct{}
+	handled  atomic.Int32
+	requests bool
+}
+
+func (h *slowHandler) Request(ctx context.Context, _ string, _ json.RawMessage) (any, error) {
+	h.handled.Add(1)
+	select {
+	case <-h.release:
+	case <-ctx.Done():
+	}
+	return nil, nil
+}
+
+func (h *slowHandler) Notify(ctx context.Context, _ string, _ json.RawMessage) {
+	h.handled.Add(1)
+	select {
+	case <-h.release:
+	case <-ctx.Done():
+	}
+}
+
+// burstAgent handshakes around count agent messages sent while handler is
+// stalled. It returns the client, the handshake result and the release signal.
+func burstAgent(t *testing.T, handler *slowHandler, count int) (*Client, <-chan error, chan struct{}) {
+	t.Helper()
+	left, right := net.Pipe()
+	t.Cleanup(func() { _ = right.Close() })
+	client := Connect(context.Background(), left, left, handler, nil)
+	t.Cleanup(client.Close)
+	handler.release = make(chan struct{})
+	done := make(chan error, 1)
+	result := func(id json.RawMessage) {
+		_ = json.NewEncoder(right).Encode(map[string]any{"jsonrpc": "2.0", "id": id, "result": map[string]any{"protocolVersion": 1, "agentInfo": map[string]string{"name": "burst", "version": "1"}}})
+	}
+	written := make(chan struct{})
+	go func() {
+		decoder, encoder := json.NewDecoder(right), json.NewEncoder(right)
+		var initialize envelope
+		if err := decoder.Decode(&initialize); err != nil {
+			done <- err
+			return
+		}
+		id := json.RawMessage(initialize.ID)
+		if handler.requests {
+			// A real agent keeps reading answers while it writes; the synchronous
+			// test pipe needs a separate reader for them.
+			go func() {
+				for i := 0; i < count; i++ {
+					var reply json.RawMessage
+					if decoder.Decode(&reply) != nil {
+						return
+					}
+				}
+				<-written
+				result(id)
+			}()
+		}
+		for i := 0; i < count; i++ {
+			message := map[string]any{"jsonrpc": "2.0", "method": "session/update", "params": map[string]any{"sessionId": "s1"}}
+			if handler.requests {
+				message = map[string]any{"jsonrpc": "2.0", "id": i + 1, "method": "session/request_permission", "params": map[string]any{"sessionId": "s1"}}
+			}
+			if err := encoder.Encode(message); err != nil {
+				done <- err
+				return
+			}
+		}
+		close(written)
+		if !handler.requests {
+			result(id)
+		}
+	}()
+	go func() {
+		_, err := client.Initialize(context.Background())
+		done <- err
+	}()
+	deadline := time.Now().Add(3 * time.Second)
+	for handler.handled.Load() == 0 && time.Now().Before(deadline) {
+		select {
+		case err := <-done:
+			t.Fatalf("handshake settled before the burst was released: %v", err)
+		default:
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if handler.handled.Load() == 0 {
+		t.Fatal("no traffic reached the handler")
+	}
+	return client, done, handler.release
+}
+
+func TestClientBackpressuresNotificationBursts(t *testing.T) {
+	handler := &slowHandler{}
+	client, done, release := burstAgent(t, handler, 200)
+	// The consumer is stalled well beyond the buffer size of 64.
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case <-client.Done():
+		t.Fatal("notification burst ended the session")
+	default:
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for handler.handled.Load() < 200 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if got := handler.handled.Load(); got != 200 {
+		t.Fatalf("notifications delivered = %d, want 200", got)
+	}
+}
+
+func TestClientBackpressuresConcurrentRequests(t *testing.T) {
+	handler := &slowHandler{requests: true}
+	client, done, release := burstAgent(t, handler, 12)
+	// Nine requests are in flight well beyond the limit of eight.
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case <-client.Done():
+		t.Fatal("concurrent requests ended the session")
+	default:
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for handler.handled.Load() < 12 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if got := handler.handled.Load(); got != 12 {
+		t.Fatalf("requests handled = %d, want 12", got)
 	}
 }
 func TestInteractionsRejectForeignSessionAndUnknownTools(t *testing.T) {

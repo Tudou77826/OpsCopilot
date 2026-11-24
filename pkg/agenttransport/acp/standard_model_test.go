@@ -37,7 +37,7 @@ func TestLiveOpenCodeStandardModelSwitch(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	dir := t.TempDir()
-	client, err := Start(ctx, ProcessConfig{Executable: exe, Args: []string{"acp"}, Directory: dir, Environment: probeEnvironment(dir)}, nil)
+	client, err := Start(ctx, ProcessConfig{Executable: exe, Args: []string{"acp"}, Directory: dir, Environment: os.Environ()}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

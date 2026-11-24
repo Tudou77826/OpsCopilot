@@ -37,6 +37,7 @@ var callTitles = map[string]string{
 	"local_directories": "查看本地项目目录", "local_add_directories": "添加本地项目目录",
 	"knowledge_list": "浏览定位经验", "knowledge_search": "搜索定位经验", "knowledge_read": "阅读定位经验",
 	"quick_command_list": "查询快捷指令列表", "quick_command_read": "读取快捷指令",
+	"skill_list": "浏览技能目录", "skill_read": "读取技能内容",
 }
 
 func (w *WorkspaceTools) beginCallReceipt(name, argument string) func(any, error) {
@@ -65,7 +66,7 @@ func (w *WorkspaceTools) newCallReceipt(name, argument string, start time.Time) 
 	if strings.HasPrefix(name, "knowledge_") {
 		op.Kind = "knowledge"
 	}
-	if strings.HasPrefix(name, "quick_command_") {
+	if strings.HasPrefix(name, "quick_command_") || strings.HasPrefix(name, "skill_") {
 		op.Kind = "reference"
 	}
 	var args map[string]json.RawMessage

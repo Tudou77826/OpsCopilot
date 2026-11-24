@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 
 	"github.com/google/uuid"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"opscopilot/pkg/assistantcontrol"
+	"opscopilot/pkg/assistantskills"
 	"opscopilot/pkg/assistanttools"
 	"opscopilot/pkg/connectionstore"
 	"opscopilot/pkg/remote"
@@ -248,6 +250,7 @@ func (a *App) assistantWorkspaceTools(turn *assistantcontrol.Turn, target termin
 	if len(reviewers) > 0 {
 		tools.LocalDirectories.Review = reviewers[0]
 	}
-	tools.References = &assistanttools.ReferenceTools{Turn: turn, KnowledgeDirectory: a.resolveKnowledgeBase, Commands: a.assistantReferenceCommands}
+	skillsDirectory := filepath.Join(a.configMgr.Directory(), "assistant-skills")
+	tools.References = &assistanttools.ReferenceTools{Turn: turn, KnowledgeDirectory: a.resolveKnowledgeBase, SkillDirectory: func() string { return skillsDirectory }, Skills: assistantskills.Library{Directory: skillsDirectory}.Read, Commands: a.assistantReferenceCommands}
 	return tools
 }

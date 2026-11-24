@@ -129,7 +129,22 @@ func (s *sessionFeatureStore) update(raw json.RawMessage) {
 				if item.Type != "select" || item.ID == "" || len(item.ID) > 128 || len(item.Options) > 512 {
 					continue
 				}
-				option := SessionOption{ID: item.ID, Name: boundedFeatureText(item.Name, 256), Category: boundedFeatureText(item.Category, 64), Current: boundedFeatureText(item.CurrentValue, 256)}
+				// CodeAgent sends model/mode options keyed only by id (no
+				// category/name); the reference client backfills both before
+				// consumers filter on category. Same backfill here.
+				category := boundedFeatureText(item.Category, 64)
+				name := boundedFeatureText(item.Name, 256)
+				if category == "" && (item.ID == "model" || item.ID == "mode") {
+					category = item.ID
+					if name == "" {
+						if item.ID == "model" {
+							name = "模型"
+						} else {
+							name = "模式"
+						}
+					}
+				}
+				option := SessionOption{ID: item.ID, Name: name, Category: category, Current: boundedFeatureText(item.CurrentValue, 256)}
 				for _, choice := range item.Options {
 					if choice.Value != "" && len(choice.Value) <= 256 {
 						option.Choices = append(option.Choices, SessionChoice{Value: choice.Value, Name: boundedFeatureText(choice.Name, 256)})

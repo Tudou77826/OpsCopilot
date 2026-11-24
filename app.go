@@ -123,6 +123,7 @@ type App struct {
 	assistantArchive          *assistantcontrol.ArchiveStore
 	assistantRecoveryNote     string
 	assistantRecovered        bool
+	assistantResumeSession    string // native session id to continue after a process loss
 	assistantSaveWarning      string
 	assistantProjectsOnce     sync.Once
 	assistantProjects         *assistantlocal.Projects
@@ -1796,8 +1797,16 @@ func (a *App) initFeedbackStore() {
 
 func (a *App) SaveSettings(cfg config.AppConfig) string {
 	cfg.AssistantRuntime.Executable = strings.TrimSpace(cfg.AssistantRuntime.Executable)
-	if cfg.AssistantRuntime.Kind != "" && cfg.AssistantRuntime.Kind != "icode" && cfg.AssistantRuntime.Kind != "opencode" && cfg.AssistantRuntime.Kind != "custom" {
+	if cfg.AssistantRuntime.Kind != "" && cfg.AssistantRuntime.Kind != "icode" && cfg.AssistantRuntime.Kind != "opencode" && cfg.AssistantRuntime.Kind != "custom" && cfg.AssistantRuntime.Kind != "codeagent" {
 		return "不支持的 Agent 底座"
+	}
+	if len(cfg.AssistantRuntime.AgentEnv) > 32 {
+		return "Agent 环境变量最多支持 32 个"
+	}
+	for name, value := range cfg.AssistantRuntime.AgentEnv {
+		if strings.TrimSpace(name) == "" || len(name) > 128 || len(value) > 4096 {
+			return "Agent 环境变量配置无效"
+		}
 	}
 	if len(cfg.AssistantRuntime.CustomAgents) > 32 {
 		return "自定义 Agent 配置最多支持 32 个"

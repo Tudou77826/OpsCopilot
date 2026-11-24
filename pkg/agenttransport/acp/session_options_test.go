@@ -29,6 +29,28 @@ func TestSessionFeaturesTrackOptionsAndCommands(t *testing.T) {
 	}
 }
 
+func TestCodeAgentConfigOptionsBackfillCategoryAndName(t *testing.T) {
+	store := &sessionFeatureStore{}
+	// CodeAgent sends model/mode keyed only by id; category/name are absent.
+	store.update(json.RawMessage(`{"configOptions":[{"id":"model","type":"select","currentValue":"glm-5","options":[{"value":"glm-5","name":"GLM"},{"value":"deepseek","name":"DeepSeek"}]},{"id":"mode","type":"select","currentValue":"ask","options":[{"value":"ask","name":"Ask"},{"value":"bypass","name":"Bypass"}]},{"id":"other","type":"select","currentValue":"x","options":[{"value":"x","name":"X"}]}]}`))
+	got := store.snapshot()
+	if len(got.Options) != 3 {
+		t.Fatalf("options = %+v", got.Options)
+	}
+	model, mode := got.Options[0], got.Options[1]
+	if model.Category != "model" || model.Name != "模型" || mode.Category != "mode" || mode.Name != "模式" {
+		t.Fatalf("backfill missing: model=%+v mode=%+v", model, mode)
+	}
+	if got.Options[2].Category != "" || got.Options[2].Name != "" {
+		t.Fatalf("unrelated option must not be backfilled: %+v", got.Options[2])
+	}
+	// Explicit fields always win over the backfill.
+	store.update(json.RawMessage(`{"configOptions":[{"id":"model","name":"Explicit","category":"model","type":"select","currentValue":"g","options":[{"value":"g","name":"G"}]}]}`))
+	if opts := store.snapshot().Options; opts[0].Name != "Explicit" {
+		t.Fatalf("explicit name overwritten: %+v", opts[0])
+	}
+}
+
 func TestIdleSessionFeaturesAreSessionScopedAndCannotAuthorize(t *testing.T) {
 	store := &sessionFeatureStore{}
 	router := &managedRouter{observeFeatures: store.update}

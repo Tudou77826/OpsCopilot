@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +32,7 @@ type managedRouter struct {
 	observeFeatures func(json.RawMessage)
 	sessionID       string
 	idleUpdates     []json.RawMessage
+	remembered      map[string]string
 }
 
 func (r *managedRouter) bind(turn *assistantcontrol.Turn, tools ManagedTools, sessionID string, audit ...func(string, string, json.RawMessage) error) error {
@@ -85,6 +87,8 @@ func (r *managedRouter) bind(turn *assistantcontrol.Turn, tools ManagedTools, se
 	}}
 	b.bridge.DenyRequests = r.denyRequests
 	b.bridge.DeferHostPermission = b.deferHostPermission
+	b.bridge.Remembered = r.rememberedDecision
+	b.bridge.Remember = r.rememberDecision
 	if len(audit) > 0 {
 		b.bridge.Audit = audit[0]
 	}
@@ -113,6 +117,31 @@ func (r *managedRouter) capture() *managedBinding {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.current
+}
+
+// rememberedDecision returns a session-scoped allow/reject decision recorded
+// from an allow_always permission option, or "" when nothing was remembered.
+func (r *managedRouter) rememberedDecision(key string) string {
+	if key == "" {
+		return ""
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.remembered[key]
+}
+
+func (r *managedRouter) rememberDecision(key, decision string) {
+	if key == "" || decision == "" {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.remembered == nil {
+		r.remembered = make(map[string]string)
+	}
+	if len(r.remembered) < 128 {
+		r.remembered[key] = decision
+	}
 }
 func (r *managedRouter) Capture() Handler {
 	if binding := r.capture(); binding != nil {
@@ -223,6 +252,15 @@ func hostToolName(name string) string {
 		}
 	}
 	return ""
+}
+
+// permissionTitle prefers the agent-provided title and falls back to the real
+// tool name restored from private metadata, so approval cards are never blank.
+func permissionTitle(title, hostName string) string {
+	if strings.TrimSpace(title) != "" {
+		return title
+	}
+	return hostName
 }
 
 func permissionKey(name string, raw json.RawMessage) string {

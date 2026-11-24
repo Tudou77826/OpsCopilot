@@ -22,7 +22,9 @@ func Start(ctx context.Context, config ProcessConfig, handler Handler) (*Client,
 	command := exec.CommandContext(ctx, config.Executable, config.Args...)
 	command.Dir = config.Directory
 	command.Env = config.Environment
-	hideWindow(command)
+	if err := prepareCommand(command); err != nil {
+		return nil, err
+	}
 	stdout, err := command.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -41,17 +43,28 @@ func Start(ctx context.Context, config ProcessConfig, handler Handler) (*Client,
 		_ = stdin.Close()
 		return nil, fmt.Errorf("无法启动 ACP 程序：%w", err)
 	}
+	// Host the whole child tree so a crashed desktop can never orphan ACP
+	// agents. Release runs only after the child has been reaped.
+	releaseTree, err := bindProcessTree(command.Process)
+	if err != nil {
+		_ = command.Process.Kill()
+		_, _ = command.Process.Wait()
+		_ = stdout.Close()
+		_ = stdin.Close()
+		return nil, fmt.Errorf("无法托管 ACP 进程树：%w", err)
+	}
 	client := Connect(ctx, stdout, stdin, handler, func() { _ = command.Process.Kill() })
 	client.startupDiagnostic = diagnostic
 	done := make(chan struct{})
 	client.processDone = done
 	go func() {
-		defer close(done)
 		<-client.Done()
 		_ = command.Wait()
 		if command.ProcessState != nil {
 			diagnostic.markExited(command.ProcessState.ExitCode())
 		}
+		releaseTree()
+		close(done)
 	}()
 	return client, nil
 }

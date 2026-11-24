@@ -62,7 +62,7 @@ func TestLiveICodeNewRuntimeUsesSavedVisibleHistoryOnlyOnFreshPrompt(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	second := NewRecoveredConversation(assistantcontrol.RecoveryContext(archive.Conversation))
+	second := NewRecoveredConversation(assistantcontrol.RecoveryContext(archive.Conversation), "")
 	defer second.Close()
 	if calls.Load() != 1 || second.client != nil || second.sessionID != "" {
 		t.Fatal("recovery started model or operation without fresh user message")

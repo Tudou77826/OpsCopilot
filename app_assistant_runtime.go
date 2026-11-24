@@ -16,7 +16,8 @@ import (
 )
 
 func (a *App) assistantExecutable() (string, error) {
-	if a.assistantRuntimeKind() == "custom" {
+	kind := a.assistantRuntimeKind()
+	if kind == "custom" {
 		if a.configMgr == nil || a.configMgr.Config == nil {
 			return "", errors.New("助手设置不可用")
 		}
@@ -29,12 +30,19 @@ func (a *App) assistantExecutable() (string, error) {
 		}
 		return path, nil
 	}
-	if a.assistantRuntimeKind() == "opencode" {
+	if kind == "opencode" {
 		configured := ""
 		if a.configMgr != nil && a.configMgr.Config != nil {
 			configured = strings.TrimSpace(a.configMgr.Config.AssistantRuntime.Executable)
 		}
 		return resolveOpenCodeExecutable(configured)
+	}
+	if kind == "codeagent" {
+		configured := ""
+		if a.configMgr != nil && a.configMgr.Config != nil {
+			configured = strings.TrimSpace(a.configMgr.Config.AssistantRuntime.Executable)
+		}
+		return resolveCodeAgentExecutable(configured)
 	}
 	if a.configMgr != nil && a.configMgr.Config != nil {
 		if configured := strings.TrimSpace(a.configMgr.Config.AssistantRuntime.Executable); configured != "" {
@@ -49,10 +57,18 @@ func (a *App) assistantRuntimeKind() string {
 	if a.configMgr != nil && a.configMgr.Config != nil && a.configMgr.Config.AssistantRuntime.Kind != "" {
 		return a.configMgr.Config.AssistantRuntime.Kind
 	}
-	return "icode"
+	// Standard ACP (CodeAgent) is the primary base; iCode remains available as
+	// an explicit legacy selection. Previously saved explicit kinds never flip.
+	return "codeagent"
 }
 
 func (a *App) AssistantAgentKind() string { return a.assistantRuntimeKind() }
+
+// standardRuntimeKind reports whether the persisted kind speaks only standard
+// ACP, so capability-driven behavior applies uniformly.
+func standardRuntimeKind(kind string) bool {
+	return kind == "opencode" || kind == "custom" || kind == "codeagent"
+}
 
 func resolveOpenCodeExecutable(configured string) (string, error) {
 	if configured != "" {
@@ -83,6 +99,60 @@ func resolveOpenCodeExecutable(configured string) (string, error) {
 	return "", errors.New("尚未找到 OpenCode 程序，请安装或选择程序路径")
 }
 
+// resolveCodeAgentExecutable accepts an explicit .exe/.cmd/.bat path, resolves
+// an extensionless path against same-directory launchers, or falls back to
+// PATH. npm-style .cmd shims are returned as-is; the launcher wraps them.
+func resolveCodeAgentExecutable(configured string) (string, error) {
+	configured = strings.TrimSpace(configured)
+	if configured != "" {
+		if !filepath.IsAbs(configured) {
+			return "", errors.New("CodeAgent 程序路径必须是绝对路径")
+		}
+		resolved := configured
+		if runtime.GOOS == "windows" {
+			extended, err := resolveWindowsLauncher(configured)
+			if err != nil {
+				return "", err
+			}
+			resolved = extended
+		}
+		if info, err := os.Stat(resolved); err != nil || info.IsDir() {
+			return "", errors.New("找不到指定的 CodeAgent 程序")
+		}
+		return resolved, nil
+	}
+	if path, err := exec.LookPath("codeagent"); err == nil {
+		absolute, absErr := filepath.Abs(path)
+		if absErr != nil {
+			return "", absErr
+		}
+		if runtime.GOOS == "windows" {
+			return resolveWindowsLauncher(absolute)
+		}
+		return absolute, nil
+	}
+	return "", errors.New("尚未找到 CodeAgent 程序，请安装 codeagent 并加入 PATH，或选择程序路径")
+}
+
+// resolveWindowsLauncher resolves extensionless Windows paths against the
+// same-directory .exe/.cmd/.bat launchers, mirroring reference ACP clients.
+func resolveWindowsLauncher(path string) (string, error) {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".exe", ".cmd", ".bat":
+		return path, nil
+	case "":
+		for _, ext := range []string{".exe", ".cmd", ".bat"} {
+			candidate := path + ext
+			if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+				return candidate, nil
+			}
+		}
+		return "", errors.New("该路径没有可用的 Windows 启动入口（.exe/.cmd/.bat）")
+	default:
+		return "", errors.New("Windows 下仅支持 .exe/.cmd/.bat 程序路径")
+	}
+}
+
 func (a *App) assistantModelConfig(_ string) (acp.ManagedConfig, error) {
 	a.assistantConversationMu.Lock()
 	defer a.assistantConversationMu.Unlock()
@@ -94,6 +164,8 @@ func (a *App) assistantModelConfigLocked() (acp.ManagedConfig, error) {
 		return acp.ManagedConfig{}, err
 	}
 	if a.assistantRuntimeKind() == "opencode" {
+		// 对齐参考 ACP 客户端：OpenCode 用它自己的模型与认证配置，启动环境
+		// 完整继承用户环境；OpsCopilot 不注入合成 provider 配置。
 		return acp.ManagedConfig{AgentKind: "opencode"}, nil
 	}
 	if a.assistantRuntimeKind() == "custom" {
@@ -105,6 +177,20 @@ func (a *App) assistantModelConfigLocked() (acp.ManagedConfig, error) {
 			return acp.ManagedConfig{}, errors.New("Agent 启动参数无效")
 		}
 		return acp.ManagedConfig{AgentKind: "custom", ArgumentsJSON: string(args)}, nil
+	}
+	if a.assistantRuntimeKind() == "codeagent" {
+		if a.configMgr == nil || a.configMgr.Config == nil {
+			return acp.ManagedConfig{}, errors.New("助手设置不可用")
+		}
+		args, err := json.Marshal(a.configMgr.Config.AssistantRuntime.Arguments)
+		if err != nil {
+			return acp.ManagedConfig{}, errors.New("Agent 启动参数无效")
+		}
+		env, err := json.Marshal(a.configMgr.Config.AssistantRuntime.AgentEnv)
+		if err != nil {
+			return acp.ManagedConfig{}, errors.New("Agent 环境变量无效")
+		}
+		return acp.ManagedConfig{AgentKind: "codeagent", ArgumentsJSON: string(args), AgentEnvJSON: string(env)}, nil
 	}
 	if a.assistantRuntimeKind() != "icode" {
 		return acp.ManagedConfig{}, errors.New("不支持的 Agent 底座")
@@ -137,6 +223,9 @@ func (a *App) InspectAssistantModel(source string) AssistantModelStatus {
 	if config.LocalModel.Profile != "" {
 		return AssistantModelStatus{Ready: true, Name: config.LocalModel.Name, Detail: "已读取 iCode 模型及其认证配置；服务连通性将在首次对话时验证。"}
 	}
+	if config.Model == "" {
+		return AssistantModelStatus{Ready: true, Detail: "模型与认证由 Agent 本机配置管理；服务连通性将在首次对话时验证。"}
+	}
 	return AssistantModelStatus{Ready: true, Name: config.Model, Detail: "使用 OpsCopilot「模型服务」配置；服务连通性将在首次对话时验证。"}
 }
 
@@ -158,7 +247,7 @@ func (a *App) CheckAssistantRuntime(configured string) acp.RuntimeReport {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	return acp.InspectRuntime(ctx, executable)
 }
@@ -167,10 +256,14 @@ func (a *App) CheckAssistantAgentRuntime(kind, configured string) acp.RuntimeRep
 	if kind == "" || kind == "icode" {
 		return a.CheckAssistantRuntime(configured)
 	}
-	if kind != "opencode" {
+	if kind != "opencode" && kind != "codeagent" {
 		return acp.RuntimeReport{Advice: "不支持的 Agent 底座"}
 	}
-	executable, err := resolveOpenCodeExecutable(strings.TrimSpace(configured))
+	resolve := resolveOpenCodeExecutable
+	if kind == "codeagent" {
+		resolve = resolveCodeAgentExecutable
+	}
+	executable, err := resolve(strings.TrimSpace(configured))
 	if err != nil {
 		return acp.RuntimeReport{Executable: configured, Checks: []acp.RuntimeCheck{{ID: "executable", Label: "程序路径", Status: "failed", Detail: err.Error()}}}
 	}
@@ -178,19 +271,26 @@ func (a *App) CheckAssistantAgentRuntime(kind, configured string) acp.RuntimeRep
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
-	return acp.InspectOpenCodeRuntime(ctx, executable)
+	if kind == "opencode" {
+		return acp.InspectOpenCodeRuntime(ctx, executable)
+	}
+	args := []string{"acp"}
+	if a.configMgr != nil && a.configMgr.Config != nil && len(a.configMgr.Config.AssistantRuntime.Arguments) > 0 {
+		args = a.configMgr.Config.AssistantRuntime.Arguments
+	}
+	return a.probeStandardRuntime(executable, args)
 }
 
-// CheckCustomAssistantRuntime inspects protocol startup only, not model access,
+// probeStandardRuntime inspects protocol startup only, not model access,
 // native permissions or actual Ops tool invocation.
-func (a *App) CheckCustomAssistantRuntime(path string, args []string) acp.RuntimeReport {
+func (a *App) probeStandardRuntime(executable string, args []string) acp.RuntimeReport {
 	ctx := a.ctx
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	filtered := make([]string, 0, len(args))
 	for _, arg := range args {
@@ -198,8 +298,8 @@ func (a *App) CheckCustomAssistantRuntime(path string, args []string) acp.Runtim
 			filtered = append(filtered, arg)
 		}
 	}
-	result, err := acp.ProbeStandardAgent(ctx, strings.TrimSpace(path), filtered)
-	report := acp.RuntimeReport{Executable: path, Name: result.Name, Version: result.Version, ProtocolVersion: result.ProtocolVersion, Checks: result.Checks}
+	result, err := acp.ProbeStandardAgent(ctx, strings.TrimSpace(executable), filtered)
+	report := acp.RuntimeReport{Executable: executable, Name: result.Name, Version: result.Version, ProtocolVersion: result.ProtocolVersion, Checks: result.Checks, Capabilities: &acp.StandardCapabilities{LoadSession: result.LoadSession, AdditionalRoots: result.AdditionalRoots, HTTPMCP: result.HTTPMCP, ModelOptions: result.ModelOptions, ModeOptions: result.ModeOptions}}
 	if err != nil {
 		report.Advice = err.Error()
 		return report
@@ -207,6 +307,12 @@ func (a *App) CheckCustomAssistantRuntime(path string, args []string) acp.Runtim
 	report.Ready = true
 	report.Advice = "已建立测试会话；模型连通、工具调用和 Agent 本机权限行为尚未验证。"
 	return report
+}
+
+// CheckCustomAssistantRuntime inspects protocol startup only, not model access,
+// native permissions or actual Ops tool invocation.
+func (a *App) CheckCustomAssistantRuntime(path string, args []string) acp.RuntimeReport {
+	return a.probeStandardRuntime(path, args)
 }
 
 func (a *App) SelectAssistantRuntimeExecutable() (string, error) {

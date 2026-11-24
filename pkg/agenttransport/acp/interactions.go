@@ -34,7 +34,11 @@ type Interactions struct {
 	// Defer host-tool approvals to the actual MCP invocation. Returning true
 	// does not authorize the action: the host must still ask before dispatch.
 	DeferHostPermission func(string, json.RawMessage) bool
-	sessionMu           sync.RWMutex
+	// Remembered/Remember carry per-conversation decisions for allow_always
+	// permission options. They live on the router, outliving a single turn.
+	Remembered func(key string) string
+	Remember   func(key, decision string)
+	sessionMu  sync.RWMutex
 }
 
 func (b *Interactions) SetSessionID(id string) {
@@ -176,6 +180,8 @@ func (b *Interactions) Request(ctx context.Context, method string, data json.Raw
 			parts = append(parts, a.Text)
 		}
 		return map[string]string{"text": strings.Join(parts, "\n")}, nil
+	case "elicitation/create":
+		return b.elicitation(ctx, data, request)
 	case "session/request_permission":
 		if b.DenyPermissions {
 			return map[string]any{"outcome": map[string]string{"outcome": "cancelled"}}, nil
@@ -191,6 +197,9 @@ func (b *Interactions) Request(ctx context.Context, method string, data json.Raw
 					Chrys struct {
 						ToolName string `json:"toolName"`
 					} `json:"chrys"`
+					CodeAgentCLI struct {
+						ToolName string `json:"toolName"`
+					} `json:"codeAgentCLI"`
 				} `json:"_meta"`
 			} `json:"toolCall"`
 			Options []struct {
@@ -201,16 +210,29 @@ func (b *Interactions) Request(ctx context.Context, method string, data json.Raw
 		if json.Unmarshal(data, &permission) != nil {
 			return nil, &RPCError{Code: -32602, Message: "审批格式无效"}
 		}
-		allow, reject := "", ""
+		allow, allowAlways, reject, rejectAlways := "", "", "", ""
 		for _, option := range permission.Options {
 			switch option.Kind {
 			case "allow_once":
 				allow = option.ID
+			case "allow_always":
+				allowAlways = option.ID
 			case "reject_once":
 				reject = option.ID
+			case "reject_always":
+				rejectAlways = option.ID
 			}
 		}
-		if allow == "" || reject == "" || allow == reject {
+		// Unknown kinds are ignored, never treated as allow. Agents offering only
+		// one direction get cancelled rather than guessed.
+		allowID, rejectID := allow, reject
+		if allowID == "" {
+			allowID = allowAlways
+		}
+		if rejectID == "" {
+			rejectID = rejectAlways
+		}
+		if allowID == "" || rejectID == "" || allowID == rejectID {
 			return map[string]any{"outcome": map[string]string{"outcome": "cancelled"}}, nil
 		}
 		if b.Audit != nil {
@@ -224,11 +246,35 @@ func (b *Interactions) Request(ctx context.Context, method string, data json.Raw
 					return nil, err
 				}
 			}
-			return map[string]any{"outcome": map[string]string{"outcome": "selected", "optionId": allow}}, nil
+			return map[string]any{"outcome": map[string]string{"outcome": "selected", "optionId": allowID}}, nil
 		}
 		hostName := permission.ToolCall.Meta.Chrys.ToolName
+		if hostName == "" {
+			hostName = permission.ToolCall.Meta.CodeAgentCLI.ToolName
+		}
 		if hostName == "" && strings.HasPrefix(permission.ToolCall.Name, "opscopilot_") {
 			hostName = permission.ToolCall.Name
+		}
+		rememberName := hostName
+		if rememberName == "" {
+			rememberName = permission.ToolCall.Name
+		}
+		rememberKey := permissionKey(rememberName, permission.ToolCall.Input)
+		// A remembered allow_always/reject decision applies without a new dialog
+		// and stays fully audited. Unknown keys simply never match.
+		if b.Remembered != nil {
+			if decision := b.Remembered(rememberKey); decision != "" {
+				id, status := rejectID, "remembered_rejected"
+				if decision == "allow" {
+					id, status = allowID, "remembered_allowed"
+				}
+				if b.Audit != nil {
+					if err := b.Audit("permission", status, data); err != nil {
+						return nil, err
+					}
+				}
+				return map[string]any{"outcome": map[string]string{"outcome": "selected", "optionId": id}}, nil
+			}
 		}
 		if b.DeferHostPermission != nil && b.DeferHostPermission(hostName, permission.ToolCall.Input) {
 			if b.Audit != nil {
@@ -236,7 +282,7 @@ func (b *Interactions) Request(ctx context.Context, method string, data json.Raw
 					return nil, err
 				}
 			}
-			return map[string]any{"outcome": map[string]string{"outcome": "selected", "optionId": allow}}, nil
+			return map[string]any{"outcome": map[string]string{"outcome": "selected", "optionId": allowID}}, nil
 		}
 		details := []assistantcontrol.Detail{}
 		if permission.ToolCall.Output != "" {
@@ -259,25 +305,34 @@ func (b *Interactions) Request(ctx context.Context, method string, data json.Raw
 		if agentName == "" {
 			agentName = "iCode"
 		}
-		err := b.Turn.ConfirmAction(ctx, input, assistantcontrol.Prompt{Kind: "approval", Title: permission.ToolCall.Title, Command: string(permission.ToolCall.Input), Description: agentName + " 需要你确认这次操作；请核对操作内容和目标。", Details: details, Choices: []assistantcontrol.Choice{{ID: "reject", Label: "拒绝"}, {ID: "allow", Label: "允许本次"}}, Expires: time.Now().Add(5 * time.Minute)}, verdict)
-		id := allow
-		if err != nil {
-			if !errors.Is(err, assistantcontrol.ErrActionDenied) {
+		choices := []assistantcontrol.Choice{{ID: "reject", Label: "拒绝"}, {ID: "allow", Label: "允许本次"}}
+		if allowAlways != "" {
+			choices = append(choices, assistantcontrol.Choice{ID: "allow_always", Label: "本会话内始终允许"})
+		}
+		choice, confirmErr := b.Turn.ConfirmActionChoice(ctx, input, assistantcontrol.Prompt{Kind: "approval", Title: permissionTitle(permission.ToolCall.Title, hostName), Command: string(permission.ToolCall.Input), Description: agentName + " 需要你确认这次操作；请核对操作内容和目标。", Details: details, Choices: choices, Expires: time.Now().Add(5 * time.Minute)}, verdict, "allow_always")
+		id := allowID
+		if confirmErr != nil {
+			if !errors.Is(confirmErr, assistantcontrol.ErrActionDenied) {
 				if b.Audit != nil {
 					_ = b.Audit("permission", "cancelled", data)
 				}
 				b.Turn.Finish("stopped", "确认未完成，未作选择或授权")
-				return nil, err
+				return nil, confirmErr
 			}
-			id = reject
+			id = rejectID
+		} else if choice == "allow_always" && allowAlways != "" {
+			id = allowAlways
+			if rememberKey != "" && b.Remember != nil {
+				b.Remember(rememberKey, "allow")
+			}
 		}
 		if b.Audit != nil {
 			status := "rejected"
-			if id == allow {
+			if id == allowID || id == allowAlways {
 				status = "allowed"
 			}
-			if err = b.Audit("permission", status, data); err != nil {
-				return nil, err
+			if auditErr := b.Audit("permission", status, data); auditErr != nil {
+				return nil, auditErr
 			}
 		}
 		return map[string]any{"outcome": map[string]string{"outcome": "selected", "optionId": id}}, nil

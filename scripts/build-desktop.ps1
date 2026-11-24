@@ -33,6 +33,22 @@ New-Item -ItemType Directory -Path $package | Out-Null
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $payload = Join-Path $package 'jdbc-runtime.bundle'
 [IO.Compression.ZipFile]::CreateFromDirectory($RuntimeDirectory, $payload, [IO.Compression.CompressionLevel]::Optimal, $false)
+# The runtime validator rejects backslash entry names on every platform. Windows
+# PowerShell 5.1 (.NET Framework) writes separators as '\'; PowerShell 7 (CI)
+# writes '/'. Rewrite the archive with '/' so a local PS 5.1 build matches CI.
+$source = [IO.Compression.ZipFile]::OpenRead($payload)
+$staged = $payload + '.normalized'
+$target = [IO.Compression.ZipFile]::Open($staged, 'Create')
+try {
+    foreach ($entry in $source.Entries) {
+        $rewritten = $target.CreateEntry($entry.FullName.Replace('\', '/'), [IO.Compression.CompressionLevel]::Optimal)
+        $input = $entry.Open(); $output = $rewritten.Open()
+        try { $input.CopyTo($output) } finally { $output.Dispose(); $input.Dispose() }
+    }
+} finally {
+    $target.Dispose(); $source.Dispose()
+}
+Move-Item -LiteralPath $staged -Destination $payload -Force
 $digest = (Get-FileHash -LiteralPath $payload -Algorithm SHA256).Hash.ToLowerInvariant()
 $previousDev = $env:OPSCOPILOT_DEV_MODE
 Push-Location $repo
@@ -40,7 +56,7 @@ try {
     $env:OPSCOPILOT_DEV_MODE = $null
     # Never replace a build/bin executable that a running preview may use.
     $intermediateName = 'opscopilot-desktop-' + [guid]::NewGuid().ToString('N') + '.exe'
-    & wails build -platform windows/amd64 -o $intermediateName -m -nocolour -ldflags "-X main.Version=$Version -X opscopilot/pkg/desktopruntime.ExpectedSHA256=$digest"
+    & wails build -platform windows/amd64 -o $intermediateName -m -s -nocolour -ldflags "-X main.Version=$Version -X opscopilot/pkg/desktopruntime.ExpectedSHA256=$digest"
     if ($LASTEXITCODE -ne 0) { throw 'Desktop build failed' }
     # Explicit allowlist: no development credentials, config, or user drivers.
     $intermediatePath = Join-Path $repo "build/bin/$intermediateName"

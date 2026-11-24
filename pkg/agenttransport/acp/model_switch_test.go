@@ -89,7 +89,7 @@ func TestRecoveredConversationSuppliesHistoryOnceAndNoToolAuthority(t *testing.T
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	config := testConversationConfig(t)
-	c := NewRecoveredConversation("saved-history-reference")
+	c := NewRecoveredConversation("saved-history-reference", "")
 	defer c.Close()
 	coordinator := &assistantcontrol.Coordinator{}
 	for _, question := range []string{"new request", "follow-up"} {

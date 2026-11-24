@@ -79,7 +79,7 @@ export function AssistantModelPicker({runtime, busy, revision, onChanging, onErr
         setLoading(true);
         try {
             const next = await runtime.modelOptions();
-            if (mounted.current && generation.current === version) {setState(next); setError('');}
+            if (mounted.current && generation.current === version) {setState({...next, models: next.models || []}); setError('');}
         } catch (e) {
             if (mounted.current && generation.current === version) setError(String(e));
         } finally {
@@ -98,7 +98,7 @@ export function AssistantModelPicker({runtime, busy, revision, onChanging, onErr
         setChanging(true); onChanging(true); setError('');
         try {
             const next = await runtime.selectModel(id);
-            if (mounted.current) setState(next);
+            if (mounted.current) setState({...next, models: next.models || []});
         } catch (e) {if (mounted.current) setError(`切换未完成：${String(e)}`);}
         finally {
             operation.current = false;

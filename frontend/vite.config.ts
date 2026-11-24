@@ -40,6 +40,12 @@ export default defineConfig({
   server: {
     port: 5174,
     strictPort: true,
+    watch: {
+      // e2e/.runtime* contains generated e2e test runtimes whose broken
+      // junctions (Linux JRE links) crash the chokidar watcher and kill the
+      // dev server; they never need hot reload.
+      ignored: ['**/e2e/.runtime*/**'],
+    },
     // Shared UI styles reference sibling assets (including companion scenes).
     // CSS URLs need an explicit serving boundary as well as module imports.
     fs: {

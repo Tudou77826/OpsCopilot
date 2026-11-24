@@ -34,6 +34,9 @@ func TestAssistantAlwaysUsesICodeAndStatusOmitsSecrets(t *testing.T) {
 		t.Fatal(err)
 	}
 	mgr.Config.LLM = config.LLMConfig{APIKey: "app-secret", BaseURL: "https://app.invalid", ComplexModel: "app-model"}
+	// This test exercises iCode model semantics, which remain available as an
+	// explicit legacy kind; the default base is now the standard-ACP CodeAgent.
+	mgr.Config.AssistantRuntime.Kind = "icode"
 	a := &App{configMgr: mgr}
 	native, err := a.assistantModelConfig("")
 	if err != nil || native.LocalModel.Name != "Local model" || native.APIKey != "" || native.BaseURL != "" {
