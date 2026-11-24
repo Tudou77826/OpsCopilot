@@ -56,7 +56,7 @@ try {
     $env:OPSCOPILOT_DEV_MODE = $null
     # Never replace a build/bin executable that a running preview may use.
     $intermediateName = 'opscopilot-desktop-' + [guid]::NewGuid().ToString('N') + '.exe'
-    & wails build -platform windows/amd64 -o $intermediateName -m -s -nocolour -ldflags "-X main.Version=$Version -X opscopilot/pkg/desktopruntime.ExpectedSHA256=$digest"
+    & wails build -platform windows/amd64 -o $intermediateName -m -nocolour -ldflags "-X main.Version=$Version -X opscopilot/pkg/desktopruntime.ExpectedSHA256=$digest"
     if ($LASTEXITCODE -ne 0) { throw 'Desktop build failed' }
     # Explicit allowlist: no development credentials, config, or user drivers.
     $intermediatePath = Join-Path $repo "build/bin/$intermediateName"
