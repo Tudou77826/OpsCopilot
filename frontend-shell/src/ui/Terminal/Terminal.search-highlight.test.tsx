@@ -205,4 +205,29 @@ describe('Terminal search/highlight integration', () => {
         const hasYellow = registerDecoration.mock.calls.some((c: any[]) => c[0] && c[0].backgroundColor === '#f6e05e');
         expect(hasYellow).toBe(false);
     });
+
+    it('refreshes active search highlight decorations when theme changes', async () => {
+        vi.useFakeTimers();
+        const ref = React.createRef<TerminalRef>();
+        render(<TerminalComponent id="t5" ref={ref} theme="dark" />);
+
+        selectionText = 'error';
+        await act(async () => {
+            lastKeyHandler!({ type: 'keydown', ctrlKey: true, code: 'KeyF', preventDefault: vi.fn() });
+        });
+        await act(async () => {
+            await vi.runAllTimersAsync();
+        });
+        expect(searchFindNext.mock.calls.at(-1)?.[1]).toMatchObject({
+            decorations: getTerminalSearchDecorations('dark'),
+        });
+
+        await act(async () => {
+            ref.current?.applyTheme('light');
+        });
+        expect(searchFindNext.mock.calls.at(-1)?.[1]).toMatchObject({
+            incremental: true,
+            decorations: getTerminalSearchDecorations('light'),
+        });
+    });
 });

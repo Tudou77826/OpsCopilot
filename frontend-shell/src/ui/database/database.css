@@ -1,7 +1,7 @@
 .oc-db-workspace {
-  --oc-db-sql-keyword: #8050a6;
-  --oc-db-sql-string: #a24524;
-  --oc-db-sql-number: #146b65;
+  --oc-db-sql-keyword: var(--code-keyword);
+  --oc-db-sql-string: var(--code-string);
+  --oc-db-sql-number: var(--code-number);
   display: flex;
   width: 100%;
   height: 100%;
@@ -10,11 +10,6 @@
   background: var(--bg-primary);
   color: var(--text-primary);
   font-size: 12px;
-}
-[data-theme='dark'] .oc-db-workspace {
-  --oc-db-sql-keyword: #c2a0ef;
-  --oc-db-sql-string: #e4b68c;
-  --oc-db-sql-number: #9acdad;
 }
 .oc-db-workspace * {
   box-sizing: border-box;

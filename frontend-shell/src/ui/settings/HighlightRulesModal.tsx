@@ -4,7 +4,7 @@ import type { HighlightRule } from '../Terminal/highlightTypes';
 import { colors, radius, font } from './settingsStyles';
 import Switch from './Switch';
 import { currentTheme } from '../appearance';
-import { getTerminalHighlightDefaults } from '../terminalSchemes';
+import { getTerminalHighlightDefaults, resolveRuleHighlightColors } from '../terminalSchemes';
 
 interface HighlightRulesModalProps {
     isOpen: boolean;
@@ -477,22 +477,25 @@ export default function HighlightRulesModal({ isOpen, rules, onChange, onSave, o
                                                     </div>
                                                 </div>
                                                 {/* Preview */}
-                                                {r.pattern && (
-                                                    <div style={styles.field}>
-                                                        <label style={styles.fieldLabel}>效果预览</label>
-                                                        <div style={styles.previewBg}>
-                                                            <span style={{
-                                                                backgroundColor: r.style?.background_color ? r.style.background_color : 'unset',
-                                                                color: r.style?.color || defaults.color,
-                                                                padding: 'var(--space-2) var(--space-6)',
-                                                                borderRadius: 'var(--radius-xs)',
-                                                                whiteSpace: 'nowrap',
-                                                            }}>
-                                                                {r.name || '未命名'} 示例文本
-                                                            </span>
+                                                {r.pattern && (() => {
+                                                    const previewColors = resolveRuleHighlightColors(r.style, currentTheme());
+                                                    return (
+                                                        <div style={styles.field}>
+                                                            <label style={styles.fieldLabel}>效果预览</label>
+                                                            <div style={styles.previewBg}>
+                                                                <span style={{
+                                                                    backgroundColor: previewColors.backgroundColor ?? 'unset',
+                                                                    color: previewColors.foregroundColor || defaults.color,
+                                                                    padding: 'var(--space-2) var(--space-6)',
+                                                                    borderRadius: 'var(--radius-xs)',
+                                                                    whiteSpace: 'nowrap',
+                                                                }}>
+                                                                    {r.name || '未命名'} 示例文本
+                                                                </span>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                )}
+                                                    );
+                                                })()}
                                             </div>
                                         )}
                                     </div>
@@ -949,7 +952,7 @@ const styles = {
         borderRadius: radius.sm,
         border: 'none',
         backgroundColor: colors.accent,
-        color: colors.textPrimary,
+        color: 'var(--text-on-accent)',
         cursor: 'pointer',
         fontWeight: 500,
         fontSize: font.base,
@@ -975,7 +978,7 @@ const styles = {
         borderRadius: radius.sm,
         border: 'none',
         backgroundColor: colors.accent,
-        color: colors.textPrimary,
+        color: 'var(--text-on-accent)',
         cursor: 'pointer',
         fontWeight: 500,
         fontSize: font.base,
@@ -1045,7 +1048,7 @@ const unsavedStyles = {
         borderRadius: radius.sm,
         border: 'none',
         backgroundColor: colors.accent,
-        color: colors.textPrimary,
+        color: 'var(--text-on-accent)',
         cursor: 'pointer',
         fontWeight: 500,
         fontSize: font.base,

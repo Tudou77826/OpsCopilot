@@ -102,4 +102,14 @@ describe('AnsiBackgroundFilter', () => {
         expect(f.feed('\x9b40mtext')).toBe('text');
         expect(f.feed('\x9b31mred')).toBe('\x1b[31mred');
     });
+
+    it('保留语义彩色背景（红底白字 41m、彩色 256/真彩背景），避免误杀高亮条与 TUI', () => {
+        const f = new AnsiBackgroundFilter();
+        expect(f.feed('\x1b[37;41m ERROR \x1b[0m')).toBe('\x1b[37;41m ERROR \x1b[0m');
+        expect(f.feed('\x1b[48;5;196malert\x1b[0m')).toBe('\x1b[48;5;196malert\x1b[0m');
+        expect(f.feed('\x1b[48;2;200;40;40mwarn\x1b[0m')).toBe('\x1b[48;2;200;40;40mwarn\x1b[0m');
+        // 极暗灰阶 232 与近黑真彩背景仍被剔除
+        expect(f.feed('\x1b[48;5;232mtext')).toBe('text');
+        expect(f.feed('\x1b[48;2;20;20;20mtext')).toBe('text');
+    });
 });

@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import css from './styles/shell-theme.css?raw';
 import hostContract from './styles/teams-host-contract.json';
-import { getTerminalTheme, getTerminalSearchDecorations, terminalHighlightDefaults } from './terminalSchemes';
+import {
+  getTerminalTheme,
+  getTerminalSearchDecorations,
+  terminalHighlightDefaults,
+  TERMINAL_MINIMUM_CONTRAST_RATIO,
+  resolveRuleHighlightColors,
+} from './terminalSchemes';
 import { currentTheme, normalizeSkin, applySkin, currentSkin, persistSkin, readPersistedSkin, DEFAULT_SKIN, SKIN_STORAGE_KEY, THEME_STORAGE_KEY, DEFAULT_THEME_FOLLOW, THEME_FOLLOW_STORAGE_KEY, normalizeThemeFollow, persistThemeFollow, readPersistedThemeFollow, hostTheme, observeHostTheme, readPersistedSkinChoice, hostTokensAvailable } from './appearance';
 import { btnPrimary, settingsCard } from './settings/settingsStyles';
 
@@ -124,9 +130,21 @@ const surfaceTokens = [
   '--bg-elevated',
   '--bg-input',
   '--bg-hover',
+  '--bg-tooltip',
   '--bg-dialog',
   '--bg-settings-canvas',
 ];
+const codeTokens = [
+  '--code-fg',
+  '--code-comment',
+  '--code-keyword',
+  '--code-string',
+  '--code-number',
+  '--code-function',
+  '--code-type',
+  '--code-attr',
+];
+const codeSurfaces = ['--bg-primary', '--bg-sunken'];
 // 半透明层次层：必须叠加在具体底色上才有意义，单独作为"表面"比较会算错。
 const layerTokens = ['--layer-1', '--layer-2'];
 const layerBackdrops = ['--bg-primary', '--bg-secondary', '--bg-elevated', '--bg-dialog'];
@@ -219,6 +237,33 @@ describe('终端旁路随主题', () => {
     expect(terminalHighlightDefaults.light).not.toEqual(terminalHighlightDefaults.dark);
     expect(getTerminalSearchDecorations('light').matchBackground).not.toBe(getTerminalSearchDecorations('dark').matchBackground);
   });
+
+  it('终端统一开启 WCAG AA 最小对比度 4.5，亮色 ANSI 16 色在纸白底上全部达到 4.5', () => {
+    expect(TERMINAL_MINIMUM_CONTRAST_RATIO).toBe(4.5);
+    const terminal = getTerminalTheme('light');
+    const bg = terminal.background!;
+    const ansiKeys = [
+      'black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white',
+      'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite',
+    ] as const;
+    const failures = ansiKeys
+      .map(key => [key, terminal[key]] as const)
+      .filter(([, color]) => typeof color !== 'string' || contrast(color, bg) < 4.5)
+      .map(([key, color]) => `${key} ${color} on ${bg} = ${typeof color === 'string' ? contrast(color, bg).toFixed(2) : 'missing'}`);
+    expect(failures.join('\n')).toBe('');
+  });
+
+  it('resolveRuleHighlightColors：暗色下建的浅字规则切到亮色终端自动补偿至 ≥ 4.5', () => {
+    const lightBg = getTerminalTheme('light').background!;
+    const adapted = resolveRuleHighlightColors({ color: '#ffd700' }, 'light', lightBg);
+    expect(adapted.backgroundColor).toBeUndefined();
+    expect(adapted.foregroundColor).toBeDefined();
+    expect(contrast(adapted.foregroundColor!, lightBg)).toBeGreaterThanOrEqual(4.5);
+
+    const adaptedWithBg = resolveRuleHighlightColors({ background_color: '#fff3c4', color: '#ffffff' }, 'light', lightBg);
+    expect(adaptedWithBg.backgroundColor).toBe('#fff3c4');
+    expect(contrast(adaptedWithBg.foregroundColor!, '#fff3c4')).toBeGreaterThanOrEqual(4.5);
+  });
 });
 
 describe('currentTheme', () => {
@@ -272,6 +317,10 @@ describe.each(palettes)('%s 模式的对比度', (_mode, palette) => {
 
   it('语义前景色在对应底色上达到 4.5', () => {
     expect(contrastFailures(palette, semanticPairs).join('\n')).toBe('');
+  });
+
+  it('代码语法高亮令牌在代码底色上达到 4.5', () => {
+    expect(contrastFailures(palette, pairsOf(codeTokens, codeSurfaces)).join('\n')).toBe('');
   });
 });
 

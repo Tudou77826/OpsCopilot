@@ -4,6 +4,9 @@ import { DecorationStore, RenderRange } from './DecorationStore';
 import { TerminalLineMapper } from './TerminalLineMapper';
 import { MatcherRule, RuleMatcher } from './RuleMatcher';
 import { assessPattern } from './regexSafety';
+import type { Theme } from '../../appearanceTypes';
+import { currentTheme } from '../../appearance';
+import { resolveRuleHighlightColors } from '../../terminalSchemes';
 
 interface CompiledRule {
     rule: HighlightRule;
@@ -13,9 +16,6 @@ interface CompiledRule {
 const MAX_DECORATIONS = 500;
 const MAX_LOGICAL_LINE_LENGTH = 32 * 1024;
 const FRAME_BUDGET_MS = 4;
-
-const validColor = (value?: string): string | undefined =>
-    value && /^#[0-9a-f]{6}$/i.test(value) ? value : undefined;
 
 // 规则丢弃标准与编辑界面同源（assessPattern）：severe（确证灾难性回溯）或语法
 // 非法时丢弃，防老鼠屎正则卡死共享 worker。safe/moderate/high 一律保留——
@@ -51,7 +51,10 @@ export class RuleHighlightController {
     private timer: number | null = null;
     private disposed = false;
 
-    constructor(private readonly terminal: Terminal) {
+    private readonly getTheme: () => Theme;
+
+    constructor(private readonly terminal: Terminal, getTheme: () => Theme = currentTheme) {
+        this.getTheme = getTheme;
         this.decorations = new DecorationStore(terminal);
     }
 
@@ -136,11 +139,14 @@ export class RuleHighlightController {
             if (this.disposed || generation !== this.generation) return;
 
             const rulesById = new Map(this.rules.map(compiled => [compiled.rule.id, compiled.rule]));
+            const activeTheme = this.getTheme();
+            const terminalBg = this.terminal.options.theme?.background;
             const renderRanges: RenderRange[] = [];
             for (const match of matches) {
                 const snapshot = snapshots.get(match.lineId);
                 const rule = rulesById.get(match.ruleId);
                 if (!snapshot || !rule) continue;
+                const resolved = resolveRuleHighlightColors(rule.style, activeTheme, terminalBg);
                 for (const range of mapper.toCellRanges(snapshot, match.start, match.end)) {
                     if (renderRanges.length >= MAX_DECORATIONS) break;
                     renderRanges.push({
@@ -149,8 +155,8 @@ export class RuleHighlightController {
                         row: range.row,
                         col: range.col,
                         width: range.width,
-                        backgroundColor: validColor(rule.style?.background_color),
-                        foregroundColor: validColor(rule.style?.color),
+                        backgroundColor: resolved.backgroundColor,
+                        foregroundColor: resolved.foregroundColor,
                     });
                 }
                 if (renderRanges.length >= MAX_DECORATIONS) break;

@@ -16,7 +16,7 @@ import { RuleHighlightController } from './highlight/RuleHighlightController';
 import { Theme } from '../appearanceTypes';
 import { currentTheme } from '../appearance';
 import { DEFAULT_THEME } from '../appearance';
-import { getTerminalTheme } from '../terminalSchemes';
+import { getTerminalTheme, TERMINAL_MINIMUM_CONTRAST_RATIO } from '../terminalSchemes';
 import { AnsiBackgroundFilter } from './ansiBgFilter';
 import { TerminalRuntime } from '../ports';
 
@@ -595,9 +595,10 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             term.refresh(0, term.rows - 1);
             // 切换主题时重置 ANSI 背景过滤器状态（跨 chunk partial 残留）
             bgFilterRef.current?.reset();
-            // 规则高亮装饰器颜色在创建时固化，需重建以适配新背景（自动对比度补偿在 Phase 4 接入）
+            // 规则高亮与搜索高亮装饰器均需同步重建以适配新背景
             ruleHighlightControllerRef.current?.invalidate();
             ruleHighlightControllerRef.current?.schedule('rules');
+            searchControllerRef.current?.refreshTheme();
         },
     }));
 
@@ -612,7 +613,8 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             fontSize: clampTerminalFontSize(terminalConfig?.font_size),
             fontWeight: '400',
             fontWeightBold: '700',
-            // 完整配色方案（foreground/cursor/16 ANSI 等），随主题切换。详见 themes/terminalSchemes.ts
+            minimumContrastRatio: TERMINAL_MINIMUM_CONTRAST_RATIO,
+            // 完整配色方案（foreground/cursor/16 ANSI 等），随主题与皮肤切换。详见 terminalSchemes.ts
             theme: getTerminalTheme(theme),
             // 扩展分隔符：加入终端常见分隔符 /:=| 等
             // 但不加 . 和 _，这样 sopuesr.iii_yuyu、my_var 等标识符保持为整体
@@ -639,7 +641,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
 
         fitAddonRef.current = fitAddon;
         xtermRef.current = term;
-        const ruleController = new RuleHighlightController(term);
+        const ruleController = new RuleHighlightController(term, () => themeRef.current);
         ruleHighlightControllerRef.current = ruleController;
         ruleController.setRules(highlightRulesRef.current, terminalConfigRef.current?.highlight_enabled ?? true);
 
@@ -1007,7 +1009,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         adjustTerminalFontSize,
     ]);
 
-    // 主题切换：更新 xterm 配色 + 重建规则高亮装饰器。
+    // 主题切换：更新 xterm 配色 + 重建规则/搜索高亮装饰器。
     // 覆盖「主题变化后该组件实例的响应」；applyThemeAll 命令式调用走 useImperativeHandle。
     useEffect(() => {
         const term = xtermRef.current;
@@ -1018,7 +1020,23 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
         bgFilterRef.current?.reset();
         ruleHighlightControllerRef.current?.invalidate();
         ruleHighlightControllerRef.current?.schedule('rules');
+        searchControllerRef.current?.refreshTheme();
     }, [theme]);
+
+    // 皮肤切换（data-skin）：终端画布与语义令牌同源，切换皮肤时同步更新终端背景/前景。
+    useEffect(() => {
+        if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return;
+        const observer = new MutationObserver(() => {
+            const term = xtermRef.current;
+            if (!term) return;
+            term.options.theme = getTerminalTheme(themeRef.current);
+            term.refresh(0, term.rows - 1);
+            ruleHighlightControllerRef.current?.invalidate();
+            ruleHighlightControllerRef.current?.schedule('rules');
+        });
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-skin'] });
+        return () => observer.disconnect();
+    }, []);
 
     useEffect(() => {
         const term = xtermRef.current;

@@ -974,7 +974,7 @@ const styles: Record<string, React.CSSProperties> = {
         border: '1px solid var(--success-tint-border)',
     },
     badgeNew: {
-        color: colors.textPrimary,
+        color: 'var(--text-on-accent)',
         fontSize: font.xs,
         backgroundColor: colors.accent,
         padding: '2px 8px',
@@ -1126,7 +1126,7 @@ const styles: Record<string, React.CSSProperties> = {
     updateBtn: {
         padding: '7px 14px',
         backgroundColor: colors.accent,
-        color: colors.textPrimary,
+        color: 'var(--text-on-accent)',
         border: 'none',
         borderRadius: radius.sm,
         cursor: 'pointer',

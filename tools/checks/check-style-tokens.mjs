@@ -14,6 +14,13 @@
 //         里有声明，且尺寸令牌只能声明在 :root（尺寸与明暗无关）。写错名字时浏览器不报错、只是静默
 //         丢掉整条声明（自定义属性解析失败，属性回落初始值），页面会塌掉，所以必须静态查。
 //
+// 检查 5 第三方固定语法高亮表禁令：禁止直接引入 highlight.js/styles/* 等固定明暗主题表，
+//         全站代码块语法高亮统一走 shell-theme.css 中的 --code-* 语义令牌。
+//
+// 检查 6 强调底色配对约束：background/backgroundColor 为 var(--accent) / colors.accent 时，
+//         同一样式块内禁止配 var(--text-primary) / colors.textPrimary（亮色下暗底暗字不可读），
+//         必须使用 var(--text-on-accent)。
+//
 // 用法：
 //   node tools/checks/check-style-tokens.mjs                          扫默认的两个源码根
 //   node tools/checks/check-style-tokens.mjs <相对仓库根的目录> ...    只扫指定目录（fixture 自测用）
@@ -99,6 +106,9 @@ const deviations = []
 // ---- 检查 1：裸色值扫描（同时收集检查 4 要用的尺寸令牌引用）----
 
 const sizeReferencePattern = /var\(\s*(--(?:space|radius|font-size)-[\w-]+)/g
+const fixedHighlightImportPattern = /highlight\.js\/styles\/[^\s'"]+/
+const accentBgPattern = /\bbackground(?:Color)?\s*:\s*['"]?(?:var\(--accent\)|colors\.accent\b)/
+const primaryTextColorPattern = /\bcolor\s*:\s*['"]?(?:var\(--text-primary\)|colors\.textPrimary\b)/
 const sizeReferences = []
 
 let scanned = 0
@@ -110,21 +120,34 @@ for (const { dir, label } of scanRoots) {
       continue
     }
     scanned += 1
-    readFileSync(path, 'utf8')
-      .split('\n')
-      .forEach((line, index) => {
-        const at = `${rel}:${index + 1}`
-        for (const match of line.matchAll(hexPattern)) {
-          violations.push(`${at} 裸色值 ${match[0]}（应改用 shell-theme.css 中的语义令牌）`)
+    const lines = readFileSync(path, 'utf8').split('\n')
+    lines.forEach((line, index) => {
+      const at = `${rel}:${index + 1}`
+      for (const match of line.matchAll(hexPattern)) {
+        violations.push(`${at} 裸色值 ${match[0]}（应改用 shell-theme.css 中的语义令牌）`)
+      }
+      for (const match of line.matchAll(colorFunctionPattern)) {
+        if (isFullyTransparent(match[0])) continue
+        violations.push(`${at} 裸色值 ${match[0]}（应改用 shell-theme.css 中的语义令牌）`)
+      }
+      for (const match of line.matchAll(sizeReferencePattern)) {
+        sizeReferences.push({ at, name: match[1] })
+      }
+      if (fixedHighlightImportPattern.test(line)) {
+        violations.push(`${at} 引入了固定明暗的第三方语法高亮表（应改用 shell-theme.css 中的 --code-* 语义令牌）`)
+      }
+      if (accentBgPattern.test(line)) {
+        // 向前向后在同一个花括号块内检查是否误配了 text-primary
+        let blockStart = index
+        while (blockStart > 0 && !lines[blockStart].includes('{') && index - blockStart < 8) blockStart--
+        let blockEnd = index
+        while (blockEnd < lines.length - 1 && !lines[blockEnd].includes('}') && blockEnd - index < 8) blockEnd++
+        const blockText = lines.slice(blockStart, blockEnd + 1).join('\n')
+        if (primaryTextColorPattern.test(blockText) && !/text-on-accent|textOnAccent/.test(blockText)) {
+          violations.push(`${at} accent 背景误配了 text-primary 前景（亮色下对比度不足，应改用 var(--text-on-accent)）`)
         }
-        for (const match of line.matchAll(colorFunctionPattern)) {
-          if (isFullyTransparent(match[0])) continue
-          violations.push(`${at} 裸色值 ${match[0]}（应改用 shell-theme.css 中的语义令牌）`)
-        }
-        for (const match of line.matchAll(sizeReferencePattern)) {
-          sizeReferences.push({ at, name: match[1] })
-        }
-      })
+      }
+    })
   }
 }
 

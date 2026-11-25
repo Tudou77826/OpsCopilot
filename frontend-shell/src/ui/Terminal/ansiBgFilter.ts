@@ -1,10 +1,10 @@
 /**
- * 有状态的 ANSI「设置背景色 SGR」流式过滤器。
+ * 有状态的 ANSI「默认黑底背景 SGR」流式过滤器。
  *
- * 用途：亮色主题下，远端 shell 的 motd/bashrc/PROMPT 常会发设置黑色或深色背景的
+ * 用途：亮色主题下，远端 shell 的 motd/bashrc/PROMPT 常会发设置纯黑/近黑背景的
  * SGR（如 `\x1b[40m`、`\x1b[48;5;0m`、`\x1b[48;2;0;0;0m`），导致整屏变黑、亮色失效。
- * 本过滤器在写入 xterm 前剥离这些「设置背景色」参数，保留前景色/粗体/下划线等其它属性，
- * 使背景始终由 xterm theme.background（跟随主题）决定。
+ * 本过滤器仅剥离这类“默认暗底背景”，**保留** 41..47 等语义高亮背景（如红底白字 ERROR、
+ * vim/htop/tmux 状态栏）与 49 默认背景重置；前景可读性由 xterm 原生 minimumContrastRatio 保障。
  *
  * 暗色主题下不启用（直接透传），避免影响现有体验。
  *
@@ -13,12 +13,11 @@
  *   需在 partial buffer 里暂存未完成的转义，下次 feed 续判。
  * - 只处理 CSI 序列里的 SGR（参数以 'm' 结尾，CSI = `\x1b[` 或 `\x9b`）。
  *   其它 CSI（光标移动/清屏等）和 OSC 等原样透传，不误伤。
- * - SGR 参数解析：按 ';' 分段。识别并剔除背景色参数段：
- *     40..47        标准 ANSI 背景（40=黑,41=红,...,47=白）
- *     48            下一段是背景色扩展（;5;N 256色 或 ;2;R;G;B 真彩色），连同扩展参数一并剔除
- *     49            默认背景 —— 保留（正是用来清除远端背景色的）
- *     100..107      bright 背景（亮色变体）
- *   剔除后若该 SGR 还有其它参数（如前景 31、粗体 1），保留剩余；全空则整条丢弃。
+ * - 精准剔除范围：
+ *     40 / 100      标准黑底 / 亮黑（深灰）底
+ *     48;5;N        N 为 0、16 或 232..236（纯黑/极暗灰阶）
+ *     48;2;R;G;B    极暗低饱和底色（max <= 45 且 max - min <= 15）
+ *   其余语义背景色（41..47、101..107、彩色 256/真彩背景）与 49 全部保留。
  */
 
 export class AnsiBackgroundFilter {
@@ -182,41 +181,53 @@ function rewriteSgr(params: string): string {
             continue;
         }
 
-        // 背景色相关：40..49、48（扩展）、100..109
-        if (n >= 40 && n <= 49) {
-            if (n === 48) {
-                // 48 后面跟扩展参数：;5;N（256色，2 段）或 ;2;R;G;B（真彩色，4 段）
-                const ext = skipExtendedColor(segs, i + 1);
-                i = ext;
-                continue;
-            }
-            if (n === 49) {
-                // 49 = 默认背景 —— 保留（清除远端背景色）
-                kept.push(raw);
-                i++;
-                continue;
-            }
-            // 40..47 标准 ANSI 背景：剔除
+        // 背景色相关：只剥离纯黑/近黑默认暗底（40、100、暗黑 48 扩展），保留语义彩色背景与 49
+        if (n === 40 || n === 100) {
             i++;
             continue;
         }
 
-        if (n >= 100 && n <= 109) {
-            // 100..107 bright 背景：剔除。108/109 极少见，一并按背景处理。
-            i++;
+        if (n === 48) {
+            const ext = skipExtendedColor(segs, i + 1);
+            if (!isDarkCanvasExtendedBg(segs, i + 1)) {
+                for (let k = i; k < ext; k++) kept.push(segs[k]);
+            }
+            i = ext;
             continue;
         }
 
-        // 非背景色参数（前景、粗体、斜体、下划线、reset 0 等）：保留
+        // 其余参数（语义背景 41..47 / 49 / 101..107、前景、粗体、斜体、下划线、reset 0 等）：保留
         kept.push(raw);
         i++;
     }
 
     if (kept.length === 0) {
-        // 整条 SGR 全是背景色参数 → 整条丢弃（不输出任何字节）
+        // 整条 SGR 全是需剔除的暗底背景参数 → 整条丢弃（不输出任何字节）
         return '';
     }
     return '\x1b[' + kept.join(';') + 'm';
+}
+
+/** 判断 48 扩展背景色是否属于会把亮色画布染黑的纯黑/极暗灰底 */
+function isDarkCanvasExtendedBg(segs: string[], start: number): boolean {
+    if (start >= segs.length) return false;
+    const mode = parseDec(segs[start]);
+    if (mode === 5 && start + 1 < segs.length) {
+        const idx = parseDec(segs[start + 1]);
+        if (idx === null) return false;
+        // 0 = ANSI black, 16 = 6x6x6 cube pure black, 232..236 = 极暗灰阶
+        return idx === 0 || idx === 16 || (idx >= 232 && idx <= 236);
+    }
+    if (mode === 2 && start + 3 < segs.length) {
+        const r = parseDec(segs[start + 1]);
+        const g = parseDec(segs[start + 2]);
+        const b = parseDec(segs[start + 3]);
+        if (r === null || g === null || b === null) return false;
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        return max <= 45 && (max - min) <= 15;
+    }
+    return false;
 }
 
 /** 跳过 48 之后的扩展色参数（;5;N 或 ;2;R;G;B），返回跳完后下一个段的索引 */

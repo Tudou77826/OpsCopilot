@@ -314,7 +314,7 @@ const styles: Record<string, React.CSSProperties> = {
     primaryBtn: {
         backgroundColor: 'var(--accent)',
         border: 'none',
-        color: 'var(--text-primary)',
+        color: 'var(--text-on-accent)',
         borderRadius: '6px',
         padding: '10px 16px',
         fontSize: '13px',

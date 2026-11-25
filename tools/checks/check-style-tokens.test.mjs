@@ -94,4 +94,13 @@ test('真实仓库的 FlexLayout 映射完整且入口不再引入第三方暗�
   assert.doesNotMatch(result.stderr, /未引入flexlayout-react\/style\/light\.css/)
   assert.doesNotMatch(result.stderr, /未声明的尺寸令牌/)
   assert.doesNotMatch(result.stderr, /声明在亮色块/)
+  assert.doesNotMatch(result.stderr, /固定明暗的第三方语法高亮表/)
+  assert.doesNotMatch(result.stderr, /accent 背景误配了 text-primary/)
+})
+
+test('检查 5 与检查 6：拦截固定第三方高亮表与 accent+textPrimary 错配', () => {
+  const result = run(['tools/checks/__fixtures__/contrast-guards', '--token-file=none'])
+  assert.equal(result.code, 1)
+  assert.match(result.stderr, /固定明暗的第三方语法高亮表/)
+  assert.match(result.stderr, /accent 背景误配了 text-primary/)
 })

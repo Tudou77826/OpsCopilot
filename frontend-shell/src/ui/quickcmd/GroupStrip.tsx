@@ -178,7 +178,7 @@ const styles = {
         transition: 'color 0.2s ease',
     },
     itemFront: {
-        color: 'var(--text-primary)',
+        color: 'var(--text-on-accent)',
         backgroundColor: 'var(--accent)',
     },
     fadeTop: {

@@ -144,6 +144,16 @@
   --bg-dialog-section: var(--bg-tertiary);
   --bg-settings-canvas: var(--bg-tertiary);
 
+  /* —— 代码语法高亮（全站 hljs / SQL 编辑器共享，暗色）—— */
+  --code-fg: #d4d4d4;
+  --code-comment: #8b949e;
+  --code-keyword: #c586c0;
+  --code-string: #98c379;
+  --code-number: #d19a66;
+  --code-function: #61afef;
+  --code-type: #e5c07b;
+  --code-attr: #e06c75;
+
   /* —— 滚动条 —— */
   --app-scrollbar-size: 6px;
   --app-scrollbar-track: transparent;
@@ -238,7 +248,7 @@
   --bg-hover: #e9e1d2;
   --bg-active: #eee0c7;
   --bg-active-soft: #f6eedf;
-  --bg-tooltip: #2b2b2b;
+  --bg-tooltip: #fffdf8;
 
   --border: #d9d0c0;
   --border-subtle: #e9e2d6;
@@ -341,6 +351,15 @@
   --bg-dialog: #fffdf8;
   --bg-dialog-section: #faf8f3;
   --bg-settings-canvas: #faf8f3;
+
+  --code-fg: #39362f;
+  --code-comment: #655d50;
+  --code-keyword: #7e3f98;
+  --code-string: #166f30;
+  --code-number: #9c4a1a;
+  --code-function: #0958b5;
+  --code-type: #7d5300;
+  --code-attr: #b52b27;
 
   --app-scrollbar-thumb: #bcaf99;
   --app-scrollbar-thumb-hover: #9a896e;
@@ -475,6 +494,67 @@
 :focus-visible {
   outline: 2px solid var(--border-focus);
   outline-offset: 1px;
+}
+
+/* —— 全站代码语法高亮（替代 highlight.js 固定暗色主题，自动随亮/暗模式切换）—— */
+.hljs {
+  color: var(--code-fg);
+  background: transparent;
+}
+.hljs-comment,
+.hljs-quote {
+  color: var(--code-comment);
+  font-style: italic;
+}
+.hljs-doctag,
+.hljs-keyword,
+.hljs-formula,
+.hljs-selector-tag {
+  color: var(--code-keyword);
+}
+.hljs-section,
+.hljs-name,
+.hljs-selector-id,
+.hljs-deletion,
+.hljs-subst,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-attr,
+.hljs-attribute {
+  color: var(--code-attr);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-meta .hljs-string {
+  color: var(--code-string);
+}
+.hljs-literal,
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-selector-attr,
+.hljs-selector-pseudo {
+  color: var(--code-number);
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-link,
+.hljs-meta {
+  color: var(--code-function);
+}
+.hljs-built_in,
+.hljs-title.class_,
+.hljs-class .hljs-title,
+.hljs-type,
+.hljs-selector-class {
+  color: var(--code-type);
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
 }
 
 /* —— 皮肤块 ——

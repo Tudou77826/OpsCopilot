@@ -654,7 +654,7 @@ const styles = {
         padding: '9px 11px',
         borderRadius: '8px 8px 2px 8px',
         backgroundColor: 'var(--accent)',
-        color: 'var(--text-primary)',
+        color: 'var(--text-on-accent)',
         wordBreak: 'break-word' as const,
     },
     aiMessageItem: {
