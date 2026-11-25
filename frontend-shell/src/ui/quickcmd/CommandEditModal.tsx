@@ -1,5 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId, useRef } from 'react';
 import { QuickCommand } from '../ports';
+import { btnSecondary } from '../settings/settingsStyles';
+import './CommandEditModal.css';
+
+const variables = [
+    { token: '{{local_ip}}', label: '本地 IP', description: '本机连接 SSH 时使用的 IP', example: '192.0.2.10' },
+    { token: '{{remote_ip}}', label: '远程 IP', description: '当前 SSH 会话的目标 IP', example: '198.51.100.20' },
+    { token: '{{selected_text}}', label: '终端选中文本', description: '当前终端里选中的一行文字', example: 'REQ-8742' },
+    { token: '{{date}}', label: '本地日期', description: '电脑当天的日期 · YYYY-MM-DD' },
+];
+
+const variablePattern = /\{\{(?:local_ip|remote_ip|selected_text|date)\}\}/g;
+
+function previewTemplate(content: string) {
+    const today = new Date();
+    const date = [today.getFullYear(), today.getMonth() + 1, today.getDate()]
+        .map(part => String(part).padStart(2, '0')).join('-');
+    return content.replace(variablePattern, token => variables.find(variable => variable.token === token)?.example ?? date);
+}
 
 interface CommandEditModalProps {
     isOpen: boolean;
@@ -9,6 +27,7 @@ interface CommandEditModalProps {
     onSave: (command: QuickCommand) => void;
     onCancel: () => void;
     defaultGroup?: string;
+    supportsVariables?: boolean;
 }
 
 const CommandEditModal: React.FC<CommandEditModalProps> = ({
@@ -19,11 +38,17 @@ const CommandEditModal: React.FC<CommandEditModalProps> = ({
     onSave,
     onCancel,
     defaultGroup = 'default',
+    supportsVariables = false,
 }) => {
     const [editCmd, setEditCmd] = useState<QuickCommand | null>(null);
     const [isNewGroupMode, setIsNewGroupMode] = useState(false);
+    const [variablesOpen, setVariablesOpen] = useState(false);
+    const inputRef = useRef<HTMLTextAreaElement>(null);
+    const variablesButtonRef = useRef<HTMLButtonElement>(null);
+    const contentId = useId();
 
     useEffect(() => {
+        setVariablesOpen(false);
         if (isOpen && command) {
             setEditCmd({ ...command });
             // 从分组条 "+" 进入时 group 为 __new__：直接进入新分组输入模式，
@@ -46,11 +71,31 @@ const CommandEditModal: React.FC<CommandEditModalProps> = ({
     // 避免命令被静默塞进第一个分组
     const effectiveGroup = editCmd.group === '__new__' ? '' : (editCmd.group || '');
     const groupNameEmpty = isNewGroupMode && !effectiveGroup.trim();
-    const canSave = !!editCmd.name.trim() && !groupNameEmpty;
+    const useVariables = editCmd.useVariables && !!editCmd.content.match(variablePattern);
+    const invalidTemplate = useVariables && /[\u0000-\u001f\u007f-\u009f]/.test(editCmd.content);
+    const preview = useVariables && !invalidTemplate ? previewTemplate(editCmd.content) : '';
+    const canSave = !!editCmd.name.trim() && !groupNameEmpty && !invalidTemplate;
 
     const handleSave = () => {
         if (!canSave) return;
-        onSave(editCmd);
+        onSave({ ...editCmd, useVariables });
+    };
+
+    const insertVariable = (token: string) => {
+        const input = inputRef.current;
+        if (!input) return;
+        const start = input.selectionStart;
+        const end = input.selectionEnd;
+        setEditCmd({
+            ...editCmd,
+            useVariables: true,
+            content: editCmd.content.slice(0, start) + token + editCmd.content.slice(end),
+        });
+        setVariablesOpen(false);
+        requestAnimationFrame(() => {
+            input.focus();
+            input.setSelectionRange(start + token.length, start + token.length);
+        });
     };
 
     return (
@@ -121,14 +166,56 @@ const CommandEditModal: React.FC<CommandEditModalProps> = ({
                 </div>
 
                 <div style={styles.formGroup}>
-                    <label style={styles.label}>命令内容</label>
+                    <div className="oc-quick-command-content-heading">
+                        <label style={styles.label} htmlFor={contentId}>命令内容</label>
+                        {supportsVariables && !isNewGroupMode && (
+                            <div className="oc-quick-command-variable-picker"
+                                onBlur={event => {
+                                    if (!event.currentTarget.contains(event.relatedTarget)) setVariablesOpen(false);
+                                }}
+                                onKeyDown={event => {
+                                    if (event.key === 'Escape' && variablesOpen) {
+                                        event.stopPropagation();
+                                        setVariablesOpen(false);
+                                        variablesButtonRef.current?.focus();
+                                    }
+                                }}
+                            >
+                                <button type="button" ref={variablesButtonRef} style={btnSecondary}
+                                    aria-expanded={variablesOpen} aria-controls={variablesOpen ? `${contentId}-variables` : undefined}
+                                    onClick={() => setVariablesOpen(open => !open)}>
+                                    插入变量 <span aria-hidden="true">▾</span>
+                                </button>
+                                {variablesOpen && (
+                                    <div id={`${contentId}-variables`} className="oc-quick-command-variable-options" role="group" aria-label="预置变量">
+                                        {variables.map(variable => (
+                                            <button type="button" key={variable.token} onClick={() => insertVariable(variable.token)}>
+                                                <span>{variable.label}</span>
+                                                <small>{variable.description}</small>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                     <textarea
-                        style={styles.textarea}
+                        id={contentId}
+                        ref={inputRef}
+                        style={{ ...styles.input, ...styles.textarea }}
                         value={editCmd.content}
                         onChange={e => setEditCmd({ ...editCmd, content: e.target.value })}
                         placeholder="输入命令"
                         data-testid="command-content-textarea"
                     />
+                    {invalidTemplate ? (
+                        <div className="oc-quick-command-template-error" role="alert">含变量的快捷指令请输入一行文本</div>
+                    ) : preview && (
+                        <div className="oc-quick-command-template-preview">
+                            <span>示例预览</span>
+                            <code title={preview}>{preview}</code>
+                        </div>
+                    )}
                 </div>
 
                 <div style={styles.actions}>
@@ -137,6 +224,7 @@ const CommandEditModal: React.FC<CommandEditModalProps> = ({
                     </button>
                     <button
                         onClick={handleSave}
+                        disabled={!canSave}
                         style={{ ...styles.saveBtn, ...(canSave ? {} : styles.saveBtnDisabled) }}
                         data-testid="command-edit-save"
                     >
@@ -188,20 +276,12 @@ const styles = {
         color: 'var(--text-primary)',
         borderRadius: '4px',
         boxSizing: 'border-box' as const,
+        fontFamily: 'inherit',
         fontSize: '13px',
     },
     textarea: {
-        width: '100%',
         height: '80px',
-        padding: '6px 8px',
-        backgroundColor: 'var(--border)',
-        border: '1px solid var(--border-strong)',
-        color: 'var(--text-primary)',
-        borderRadius: '4px',
         resize: 'none' as const,
-        boxSizing: 'border-box' as const,
-        fontFamily: 'monospace',
-        fontSize: '13px',
     },
     actions: {
         display: 'flex',

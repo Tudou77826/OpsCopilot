@@ -4,7 +4,7 @@ import { confirmDialog } from '../feedback/ConfirmDialog';
 
 interface CommandGridProps {
     commands: QuickCommand[];
-    onExecute: (content: string, commandId?: string) => void;
+    onExecute: (content: string, commandId?: string, useVariables?: boolean) => void;
     onEdit: (command: QuickCommand) => void;
     onDelete: (id: string) => void;
     onAdd: () => void;
@@ -123,7 +123,7 @@ const CommandGrid: React.FC<CommandGridProps> = ({
                                 setDragId(null);
                                 setDropHint(null);
                             }}
-                            onClick={() => onExecute(cmd.content, cmd.id)}
+                            onClick={() => cmd.useVariables ? onExecute(cmd.content, cmd.id, true) : onExecute(cmd.content, cmd.id)}
                             onContextMenu={(e) => {
                                 e.preventDefault();
                                 setContextMenu({ x: e.clientX, y: e.clientY, cmdId: cmd.id });
@@ -163,22 +163,24 @@ const CommandGrid: React.FC<CommandGridProps> = ({
                         // 边界感知定位：菜单出现在指针处，但整体限制在视口内，
                         // 靠近屏幕底部/右缘时向上/向左收，避免弹出可视区外。
                         const MENU_W = 100;
-                        const MENU_H = onBroadcast ? 100 : 70;
+                        const command = commands.find(cmd => cmd.id === contextMenu.cmdId);
+                        const broadcast = command && !command.useVariables ? onBroadcast : undefined;
+                        const MENU_H = broadcast ? 100 : 70;
                         const top = Math.max(8, Math.min(contextMenu.y, window.innerHeight - MENU_H - 8));
                         const left = Math.max(8, Math.min(contextMenu.x, window.innerWidth - MENU_W - 8));
                         // 有广播能力时菜单项整体下移一位：发送广播、编辑、删除
-                        const editIdx = onBroadcast ? 1 : 0;
+                        const editIdx = broadcast ? 1 : 0;
                         const deleteIdx = editIdx + 1;
                         return (
                             <div style={{ ...styles.menu, top, left }} data-testid="command-context-menu">
-                                {onBroadcast && (
+                                {broadcast && (
                                     <div
                                         style={hoveredMenuItem === 0 ? { ...styles.menuItem, ...styles.menuItemHover } : styles.menuItem}
                                         onMouseEnter={() => setHoveredMenuItem(0)}
                                         onMouseLeave={() => setHoveredMenuItem(null)}
                                         onClick={() => {
                                             const cmd = commands.find(c => c.id === contextMenu.cmdId);
-                                            if (cmd) onBroadcast(cmd.content, cmd.id);
+                                            if (cmd) broadcast(cmd.content, cmd.id);
                                             setContextMenu(null);
                                         }}
                                     >

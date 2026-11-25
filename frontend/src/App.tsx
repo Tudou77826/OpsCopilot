@@ -10,7 +10,7 @@ import { useTerminalReconnect } from './components/TerminalHandoff/useTerminalRe
 import QuickCommandPanel from './components/QuickCommandPanel/QuickCommandPanel';
 import BottomBar from './components/BottomBar/BottomBar';
 import { StartupConsent } from './components/ServiceCenter/ServiceCenter';
-import { CountServiceUsage, WorkspaceDiscard } from '../wailsjs/go/main/App';
+import { CountServiceUsage, DispatchQuickCommandTemplate, WorkspaceDiscard } from '../wailsjs/go/main/App';
 import SmartConnectModal from './components/SmartConnectModal/SmartConnectModal';
 import Sidebar from './components/Sidebar/Sidebar';
 import SettingsModal from './components/SettingsModal/SettingsModal';
@@ -622,7 +622,7 @@ function App() {
         });
     };
 
-    const handleQuickCommand = (command: string, commandId?: string) => {
+    const handleQuickCommand = (command: string, commandId?: string, useVariables?: boolean) => {
         if (workspaceKindRef.current !== 'terminal') { toast.warning('请先切换到目标终端'); return; }
         const targetTerminalId = activeTerminalId;
         if (!targetTerminalId) {
@@ -633,6 +633,20 @@ function App() {
         const targetTerminal = terminalRefs.current.get(targetTerminalId);
         if (!targetTerminal) {
             toast.warning("请先选择一个激活的终端");
+            return;
+        }
+
+        if (commandId && useVariables) {
+            const tab = terminals.find(terminal => terminal.id === targetTerminalId);
+            if (tab?.status !== SessionStatus.CONNECTED || !tab.connectionId) {
+                toast.warning('请先连接当前终端');
+                return;
+            }
+            const selection = targetTerminal.getSelection?.() ?? '';
+            targetTerminal.prepareForExternalInput();
+            void DispatchQuickCommandTemplate(commandId, targetTerminalId, tab.connectionId, selection)
+                .then(result => { if (result.warning) toast.warning(result.warning); })
+                .catch((error: unknown) => toast.error(String(error)));
             return;
         }
 
@@ -774,7 +788,7 @@ function App() {
                         />}
             quickCommands={<QuickCommandPanel
                         isOpen={isQuickCommandOpen}
-                        onExecute={(command, commandId) => {if(activeTerminalId && terminalRefs.current.has(activeTerminalId)){void CountServiceUsage('quick_command').catch(()=>{});}handleQuickCommand(command, commandId);}}
+                        onExecute={(command, commandId, useVariables) => {if(activeTerminalId && terminalRefs.current.has(activeTerminalId)){void CountServiceUsage('quick_command').catch(()=>{});}handleQuickCommand(command, commandId, useVariables);}}
                         onBroadcast={command => {if(terminals.length){void CountServiceUsage('quick_command').catch(()=>{});}handleQuickCommandBroadcast(command);}}
                     />}
             sidebar={<Sidebar

@@ -10,7 +10,7 @@ import QuickCommandImportDialog from './QuickCommandImportDialog';
 interface QuickCommandPanelProps {
     host: QuickCommandHost;
     isOpen: boolean;
-    onExecute: (content: string, commandId?: string) => void;
+    onExecute: (content: string, commandId?: string, useVariables?: boolean) => void;
     /** 广播执行：命令卡右键菜单的「发送广播」项。宿主未提供广播能力时不传（项自动消失）。 */
     onBroadcast?: (content: string, commandId?: string) => void;
 }
@@ -141,7 +141,7 @@ const QuickCommandPanel: React.FC<QuickCommandPanelProps> = ({ isOpen, onExecute
     const handleSave = (cmd: QuickCommand) => {
         if (isNewCommand) {
             const group = cmd.group || selectedGroup;
-            addCommand(cmd.name, cmd.content, group);
+            addCommand(cmd.name, cmd.content, group, cmd.useVariables);
             // 新建后落到该命令所在的分组（尤其是新建分组：不切换的话
             // 用户会以为保存没生效）
             setSelectedGroup(group);
@@ -150,6 +150,7 @@ const QuickCommandPanel: React.FC<QuickCommandPanelProps> = ({ isOpen, onExecute
                 name: cmd.name,
                 content: cmd.content,
                 group: cmd.group,
+                useVariables: cmd.useVariables,
             });
         }
         setEditingCmd(null);
@@ -193,7 +194,7 @@ const QuickCommandPanel: React.FC<QuickCommandPanelProps> = ({ isOpen, onExecute
                         onPointerCancel={endResize}
                     />
                     <CommandGrid
-                        commands={visibleCommands}
+                        commands={host.supportsVariables ? visibleCommands : visibleCommands.filter(cmd => !cmd.useVariables)}
                         onExecute={onExecute}
                         onBroadcast={onBroadcast}
                         onEdit={handleEdit}
@@ -231,6 +232,7 @@ const QuickCommandPanel: React.FC<QuickCommandPanelProps> = ({ isOpen, onExecute
                 onSave={handleSave}
                 onCancel={handleCancel}
                 defaultGroup={selectedGroup}
+                supportsVariables={host.supportsVariables}
             />
 
             {/* 导入面板独立包一层 ErrorBoundary：导入涉及文件解析与落盘，

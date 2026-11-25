@@ -38,7 +38,7 @@ export interface UseQuickCommandsReturn {
     selectedGroup: string;
     setSelectedGroup: (group: string) => void;
     filteredCommands: QuickCommand[];
-    addCommand: (name: string, content: string, group: string) => void;
+    addCommand: (name: string, content: string, group: string, useVariables?: boolean) => void;
     updateCommand: (id: string, updates: Partial<QuickCommand>) => void;
     deleteCommand: (id: string) => void;
     reorderCommands: (ids: string[]) => void;
@@ -125,7 +125,7 @@ export function useQuickCommands(options?: UseQuickCommandsOptions): UseQuickCom
         });
     }, [commands, selectedGroup]);
 
-    const addCommand = (name: string, content: string, group: string) => {
+    const addCommand = (name: string, content: string, group: string, useVariables?: boolean) => {
         // 确保 __new__ 不被保存为实际分组
         const effectiveGroup = group === '__new__' ? 'default' : group;
         const newCmd: QuickCommand = {
@@ -133,6 +133,7 @@ export function useQuickCommands(options?: UseQuickCommandsOptions): UseQuickCom
             name,
             content,
             group: effectiveGroup,
+            ...(useVariables ? { useVariables } : {}),
         };
         setCommands(prev => [...prev, newCmd]);
         adapter?.add(newCmd);

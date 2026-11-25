@@ -80,6 +80,7 @@ class WailsQuickCommandStorage implements QuickCommandStorageAdapter {
 export function makeWailsQuickCommandHost(execute: (content: string) => void): QuickCommandHost {
     return {
         execute,
+        supportsVariables: true,
         storage: new WailsQuickCommandStorage(),
         onExternalChange(handler) {
             const runtime = (window as WailsWindow).runtime;

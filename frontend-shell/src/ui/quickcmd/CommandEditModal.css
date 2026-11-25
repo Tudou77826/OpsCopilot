@@ -1,0 +1,77 @@
+.oc-quick-command-content-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.oc-quick-command-content-heading label {
+    margin-bottom: 0;
+}
+
+.oc-quick-command-variable-picker {
+    position: relative;
+}
+
+.oc-quick-command-variable-options {
+    position: absolute;
+    z-index: 1;
+    inset-inline-end: 0;
+    top: calc(100% + 4px);
+    width: 236px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-elevated);
+    box-shadow: 0 4px 12px var(--shadow);
+}
+
+.oc-quick-command-variable-options button {
+    display: grid;
+    gap: 2px;
+    width: 100%;
+    padding: 6px 8px;
+    text-align: start;
+    font: inherit;
+    font-size: 12px;
+    background: transparent;
+    color: var(--text-primary);
+    border: 0;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.oc-quick-command-variable-options button:is(:hover, :focus-visible) {
+    background: var(--bg-hover);
+}
+
+.oc-quick-command-variable-options small,
+.oc-quick-command-template-preview {
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.oc-quick-command-template-preview {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: 5px;
+}
+
+.oc-quick-command-template-preview span {
+    flex: none;
+}
+
+.oc-quick-command-template-preview code {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--text-primary);
+}
+
+.oc-quick-command-template-error {
+    margin-top: 5px;
+    color: var(--severity-danger);
+    font-size: 11px;
+}

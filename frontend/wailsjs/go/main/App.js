@@ -314,6 +314,10 @@ export function DispatchQuickCommand(arg1, arg2) {
   return window['go']['main']['App']['DispatchQuickCommand'](arg1, arg2);
 }
 
+export function DispatchQuickCommandTemplate(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['DispatchQuickCommandTemplate'](arg1, arg2, arg3, arg4);
+}
+
 export function DoUpdate(arg1) {
   return window['go']['main']['App']['DoUpdate'](arg1);
 }

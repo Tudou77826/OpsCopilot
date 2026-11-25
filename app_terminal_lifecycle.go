@@ -65,7 +65,9 @@ func (a *App) installTerminal(lifetime *session.Lifetime, id string, config Conn
 			}
 		}
 		a.pendingTerminals.Delete(id)
-		target.registered = a.sessionMgr.AddWithID(id, conn, stdin)
+		target.registered = a.sessionMgr.Register(session.Session{
+			ID: id, ConnectionID: target.connectionID, Conn: conn, Stdin: stdin,
+		})
 		a.setConfig(id, config)
 		target.gate = a.storeSessionState(id, config).Output
 		a.extractorMu.Lock()

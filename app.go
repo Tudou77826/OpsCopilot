@@ -691,6 +691,9 @@ func (a *App) startup(ctx context.Context) {
 	a.startQuickApproval(ctx)
 	a.initServiceCenter()
 
+	if err := a.installQuickCommandExamples(); err != nil {
+		slog.Warn("快捷指令示例初始化失败", "error", err)
+	}
 	// 快捷命令热加载：监听配置文件外部变化（多窗口互写），推送给前端
 	a.startQuickCommandsWatcher()
 
@@ -3051,7 +3054,7 @@ func (a *App) SaveHighlightRules(rules []config.HighlightRule) string {
 
 // LoadQuickCommands returns the list of quick commands from config
 func (a *App) LoadQuickCommands() []config.QuickCommand {
-	return a.configMgr.Config.QuickCommands
+	return a.configMgr.QuickCommandsSnapshot()
 }
 
 // 以下三个意图化接口取代旧的 SaveQuickCommands 全量覆盖保存：
@@ -3130,7 +3133,7 @@ func (a *App) emitQuickCommandsUpdated() {
 	if a.ctx == nil {
 		return
 	}
-	runtime.EventsEmit(a.ctx, "quick-commands-updated", a.configMgr.Config.QuickCommands)
+	runtime.EventsEmit(a.ctx, "quick-commands-updated", a.configMgr.QuickCommandsSnapshot())
 }
 
 // startQuickCommandsWatcher 轮询 quick_commands.json 变化（其他进程写入），

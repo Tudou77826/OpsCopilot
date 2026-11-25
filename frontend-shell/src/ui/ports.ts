@@ -252,6 +252,7 @@ export interface QuickCommandImportReport {
 export interface QuickCommandHost {
   execute(content: string, commandId?: string): void;
   storage: QuickCommandStorageAdapter;
+  supportsVariables?: boolean;
   /** 多窗口变更通知订阅。Wails 走 window.runtime.EventsOn；Sidecar 走配置轮询。 */
   onExternalChange?: (handler: (cmds: QuickCommand[]) => void) => () => void;
 

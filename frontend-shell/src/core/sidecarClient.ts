@@ -69,6 +69,7 @@ export interface QuickCommand {
   id: string;
   name: string;
   content: string;
+  useVariables?: boolean;
   group?: string;
 }
 

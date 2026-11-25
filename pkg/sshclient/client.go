@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -48,8 +49,10 @@ var (
 )
 
 type Client struct {
-	client  *ssh.Client
-	bastion *Client
+	client   *ssh.Client
+	bastion  *Client
+	localIP  string
+	remoteIP string
 
 	// lastSessionMu 保护 lastSession:StartShell 写入,Resize 读取,
 	// 这两个调用可能来自不同 goroutine(app.go 的 read loop 与
@@ -144,6 +147,7 @@ func NewClientWithTrace(ctx context.Context, config *ConnectConfig) (*Client, er
 
 	var client *ssh.Client
 	var err error
+	var localIP, remoteIP string
 
 	if bastionClient != nil {
 		// 通过 Bastion 建立连接
@@ -176,6 +180,11 @@ func NewClientWithTrace(ctx context.Context, config *ConnectConfig) (*Client, er
 			return nil, fmt.Errorf("failed to create client conn: %w", err)
 		}
 		client = ssh.NewClient(ncc, chans, reqs)
+		localIP = bastionClient.localIP
+		// A forwarded channel does not report the IP resolved by the jump host.
+		if ip, err := netip.ParseAddr(host); err == nil {
+			remoteIP = ip.Unmap().String()
+		}
 	} else {
 		// 直连
 		connectiondiag.Event(ctx, "ssh.handshake.start", "本机直接连接SSH=%s；开始 TCP、SSH 握手和认证", addr)
@@ -188,6 +197,8 @@ func NewClientWithTrace(ctx context.Context, config *ConnectConfig) (*Client, er
 			ncc, channels, requests, err = newClientConnContext(ctx, raw, addr, sshConfig)
 			if err == nil {
 				client = ssh.NewClient(ncc, channels, requests)
+				localIP = tcpIP(raw.LocalAddr())
+				remoteIP = tcpIP(raw.RemoteAddr())
 			} else {
 				raw.Close()
 			}
@@ -202,7 +213,19 @@ func NewClientWithTrace(ctx context.Context, config *ConnectConfig) (*Client, er
 	connectiondiag.Event(ctx, "ssh.handshake.ok", "SSH节点=%s SSH账号=%q SSH服务版本=%q 远端地址=%s；SSH认证完成，不代表数据库端口转发被允许", addr, config.User, string(client.ServerVersion()), client.RemoteAddr())
 	slog.Info("ssh connected", "host", config.Host, "user", config.User, "bastion", config.Bastion != nil)
 	created = true
-	return &Client{client: client, bastion: bastionClient}, nil
+	return &Client{client: client, bastion: bastionClient, localIP: localIP, remoteIP: remoteIP}, nil
+}
+
+func tcpIP(addr net.Addr) string {
+	if tcp, ok := addr.(*net.TCPAddr); ok {
+		return tcp.AddrPort().Addr().Unmap().String()
+	}
+	return ""
+}
+
+// ConnectionIPs returns the desktop source IP and the final SSH destination IP.
+func (c *Client) ConnectionIPs() (local, remote string) {
+	return c.localIP, c.remoteIP
 }
 
 // The setup context must not become the lifetime of a successfully connected client.

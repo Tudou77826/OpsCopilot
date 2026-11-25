@@ -137,6 +137,28 @@ func TestDiagnosticSSHMultiHopAndFinalRejection(t *testing.T) {
 	}
 }
 
+func TestConnectionIPsThroughBastion(t *testing.T) {
+	for _, tt := range []struct{ host, remoteIP string }{
+		{"127.0.0.1", "127.0.0.1"},
+		{"localhost", ""},
+	} {
+		t.Run(tt.host, func(t *testing.T) {
+			final := diagnosticSSH(t, "target", "")
+			final.Host = tt.host
+			final.Bastion = diagnosticSSH(t, "jump", net.JoinHostPort(final.Host, strconv.Itoa(final.Port)))
+			client, err := NewClient(final)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.Close()
+			local, remote := client.ConnectionIPs()
+			if local != "127.0.0.1" || remote != tt.remoteIP {
+				t.Fatalf("ConnectionIPs = (%q, %q), want (127.0.0.1, %q)", local, remote, tt.remoteIP)
+			}
+		})
+	}
+}
+
 func TestDiagnosticSSHReportsExistingFallbackSeparately(t *testing.T) {
 	jump := diagnosticSSH(t, "fixture51", "")
 	ctx, trace := connectiondiag.New(context.Background())

@@ -27,17 +27,14 @@ func (a *App) recordKnowledgeRead(root, relative, content string) {
 }
 
 func (a *App) DispatchQuickCommand(commandID string, sessionIDs []string) (achievements.DispatchResult, error) {
-	var content string
-	for _, cmd := range a.configMgr.Config.QuickCommands {
-		if cmd.ID == commandID {
-			content = cmd.Content
-			break
-		}
+	cmd, err := a.quickCommand(commandID)
+	if err != nil {
+		return achievements.DispatchResult{}, err
 	}
-	content = strings.TrimRight(content, "\r\n")
-	if strings.TrimSpace(content) == "" {
-		return achievements.DispatchResult{}, fmt.Errorf("快捷指令不存在或内容为空")
+	if cmd.UseVariables {
+		return achievements.DispatchResult{}, fmt.Errorf("请在当前终端使用带变量的快捷指令")
 	}
+	content := strings.TrimRight(cmd.Content, "\r\n")
 	return achievements.Dispatch(a.achievements, commandID, sessionIDs, func(id string) error {
 		if err := a.SendCommand(id, content); err != nil {
 			return err

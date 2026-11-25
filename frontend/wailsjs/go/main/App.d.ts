@@ -174,6 +174,8 @@ export function DetectXshellSessionDirs():Promise<Array<main.XshellSessionDir>>;
 
 export function DispatchQuickCommand(arg1:string,arg2:Array<string>):Promise<achievements.DispatchResult>;
 
+export function DispatchQuickCommandTemplate(arg1:string,arg2:string,arg3:string,arg4:string):Promise<achievements.DispatchResult>;
+
 export function DoUpdate(arg1:string):Promise<string>;
 
 export function DuplicateSavedConnection(arg1:string):Promise<main.SessionTreeNode>;

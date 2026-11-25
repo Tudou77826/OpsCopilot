@@ -14,9 +14,10 @@ import (
 // 或 *ssh.Session。Resize 能力由 Conn 自身提供(SSH 实现内部转发到
 // session.WindowChange),故无需单独的 SSHSession 字段。
 type Session struct {
-	ID    string
-	Conn  remote.Connection
-	Stdin io.WriteCloser
+	ID           string
+	ConnectionID string
+	Conn         remote.Connection
+	Stdin        io.WriteCloser
 }
 
 type Manager struct {
@@ -46,15 +47,15 @@ func (m *Manager) Add(conn remote.Connection, stdin io.WriteCloser) string {
 
 // AddWithID 以指定 ID 注册会话(用于重连复用同一 sessionID)。
 func (m *Manager) AddWithID(id string, conn remote.Connection, stdin io.WriteCloser) *Session {
+	return m.Register(Session{ID: id, Conn: conn, Stdin: stdin})
+}
+
+func (m *Manager) Register(sess Session) *Session {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.sessions[id] = &Session{
-		ID:    id,
-		Conn:  conn,
-		Stdin: stdin,
-	}
-	return m.sessions[id]
+	m.sessions[sess.ID] = &sess
+	return &sess
 }
 
 func (m *Manager) Get(id string) (*Session, bool) {

@@ -1261,6 +1261,7 @@ export namespace config {
 	    name: string;
 	    content: string;
 	    group?: string;
+	    useVariables?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new QuickCommand(source);
@@ -1272,6 +1273,7 @@ export namespace config {
 	        this.name = source["name"];
 	        this.content = source["content"];
 	        this.group = source["group"];
+	        this.useVariables = source["useVariables"];
 	    }
 	}
 	export class CLIConfig {

@@ -40,6 +40,7 @@ export interface TerminalRef {
     write: (data: string) => void;
     fit: () => void;
     prepareForExternalInput: () => void;
+    getSelection?: () => string;
     getCursorScreenPosition: () => { x: number; y: number } | null;
     focus: () => void;
     /** 运行时切换主题：更新 xterm theme 并刷新，已存在实例无需重建 */
@@ -561,6 +562,7 @@ const TerminalComponent = forwardRef<TerminalRef, TerminalProps>(({ id, sessionI
             scrollToBottomAndRefresh();
             xtermRef.current?.focus();
         },
+        getSelection: () => xtermRef.current?.getSelection() ?? '',
         focus: () => {
             xtermRef.current?.focus();
         },

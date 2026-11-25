@@ -161,10 +161,11 @@ type HighlightStyle struct {
 }
 
 type QuickCommand struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Content string `json:"content"`
-	Group   string `json:"group,omitempty"` // 所属分组，默认为 "default"
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Content      string `json:"content"`
+	Group        string `json:"group,omitempty"` // 所属分组，默认为 "default"
+	UseVariables bool   `json:"useVariables,omitempty"`
 }
 
 type LogConfig struct {
