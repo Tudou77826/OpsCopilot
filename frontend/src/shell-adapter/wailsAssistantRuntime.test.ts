@@ -4,6 +4,7 @@ import { wailsWorkspaceHost } from './wailsWorkspaceHost';
 import { provideWorkspaceSnapshot } from './workspaceIdentity';
 
 const api = vi.hoisted(() => ({
+    AssistantOpsToolNames: vi.fn(async () => ['workspace_list', 'workspace_create', 'workspace_open']),
     AssistantAgentCommands: vi.fn(async () => []),
     AssistantAgentKind: vi.fn(async () => 'icode'),
     AssistantApprovalMode: vi.fn(), SelectAssistantApprovalMode: vi.fn(),
@@ -18,6 +19,11 @@ const api = vi.hoisted(() => ({
     NewAssistantConversation: vi.fn(), AssistantControlState: vi.fn(), StopAssistantTurn: vi.fn(), RespondAssistantInteraction: vi.fn(),
 }));
 vi.mock('../../wailsjs/go/main/App', () => api);
+
+it('loads the capability list from the desktop tool catalog', async () => {
+    expect(await wailsAssistantRuntime.opsToolNames?.()).toEqual(['workspace_list', 'workspace_create', 'workspace_open']);
+    expect(api.AssistantOpsToolNames).toHaveBeenCalledOnce();
+});
 
 it('publishes the sender snapshot and includes its document identity in every submission', async () => {
     const view = {tabs:[{tabId:'selected',connectionId:'actual',title:'remote',status:'connected',ready:true}],active:{tabId:'selected',connectionId:'actual'},activeWorkspace:''};
