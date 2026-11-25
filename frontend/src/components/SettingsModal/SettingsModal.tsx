@@ -1,5 +1,3 @@
-import { PersonaSettingsDisclosure, usePersonaSettings } from '../../../../frontend-shell/src/ui/settings/PersonaSettingsPage';
-import { wailsAssistantSettings } from '../../shell-adapter/wailsAssistantSettings';
 import CompanionPage, { CompanionEnable } from '../../../../frontend-shell/src/ui/companion/CompanionPage';
 import { wailsCompanionHost } from '../../shell-adapter/wailsCompanionHost';
 import { wailsSocialHost } from '../../shell-adapter/wailsSocialHost';
@@ -295,7 +293,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     // 关闭页面时存在未保存改动 → 弹确认框
     const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
     const [activeTab, setActiveTab] = useState<TabId>('llm');
-    const persona = usePersonaSettings(wailsAssistantSettings, isOpen);
     const [importDir, setImportDir] = useState('');
     const [importLoading, setImportLoading] = useState(false);
     const [importMsg, setImportMsg] = useState('');
@@ -320,7 +317,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
     // Navigation items structure
     const navItems: NavItem[] = [
-        ...(savedCompanionEnabled ? [{id:'achievements' as TabId,label:'伙伴与奖章',icon:TbUsers({}),category:'个人',keywords:['排名','功能奖章','伙伴','养成','进度','伙伴人设','提示词','性格','语气','persona']}] : []),
+        ...(savedCompanionEnabled ? [{id:'achievements' as TabId,label:'伙伴与奖章',icon:TbUsers({}),category:'个人',keywords:['排名','功能奖章','伙伴','养成','进度']}] : []),
         { id: 'llm', label: '模型服务', icon: TbRobot({}), category: 'AI' },
         { id: 'appearance', label: '外观', icon: TbSun({}), category: '终端', keywords: ['终端外观', '终端', '字体', '字号', 'theme', '主题'] },
         { id: 'highlight', label: '突出显示', icon: TbPalette({}), category: '终端' },
@@ -440,7 +437,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen, config, activeTab, persona.draft, persona.saved]);
+    }, [isOpen, config, activeTab]);
 
     // Auto-select first result when searching
     useEffect(() => {
@@ -555,12 +552,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
     // 是否有未保存改动：对比当前工作副本与最近一次已落盘快照。
     // 主题不经过 config（走 onThemeChange 即时落盘），因此不会误报为脏。
-    const configDirty = useMemo(() => {
+    const isDirty = useMemo(() => {
         if (!config || savedConfigJson === null) return false;
         return JSON.stringify(config) !== savedConfigJson;
     }, [config, savedConfigJson]);
-
-    const isDirty = configDirty || persona.dirty;
 
     // 统一落盘逻辑，保存成功返回 true。closeAfter 为 true 时保存成功后关闭页面，
     // 用于「保存并关闭」；普通「保存更改」只提示成功、不关闭。
@@ -568,11 +563,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         if (!config) return false;
         setLoading(true);
         try {
-            if (persona.dirty) {
-                await persona.save();
-                if (!configDirty) { setMsg('人设已保存，下次问答生效'); if (closeAfter) onClose(); return true; }
-            }
-            if (activeTab === 'achievements' && !configDirty) return true;
+            if (activeTab === 'achievements' && !isDirty) return true;
             const nextConfig = {
                 ...config,
                 cli: normalizeCliConfig(config.cli),
@@ -1675,7 +1666,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 return <FileAccessPanel />;
 
             case 'achievements':
-                return savedCompanionEnabled ? <CompanionPage host={wailsCompanionHost} socialHost={wailsSocialHost} preferences={<PersonaSettingsDisclosure state={persona} disabled={loading}/>}/> : null;
+                return savedCompanionEnabled ? <CompanionPage host={wailsCompanionHost} socialHost={wailsSocialHost}/> : null;
 
             case 'experimental':
                 return (

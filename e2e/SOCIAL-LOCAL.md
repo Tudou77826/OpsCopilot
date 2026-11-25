@@ -61,7 +61,7 @@ node e2e/harness/companion-settings-review.mjs e2e/.runtime/settings-density
 
 该检查沿用完整实测的成员数据，在 1351×833px 和 960×833px 下记录页面高度、滚动区域、奖章列数和截图；验证宽窗口无需滚动、无横向溢出、编辑取消、说明展开和另一成员资料查看，不提交成员凭据或修改精选选择。先构建桌面前端以加载最新页面；可添加 `--baseline` 仅采集布局尺寸与截图。
 
-人设入口检查使用 `node e2e/harness/persona-review.mjs e2e/.runtime/persona-review`，在真实 Wails 页验证“伙伴与奖章”内的人设入口默认折叠、独立侧栏入口移除、折叠保留草稿与 Ctrl+S 保存，以及重新打开保持、恢复默认、未保存关闭确认和响应式布局，结束时恢复原人设。模型请求中的人设注入及旧入口隔离由 `TestAssistantPersonaPersistsAndReachesOnlyCompanionRequest` 捕获验证；本地浏览器实例未配置可用模型，不用该检查评估人设回复质量。
+设置页入口检查使用 `node e2e/harness/companion-settings-visibility.mjs e2e/.runtime/companion-settings-visibility`，在本地 Wails 页面验证伙伴和功能奖章正常展示、伙伴人设入口已移除，并保存明暗主题截图。
 
 | 端口 | 用途 |
 | --- | --- |

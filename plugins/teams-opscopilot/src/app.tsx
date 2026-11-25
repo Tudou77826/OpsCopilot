@@ -1,4 +1,3 @@
-import { makeAssistantSettingsHost } from '../../../frontend-shell/src/assistant/settings'
 import { makeSocialHost } from '../../../frontend-shell/src/companion/socialHost'
 import { makeCompanionHost } from '../../../frontend-shell/src/companion/host'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -70,7 +69,6 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
   }, active, settings.commandQueryShortcut || 'Ctrl+K')
 
   const senders = useRef(new Map<string, (text: string) => void>())
-  const assistantSettings = useMemo(()=>makeAssistantSettingsHost((method,params)=>client.call(`assistant.${method}`,params)),[client])
   const socialHost = useMemo(()=>makeSocialHost((method,params)=>client.call(`social.${method}`,params)),[client])
   const companionHost = useMemo(()=>makeCompanionHost((method,params)=>client.call(`companion.${method}`,params)),[client])
   const [settingsInitialTab, setSettingsInitialTab] = useState<'appearance' | 'achievements'>('appearance')
@@ -251,7 +249,7 @@ export function OpsApp({ client, surface, hostSettings }: { client: TeamsOpsClie
   >
     <SmartConnectModal isOpen={connectModal} initialConfigs={connectSeed} onClose={() => setConnectModal(false)} onConnect={connectBatch}
       onParse={async input => (await client.call('ai.parse',{input})).configs ?? []}/>
-    <ShellSettingsModal assistantSettings={assistantSettings} companionHost={companionHost} initialTab={settingsInitialTab} socialHost={socialHost} hostSettings={hostSettings} embedded isOpen={showSettings} onClose={() => setShowSettings(false)} runtime={settingsRuntime} initial={settings} onApply={applySettings} aiRuntime={aiRuntime}
+    <ShellSettingsModal companionHost={companionHost} initialTab={settingsInitialTab} socialHost={socialHost} hostSettings={hostSettings} embedded isOpen={showSettings} onClose={() => setShowSettings(false)} runtime={settingsRuntime} initial={settings} onApply={applySettings} aiRuntime={aiRuntime}
       skin={{ value: skin, onChange: changeSkin, options: availableSkins(), previewRoot: surface }}/>
     <CommandQueryOverlay visible={commandQuery.visible} query={commandQuery.query} onQueryChange={commandQuery.setQuery} loading={commandQuery.loading} result={commandQuery.result} error={commandQuery.error}
       onGenerate={() => void commandQuery.generate()} onRegenerate={() => void commandQuery.generate()} onCopy={() => void commandQuery.copy()}

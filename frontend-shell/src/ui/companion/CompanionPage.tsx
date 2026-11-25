@@ -14,7 +14,7 @@ export function CompanionEnable({ enabled, onChange }: { enabled: boolean; onCha
   return <section className="oc-companion-enable"><label><input type="checkbox" checked={enabled} onChange={e => onChange(e.target.checked)} />启用伙伴养成与功能奖章</label><p>通过日常实践陪伴伙伴成长，记录自己的功能积累。关闭后暂停采集，保留存档。</p></section>;
 }
 
-export default function CompanionPage({ host, socialHost, preferences }: { host: CompanionHost; socialHost: SocialHost; preferences?: React.ReactNode }) {
+export default function CompanionPage({ host, socialHost }: { host: CompanionHost; socialHost: SocialHost }) {
   const { snapshot, error: readError, refresh, accept } = useCompanion(host);
   const [name, setName] = useState('');
   const [editRevision, setEditRevision] = useState<number>();
@@ -115,7 +115,7 @@ export default function CompanionPage({ host, socialHost, preferences }: { host:
   }
   function finishInteraction() { clearTimeout(timer.current); setAction('idle'); }
   return <div className="oc-companion-page">
-    <header className="oc-companion-page-heading"><h2>伙伴与奖章</h2>{preferences}</header>
+    <header className="oc-companion-page-heading"><h2>伙伴与奖章</h2></header>
     {(error || readError) && <div role="alert" className="oc-companion-error">{error || readError}<button type="button" onClick={() => void refresh().catch(() => {})}>重新读取存档</button></div>}
     {!snapshot ? <p role="status">正在读取伙伴存档…</p> : <section className="oc-companion-home" aria-label="我的伙伴" aria-busy={busy}>
       <div className="oc-companion-scene">
@@ -123,7 +123,7 @@ export default function CompanionPage({ host, socialHost, preferences }: { host:
       </div>
       <div className="oc-companion-details">
         {opening ? <div className="oc-companion-hatch-intro"><h3>正在开蛋…</h3><p>即将见到新的伙伴</p></div> : !pet ? <div className="oc-companion-hatch-intro">
-          <h3>遇见你的伙伴</h3><p>首次开蛋不消耗经验，{companionSpecies.length} 种伙伴等概率出现。形象与默认性格随开蛋确定。</p>
+          <h3>遇见你的伙伴</h3><p>首次开蛋不消耗经验，{companionSpecies.length} 种伙伴等概率出现。伙伴形象随开蛋确定。</p>
           <div className="oc-companion-actions"><button type="button" disabled={busy || !!readError || !snapshot.canHatch} onClick={() => { setOffer(snapshot); setHatchResult(undefined); setError(''); }}>开蛋</button></div>
         </div> : <>
           <div className="oc-companion-overview"><h3 ref={resultHeading} tabIndex={-1}>{pet.name}</h3><span>Lv.{level} · {pet.name !== speciesInfo(pet.speciesId).name && `${speciesInfo(pet.speciesId).name} · `}{speciesInfo(pet.speciesId).character}</span><small title={`初次相遇于 ${new Date(pet.adoptedAt).toLocaleDateString('zh-CN')}`}>今日经验 {snapshot.todayXP ?? 0}/{snapshot.dailyXPMax ?? 12}</small></div>
