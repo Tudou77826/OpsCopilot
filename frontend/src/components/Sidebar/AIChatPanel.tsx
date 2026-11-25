@@ -8,6 +8,8 @@ import { wailsAssistantRuntime } from '../../shell-adapter/wailsAssistantRuntime
 import { useAssistantQueue } from './useAssistantQueue';
 import { AssistantInteractionCard } from '../AssistantInteraction/AssistantInteractionCard';
 import { DatabaseConnectionRequest } from '../AssistantInteraction/DatabaseConnectionRequest';
+import { SSHConnectionRequest } from '../AssistantInteraction/SSHConnectionRequest';
+import { AssistantCapabilityHelp } from './AssistantCapabilityHelp';
 import { AIChatMessage } from './AIChatMessage';
 import { AIChatTimeline } from './AIChatTimeline';
 import { AssistantMessageQueue } from './AssistantMessageQueue';
@@ -221,6 +223,7 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
         assistant.state?.activity==='database' ? '正在处理数据库任务…' : assistant.state?.activity==='local' ? '正在使用工具…' : assistant.state?.output ? '正在回答…' : assistant.state?.target.tabId ? '正在处理操作…' : assistant.state?.turnId ? '正在思考…' : '正在启动助手…';
 
     const headerActions = <div className="ai-chat-header-actions" role="toolbar" aria-label="对话操作">
+                {runtime.opsToolNames && <AssistantCapabilityHelp load={runtime.opsToolNames}/>}
                 <IconButton label="新建对话" disabled={busy || assistant.transitioning || assistant.restoring || preparing || modelChanging} onClick={() => void newConversation()}><TbMessagePlus size={18}/></IconButton>
                 {onClose && <IconButton label="关闭助手" onClick={onClose}><TbX size={18}/></IconButton>}
             </div>;
@@ -248,7 +251,11 @@ export default function AIChatPanel({ activeTerminalTitle, activeTerminalTarget,
             <LatestMessageButton anchor={history} visible={showLatest} onClick={scrollToLatest}/>
         </div>
         <div className="ai-panel-footer">
-            {!assistant.transitioning && assistant.state?.prompt && (assistant.state.prompt.kind==='database_connection' ? <DatabaseConnectionRequest key={assistant.state.prompt.id} prompt={assistant.state.prompt} onRespond={assistant.respond}/> : <AssistantInteractionCard key={assistant.state.prompt.id} prompt={assistant.state.prompt} onRespond={assistant.respond} onStop={() => void stop()} showStop={false} />)}
+            {!assistant.transitioning && assistant.state?.prompt && (assistant.state.prompt.kind==='ssh_connection'
+                ? <SSHConnectionRequest key={assistant.state.prompt.id} prompt={assistant.state.prompt} onRespond={assistant.respond}/>
+                : assistant.state.prompt.kind==='database_connection'
+                    ? <DatabaseConnectionRequest key={assistant.state.prompt.id} prompt={assistant.state.prompt} onRespond={assistant.respond}/>
+                    : <AssistantInteractionCard key={assistant.state.prompt.id} prompt={assistant.state.prompt} onRespond={assistant.respond} onStop={() => void stop()} showStop={false} />)}
             {(busy || assistant.transitioning) && <div className="ai-chat-activity">
                 <div className={`ai-chat-progress${assistant.state?.prompt ? ' is-waiting' : ''}`} role="status"><i aria-hidden="true" /><span>{progress}</span>
                     {turnTitle && turnTitle !== contextTitle && <small title={`本轮终端 · ${turnTitle}`}>{turnTitle}</small>}

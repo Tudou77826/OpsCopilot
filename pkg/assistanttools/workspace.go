@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"opscopilot/pkg/agenttransport/mcp"
 	"opscopilot/pkg/assistantcontrol"
 	"opscopilot/pkg/assistantreference"
 	"opscopilot/pkg/terminalcontrol"
@@ -20,6 +21,8 @@ type ConnectionPlan struct {
 	Connection workspace.Connection
 	Open       func(context.Context) (workspace.Tab, error)
 }
+
+const sshTargetHint = "用 workspace_list 查找目标；用 workspace_select 选择现有终端，或用 workspace_open 打开已保存的 SSH 连接。没有对应配置时可先用 workspace_create 新建。"
 
 type terminalDenials struct {
 	read bool
@@ -188,6 +191,8 @@ func (w *WorkspaceTools) call(ctx context.Context, generation uint64, name, argu
 			inventory.ToolTarget = workspace.Target{TabID: w.current.Target.SessionID, ConnectionID: w.current.Target.ConnectionID}
 		}
 		return inventory, err
+	case "workspace_create":
+		return w.createSSHConnection(ctx, argument)
 	case "workspace_open", "workspace_select":
 		if w.Files != nil {
 			w.Files.Close()
@@ -269,8 +274,47 @@ func (w *WorkspaceTools) call(ctx context.Context, generation uint64, name, argu
 		return map[string]any{"tab": tab, "owned": false, "message": "终端已呈现并设为工具目标，尚未取得读屏或命令授权"}, nil
 	default:
 		if w.current == nil {
-			return unavailableSSH("ssh_required", "请先通过 workspace_list 查看工作台，再用 workspace_select 选择终端或 workspace_open 打开已保存的 SSH 连接"), nil
+			return unavailableSSH("ssh_required", sshTargetHint), nil
 		}
 		return w.current.CallWithPurpose(ctx, name, argument, purpose)
 	}
+}
+
+func (w *WorkspaceTools) createSSHConnection(ctx context.Context, argument string) (any, error) {
+	var draft mcp.SSHConnectionDraft
+	if json.Unmarshal([]byte(argument), &draft) != nil || strings.TrimSpace(draft.Host) == "" {
+		return nil, errors.New("请提供要新建 SSH 连接的主机地址")
+	}
+	if draft.Port == 0 {
+		draft.Port = 22
+	}
+	key := "create:" + strings.ToLower(draft.Host)
+	if w.denied[key] {
+		return nil, assistantcontrol.ErrActionDenied
+	}
+	data, err := json.Marshal(draft)
+	if err != nil {
+		return nil, err
+	}
+	answer, err := w.turn.Request(ctx, assistantcontrol.Prompt{
+		Kind: "ssh_connection", Title: "新建 SSH 连接",
+		Description: "检查目标主机，补全登录信息并保存。登录凭据只在连接表单中填写。",
+		Data:        data, Choices: []assistantcontrol.Choice{{ID: "reject", Label: "取消"}, {ID: "allow", Label: "保存连接"}},
+		Expires: time.Now().Add(5 * time.Minute),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(answer.Selected) != 1 || answer.Selected[0] != "allow" {
+		w.denied[key] = true
+		return nil, assistantcontrol.ErrActionDenied
+	}
+	if ctx.Err() != nil || w.turn.Context().Err() != nil {
+		return nil, assistantcontrol.ErrStale
+	}
+	plan, err := w.prepare(ctx, answer.Text)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"connection_id": plan.Connection.ID, "name": plan.Connection.Name, "route": plan.Connection.Route}, nil
 }

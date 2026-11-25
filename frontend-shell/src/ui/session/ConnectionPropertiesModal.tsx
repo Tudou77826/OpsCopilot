@@ -18,6 +18,8 @@ type Props = {
     onClose: () => void;
     onSaved: () => void;
     runtime: SessionManagerRuntime;
+    createConnection?: SessionManagerRuntime['createConnection'];
+    sshOnly?: boolean;
 };
 
 /**
@@ -37,6 +39,8 @@ const ConnectionPropertiesModal: React.FC<Props> = ({
     onClose,
     onSaved,
     runtime,
+    createConnection,
+    sshOnly,
 }) => {
     const [config, setConfig] = useState<ConnectionConfig>(initialConfig);
     const [saving, setSaving] = useState(false);
@@ -71,7 +75,7 @@ const ConnectionPropertiesModal: React.FC<Props> = ({
         try {
             const payload = normalizeConfig(config);
             if (mode === 'create') {
-                await runtime.createConnection(payload, parentId);
+                await (createConnection ?? runtime.createConnection)(payload, parentId);
             } else {
                 if (!sessionId) throw new Error('缺少会话 ID');
                 await runtime.updateConnection(sessionId, payload);
@@ -101,7 +105,7 @@ const ConnectionPropertiesModal: React.FC<Props> = ({
         >
             <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
                 <div style={styles.header}>
-                    <h2 style={styles.title}>{mode === 'create' ? '新建连接' : '编辑连接'}</h2>
+                    <h2 style={styles.title}>{mode === 'create' ? (sshOnly ? '新建 SSH 连接' : '新建连接') : '编辑连接'}</h2>
                     {mode === 'create' && <span style={styles.destination}>{destination}</span>}
                 </div>
                 <div style={styles.body}>
@@ -112,6 +116,7 @@ const ConnectionPropertiesModal: React.FC<Props> = ({
                         showName={true}
                         // 归属由树里的位置决定，弹窗内不提供分组输入。
                         showGroup={false}
+                        sshOnly={sshOnly}
                     />
                 </div>
                 <div style={styles.footer}>

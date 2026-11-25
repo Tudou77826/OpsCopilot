@@ -62,6 +62,8 @@ export function AssistantLocalProjects():Promise<assistantlocal.ProjectState>;
 
 export function AssistantModelOptions():Promise<main.AssistantModels>;
 
+export function AssistantOpsToolNames():Promise<Array<string>>;
+
 export function AssistantProjectWorkspace():Promise<main.AssistantProjectWorkspaceStatus>;
 
 export function Broadcast(arg1:Array<string>,arg2:string):Promise<void>;

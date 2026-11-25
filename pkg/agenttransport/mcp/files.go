@@ -26,7 +26,7 @@ func FileToolNames() []string {
 }
 func fileDefinitions() []any {
 	descriptions := map[string]string{
-		"file_workspaces": "List visible file workspaces, transfer jobs and connected SSH session IDs without credentials or file contents. Use existing session IDs exactly; workspace_open can establish a saved SSH connection first.",
+		"file_workspaces": "List visible file workspaces, transfer jobs and connected SSH session IDs without credentials or file contents. If the requested host has no connected session, use the SSH workspace tools to find, create if needed, and open its connection before calling file_open.",
 		"file_open":       "Open/present a full file-transfer tab bound to one connected SSH session. Reuses the normal file transport identity, which can differ from a terminal su identity; host checks task scope and consequences before access. Does not take ownership.",
 		"file_take":       "Explicitly protect a file workspace during a file management sequence. Never take for chat. Terminal/database authority is released. File operations do not run in the terminal shell.",
 		"file_list":       "Navigate the owned file tab and list one absolute local or remote directory. side must be local or remote. Metadata only, at most 4096 entries. Use terminal grep/zgrep/tail for log diagnosis; file tools are for file management and transfer, not log analysis.",

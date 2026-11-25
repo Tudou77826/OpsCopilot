@@ -33,6 +33,50 @@ func TestWorkspaceSwitchRevokesOldConsentAndCapturedCalls(t *testing.T) {
 		t.Fatal("old target generation inherited new target", err)
 	}
 }
+
+func TestWorkspaceCreatesSavedSSHWithoutAnOpenTerminal(t *testing.T) {
+	for _, selection := range []string{"reject", "allow"} {
+		t.Run(selection, func(t *testing.T) {
+			const id = "31dde072-a161-4d5f-9ab5-047644be052d"
+			c := &assistantcontrol.Coordinator{}
+			turn, err := c.Begin(context.Background(), assistantcontrol.Target{}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer turn.Finish("completed", "")
+			w := NewWorkspaceTools(turn, terminalcontrol.Target{}, nil, func(_ context.Context, got string) (ConnectionPlan, error) {
+				if got != id {
+					return ConnectionPlan{}, errors.New("unexpected saved profile")
+				}
+				return ConnectionPlan{Connection: workspace.Connection{ID: got, Name: "New SSH"}}, nil
+			}, nil, func(terminalcontrol.Target) *TerminalTools { return nil })
+			defer w.Close()
+			done := make(chan error, 1)
+			go func() {
+				value, err := w.Call(turn.Context(), "workspace_create", `{"host":"test.example","user":"ops"}`)
+				if err == nil && value.(map[string]any)["connection_id"] != id {
+					err = errors.New("missing saved profile ID")
+				}
+				done <- err
+			}()
+			prompt := waitPrompt(t, c)
+			if prompt.Prompt.Kind != "ssh_connection" {
+				t.Fatal(prompt.Prompt.Kind)
+			}
+			answer := assistantcontrol.Answer{Selected: []string{selection}}
+			if selection == "allow" {
+				answer.Text = id
+			}
+			if err := c.Respond(turn.ID(), prompt.Prompt.ID, answer); err != nil {
+				t.Fatal(err)
+			}
+			err = <-done
+			if selection == "allow" && err != nil || selection == "reject" && !errors.Is(err, assistantcontrol.ErrActionDenied) {
+				t.Fatal(err)
+			}
+		})
+	}
+}
 func TestWorkspaceOpenNeedsExactConfirmationAndStopPreventsDial(t *testing.T) {
 	for _, answer := range []string{"reject", "stop", "allow"} {
 		t.Run(answer, func(t *testing.T) {

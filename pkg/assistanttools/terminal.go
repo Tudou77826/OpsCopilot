@@ -184,7 +184,7 @@ func (b *TerminalTools) CallWithPurpose(ctx context.Context, name, command, purp
 		return map[string]bool{"owned": false}, b.release()
 	}
 	if b.Target.SessionID == "" || b.Target.ConnectionID == "" {
-		return unavailableSSH("ssh_required", "当前没有可用的 SSH 终端。可以继续聊天；需要操作终端时，请先打开并选中一个 SSH 连接，再发送操作要求"), nil
+		return unavailableSSH("ssh_required", sshTargetHint), nil
 	}
 	if b.Validate != nil {
 		if err := b.Validate(ctx); err != nil {

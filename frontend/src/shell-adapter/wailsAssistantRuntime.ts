@@ -5,9 +5,10 @@ import { pullWorkspace } from './wailsWorkspaceHost';
 import { RevealAssistantResult } from '../../wailsjs/go/main/App';
 import { StartAssistantTurnWithReferencesOnPage } from '../../wailsjs/go/main/App';
 import { AssistantApprovalMode, SelectAssistantApprovalMode } from '../../wailsjs/go/main/App';
-import { AssistantAgentKind } from '../../wailsjs/go/main/App';
+import { AssistantAgentKind, AssistantOpsToolNames } from '../../wailsjs/go/main/App';
 
 export const wailsAssistantRuntime: AssistantRuntime = {
+    opsToolNames: AssistantOpsToolNames,
 	agentKind: AssistantAgentKind,
 	agentCommands: AssistantAgentCommands,
 	approvalMode: AssistantApprovalMode,

@@ -90,6 +90,10 @@ export function AssistantModelOptions() {
   return window['go']['main']['App']['AssistantModelOptions']();
 }
 
+export function AssistantOpsToolNames() {
+  return window['go']['main']['App']['AssistantOpsToolNames']();
+}
+
 export function AssistantProjectWorkspace() {
   return window['go']['main']['App']['AssistantProjectWorkspace']();
 }

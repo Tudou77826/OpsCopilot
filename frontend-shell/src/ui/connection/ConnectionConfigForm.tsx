@@ -7,9 +7,10 @@ type Props = {
     idPrefix?: string;
     showName?: boolean;
     showGroup?: boolean;
+    sshOnly?: boolean;
 };
 
-const ConnectionConfigForm: React.FC<Props> = ({ config, onChange, idPrefix = 'cfg', showName = true, showGroup = true }) => {
+const ConnectionConfigForm: React.FC<Props> = ({ config, onChange, idPrefix = 'cfg', showName = true, showGroup = true, sshOnly = false }) => {
     // 当前协议(归一化:空值视为 ssh)
     const protocol: Protocol = normalizeProtocol(config.protocol);
     // telnet 模式:隐藏 Root 密码(无标准 sudo)和 bastion(无标准堡垒机)
@@ -80,7 +81,7 @@ const ConnectionConfigForm: React.FC<Props> = ({ config, onChange, idPrefix = 'c
             )}
 
             {/* 协议选择:SSH / Telnet。切换时联动端口默认值与字段显隐。 */}
-            <div style={styles.row}>
+            {!sshOnly && <div style={styles.row}>
                 <div style={styles.fieldGroup}>
                     <label style={styles.fieldLabel}>协议</label>
                     <div style={styles.protocolSwitch}>
@@ -100,7 +101,7 @@ const ConnectionConfigForm: React.FC<Props> = ({ config, onChange, idPrefix = 'c
                         </button>
                     </div>
                 </div>
-            </div>
+            </div>}
 
             <div style={styles.row}>
                 <div style={{ flex: 2 }}>

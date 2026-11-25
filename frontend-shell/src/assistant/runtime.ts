@@ -38,6 +38,7 @@ export interface AssistantModels { models: AssistantModelOption[]; current?: Ass
 export interface AssistantContextUsage { known: boolean; used: number; size: number; }
 export interface AssistantAgentCommand { name:string; description:string; unavailable?:string; }
 export interface AssistantRuntime {
+    opsToolNames?(): Promise<string[]>;
 	agentKind?(): Promise<string>;
 	agentCommands?(): Promise<AssistantAgentCommand[]>;
 	approvalMode?(): Promise<string>;

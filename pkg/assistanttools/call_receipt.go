@@ -30,7 +30,7 @@ func hasDetailedReceipt(name string) bool {
 
 var callTitles = map[string]string{
 	"terminal_execute": "执行远程命令", "database_execute": "执行 SQL", "database_open": "打开数据库页签", "file_open": "打开文件页签", "file_transfer": "传输文件",
-	"workspace_list": "查看终端与连接", "workspace_open": "打开终端页签", "workspace_select": "切换终端页签",
+	"workspace_list": "查看终端与连接", "workspace_create": "新建 SSH 连接", "workspace_open": "打开终端页签", "workspace_select": "切换终端页签",
 	"terminal_context": "读取终端屏幕", "terminal_take": "接管终端", "terminal_release": "交还终端",
 	"database_list": "查看数据库与驱动", "database_create": "保存数据库连接", "database_take": "接管数据库页签", "database_release": "交还数据库页签", "database_context": "查看数据库上下文", "database_tables": "查询数据表", "database_structure": "查询表结构", "database_close": "关闭数据库连接",
 	"file_workspaces": "查看文件工作区", "file_take": "接管文件页签", "file_release": "交还文件页签", "file_tasks": "查看传输任务", "file_list": "浏览文件目录", "file_cancel": "取消文件传输",

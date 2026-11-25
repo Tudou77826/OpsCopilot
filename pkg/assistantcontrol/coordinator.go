@@ -284,7 +284,8 @@ func (c *Coordinator) Stop(id string) error {
 }
 
 func validatePrompt(p Prompt) error {
-	if (p.Kind != "approval" && p.Kind != "input" && p.Kind != "database_connection") || p.Title == "" || len(p.Title) > 512 || len(p.Description) > 8192 || len(p.Command) > 8192 || len(p.Data) > 8192 || len(p.Choices) > 16 || len(p.Details) > 16 || (!p.Expires.IsZero() && (!p.Expires.After(time.Now()) || p.Expires.After(time.Now().Add(10*time.Minute)))) || (p.Kind != "input" && p.Expires.IsZero()) {
+	connectionForm := p.Kind == "database_connection" || p.Kind == "ssh_connection"
+	if (p.Kind != "approval" && p.Kind != "input" && !connectionForm) || p.Title == "" || len(p.Title) > 512 || len(p.Description) > 8192 || len(p.Command) > 8192 || len(p.Data) > 8192 || len(p.Choices) > 16 || len(p.Details) > 16 || (!p.Expires.IsZero() && (!p.Expires.After(time.Now()) || p.Expires.After(time.Now().Add(10*time.Minute)))) || (p.Kind != "input" && p.Expires.IsZero()) {
 		return errors.New("交互请求无效或已过期")
 	}
 	seen := map[string]bool{}
@@ -302,7 +303,7 @@ func validatePrompt(p Prompt) error {
 	if p.Kind == "approval" && (p.Multiple || len(p.Choices) > 3 || !seen["allow"] || !seen["reject"] || (len(p.Choices) == 3 && !seen["allow_always"])) {
 		return errors.New("审批只能明确批准本次、本会话内始终允许或拒绝")
 	}
-	if p.Kind == "database_connection" && (!json.Valid(p.Data) || p.Multiple || len(p.Choices) != 2 || !seen["allow"] || !seen["reject"]) {
+	if connectionForm && (!json.Valid(p.Data) || p.Multiple || len(p.Choices) != 2 || !seen["allow"] || !seen["reject"]) {
 		return errors.New("连接表单请求无效")
 	}
 	return nil
@@ -415,7 +416,7 @@ func (c *Coordinator) Respond(turnID, requestID string, answer Answer) error {
 	if p.Kind == "input" && len(answer.Selected) == 0 && answer.Text == "" {
 		return errors.New("请填写回答")
 	}
-	if p.Kind == "database_connection" {
+	if p.Kind == "database_connection" || p.Kind == "ssh_connection" {
 		if len(answer.Selected) != 1 {
 			return errors.New("请保存新连接或取消")
 		}

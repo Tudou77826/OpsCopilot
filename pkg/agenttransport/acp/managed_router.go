@@ -243,10 +243,7 @@ func (c *capturedToolCaller) CallWithArguments(ctx context.Context, name, argume
 }
 
 func hostToolName(name string) string {
-	names := append(append(mcp.DatabaseToolNames(), mcp.FileToolNames()...), mcp.LocalDirectoryToolNames()...)
-	names = append(names, mcp.ReferenceToolNames()...)
-	names = append(names, "workspace_list", "workspace_open", "workspace_select", "terminal_context", "terminal_take", "terminal_release", "terminal_execute")
-	for _, tool := range names {
+	for _, tool := range mcp.ToolNames() {
 		if name == tool || name == "opscopilot_"+tool || name == "opscopilot__"+tool {
 			return tool
 		}
@@ -316,6 +313,11 @@ func (b *managedBinding) authorizeCall(ctx context.Context, name string, args js
 	b.permissionMu.Unlock()
 	if !pending && hasOtherPending {
 		return ctx, errors.New("待确认的操作与工具调用不一致，未执行；请重新发起")
+	}
+	// This call only presents a form. Saving a connection always requires an
+	// explicit user action inside that form, regardless of approval mode.
+	if name == "workspace_create" {
+		return ctx, nil
 	}
 	if b.turn.ApprovalMode() == "bypass" || (!pending && !(b.turn.ApprovalMode() == "manual" && executionTool(name))) {
 		return ctx, nil

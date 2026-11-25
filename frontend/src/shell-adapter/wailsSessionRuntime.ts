@@ -52,6 +52,9 @@ async function call<T>(name: keyof WailsApp, ...args: unknown[]): Promise<T> {
 }
 
 /** Wails 对共享 SessionManager 的唯一运行时适配。 */
+export const createSavedConnection = (config: ConnectionConfig, parentId: string) =>
+    call<SessionNode>('CreateSavedConnection', config, parentId);
+
 export const wailsSessionRuntime: SessionManagerRuntime = {
     async listTree() {
         return (await call<SessionNode[]>('GetConnectionTree')) ?? [];
@@ -60,7 +63,7 @@ export const wailsSessionRuntime: SessionManagerRuntime = {
         await call('CreateSavedFolder', name, parentId);
     },
     async createConnection(config, parentId) {
-        await call('CreateSavedConnection', config, parentId);
+        await createSavedConnection(config, parentId);
     },
     async renameNode(id, newName) {
         await call('RenameTreeNode', id, newName);

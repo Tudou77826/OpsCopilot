@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"opscopilot/pkg/agenttransport/mcp"
 	"opscopilot/pkg/assistantcontrol"
 	"opscopilot/pkg/assistantskills"
 	"opscopilot/pkg/assistanttools"
@@ -17,6 +18,8 @@ import (
 	"opscopilot/pkg/terminalcontrol"
 	"opscopilot/pkg/workspace"
 )
+
+func (a *App) AssistantOpsToolNames() []string { return mcp.ToolNames() }
 
 func (a *App) workspaceService() *workspace.Service {
 	a.workspaceOnce.Do(func() { a.workspace = &workspace.Service{} })
