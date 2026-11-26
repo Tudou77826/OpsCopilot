@@ -110,6 +110,63 @@ func TestParseConnectIntent_ProtocolPassthrough(t *testing.T) {
 	}
 }
 
+func TestParseConnectIntent_SanitizesInvisibleCharsAndDefaults(t *testing.T) {
+	expectedJSON := `[
+		{
+			"name": " \u200b订单节点\u00a0",
+			"host": "\ufeff 10.0.1.8 \r\n",
+			"user": " root\u200b ",
+			"password": " \u200bp@ss word#1\u00a0\t",
+			"root_password": "\u200broot pass\r\n",
+			"bastion": {
+				"host": " 192.168.1.1\u00a0",
+				"user": "\ufeffsopuser ",
+				"password": " jump@123\u200b "
+			}
+		},
+		{
+			"host": "10.0.1.9",
+			"protocol": "telnet",
+			"user": "admin",
+			"password": "abc"
+		}
+	]`
+
+	mockProvider := &llm.MockProvider{Response: expectedJSON}
+	service := NewAIService(mockProvider, mockProvider, config.NewManager())
+
+	configs, err := service.ParseConnectIntent("任意输入")
+	if err != nil {
+		t.Fatalf("ParseConnectIntent failed: %v", err)
+	}
+	if len(configs) != 2 {
+		t.Fatalf("Expected 2 configs, got %d", len(configs))
+	}
+
+	c := configs[0]
+	if c.Name != "订单节点" || c.Host != "10.0.1.8" || c.User != "root" {
+		t.Errorf("unexpected cleaned identifiers: name=%q host=%q user=%q", c.Name, c.Host, c.User)
+	}
+	if c.Password != "p@ss word#1" {
+		t.Errorf("password = %q, want %q", c.Password, "p@ss word#1")
+	}
+	if c.RootPassword != "root pass" {
+		t.Errorf("rootPassword = %q, want %q", c.RootPassword, "root pass")
+	}
+	if c.Port != 22 {
+		t.Errorf("port = %d, want 22", c.Port)
+	}
+	if c.Bastion == nil {
+		t.Fatal("expected bastion")
+	}
+	if c.Bastion.Host != "192.168.1.1" || c.Bastion.User != "sopuser" || c.Bastion.Password != "jump@123" || c.Bastion.Port != 22 {
+		t.Errorf("unexpected cleaned bastion: %+v", c.Bastion)
+	}
+	if configs[1].Port != 23 {
+		t.Errorf("telnet default port = %d, want 23", configs[1].Port)
+	}
+}
+
 func TestAskWithContext(t *testing.T) {
 	// Mock response that follows the new format
 	expectedResponse := `## 排查思路

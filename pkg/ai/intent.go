@@ -130,9 +130,9 @@ func (s *AIService) ParseConnectIntent(input string) ([]sshclient.ConnectConfig,
 		return nil, fmt.Errorf("failed to parse AI response as JSON: %v. Raw: %s", err, resp)
 	}
 
-	// 校验配置完整性
+	// 清洗并校验配置完整性
 	for i := range configs {
-		configs[i].Protocol = normalizeProtocol(configs[i].Protocol)
+		sanitizeConnectConfig(&configs[i])
 		c := configs[i]
 		if c.Host == "" {
 			return nil, fmt.Errorf("config #%d missing 'host'. AI response incomplete", i+1)
@@ -143,6 +143,56 @@ func (s *AIService) ParseConnectIntent(input string) ([]sshclient.ConnectConfig,
 	}
 
 	return configs, nil
+}
+
+// sanitizeConnectConfig 清洗 AI 解析出的连接配置：
+// 1. 剥离从聊天/文档复制时混入的零宽字符、BOM、换行与首尾空白，避免肉眼相同但字节不同导致 SSH 认证失败；
+// 2. 保留密码中间的普通空格及所有可见特殊字符，不做语义改写；
+// 3. 补齐缺失的默认端口（SSH 22 / Telnet 23），递归处理跳板机。
+func sanitizeConnectConfig(c *sshclient.ConnectConfig) {
+	if c == nil {
+		return
+	}
+	c.Protocol = normalizeProtocol(c.Protocol)
+	c.Name = cleanIdentifierField(c.Name)
+	c.Host = cleanIdentifierField(c.Host)
+	c.User = cleanIdentifierField(c.User)
+	c.Password = cleanSecretField(c.Password)
+	c.RootPassword = cleanSecretField(c.RootPassword)
+	if c.Port <= 0 {
+		if c.Protocol == "telnet" {
+			c.Port = 23
+		} else {
+			c.Port = 22
+		}
+	}
+	if c.Bastion != nil {
+		sanitizeConnectConfig(c.Bastion)
+	}
+}
+
+func stripInvisibleChars(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case '\u200b', '\u200c', '\u200d', '\u2060', '\ufeff', '\r', '\n', '\t':
+			return -1
+		default:
+			return r
+		}
+	}, s)
+}
+
+func cleanIdentifierField(s string) string {
+	s = stripInvisibleChars(s)
+	s = strings.ReplaceAll(s, "\u00a0", " ")
+	return strings.TrimSpace(s)
+}
+
+func cleanSecretField(s string) string {
+	s = stripInvisibleChars(s)
+	return strings.TrimFunc(s, func(r rune) bool {
+		return r == ' ' || r == '\u00a0' || r == '\u3000'
+	})
 }
 
 // normalizeProtocol 归一化 AI 输出的协议字段：大小写不敏感，仅接受
