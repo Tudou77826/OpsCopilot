@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { TbPlayerPlay, TbPlayerStop } from 'react-icons/tb';
 import { useToast } from '../feedback/Toast';
+import { confirmDialog } from '../feedback/ConfirmDialog';
 import type { ScriptRuntime, ScriptRecordingStatus } from './types';
 
 interface ScriptRecordingPanelProps {
@@ -49,10 +50,29 @@ const ScriptRecordingPanel: React.FC<ScriptRecordingPanelProps> = ({ activeSessi
             return;
         }
 
-        const name = prompt('请输入脚本名称:', '脚本_' + new Date().toLocaleString());
+        const values = await confirmDialog.prompt({
+            title: '开始录制脚本',
+            fields: [
+                {
+                    key: 'name',
+                    label: '脚本名称',
+                    defaultValue: '脚本_' + new Date().toLocaleString(),
+                    placeholder: '请输入脚本名称',
+                    required: true,
+                },
+                {
+                    key: 'description',
+                    label: '脚本描述（可选）',
+                    defaultValue: '',
+                    placeholder: '简述脚本用途',
+                },
+            ],
+            confirmText: '开始录制',
+        });
+        const name = values?.name?.trim();
         if (!name) return;
 
-        const description = prompt('请输入脚本描述（可选）:', '');
+        const description = values?.description?.trim() || '';
 
         try {
             await runtime.startRecording(name, description || '', activeSessionId);

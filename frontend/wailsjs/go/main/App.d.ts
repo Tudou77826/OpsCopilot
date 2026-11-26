@@ -276,6 +276,8 @@ export function GetSessionTimeline():Promise<recorder.RecordingSession>;
 
 export function GetSettings():Promise<config.AppConfig>;
 
+export function GetSharedDatabases():Promise<string>;
+
 export function GetSharedSessions():Promise<string>;
 
 export function GetVersion():Promise<string>;
@@ -287,6 +289,8 @@ export function HasActiveWork():Promise<Record<string, any>>;
 export function ImportAssistantSkill(arg1:string,arg2:boolean,arg3:string):Promise<void>;
 
 export function ImportConfigFromDirectory(arg1:string):Promise<string>;
+
+export function ImportSharedDatabase(arg1:string):Promise<main.SharedDatabaseImportResult>;
 
 export function InspectAssistantModel(arg1:string):Promise<main.AssistantModelStatus>;
 
@@ -331,6 +335,8 @@ export function RemoveAssistantCommand(arg1:string):Promise<void>;
 export function RemoveAssistantProjectDirectory(arg1:string,arg2:string):Promise<assistantlocal.ProjectState>;
 
 export function RemoveAssistantSkill(arg1:string):Promise<void>;
+
+export function RemoveSharedDatabase(arg1:string):Promise<string>;
 
 export function RemoveSharedSession(arg1:string):Promise<string>;
 

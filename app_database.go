@@ -63,7 +63,11 @@ func (a *App) DatabaseConnect(id string) (dbworkspace.SessionInfo, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return a.databaseService().Connect(ctx, id)
+	info, err := a.databaseService().Connect(ctx, id)
+	if err == nil {
+		a.recordSharedDatabaseLogin(id)
+	}
+	return info, err
 }
 func (a *App) DatabaseDisconnect(id string) error          { return a.databaseService().Disconnect(id) }
 func (a *App) DatabaseSchemas(id string) ([]string, error) { return a.databaseService().Schemas(id) }

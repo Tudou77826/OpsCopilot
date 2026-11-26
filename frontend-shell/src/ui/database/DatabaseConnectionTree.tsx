@@ -9,6 +9,7 @@ import {
   TbChevronRight,
   TbCode,
   TbDatabase,
+  TbLoader2,
   TbServer,
   TbTable,
 } from 'react-icons/tb';
@@ -152,22 +153,25 @@ export function DatabaseConnectionTree({
             )
           }
         >
-          <TbServer size={15} />
-          <span>
+          <TbServer size={14} />
+          <span className="oc-db-connection-label">
             <strong>{p.name}</strong>
-            <small>
-              {p.environment ? `${p.environment} · ` : ''}
-              {p.host}:{p.port}
-            </small>
+            {p.environment && (
+              <span className="oc-db-env-tag">{p.environment}</span>
+            )}
           </span>
-          <i
-            className={
-              c ? 'is-online' : m.connecting[p.id] ? 'is-connecting' : ''
-            }
-            aria-label={
-              c ? '已连接' : m.connecting[p.id] ? '正在连接' : '未连接'
-            }
-          />
+          {m.connecting[p.id] ? (
+            <TbLoader2
+              size={13}
+              className="oc-db-spin oc-db-connecting-spinner"
+              aria-label="正在连接"
+            />
+          ) : (
+            <i
+              className={c ? 'is-online' : ''}
+              aria-label={c ? '已连接' : '未连接'}
+            />
+          )}
         </button>
       </div>
       {open && c && (

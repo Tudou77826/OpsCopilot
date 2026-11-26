@@ -107,6 +107,7 @@ interface SessionShareStatus {
     running: boolean;
     pendingCount: number;
     entryCount: number;
+    databaseEntryCount?: number;
     owner?: string;
     lastSyncAt?: string;
     lastSyncSuccess: boolean;
@@ -1415,8 +1416,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         <div style={styles.card}>
                             <div style={styles.cardTitle}>会话共享</div>
                             <div style={{ ...styles.rowDesc, marginLeft: '0', marginBottom: '10px' }}>
-                                开启后，每次连接成功会自动把该连接信息（密码加密后）推送到团队共享 Git 仓库；
-                                团队成员配置相同的仓库地址、分支与共享密钥，即可在会话管理面板互相看到最近使用的连接。
+                                开启后，每次终端会话或数据库连接成功时，会自动把连接信息（密码及 SSH 隧道加密后）推送到团队共享 Git 仓库；
+                                团队成员配置相同的仓库地址、分支与共享密钥，即可在会话管理与数据库面板中互相看到最近使用的连接。
                             </div>
                             <div style={styles.row}>
                                 <div style={styles.rowLeft}>
@@ -1496,7 +1497,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 </div>
                                 <div style={styles.statusCard}>
                                     <div style={styles.statusCardLabel}>共享条目</div>
-                                    <div style={styles.statusCardValue}>{sessionShareStatus.entryCount}</div>
+                                    <div style={styles.statusCardValue}>
+                                        {sessionShareStatus.databaseEntryCount
+                                            ? `${sessionShareStatus.entryCount} 终端 · ${sessionShareStatus.databaseEntryCount} 数据库`
+                                            : sessionShareStatus.entryCount}
+                                    </div>
                                 </div>
                                 <div style={styles.statusCard}>
                                     <div style={styles.statusCardLabel}>待推送登录</div>

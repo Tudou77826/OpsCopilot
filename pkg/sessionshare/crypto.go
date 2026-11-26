@@ -34,11 +34,45 @@ var ErrWrongKey = errors.New("解密失败：共享密钥可能不正确")
 // 带 "v1:" 版本前缀。passphrase 为空时返回错误——静默使用空密钥会让人
 // 误以为已加密。
 func EncryptSecrets(payload SecretsPayload, passphrase string) (string, error) {
+	return encryptJSON(payload, passphrase)
+}
+
+// DecryptSecrets 解密 EncryptSecrets 的产物。认证失败（密钥错误或篡改）
+// 返回 ErrWrongKey。
+func DecryptSecrets(enc, passphrase string) (SecretsPayload, error) {
+	var payload SecretsPayload
+	if enc == "" {
+		return payload, nil // 无凭据（密钥认证等场景），合法的空条目
+	}
+	if err := decryptJSON(enc, passphrase, &payload); err != nil {
+		return payload, err
+	}
+	return payload, nil
+}
+
+// EncryptDatabaseSecrets 加密数据库连接凭据（含可选 SSH 隧道链路）。
+func EncryptDatabaseSecrets(payload DatabaseSecretsPayload, passphrase string) (string, error) {
+	return encryptJSON(payload, passphrase)
+}
+
+// DecryptDatabaseSecrets 解密 EncryptDatabaseSecrets 的产物。
+func DecryptDatabaseSecrets(enc, passphrase string) (DatabaseSecretsPayload, error) {
+	var payload DatabaseSecretsPayload
+	if enc == "" {
+		return payload, nil
+	}
+	if err := decryptJSON(enc, passphrase, &payload); err != nil {
+		return payload, err
+	}
+	return payload, nil
+}
+
+func encryptJSON(v interface{}, passphrase string) (string, error) {
 	if strings.TrimSpace(passphrase) == "" {
 		return "", fmt.Errorf("共享密钥为空，无法加密")
 	}
 
-	plaintext, err := json.Marshal(payload)
+	plaintext, err := json.Marshal(v)
 	if err != nil {
 		return "", fmt.Errorf("marshal secrets: %w", err)
 	}
@@ -65,23 +99,17 @@ func EncryptSecrets(payload SecretsPayload, passphrase string) (string, error) {
 	return encPrefixV1 + base64.StdEncoding.EncodeToString(buf), nil
 }
 
-// DecryptSecrets 解密 EncryptSecrets 的产物。认证失败（密钥错误或篡改）
-// 返回 ErrWrongKey。
-func DecryptSecrets(enc, passphrase string) (SecretsPayload, error) {
-	var payload SecretsPayload
-	if enc == "" {
-		return payload, nil // 无凭据（密钥认证等场景），合法的空条目
-	}
+func decryptJSON(enc, passphrase string, dst interface{}) error {
 	if !strings.HasPrefix(enc, encPrefixV1) {
-		return payload, fmt.Errorf("%w（未知密文版本）", ErrWrongKey)
+		return fmt.Errorf("%w（未知密文版本）", ErrWrongKey)
 	}
 
 	raw, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(enc, encPrefixV1))
 	if err != nil {
-		return payload, fmt.Errorf("%w（base64）", ErrWrongKey)
+		return fmt.Errorf("%w（base64）", ErrWrongKey)
 	}
 	if len(raw) < saltLen+nonceLen+gcmOverhead {
-		return payload, fmt.Errorf("%w（长度不足）", ErrWrongKey)
+		return fmt.Errorf("%w（长度不足）", ErrWrongKey)
 	}
 
 	salt := raw[:saltLen]
@@ -90,18 +118,18 @@ func DecryptSecrets(enc, passphrase string) (SecretsPayload, error) {
 
 	aead, err := newAEAD(passphrase, salt)
 	if err != nil {
-		return payload, err
+		return err
 	}
 
 	plaintext, err := aead.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		return payload, ErrWrongKey
+		return ErrWrongKey
 	}
 
-	if err := json.Unmarshal(plaintext, &payload); err != nil {
-		return payload, fmt.Errorf("unmarshal secrets: %w", err)
+	if err := json.Unmarshal(plaintext, dst); err != nil {
+		return fmt.Errorf("unmarshal secrets: %w", err)
 	}
-	return payload, nil
+	return nil
 }
 
 func newAEAD(passphrase string, salt []byte) (cipher.AEAD, error) {

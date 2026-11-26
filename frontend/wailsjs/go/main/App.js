@@ -518,6 +518,10 @@ export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
 }
 
+export function GetSharedDatabases() {
+  return window['go']['main']['App']['GetSharedDatabases']();
+}
+
 export function GetSharedSessions() {
   return window['go']['main']['App']['GetSharedSessions']();
 }
@@ -540,6 +544,10 @@ export function ImportAssistantSkill(arg1, arg2, arg3) {
 
 export function ImportConfigFromDirectory(arg1) {
   return window['go']['main']['App']['ImportConfigFromDirectory'](arg1);
+}
+
+export function ImportSharedDatabase(arg1) {
+  return window['go']['main']['App']['ImportSharedDatabase'](arg1);
 }
 
 export function InspectAssistantModel(arg1) {
@@ -628,6 +636,10 @@ export function RemoveAssistantProjectDirectory(arg1, arg2) {
 
 export function RemoveAssistantSkill(arg1) {
   return window['go']['main']['App']['RemoveAssistantSkill'](arg1);
+}
+
+export function RemoveSharedDatabase(arg1) {
+  return window['go']['main']['App']['RemoveSharedDatabase'](arg1);
 }
 
 export function RemoveSharedSession(arg1) {

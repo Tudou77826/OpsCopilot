@@ -29,7 +29,7 @@ export function ConnectionFailurePanel({
         </div>
         <div className="oc-db-failure-actions">
           <button className="oc-db-primary" disabled={busy} onClick={onRetry}>
-            <TbRefresh size={15} />
+            <TbRefresh size={15} className={busy ? 'oc-db-spin' : undefined} />
             {busy ? '正在连接…' : '重试连接'}
           </button>
           <button disabled={busy} onClick={onEdit}>

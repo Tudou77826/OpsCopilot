@@ -7,6 +7,7 @@ import { SessionStatus, normalizeProtocol, PROTOCOL_LABEL } from '../types';
 import { TimestampResult } from '../timestampParser';
 import { TerminalRuntime } from '../ports';
 import { createInitialLayout } from './layoutConfig';
+import { confirmDialog } from '../feedback/ConfirmDialog';
 import type { TerminalWorkspaceController } from '../../workspace/controller';
 
 const FILE_TRANSFER_TAB_ID = 'file-transfer';
@@ -838,9 +839,16 @@ const ContextMenu: React.FC<ContextMenuProps> = ({ x, y, terminalId, terminals, 
             onClick={(e) => e.stopPropagation()}
         >
             <div style={menuItemStyle} onClick={() => {
-                const name = prompt('重命名:', term?.title || '');
-                if (name?.trim()) onRename(terminalId, name.trim());
+                const currentTitle = term?.title || '';
                 onClose();
+                void confirmDialog.prompt({
+                    title: '重命名标签',
+                    fields: [{ key: 'name', label: '标签名称', defaultValue: currentTitle, placeholder: '输入新名称', required: true }],
+                    confirmText: '重命名',
+                }).then((values) => {
+                    const next = values?.name?.trim();
+                    if (next) onRename(terminalId, next);
+                });
             }}>
                 重命名
             </div>

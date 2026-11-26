@@ -31,18 +31,19 @@ import (
 
 // SessionShareStatus 会话共享同步状态快照（前端轮询，结构对齐 PatchSyncStatus）。
 type SessionShareStatus struct {
-	Enabled         bool   `json:"enabled"`
-	Configured      bool   `json:"configured"`
-	HasSecretKey    bool   `json:"hasSecretKey"`
-	Running         bool   `json:"running"`
-	PendingCount    int    `json:"pendingCount"`
-	EntryCount      int    `json:"entryCount"`
-	Owner           string `json:"owner,omitempty"`
-	LastSyncAt      string `json:"lastSyncAt,omitempty"`
-	LastSyncSuccess bool   `json:"lastSyncSuccess"`
-	LastSyncMessage string `json:"lastSyncMessage,omitempty"`
-	RemoteURL       string `json:"remoteURL,omitempty"`
-	Branch          string `json:"branch,omitempty"`
+	Enabled            bool   `json:"enabled"`
+	Configured         bool   `json:"configured"`
+	HasSecretKey       bool   `json:"hasSecretKey"`
+	Running            bool   `json:"running"`
+	PendingCount       int    `json:"pendingCount"`
+	EntryCount         int    `json:"entryCount"`
+	DatabaseEntryCount int    `json:"databaseEntryCount"`
+	Owner              string `json:"owner,omitempty"`
+	LastSyncAt         string `json:"lastSyncAt,omitempty"`
+	LastSyncSuccess    bool   `json:"lastSyncSuccess"`
+	LastSyncMessage    string `json:"lastSyncMessage,omitempty"`
+	RemoteURL          string `json:"remoteURL,omitempty"`
+	Branch             string `json:"branch,omitempty"`
 	// 同步进行中的大致进度（0-100，按阶段推进：拉取 5→40、逐条推送 40→90）
 	Progress      int    `json:"progress"`
 	ProgressLabel string `json:"progressLabel,omitempty"`
@@ -65,15 +66,17 @@ type SharedSessionView struct {
 
 // sessionShareRuntime 会话共享的运行时状态（App 持有其指针，nil = 未启用）。
 type sessionShareRuntime struct {
-	store sessionshare.Store
-	local *sessionshare.LocalState
+	store   sessionshare.Store
+	local   *sessionshare.LocalState
+	dbLocal *sessionshare.DatabaseLocalState
 
 	ownerMu sync.RWMutex
 	owner   string // 当前用户标识（首次同步时解析）
 
-	mu     sync.RWMutex
-	status SessionShareStatus
-	merged []sharedViewEntry // 跨用户合并后的最新视图（按最近登录降序）
+	mu       sync.RWMutex
+	status   SessionShareStatus
+	merged   []sharedViewEntry         // 跨用户合并后的最新终端会话视图（按最近登录降序）
+	dbMerged []sharedDatabaseViewEntry // 跨用户合并后的最新数据库视图（按最近登录降序）
 	// 密钥探测失败的提示文案（同步成功但有密钥问题时展示，空 = 无警告）
 	keyWarning string
 
@@ -82,6 +85,11 @@ type sessionShareRuntime struct {
 
 type sharedViewEntry struct {
 	session     sessionshare.SharedSession
+	decryptable bool
+}
+
+type sharedDatabaseViewEntry struct {
+	db          sessionshare.SharedDatabase
 	decryptable bool
 }
 
@@ -129,10 +137,15 @@ func (a *App) initSessionShareStore() {
 	if err := local.Load(); err != nil {
 		slog.Warn("session share: load local state failed", "error", err)
 	}
+	dbLocal := sessionshare.NewDatabaseLocalState(filepath.Join(filepath.Dir(localDir), "sessionstore-databases-local.json"))
+	if err := dbLocal.Load(); err != nil {
+		slog.Warn("session share: load database local state failed", "error", err)
+	}
 
 	rt := &sessionShareRuntime{
-		store: store,
-		local: local,
+		store:   store,
+		local:   local,
+		dbLocal: dbLocal,
 		status: SessionShareStatus{
 			Enabled:      true,
 			Configured:   true,
@@ -454,6 +467,11 @@ func (a *App) syncSharedSessions(rt *sessionShareRuntime) error {
 		rt.local.MarkPushed(e.Protocol, e.Host, e.Port, e.User, e.LastLoginAt)
 	}
 
+	// 同步共享数据库连接（如果 store 支持 DatabaseStore）
+	if err := a.syncSharedDatabases(ctx, rt, owner, passphrase); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -472,7 +490,11 @@ func (a *App) GetSessionShareStatus() string {
 		})
 	}
 	rt.updateStatus(func(status *SessionShareStatus) {
-		status.PendingCount = len(rt.local.PendingEntries())
+		pending := len(rt.local.PendingEntries())
+		if rt.dbLocal != nil {
+			pending += len(rt.dbLocal.PendingEntries())
+		}
+		status.PendingCount = pending
 	})
 	return marshalJSON(rt.statusSnapshot())
 }

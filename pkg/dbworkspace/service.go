@@ -85,7 +85,7 @@ func (s *Service) ConnectRevision(ctx context.Context, id string, revision int) 
 	if err != nil {
 		return SessionInfo{}, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	db, release, err := s.open(ctx, adapter, p, password)
 	if err != nil {
@@ -159,7 +159,7 @@ func (s *Service) Test(ctx context.Context, in ProfileInput) (version string, er
 	if err != nil {
 		return "", err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	db, release, err := s.open(ctx, adapter, p, password)
 	if err != nil {

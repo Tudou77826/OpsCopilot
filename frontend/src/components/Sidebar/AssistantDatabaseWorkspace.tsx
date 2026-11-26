@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { AssistantDatabaseWorkspace } from "../../../../frontend-shell/src/workspace/database";
 import { wailsDatabaseRuntime } from "../../shell-adapter/wailsDatabaseRuntime";
+import { confirmDialog } from "../ConfirmDialog/ConfirmDialog";
 import * as api from "../../../wailsjs/go/main/App";
 import "../TerminalHandoff/terminalHandoff.css";
 import "./assistantDatabase.css";
@@ -41,12 +42,13 @@ export function AssistantDatabaseWorkspaceView({
       ...wailsDatabaseRuntime,
       disconnect: async (id: string) => {
         if (id === current.current.session.id) {
-          if (
-            !window.confirm(
-              "断开这个数据库会话？未提交事务可能回滚，SQL 和结果仍保留。",
-            )
-          )
-            throw Error("已取消断开");
+          const confirmed = await confirmDialog.show({
+            title: "断开数据库会话",
+            message: "断开这个数据库会话？未提交事务可能回滚，SQL 和结果仍保留。",
+            confirmText: "断开",
+            danger: true,
+          });
+          if (!confirmed) throw Error("已取消断开");
           await api.DatabaseWorkspaceClose(current.current.id);
         } else await wailsDatabaseRuntime.disconnect(id);
       },

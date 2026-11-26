@@ -581,11 +581,16 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
             onEdit={() => setEditing(profile)}
           />
         ) : !connection && !(managed && tab) ? (
-          <div className="oc-db-empty">
-            <TbDatabase size={40} />
+          <div className={`oc-db-empty${busyProfile ? ' is-connecting' : ''}`}>
+            <div className="oc-db-empty-icon">
+              <TbDatabase size={36} />
+              {busyProfile && (
+                <span className="oc-db-empty-ring" aria-hidden />
+              )}
+            </div>
             <h3>
               {busyProfile
-                ? '正在连接…'
+                ? `正在连接 ${profile?.name ?? ''}…`
                 : profile
                   ? profile.name
                   : '打开数据库连接'}
@@ -595,22 +600,23 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
                 ? `${profile.host}:${profile.port} · ${profile.user}${profile.gatewayId ? ' · 通过 SSH' : ''}`
                 : '从左侧选择连接，或添加数据库连接。'}
             </p>
-            {profile ? (
-              <button
-                className="oc-db-primary"
-                disabled={!!busyProfile || profileRunning || !!metadataBusy}
-                onClick={() => void connect(profile)}
-              >
-                {busyProfile ? '正在连接…' : '连接数据库'}
-              </button>
-            ) : (
-              <button
-                className="oc-db-primary"
-                onClick={() => setEditing(emptyProfile())}
-              >
-                添加连接
-              </button>
-            )}
+            {!busyProfile &&
+              (profile ? (
+                <button
+                  className="oc-db-primary"
+                  disabled={profileRunning || !!metadataBusy}
+                  onClick={() => void connect(profile)}
+                >
+                  连接数据库
+                </button>
+              ) : (
+                <button
+                  className="oc-db-primary"
+                  onClick={() => setEditing(emptyProfile())}
+                >
+                  添加连接
+                </button>
+              ))}
           </div>
         ) : (
           <>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ManagedDatabase } from '../../workspace/database';
+import { confirmDialog } from '../feedback/ConfirmDialog';
 import type {
   DatabaseProfile,
   DatabaseRuntime,
@@ -534,12 +535,13 @@ export function useDatabaseWorkspace(runtime: DatabaseRuntime,managed?: ManagedD
     await refreshCatalog();
   }
   async function removeProfile(p: DatabaseProfile) {
-    if (
-      !window.confirm(
-        `删除连接「${p.name}」？保存的凭据也会移除，数据库内容不受影响。`,
-      )
-    )
-      return;
+    const confirmed = await confirmDialog.show({
+      title: '删除数据库连接',
+      message: `删除连接「${p.name}」？保存的凭据也会移除，数据库内容不受影响。`,
+      confirmText: '删除',
+      danger: true,
+    });
+    if (!confirmed) return;
     try {
       await runtime.remove(p.id, p.revision);
       await disconnect(p.id);

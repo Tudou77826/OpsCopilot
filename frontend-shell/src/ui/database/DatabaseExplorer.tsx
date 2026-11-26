@@ -30,11 +30,14 @@ import {
   type FolderAction,
 } from './DatabaseFolderDialog';
 import { DatabaseMenu, type DatabaseMenuItem } from './DatabaseMenu';
+import { SharedDatabasePanel } from './SharedDatabasePanel';
+import { confirmDialog } from '../feedback/ConfirmDialog';
 import type {
   DatabaseProfile,
   DatabaseProfileInput,
   DatabaseRuntime,
   DatabaseSQLTemplate,
+  SharedDatabaseImportResult,
 } from './types';
 import {
   errorText,
@@ -637,6 +640,35 @@ export function DatabaseExplorer({
           <p className="oc-db-filter-note">没有匹配的连接或已加载对象</p>
         )}
       </div>
+      <SharedDatabasePanel
+        runtime={runtime.shared}
+        searchTerm={filter}
+        onError={(msg) => m.setError(msg)}
+        onImported={async (profile, connect) => {
+          await m.loadProfiles();
+          if (profile.group) {
+            setCollapsedGroups((all) => ({ ...all, [profile.group!]: false }));
+          }
+          if (connect) {
+            await expandConnection(profile, true);
+          } else {
+            select({ kind: 'connection', profileId: profile.id });
+          }
+        }}
+        onMissingDriver={(result: SharedDatabaseImportResult) => {
+          const driverLabel =
+            result.driverName || result.driverClassName || '对应 JDBC 驱动';
+          void confirmDialog
+            .show({
+              title: '缺少 JDBC 驱动',
+              message: `${result.message || `本机未导入「${driverLabel}」`}\n\n是否现在打开驱动管理进行导入？`,
+              confirmText: '打开驱动管理',
+            })
+            .then((ok) => {
+              if (ok) setManagingDrivers(true);
+            });
+        }}
+      />
       <footer>
         <span>
           {m.profiles.length} 个连接 · {Object.keys(m.connections).length}{' '}

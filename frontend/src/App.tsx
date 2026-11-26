@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { TbClock, TbScreenShare, TbStethoscope, TbMessageChatbot, TbCode, TbBolt, TbBook } from 'react-icons/tb';
 import { useToast } from './components/Toast/Toast';
+import { confirmDialog } from './components/ConfirmDialog/ConfirmDialog';
 import './App.css';
 import { ProductFrame, ProductToolbar, ProductNavigation } from '../../frontend-shell/src/ui/product/ProductChrome';
 import { TerminalRef } from './components/Terminal/Terminal';
@@ -101,8 +102,8 @@ function App() {
         },render:()=> <AssistantFileWorkspaceView workspace={w} ready={assistantFiles.ready}/>})),
         {id:'database',title:'数据库',request:databaseRequest,render:()=> <Suspense fallback={<div style={{padding:20,color:'var(--text-muted)'}}>正在打开数据库…</div>}><DatabaseWorkspace runtime={wailsDatabaseRuntime}/></Suspense>},
         ...assistantDatabase.items.map(w=>({id:w.id,restore:true,title:`${w.profile.name} · AI`,request:w.pending?w.revision:0,onClose:()=>{
-            if(w.ownerTurn){if(window.confirm('AI 正在使用此页签，先停止并接回？'))void DatabaseWorkspaceTakeover(w.id);return;}
-            if(window.confirm('关闭数据库页签？未提交事务可能回滚，保存的连接配置不会删除。'))void DatabaseWorkspaceDismiss(w.id).catch(error=>setStatus(String(error)));
+            if(w.ownerTurn){void confirmDialog.show({title:'接回数据库页签',message:'AI 正在使用此页签，先停止并接回？',confirmText:'停止并接回'}).then(ok=>{if(ok)void DatabaseWorkspaceTakeover(w.id);});return;}
+            void confirmDialog.show({title:'关闭数据库页签',message:'关闭数据库页签？未提交事务可能回滚，保存的连接配置不会删除。',confirmText:'关闭',danger:true}).then(ok=>{if(ok)void DatabaseWorkspaceDismiss(w.id).catch(error=>setStatus(String(error)));});
         },render:()=> <AssistantDatabaseWorkspaceView workspace={w} ready={assistantDatabase.ready}/>})),
     ],[databaseRequest,assistantDatabase.items,assistantDatabase.ready,assistantFiles.items,assistantFiles.ready]);
     const [knowledgeTarget, setKnowledgeTarget] = useState<KnowledgeTarget | null>(null);

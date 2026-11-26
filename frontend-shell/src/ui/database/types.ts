@@ -84,6 +84,46 @@ export interface DatabaseGateway {
   name: string;
   host: string;
 }
+export interface SharedDatabaseEntry {
+  entryKey: string;
+  owner: string;
+  name: string;
+  engine: string;
+  driverName?: string;
+  driverClassName?: string;
+  driverDialect?: string;
+  host: string;
+  port: number;
+  user: string;
+  database?: string;
+  environment?: string;
+  tls?: string;
+  readOnly?: boolean;
+  hasGateway?: boolean;
+  gatewayHost?: string;
+  gatewayMode?: string;
+  lastLoginAt: string;
+  own: boolean;
+  hasSecrets: boolean;
+  decryptable: boolean;
+}
+
+export interface SharedDatabaseImportResult {
+  success: boolean;
+  message?: string;
+  profile?: DatabaseProfile;
+  reused?: boolean;
+  missingDriver?: boolean;
+  driverName?: string;
+  driverClassName?: string;
+}
+
+export interface SharedDatabaseRuntime {
+  list(): Promise<{ enabled: boolean; databases: SharedDatabaseEntry[] }>;
+  importToLocal(entryKey: string): Promise<SharedDatabaseImportResult>;
+  remove(entryKey: string): Promise<void>;
+}
+
 export interface DatabaseRuntime {
   jdbcStatus(): Promise<DatabaseJDBCStatus>;
   importJDBC(input: DatabaseJDBCImport): Promise<DatabaseJDBCDriver>;
@@ -108,6 +148,7 @@ export interface DatabaseRuntime {
   browse(request: DatabaseTableRequest): Promise<DatabaseQueryResult>;
   query(request: DatabaseQuery): Promise<DatabaseQueryResult>;
   cancel(id: string): Promise<boolean>;
+  shared?: SharedDatabaseRuntime;
 }
 
 export interface DatabaseJDBCDriver {

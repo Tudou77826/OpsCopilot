@@ -181,6 +181,165 @@ func (s *GitSessionStore) DownloadAll(ctx context.Context) ([]SharedSession, err
 	return all, nil
 }
 
+// UploadDatabase 将一条数据库连接记录 upsert 到本人文件（databases/<owner>.json）。
+func (s *GitSessionStore) UploadDatabase(ctx context.Context, db SharedDatabase) error {
+	s.opsMu.Lock()
+	defer s.opsMu.Unlock()
+
+	if err := s.ensureRepo(ctx); err != nil {
+		return fmt.Errorf("ensure repo: %w", err)
+	}
+	s.resolveIdentity(ctx)
+	if db.Owner == "" {
+		db.Owner = s.Owner(ctx)
+	}
+	if err := s.pull(ctx); err != nil {
+		return fmt.Errorf("pull before upload database: %w", err)
+	}
+
+	changed, err := s.upsertDatabaseInOwnerFile(db)
+	if err != nil {
+		return err
+	}
+	if !changed {
+		slog.Debug("session share: remote database record is newer or equal, skip upload",
+			"host", db.Host, "owner", db.Owner)
+		return nil
+	}
+
+	return s.commitAndPush(ctx, s.ownerDatabaseFilePath(db.Owner), "databases: %s -> %s:%d",
+		db.Owner, db.Host, db.Port)
+}
+
+// DeleteDatabase 从本人数据库文件中移除指定端点条目。
+func (s *GitSessionStore) DeleteDatabase(ctx context.Context, endpoint SharedDatabase) error {
+	s.opsMu.Lock()
+	defer s.opsMu.Unlock()
+
+	if err := s.ensureRepo(ctx); err != nil {
+		return fmt.Errorf("ensure repo: %w", err)
+	}
+	s.resolveIdentity(ctx)
+	if endpoint.Owner == "" {
+		endpoint.Owner = s.Owner(ctx)
+	}
+	if err := s.pull(ctx); err != nil {
+		return fmt.Errorf("pull before delete database: %w", err)
+	}
+
+	filePath := s.ownerDatabaseFilePath(endpoint.Owner)
+	dbs := s.readDatabaseOwnerFile(filePath)
+	kept := make([]SharedDatabase, 0, len(dbs))
+	for _, existing := range dbs {
+		if !SameDatabaseEndpoint(existing, endpoint) {
+			kept = append(kept, existing)
+		}
+	}
+	if len(kept) == len(dbs) {
+		return nil
+	}
+
+	if err := s.writeDatabaseOwnerFile(filePath, kept); err != nil {
+		return err
+	}
+	return s.commitAndPush(ctx, filePath, "databases: remove %s:%d by %s",
+		endpoint.Host, endpoint.Port, endpoint.Owner)
+}
+
+// DownloadAllDatabases 拉取并返回仓库中全部用户的数据库连接条目。
+func (s *GitSessionStore) DownloadAllDatabases(ctx context.Context) ([]SharedDatabase, error) {
+	s.opsMu.Lock()
+	defer s.opsMu.Unlock()
+
+	if err := s.ensureRepo(ctx); err != nil {
+		return nil, fmt.Errorf("ensure repo: %w", err)
+	}
+	s.resolveIdentity(ctx)
+	if err := s.pull(ctx); err != nil {
+		return nil, fmt.Errorf("pull databases: %w", err)
+	}
+
+	dbDir := filepath.Join(s.localDir, "databases")
+	entries, err := os.ReadDir(dbDir)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read databases dir: %w", err)
+	}
+
+	var all []SharedDatabase
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(strings.ToLower(entry.Name()), ".json") {
+			continue
+		}
+		all = append(all, s.readDatabaseOwnerFile(filepath.Join(dbDir, entry.Name()))...)
+	}
+	return all, nil
+}
+
+func (s *GitSessionStore) upsertDatabaseInOwnerFile(db SharedDatabase) (bool, error) {
+	filePath := s.ownerDatabaseFilePath(db.Owner)
+	dbs := s.readDatabaseOwnerFile(filePath)
+
+	replaced := false
+	for i, existing := range dbs {
+		if SameDatabaseEndpoint(existing, db) {
+			if db.LastLoginAt.Before(existing.LastLoginAt) {
+				return false, nil
+			}
+			dbs[i] = db
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		dbs = append(dbs, db)
+	}
+
+	if err := s.writeDatabaseOwnerFile(filePath, dbs); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *GitSessionStore) ownerDatabaseFilePath(owner string) string {
+	return filepath.Join(s.localDir, "databases", sanitizeFileName(owner)+".json")
+}
+
+func (s *GitSessionStore) readDatabaseOwnerFile(path string) []SharedDatabase {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			slog.Warn("session share: failed to read database owner file", "path", path, "error", err)
+		}
+		return nil
+	}
+	var dbs []SharedDatabase
+	if err := json.Unmarshal(data, &dbs); err != nil {
+		slog.Warn("session share: failed to parse database owner file", "path", path, "error", err)
+		return nil
+	}
+	return dbs
+}
+
+func (s *GitSessionStore) writeDatabaseOwnerFile(path string, dbs []SharedDatabase) error {
+	if len(dbs) == 0 {
+		dbs = []SharedDatabase{}
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("create databases dir: %w", err)
+	}
+	data, err := json.MarshalIndent(dbs, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal databases: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("write database owner file: %w", err)
+	}
+	return nil
+}
+
 // --- 内部方法 ---
 
 // upsertInOwnerFile 读取本人文件并按端点合并写入。

@@ -149,28 +149,62 @@
   display: flex;
   width: 100%;
   justify-content: flex-start;
+  align-items: center;
   text-align: left;
-  gap: 8px;
-  padding: 9px 7px;
-  margin: 2px 0;
+  gap: 5px;
+  padding: 2px 5px;
+  margin: 0;
+  min-height: 23px;
+  font-size: 12px;
 }
-.oc-db-connection > span {
+.oc-db-connection > span,
+.oc-db-connection-label {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 .oc-db-connection strong {
   font-weight: 500;
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.oc-db-env-tag {
+  font-size: 10px;
+  line-height: 1.35;
+  padding: 0 4px;
+  border-radius: 3px;
+  color: var(--text-muted);
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
 }
 .oc-db-connection small {
   display: block;
   font-size: 10px;
   color: var(--text-muted);
-  margin-top: 3px;
+  margin-top: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.oc-db-connecting-spinner {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+@keyframes oc-db-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.oc-db-spin {
+  animation: oc-db-spin 0.9s linear infinite;
 }
 .oc-db-connection i {
   width: 6px;
@@ -299,13 +333,33 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
   color: var(--text-muted);
   padding: 20px;
 }
+.oc-db-empty-icon {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+.oc-db-empty.is-connecting .oc-db-empty-icon {
+  color: var(--accent);
+}
+.oc-db-empty-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  border-top-color: var(--accent);
+  animation: oc-db-spin 1s linear infinite;
+}
 .oc-db-empty h3 {
   color: var(--text-primary);
-  font-size: 16px;
+  font-size: 15px;
   margin: 0;
   font-weight: 500;
 }
