@@ -134,6 +134,8 @@ export function DatabaseImportJDBC(arg1:dbworkspace.JDBCImport):Promise<dbworksp
 
 export function DatabaseJDBCStatus():Promise<dbworkspace.JDBCStatus>;
 
+export function DatabasePassword(arg1:string):Promise<string>;
+
 export function DatabaseProfiles():Promise<Array<dbworkspace.Profile>>;
 
 export function DatabaseQuery(arg1:dbworkspace.QueryRequest):Promise<dbworkspace.QueryResult>;

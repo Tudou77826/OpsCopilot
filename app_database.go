@@ -38,6 +38,7 @@ func (a *App) databaseService() *dbworkspace.Service {
 }
 
 func (a *App) DatabaseProfiles() ([]dbworkspace.Profile, error) { return a.databaseService().List() }
+func (a *App) DatabasePassword(id string) (string, error)       { return a.databaseService().Password(id) }
 func (a *App) DatabaseGroups() ([]string, error)                { return a.databaseService().Groups() }
 func (a *App) DatabaseCreateGroup(name string) error            { return a.databaseService().CreateGroup(name) }
 func (a *App) DatabaseRenameGroup(oldName, newName string) error {

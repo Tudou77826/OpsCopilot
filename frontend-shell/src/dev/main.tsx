@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App, SidecarEndpoint } from './App';
+import { DatabasePreview } from './DatabasePreview';
 import type { HostCapabilities } from '../ui';
 import { ToastProvider, ConfirmDialogInternal, readPersistedTheme } from '../ui';
 import '../styles.css';
@@ -16,12 +17,14 @@ interface BootstrapResponse extends SidecarEndpoint {
 }
 
 const BootstrapApp: React.FC = () => {
-  const bootstrapPath = new URLSearchParams(window.location.search).get('bootstrap');
+  const params = new URLSearchParams(window.location.search);
+  const preview = params.get('preview');
+  const bootstrapPath = params.get('bootstrap');
   const [bootstrap, setBootstrap] = useState<BootstrapResponse | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!bootstrapPath) return;
+    if (preview === 'database' || !bootstrapPath) return;
     let disposed = false;
     void fetch(bootstrapPath, { cache: 'no-store' })
       .then(async (response) => {
@@ -39,6 +42,7 @@ const BootstrapApp: React.FC = () => {
     return () => { disposed = true; };
   }, [bootstrapPath]);
 
+  if (preview === 'database') return <DatabasePreview />;
   if (!bootstrapPath) return <App />;
   if (error) return <div className="shell-root"><div className="sidecar-gate"><div className="error-banner">OpsCopilot Shell 启动失败：{error}</div></div></div>;
   if (!bootstrap) return <div className="shell-root"><div className="sidecar-gate"><div className="muted">正在启动 OpsCopilot Shell…</div></div></div>;

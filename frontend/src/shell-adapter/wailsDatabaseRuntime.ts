@@ -7,6 +7,7 @@ export const wailsDatabaseRuntime: DatabaseRuntime = {
   deleteJDBC: api.DatabaseDeleteJDBC,
   chooseJDBCJars: api.DatabaseChooseJDBCJars,
   profiles: api.DatabaseProfiles,
+  password: api.DatabasePassword,
   groups: api.DatabaseGroups,
   createGroup: api.DatabaseCreateGroup,
   renameGroup: api.DatabaseRenameGroup,

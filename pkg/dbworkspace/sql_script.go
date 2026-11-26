@@ -27,6 +27,11 @@ func executionSQL(req QueryRequest, dialect string) ([]string, error) {
 			if position >= stmt.from && position <= stmt.to {
 				return []string{stmt.text}, nil
 			}
+			// Keep cursor on the same physical line's trailing spaces after `;`
+			// bound to the statement that just ended on that line.
+			if position > stmt.to && isSameLineTrailingSpace(req.SQL, stmt.to, position) {
+				return []string{stmt.text}, nil
+			}
 		}
 		if err == nil && len(statements) > 0 && position >= statements[len(statements)-1].to {
 			return []string{statements[len(statements)-1].text}, nil
@@ -98,7 +103,7 @@ func scanSQL(text, dialect string) ([]sqlStatement, error) {
 			if keepSemicolon {
 				body += ";"
 			}
-			out = append(out, sqlStatement{body, start, end})
+			out = append(out, sqlStatement{body, start, next})
 		}
 		reset(next)
 	}
@@ -312,4 +317,24 @@ func sqlWord(c byte) bool {
 func transactionBegin(rest string) bool {
 	rest = strings.TrimSpace(rest)
 	return strings.HasPrefix(rest, ";") || firstKeyword(rest) == "WORK" || firstKeyword(rest) == "TRANSACTION"
+}
+
+func isSameLineTrailingSpace(text string, from, pos int) bool {
+	if from < 0 || pos > len(text) || pos <= from {
+		return false
+	}
+	for i := from; i < pos; i++ {
+		if text[i] != ' ' && text[i] != '\t' && text[i] != '\r' {
+			return false
+		}
+	}
+	for i := pos; i < len(text); i++ {
+		if text[i] == '\n' {
+			return true
+		}
+		if text[i] != ' ' && text[i] != '\t' && text[i] != '\r' {
+			return false
+		}
+	}
+	return true
 }

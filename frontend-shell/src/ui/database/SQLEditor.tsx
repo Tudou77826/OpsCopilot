@@ -1,4 +1,5 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { TbX } from 'react-icons/tb';
 import { EditorState, Compartment } from '@codemirror/state';
 import {
   EditorView,
@@ -9,10 +10,12 @@ import {
 } from '@codemirror/view';
 import {
   defaultKeymap,
+  deleteLine,
   history,
   historyKeymap,
   indentWithTab,
 } from '@codemirror/commands';
+import { formatSQL } from './sqlFormat';
 import { sql, MySQL } from '@codemirror/lang-sql';
 import {
   bracketMatching,
@@ -21,6 +24,24 @@ import {
 } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
+
+const CTRL_Y_HINT_KEY = 'opscopilot.db.hideCtrlYHint';
+
+function isCtrlYHintHidden(): boolean {
+  try {
+    return window.localStorage.getItem(CTRL_Y_HINT_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function persistHideCtrlYHint(): void {
+  try {
+    window.localStorage.setItem(CTRL_Y_HINT_KEY, '1');
+  } catch {
+    // ignore storage errors
+  }
+}
 
 export interface SQLEditorRef {
   value(): string;
@@ -41,8 +62,22 @@ export const SQLEditor = forwardRef<
 >(function SQLEditor({ value, onChange, onRun, onRunScript, schema }, ref) {
   const parent = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView>();
-  const latest = useRef({ onChange, onRun, onRunScript });
-  latest.current = { onChange, onRun, onRunScript };
+  const hintTimer = useRef<number | null>(null);
+  const [showDeleteHint, setShowDeleteHint] = useState(false);
+  const isMac =
+    typeof navigator !== 'undefined' &&
+    /mac/i.test(navigator.platform || navigator.userAgent);
+  const triggerDeleteHint = () => {
+    if (isCtrlYHintHidden()) return;
+    setShowDeleteHint(true);
+    if (hintTimer.current !== null) window.clearTimeout(hintTimer.current);
+    hintTimer.current = window.setTimeout(() => {
+      setShowDeleteHint(false);
+      hintTimer.current = null;
+    }, 5000);
+  };
+  const latest = useRef({ onChange, onRun, onRunScript, triggerDeleteHint });
+  latest.current = { onChange, onRun, onRunScript, triggerDeleteHint };
   const dialect = useRef(new Compartment());
   useImperativeHandle(
     ref,
@@ -117,6 +152,47 @@ export const SQLEditor = forwardRef<
                 return true;
               },
             },
+            {
+              key: 'Mod-y',
+              run: (editorView) => {
+                const deleted = deleteLine(editorView);
+                if (deleted) latest.current.triggerDeleteHint();
+                return deleted;
+              },
+            },
+            {
+              key: 'Ctrl-Alt-l',
+              mac: 'Cmd-Alt-l',
+              run: (editorView) => {
+                const { from, to, empty } = editorView.state.selection.main;
+                const rangeFrom = empty ? 0 : from;
+                const rangeTo = empty ? editorView.state.doc.length : to;
+                const source = editorView.state.sliceDoc(rangeFrom, rangeTo);
+                const formatted = formatSQL(source);
+                if (formatted !== source) {
+                  editorView.dispatch({
+                    changes: { from: rangeFrom, to: rangeTo, insert: formatted },
+                  });
+                }
+                return true;
+              },
+            },
+            {
+              key: 'Shift-Alt-f',
+              run: (editorView) => {
+                const { from, to, empty } = editorView.state.selection.main;
+                const rangeFrom = empty ? 0 : from;
+                const rangeTo = empty ? editorView.state.doc.length : to;
+                const source = editorView.state.sliceDoc(rangeFrom, rangeTo);
+                const formatted = formatSQL(source);
+                if (formatted !== source) {
+                  editorView.dispatch({
+                    changes: { from: rangeFrom, to: rangeTo, insert: formatted },
+                  });
+                }
+                return true;
+              },
+            },
             ...defaultKeymap,
             ...historyKeymap,
             ...completionKeymap,
@@ -170,7 +246,108 @@ export const SQLEditor = forwardRef<
             '.cm-tooltip': {
               backgroundColor: 'var(--bg-elevated)',
               color: 'var(--text-primary)',
-              borderColor: 'var(--border)',
+              border: '1px solid var(--border)',
+              borderRadius: '7px',
+              boxShadow:
+                '0 8px 24px color-mix(in srgb, var(--bg-primary) 55%, transparent)',
+              overflow: 'hidden',
+            },
+            '.cm-tooltip.cm-tooltip-autocomplete': {
+              minWidth: '210px',
+              marginTop: '4px',
+            },
+            '.cm-tooltip.cm-tooltip-autocomplete > ul': {
+              padding: '4px',
+              maxHeight: '220px',
+              fontFamily: 'var(--font-mono, Consolas, monospace)',
+              fontSize: '12px',
+              scrollbarWidth: 'thin',
+            },
+            '.cm-tooltip.cm-tooltip-autocomplete > ul > li': {
+              display: 'flex',
+              alignItems: 'center',
+              gap: '7px',
+              height: '25px',
+              lineHeight: '25px',
+              padding: '0 8px',
+              borderRadius: '4px',
+              color: 'color-mix(in srgb, var(--text-primary) 82%, transparent)',
+            },
+            '.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]': {
+              backgroundColor:
+                'color-mix(in srgb, var(--text-primary) 12%, var(--bg-elevated))',
+              color: 'var(--text-primary)',
+            },
+            '.cm-completionLabel': {
+              flex: '1',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            },
+            '.cm-completionDetail': {
+              marginLeft: '8px',
+              fontSize: '10px',
+              fontStyle: 'normal',
+              color: 'var(--text-muted)',
+              opacity: '0.85',
+            },
+            '.cm-completionMatchedText': {
+              textDecoration: 'none',
+              color: 'color-mix(in srgb, var(--accent) 68%, var(--text-primary))',
+              fontWeight: '700',
+            },
+            '.cm-completionIcon': {
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '16px',
+              height: '16px',
+              padding: '0',
+              marginRight: '0',
+              borderRadius: '3px',
+              fontSize: '10px',
+              fontWeight: '600',
+              fontStyle: 'normal',
+              opacity: '1',
+              flexShrink: '0',
+              backgroundColor:
+                'color-mix(in srgb, var(--text-muted) 16%, transparent)',
+              color: 'var(--text-secondary)',
+            },
+            '.cm-completionIcon::after': {
+              content: '"·"',
+            },
+            '.cm-completionIcon-keyword': {
+              backgroundColor:
+                'color-mix(in srgb, var(--oc-db-sql-keyword) 20%, transparent)',
+              color:
+                'color-mix(in srgb, var(--oc-db-sql-keyword) 75%, var(--text-primary))',
+            },
+            '.cm-completionIcon-keyword::after': {
+              content: '"K"',
+            },
+            '.cm-completionIcon-type, .cm-completionIcon-class': {
+              backgroundColor:
+                'color-mix(in srgb, var(--accent) 22%, transparent)',
+              color: 'color-mix(in srgb, var(--accent) 72%, var(--text-primary))',
+            },
+            '.cm-completionIcon-type::after, .cm-completionIcon-class::after': {
+              content: '"T"',
+            },
+            '.cm-completionIcon-property': {
+              backgroundColor:
+                'color-mix(in srgb, var(--oc-db-sql-string) 16%, transparent)',
+              color: 'var(--oc-db-sql-string)',
+            },
+            '.cm-completionIcon-property::after': {
+              content: '"C"',
+            },
+            '.cm-completionIcon-function': {
+              backgroundColor:
+                'color-mix(in srgb, var(--oc-db-sql-number) 16%, transparent)',
+              color: 'var(--oc-db-sql-number)',
+            },
+            '.cm-completionIcon-function::after': {
+              content: '"f"',
             },
           }),
         ],
@@ -178,6 +355,7 @@ export const SQLEditor = forwardRef<
     });
     view.current = editor;
     return () => {
+      if (hintTimer.current !== null) window.clearTimeout(hintTimer.current);
       editor.destroy();
       view.current = undefined;
     };
@@ -197,8 +375,36 @@ export const SQLEditor = forwardRef<
   return (
     <div
       className="oc-db-editor"
-      ref={parent}
       onKeyDown={(e) => e.stopPropagation()}
-    />
+    >
+      <div className="oc-db-editor-host" ref={parent} />
+      {showDeleteHint && (
+        <div className="oc-db-editor-hint" role="status">
+          <span>
+            {isMac ? 'Cmd+Y' : 'Ctrl+Y'} 已删除当前行 · 重做可用{' '}
+            {isMac ? 'Cmd+Shift+Z' : 'Ctrl+Shift+Z'}
+          </span>
+          <button
+            type="button"
+            className="oc-db-editor-hint-mute"
+            onClick={() => {
+              persistHideCtrlYHint();
+              setShowDeleteHint(false);
+            }}
+          >
+            不再提示
+          </button>
+          <button
+            type="button"
+            className="oc-db-editor-hint-close"
+            aria-label="关闭提示"
+            title="关闭"
+            onClick={() => setShowDeleteHint(false)}
+          >
+            <TbX size={13} />
+          </button>
+        </div>
+      )}
+    </div>
   );
 });

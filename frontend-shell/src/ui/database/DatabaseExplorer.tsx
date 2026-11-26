@@ -9,6 +9,7 @@ import {
   TbChevronDown,
   TbChevronRight,
   TbCode,
+  TbCurrentLocation,
   TbDatabase,
   TbDots,
   TbFolder,
@@ -33,6 +34,7 @@ import {
 import { DatabaseMenu, type DatabaseMenuItem } from './DatabaseMenu';
 import type {
   DatabaseProfile,
+  DatabaseProfileInput,
   DatabaseRuntime,
   DatabaseSQLTemplate,
 } from './types';
@@ -56,8 +58,8 @@ export function DatabaseExplorer({
   model: DatabaseWorkspaceModel;
   runtime: DatabaseRuntime;
   onInsert(text: string, profileId: string, database: string): void;
-  editing: DatabaseProfile | null;
-  setEditing(p: DatabaseProfile | null): void;
+  editing: DatabaseProfileInput | null;
+  setEditing(p: DatabaseProfileInput | null): void;
 }) {
   const [managingDrivers, setManagingDrivers] = useState(false);
   const [selected, setSelected] = useState('');
@@ -173,6 +175,46 @@ export function DatabaseExplorer({
     m.newQuery(pid, database);
   }
   const active = m.tabs.find((t) => t.id === m.activeTab);
+  const locateProfileId = active?.profileId ?? m.selectedProfile;
+  function locateCurrent() {
+    const p = m.profiles.find((item) => item.id === locateProfileId);
+    if (!p) return;
+    setCollapsedGroups((all) => ({ ...all, [p.group ?? '']: false }));
+    const hasConn = !!m.connections[p.id];
+    const node: DatabaseNode =
+      active && active.profileId === p.id && active.table && hasConn
+        ? {
+            kind: 'table',
+            profileId: p.id,
+            database: active.schema,
+            table: active.table,
+            tableType:
+              m.connections[p.id]?.tables[active.schema]?.find(
+                (t) => t.name === active.table,
+              )?.type ?? 'BASE TABLE',
+          }
+        : active && active.profileId === p.id && active.schema && hasConn
+          ? { kind: 'database', profileId: p.id, database: active.schema }
+          : { kind: 'connection', profileId: p.id };
+    setExpanded((all) => ({
+      ...all,
+      [nodeKey({ kind: 'connection', profileId: p.id })]: true,
+      ...(active?.schema
+        ? {
+            [nodeKey({
+              kind: 'database',
+              profileId: p.id,
+              database: active.schema,
+            })]: true,
+          }
+        : {}),
+    }));
+    setFilter('');
+    setScope(null);
+    select(node);
+    locateTarget.current = nodeKey(node);
+    setLocate((v) => v + 1);
+  }
   async function textAction(
     node: Extract<DatabaseNode, { kind: 'table' | 'column' }>,
     kind: DatabaseSQLTemplate['kind'],
@@ -287,14 +329,26 @@ export function DatabaseExplorer({
         },
         {
           label: '复制连接配置',
-          action: () =>
-            setEditing({
-              ...p,
-              id: '',
-              revision: 0,
-              name: `${p.name} · 副本`,
-              passwordSet: false,
-            }),
+          action: () => {
+            void (async () => {
+              let copiedPassword = '';
+              if (p.passwordSet && runtime.password) {
+                try {
+                  copiedPassword = await runtime.password(p.id);
+                } catch {
+                  // Fall back to empty password if keyring read fails.
+                }
+              }
+              setEditing({
+                ...p,
+                id: '',
+                revision: 0,
+                name: `${p.name} · 副本`,
+                passwordSet: false,
+                password: copiedPassword,
+              });
+            })();
+          },
         },
         { label: '移动到分组…', disabled: blocked, action: () => setMoving(p) },
         {
@@ -470,6 +524,15 @@ export function DatabaseExplorer({
             <TbRefresh size={15} />
           </button>
           <button
+            type="button"
+            aria-label="定位当前连接"
+            title="定位当前连接"
+            disabled={!locateProfileId}
+            onClick={locateCurrent}
+          >
+            <TbCurrentLocation size={15} />
+          </button>
+          <button
             title="对象树选项"
             aria-label="对象树选项"
             onClick={(e) => openMenu(e)}
@@ -588,44 +651,6 @@ export function DatabaseExplorer({
           {m.profiles.length} 个连接 · {Object.keys(m.connections).length}{' '}
           个已连接
         </span>
-        <button
-          title="定位当前编辑对象"
-          disabled={!active}
-          onClick={() => {
-            if (!active) return;
-            const p = m.profiles.find((p) => p.id === active.profileId);
-            if (!p) return;
-            setCollapsedGroups((all) => ({ ...all, [p.group ?? '']: false }));
-            const node: DatabaseNode = active.table
-              ? {
-                  kind: 'table',
-                  profileId: p.id,
-                  database: active.schema,
-                  table: active.table,
-                  tableType:
-                    m.connections[p.id]?.tables[active.schema]?.find(
-                      (t) => t.name === active.table,
-                    )?.type ?? 'BASE TABLE',
-                }
-              : { kind: 'database', profileId: p.id, database: active.schema };
-            setExpanded((all) => ({
-              ...all,
-              [nodeKey({ kind: 'connection', profileId: p.id })]: true,
-              [nodeKey({
-                kind: 'database',
-                profileId: p.id,
-                database: active.schema,
-              })]: true,
-            }));
-            setFilter('');
-            setScope(null);
-            select(node);
-            locateTarget.current = nodeKey(node);
-            setLocate((v) => v + 1);
-          }}
-        >
-          定位
-        </button>
       </footer>
       {menu && (
         <DatabaseMenu

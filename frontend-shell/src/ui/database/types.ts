@@ -90,6 +90,7 @@ export interface DatabaseRuntime {
   deleteJDBC(id: string): Promise<void>;
   chooseJDBCJars(): Promise<string[]>;
   profiles(): Promise<DatabaseProfile[]>;
+  password?(id: string): Promise<string>;
   groups(): Promise<string[]>;
   createGroup(name: string): Promise<void>;
   renameGroup(oldName: string, newName: string): Promise<void>;

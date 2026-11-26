@@ -234,6 +234,10 @@ export function DatabaseJDBCStatus() {
   return window['go']['main']['App']['DatabaseJDBCStatus']();
 }
 
+export function DatabasePassword(arg1) {
+  return window['go']['main']['App']['DatabasePassword'](arg1);
+}
+
 export function DatabaseProfiles() {
   return window['go']['main']['App']['DatabaseProfiles']();
 }

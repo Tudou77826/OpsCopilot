@@ -60,7 +60,8 @@ describe('connection dialog', () => {
     expect(
       screen.getByRole('tab', { name: '数据库', selected: true }),
     ).toBeVisible();
-    expect(screen.getByLabelText('连接名称（可选）')).not.toBeVisible();
+    expect(screen.getByLabelText('连接名称（可选）')).toBeVisible();
+    expect(screen.getByLabelText('连接标记（可选）')).toBeVisible();
     fireEvent.change(screen.getByLabelText('密码'), {
       target: { value: 'draft-secret' },
     });

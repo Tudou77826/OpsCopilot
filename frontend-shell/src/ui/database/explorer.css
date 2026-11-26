@@ -151,9 +151,9 @@
   gap: 6px;
 }
 .oc-db-tabs > div > button > small {
-  font-size: 9px;
+  font-size: 11px;
   color: var(--text-muted);
-  max-width: 140px;
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
 }

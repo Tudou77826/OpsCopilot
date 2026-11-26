@@ -150,6 +150,22 @@ func TestCurrentStatementRange(t *testing.T) {
 	if err != nil || len(result) != 1 || result[0] != "SELECT 1" {
 		t.Fatalf("semicolon boundary: %#v %v", result, err)
 	}
+	result, err = executionSQL(QueryRequest{SQL: "SELECT 1;\nSELECT 2;", Mode: "statement", CursorOffset: 9}, "mysql")
+	if err != nil || len(result) != 1 || result[0] != "SELECT 1" {
+		t.Fatalf("line-end after semicolon should stay on first statement: %#v %v", result, err)
+	}
+	result, err = executionSQL(QueryRequest{SQL: "SELECT 1;   \nSELECT 2;", Mode: "statement", CursorOffset: 12}, "mysql")
+	if err != nil || len(result) != 1 || result[0] != "SELECT 1" {
+		t.Fatalf("line-end trailing spaces after semicolon should stay on first statement: %#v %v", result, err)
+	}
+	result, err = executionSQL(QueryRequest{SQL: "SELECT 1;\nSELECT 2;", Mode: "statement", CursorOffset: 10}, "mysql")
+	if err != nil || len(result) != 1 || result[0] != "SELECT 2" {
+		t.Fatalf("start of second line should run second statement: %#v %v", result, err)
+	}
+	result, err = executionSQL(QueryRequest{SQL: "SELECT 1; SELECT 2;", Mode: "statement", CursorOffset: 10}, "mysql")
+	if err != nil || len(result) != 1 || result[0] != "SELECT 2" {
+		t.Fatalf("same-line cursor before second statement should run second statement: %#v %v", result, err)
+	}
 	result, err = executionSQL(QueryRequest{SQL: "SELECT 1;  ", Mode: "statement", CursorOffset: 11}, "mysql")
 	if err != nil || result[0] != "SELECT 1" {
 		t.Fatalf("trailing space: %#v %v", result, err)

@@ -277,3 +277,9 @@ func (s *Service) profile(id string) (Profile, string, error) {
 	}
 	return Profile{}, "", fmt.Errorf("数据库连接不存在")
 }
+
+// Password returns the stored credential for editing or duplicating a profile.
+func (s *Service) Password(id string) (string, error) {
+	_, password, err := s.profile(id)
+	return password, err
+}

@@ -5,18 +5,19 @@ import {
   TbRefresh,
   TbPlayerPlay,
   TbPlayerStop,
-  TbPlugConnected,
-  TbPlugConnectedX,
   TbTable,
-  TbSettings,
-  TbTrash,
-  TbDownload,
   TbCode,
   TbX,
   TbAlertCircle,
   TbFileCode,
   TbChevronLeft,
   TbChevronRight,
+  TbChevronDown,
+  TbSearch,
+  TbUpload,
+  TbCopy,
+  TbCheck,
+  TbArrowBackUp,
 } from 'react-icons/tb';
 import { IconButton } from '../controls/IconButton';
 import { SQLEditor, type SQLEditorRef } from './SQLEditor';
@@ -26,12 +27,27 @@ import { DatabaseMenu } from './DatabaseMenu';
 import { RenameQueryDialog } from './RenameQueryDialog';
 import { ConnectionFailurePanel } from './ConnectionFailurePanel';
 import { ResultGrid, resultCSV } from './ResultGrid';
+import {
+  CellUpdateConfirmDialog,
+  type PendingBatchUpdate,
+} from './CellUpdateConfirmDialog';
+import {
+  applyPendingEditsToResult,
+  buildBatchUpdateSQL,
+  extractPrimaryKeys,
+  inferEditableTarget,
+  type SQLDialect,
+} from './resultGridUtils';
 import { emptyProfile } from './ConnectionDialog';
 import { DatabaseExplorer } from './DatabaseExplorer';
 import { ExplorerSplitter } from './ExplorerSplitter';
 import { useDatabaseWorkspace } from './useDatabaseWorkspace';
-import { objectKey, type QueryTab } from './workspaceModel';
-import type { DatabaseProfile, DatabaseRuntime } from './types';
+import { errorText, objectKey, type QueryTab } from './workspaceModel';
+import type {
+  DatabaseProfile,
+  DatabaseProfileInput,
+  DatabaseRuntime,
+} from './types';
 import './database.css';
 import './explorer.css';
 import type { ManagedDatabase } from '../../workspace/database';
@@ -50,7 +66,6 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
     error,
     setError,
     closeTab,
-    removeProfile,
   } = model;
   const tab = tabs.find((t) => t.id === activeTab);
   const profileId = tab?.profileId ?? model.selectedProfile;
@@ -60,7 +75,7 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
   const busyProfile = model.connecting[profileId];
   const metadataBusy = model.metadataBusy[profileId];
   const profileRunning = model.running(profileId);
-  const [editing, setEditing] = useState<DatabaseProfile | null>(null);
+  const [editing, setEditing] = useState<DatabaseProfileInput | null>(null);
   const [limit, setLimit] = useState(1000);
   const [timeout, setTimeoutValue] = useState(30);
   const [editorPercent, setEditorPercent] = useState(42);
@@ -71,6 +86,17 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
     trigger: HTMLElement;
   } | null>(null);
   const [renaming, setRenaming] = useState<QueryTab | null>(null);
+  const [resultFilter, setResultFilter] = useState('');
+  const [filteredCount, setFilteredCount] = useState<number | null>(null);
+  const [pendingEdits, setPendingEdits] = useState<
+    Record<number, Record<number, string | null>>
+  >({});
+  const [pendingBatch, setPendingBatch] = useState<PendingBatchUpdate | null>(
+    null,
+  );
+  const [sqlCopied, setSqlCopied] = useState(false);
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [updateError, setUpdateError] = useState('');
   const menuTab = tabs.find((t) => t.id === tabMenu?.id);
   const dismissTabMenu = () => {
     tabMenu?.trigger.focus();
@@ -116,7 +142,6 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
   }, [tab?.id]);
   model.options.current = { limit, timeout };
   const connect = model.openConnection;
-  const disconnect = model.disconnect;
   const newQuery = () => {
     if (profileId)
       model.newQuery(
@@ -168,6 +193,181 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
   let result = tab?.result?.sets[tab.resultIndex];
   if (tab?.view === 'columns') result = tab.structure?.columns;
   if (tab?.view === 'indexes') result = tab.structure?.indexes;
+  const resultViewKey = `${tab?.id ?? ''}:${tab?.view ?? ''}:${tab?.resultIndex ?? 0}`;
+  useEffect(() => {
+    setResultFilter('');
+    setFilteredCount(null);
+    setPendingEdits({});
+    setPendingBatch(null);
+  }, [resultViewKey, result]);
+
+  const dirtyCellCount = useMemo(
+    () =>
+      Object.values(pendingEdits).reduce(
+        (sum, rowMap) => sum + Object.keys(rowMap).length,
+        0,
+      ),
+    [pendingEdits],
+  );
+
+  const sqlDialect: SQLDialect =
+    profile?.engine === 'jdbc' &&
+    !(profile.driverId ?? '').toLowerCase().includes('mysql')
+      ? 'standard'
+      : 'mysql';
+  const editableTarget = useMemo(() => {
+    if (!tab) return null;
+    if (tab.table && tab.view === 'data') {
+      return { schema: tab.schema, table: tab.table };
+    }
+    if (tab.view === 'query' && result?.statement) {
+      return inferEditableTarget(result.statement, tab.schema);
+    }
+    return null;
+  }, [tab?.table, tab?.view, tab?.schema, result?.statement]);
+
+  const canEditTableData = Boolean(
+    editableTarget &&
+      connection &&
+      !connection.session.readOnly &&
+      !profileRunning &&
+      !metadataBusy,
+  );
+
+  function stageCellEdit(
+    origRowIndex: number,
+    colIndex: number,
+    newValue: string | null,
+  ) {
+    if (!result) return;
+    const origValue = result.rows[origRowIndex]?.[colIndex] ?? null;
+    setPendingEdits((prev) => {
+      const next = { ...prev };
+      const rowEdits = { ...(next[origRowIndex] ?? {}) };
+      if (newValue === origValue) {
+        delete rowEdits[colIndex];
+      } else {
+        rowEdits[colIndex] = newValue;
+      }
+      if (Object.keys(rowEdits).length === 0) {
+        delete next[origRowIndex];
+      } else {
+        next[origRowIndex] = rowEdits;
+      }
+      return next;
+    });
+  }
+
+  function revertCellEdit(origRowIndex: number, colIndex: number) {
+    setPendingEdits((prev) => {
+      if (!prev[origRowIndex]) return prev;
+      const next = { ...prev };
+      const rowEdits = { ...next[origRowIndex] };
+      delete rowEdits[colIndex];
+      if (Object.keys(rowEdits).length === 0) {
+        delete next[origRowIndex];
+      } else {
+        next[origRowIndex] = rowEdits;
+      }
+      return next;
+    });
+  }
+
+  async function buildCurrentBatchUpdate(): Promise<PendingBatchUpdate | null> {
+    if (!tab || !editableTarget || !connection || !result || dirtyCellCount === 0) {
+      return null;
+    }
+    const targetSchema = editableTarget.schema || tab.schema;
+    const targetTable = editableTarget.table;
+    let structure: typeof tab.structure =
+      (tab.table === targetTable ? tab.structure : undefined) ??
+      connection.structures[objectKey(targetSchema, targetTable)];
+    if (!structure && targetSchema) {
+      try {
+        structure = await model.loadStructure(
+          tab.profileId,
+          targetSchema,
+          targetTable,
+        );
+      } catch {
+        // Structure fetch failed; fall back to full-row WHERE with explicit warning.
+      }
+    }
+    const primaryKeys = extractPrimaryKeys(structure);
+    const built = buildBatchUpdateSQL({
+      schema: targetSchema,
+      table: targetTable,
+      dialect: sqlDialect,
+      pendingEdits,
+      columns: result.columns,
+      rows: result.rows,
+      primaryKeys,
+    });
+    if (built.rowCount === 0) return null;
+    return {
+      rowCount: built.rowCount,
+      cellCount: built.cellCount,
+      sql: built.sql,
+      usedPrimaryKey: built.usedPrimaryKey,
+      isProduction: Boolean(profile?.environment?.includes('生产')),
+    };
+  }
+
+  async function openSubmitDialog() {
+    const batch = await buildCurrentBatchUpdate();
+    if (!batch) return;
+    setUpdateError('');
+    setPendingBatch(batch);
+  }
+
+  async function copyPendingUpdateSQL() {
+    const batch = await buildCurrentBatchUpdate();
+    if (!batch) return;
+    try {
+      await navigator.clipboard.writeText(batch.sql);
+      setSqlCopied(true);
+      window.setTimeout(() => setSqlCopied(false), 1800);
+    } catch {
+      setUpdateError('');
+      setPendingBatch(batch);
+    }
+  }
+
+  async function confirmBatchUpdate(sql: string) {
+    if (!tab || !connection || !pendingBatch || !tab.result) return;
+    setUpdateBusy(true);
+    setUpdateError('');
+    try {
+      const res = await runtime.query({
+        sessionId: connection.session.id,
+        requestId: crypto.randomUUID(),
+        database: tab.schema,
+        sql,
+        mode: pendingBatch.rowCount > 1 ? 'script' : 'statement',
+        limit: 1,
+        timeoutSeconds: timeout,
+      });
+      if (res.error) {
+        setUpdateError(res.error);
+        return;
+      }
+      const nextSets = tab.result.sets.map((set, idx) =>
+        idx === tab.resultIndex
+          ? applyPendingEditsToResult(set, pendingEdits)
+          : set,
+      );
+      update(tab.id, {
+        result: { ...tab.result, sets: nextSets },
+      });
+      setPendingEdits({});
+      setPendingBatch(null);
+    } catch (e) {
+      setUpdateError(errorText(e));
+    } finally {
+      setUpdateBusy(false);
+    }
+  }
+
   function exportResult() {
     if (!result) return;
     const blob = new Blob([resultCSV(result)], {
@@ -224,64 +424,6 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
       />
       <ExplorerSplitter container={workspace} />
       <main className="oc-db-main">
-        <header className="oc-db-context">
-          <div>
-            <TbDatabase size={17} />
-            <strong>{profile?.name ?? '数据库'}</strong>
-            {profile?.environment && (
-              <span
-                className={`oc-db-env ${profile.environment.includes('生产') ? 'is-production' : ''}`}
-              >
-                {profile.environment}
-              </span>
-            )}
-            {connection && (
-              <small title={connection.session.version}>
-                {profile?.engine === 'jdbc' ? 'JDBC · ' : 'MySQL '}
-                {connection.session.version.split('-')[0]} ·{' '}
-                {connection.session.readOnly ? '只读' : '可写'}
-              </small>
-            )}
-          </div>
-          <div>
-            {profile && (
-              <>
-                <button
-                  aria-label={connection ? '断开数据库连接' : '连接数据库'}
-                  title={connection ? '断开连接' : '连接'}
-                  disabled={!!busyProfile || profileRunning || !!metadataBusy}
-                  onClick={() =>
-                    void (connection
-                      ? disconnect(profile.id)
-                      : connect(profile))
-                  }
-                >
-                  {connection ? (
-                    <TbPlugConnectedX size={16} />
-                  ) : (
-                    <TbPlugConnected size={16} />
-                  )}
-                </button>
-                <button
-                  aria-label="编辑数据库连接"
-                  title="编辑连接"
-                  disabled={profileRunning || !!metadataBusy || !!busyProfile}
-                  onClick={() => setEditing(profile)}
-                >
-                  <TbSettings size={16} />
-                </button>
-                <button
-                  aria-label="删除数据库连接"
-                  title="删除连接"
-                  disabled={profileRunning || !!metadataBusy || !!busyProfile}
-                  onClick={() => void removeProfile(profile)}
-                >
-                  <TbTrash size={15} />
-                </button>
-              </>
-            )}
-          </div>
-        </header>
         {error && (
           <div className="oc-db-banner">
             <DatabaseError message={error} />
@@ -397,19 +539,23 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
             ) : (
               <>
                 <div className="oc-db-query-toolbar">
-                  <select
-                    aria-label="当前数据库"
-                    value={tab.schema}
-                    disabled={profileRunning || !!metadataBusy || !!tab.table}
-                    onChange={(e) => update(tab.id, { schema: e.target.value })}
-                  >
-                    <option value="">选择数据库</option>
-                    {(connection?.schemas??managed?.workspace.schemas??[]).map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="oc-db-select-wrap oc-db-schema-select">
+                    <TbDatabase size={13} className="oc-db-select-lead" aria-hidden />
+                    <select
+                      aria-label="当前数据库"
+                      value={tab.schema}
+                      disabled={profileRunning || !!metadataBusy || !!tab.table}
+                      onChange={(e) => update(tab.id, { schema: e.target.value })}
+                    >
+                      <option value="">选择数据库</option>
+                      {(connection?.schemas??managed?.workspace.schemas??[]).map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                    <TbChevronDown size={13} className="oc-db-select-caret" aria-hidden />
+                  </div>
                   {tab.table ? (
                     <>
                       <div className="oc-db-view-tabs">
@@ -480,33 +626,39 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
                       <span className="oc-db-toolbar-spacer" />
                       <label>
                         上限
-                        <select
-                          aria-label="查询行数上限"
-                          value={limit}
-                          onChange={(e) => setLimit(Number(e.target.value))}
-                        >
-                          {[100, 1000, 5000].map((n) => (
-                            <option key={n} value={n}>
-                              {n} 行
-                            </option>
-                          ))}
-                        </select>
+                        <div className="oc-db-select-wrap">
+                          <select
+                            aria-label="查询行数上限"
+                            value={limit}
+                            onChange={(e) => setLimit(Number(e.target.value))}
+                          >
+                            {[100, 1000, 5000].map((n) => (
+                              <option key={n} value={n}>
+                                {n} 行
+                              </option>
+                            ))}
+                          </select>
+                          <TbChevronDown size={12} className="oc-db-select-caret" aria-hidden />
+                        </div>
                       </label>
                       <label>
                         超时
-                        <select
-                          aria-label="查询超时"
-                          value={timeout}
-                          onChange={(e) =>
-                            setTimeoutValue(Number(e.target.value))
-                          }
-                        >
-                          {[10, 30, 60, 120].map((n) => (
-                            <option key={n} value={n}>
-                              {n} 秒
-                            </option>
-                          ))}
-                        </select>
+                        <div className="oc-db-select-wrap">
+                          <select
+                            aria-label="查询超时"
+                            value={timeout}
+                            onChange={(e) =>
+                              setTimeoutValue(Number(e.target.value))
+                            }
+                          >
+                            {[10, 30, 60, 120].map((n) => (
+                              <option key={n} value={n}>
+                                {n} 秒
+                              </option>
+                            ))}
+                          </select>
+                          <TbChevronDown size={12} className="oc-db-select-caret" aria-hidden />
+                        </div>
                       </label>
                     </>
                   )}
@@ -577,7 +729,7 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
                   ) : (
                     <div className="oc-db-results">
                       <div className="oc-db-result-toolbar">
-                        <div>
+                        <div className="oc-db-result-tabs">
                           {tab.view === 'query' &&
                           (tab.result?.sets.length ?? 0) > 1 ? (
                             tab.result!.sets.map((_, i) => (
@@ -606,30 +758,125 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
                         <span className="oc-db-toolbar-spacer" />
                         {result && (
                           <>
+                            {result.columns.length > 0 && (
+                              <div className="oc-db-result-filter">
+                                <TbSearch size={13} aria-hidden />
+                                <input
+                                  type="search"
+                                  aria-label="筛选结果行"
+                                  placeholder="筛选结果…"
+                                  value={resultFilter}
+                                  onChange={(e) =>
+                                    setResultFilter(e.target.value)
+                                  }
+                                />
+                                {resultFilter && (
+                                  <button
+                                    type="button"
+                                    aria-label="清除结果筛选"
+                                    title="清除筛选"
+                                    onClick={() => setResultFilter('')}
+                                  >
+                                    <TbX size={12} />
+                                  </button>
+                                )}
+                              </div>
+                            )}
                             <small>
                               {result.columns.length
-                                ? `${result.rows.length} 行`
+                                ? resultFilter.trim() &&
+                                  filteredCount !== null
+                                  ? `匹配 ${filteredCount} / ${result.rows.length} 行`
+                                  : `${result.rows.length} 行`
                                 : `影响 ${result.affectedRows} 行`}
                               {tab.result
                                 ? ` · ${tab.result.durationMs} ms`
                                 : ''}
                               {result.truncated ? ' · 已达返回上限' : ''}
                             </small>
+                            {canEditTableData && result.columns.length > 0 && (
+                              <div className="oc-db-dirty-actions">
+                                {dirtyCellCount > 0 && (
+                                  <span
+                                    className="oc-db-dirty-badge"
+                                    title={`有 ${dirtyCellCount} 个未提交的单元格修改`}
+                                  >
+                                    {dirtyCellCount}
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  className={
+                                    dirtyCellCount > 0 ? 'is-dirty-submit' : ''
+                                  }
+                                  title={
+                                    dirtyCellCount > 0
+                                      ? `提交 ${dirtyCellCount} 处修改到数据库`
+                                      : '暂无未提交修改'
+                                  }
+                                  aria-label="提交修改"
+                                  disabled={dirtyCellCount === 0}
+                                  onClick={() => void openSubmitDialog()}
+                                >
+                                  <TbCheck size={15} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className={sqlCopied ? 'is-copied' : ''}
+                                  title={
+                                    sqlCopied
+                                      ? '已复制 UPDATE SQL'
+                                      : '复制待执行的 UPDATE SQL'
+                                  }
+                                  aria-label="复制更新 SQL"
+                                  disabled={dirtyCellCount === 0}
+                                  onClick={() => void copyPendingUpdateSQL()}
+                                >
+                                  {sqlCopied ? (
+                                    <TbCheck size={15} />
+                                  ) : (
+                                    <TbCopy size={15} />
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  title="撤销全部未提交修改"
+                                  aria-label="撤销全部修改"
+                                  disabled={dirtyCellCount === 0}
+                                  onClick={() => setPendingEdits({})}
+                                >
+                                  <TbArrowBackUp size={15} />
+                                </button>
+                              </div>
+                            )}
                             <button
                               title="导出当前结果为 CSV"
                               aria-label="导出 CSV"
                               disabled={!result.columns.length}
                               onClick={exportResult}
                             >
-                              <TbDownload size={15} />
+                              <TbUpload size={15} />
                             </button>
                           </>
                         )}
                       </div>
                       {result?.columns.length ? (
                         <ResultGrid
-                          key={`${tab.id}:${tab.view}:${tab.resultIndex}`}
+                          key={resultViewKey}
                           result={result}
+                          filterText={resultFilter}
+                          onFilteredCountChange={(filtered) =>
+                            setFilteredCount(filtered)
+                          }
+                          target={{
+                            schema: editableTarget?.schema ?? tab.schema,
+                            table: editableTarget?.table ?? tab.table,
+                            dialect: sqlDialect,
+                          }}
+                          canEdit={canEditTableData}
+                          pendingEdits={pendingEdits}
+                          onStageCellEdit={stageCellEdit}
+                          onRevertCellEdit={revertCellEdit}
                         />
                       ) : (
                         <div className="oc-db-result-empty">
@@ -741,6 +988,17 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
           title={renaming.title}
           onSave={(title) => update(renaming.id, { title })}
           onClose={() => setRenaming(null)}
+        />
+      )}
+      {pendingBatch && (
+        <CellUpdateConfirmDialog
+          update={pendingBatch}
+          busy={updateBusy}
+          error={updateError}
+          onConfirm={(sql) => void confirmBatchUpdate(sql)}
+          onClose={() => {
+            if (!updateBusy) setPendingBatch(null);
+          }}
         />
       )}
     </section>

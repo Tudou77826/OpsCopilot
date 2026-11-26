@@ -36,7 +36,7 @@ export function ConnectionDialog({
   onSaved,
   assistantRequest = false,
 }: {
-  profile: DatabaseProfile;
+  profile: DatabaseProfileInput;
   runtime: DatabaseRuntime;
   onClose(): void;
   onSaved(profile: DatabaseProfile, connect: boolean): void;
@@ -53,7 +53,11 @@ export function ConnectionDialog({
     driverId: profile.engine === 'jdbc' ? profile.driverId : '',
   });
   const [section, setSection] = useState('database');
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState(profile.password ?? '');
+  const [passwordLoaded, setPasswordLoaded] = useState(
+    profile.password !== undefined || !profile.id || !profile.passwordSet,
+  );
+  const passwordTouched = useRef(profile.password !== undefined);
   const [clearPassword, setClearPassword] = useState(false);
   const [usingSSH, setUsingSSH] = useState(!!profile.gatewayId);
   const [gateways, setGateways] = useState<DatabaseGateway[]>([]);
@@ -97,6 +101,30 @@ export function ConnectionDialog({
     void refreshDrivers();
     void refreshGateways();
   }, [runtime]);
+  useEffect(() => {
+    if (
+      !profile.id ||
+      !profile.passwordSet ||
+      profile.password !== undefined ||
+      !runtime.password
+    ) {
+      return;
+    }
+    let cancelled = false;
+    void runtime
+      .password(profile.id)
+      .then((savedPassword) => {
+        if (cancelled || passwordTouched.current) return;
+        setPassword(savedPassword);
+        setPasswordLoaded(true);
+      })
+      .catch(() => {
+        if (!cancelled) setPasswordLoaded(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [profile.id, profile.passwordSet, profile.password, runtime]);
   const invalidate = () => {
     setTestedVersion('');
     setError('');
@@ -114,7 +142,10 @@ export function ConnectionDialog({
       gatewayId: usingSSH ? draft.gatewayId : '',
       gatewayMode: 'auto',
     };
-    if (password || clearPassword || !profile.id) value.password = password;
+    delete value.password;
+    if (password || clearPassword || !profile.id || passwordLoaded) {
+      value.password = password;
+    }
     return value;
   }
   function valid() {
@@ -335,6 +366,34 @@ export function ConnectionDialog({
                   )}
                 </div>
               )}
+              <div className="oc-db-form-grid">
+                <label>
+                  连接名称（可选）
+                  <input
+                    maxLength={100}
+                    value={draft.name}
+                    onChange={(e) => change('name', e.target.value)}
+                    placeholder={draft.port ? `${draft.host}:${draft.port}` : draft.host}
+                  />
+                </label>
+                <div className="oc-db-labeled-field">
+                  <div className="oc-db-field-label">
+                    <label htmlFor={environmentInputId}>连接标记（可选）</label>
+                    <ConnectionHelp
+                      id={environmentHelpId}
+                      label="连接标记说明"
+                      text="显示在连接名称旁，仅作识别，不影响连接或权限。"
+                    />
+                  </div>
+                  <input
+                    id={environmentInputId}
+                    value={draft.environment}
+                    aria-describedby={environmentHelpId}
+                    onChange={(e) => change('environment', e.target.value)}
+                    placeholder="例如：生产、测试"
+                  />
+                </div>
+              </div>
               <div className="oc-db-target-fields">
                 <label>
                   数据库地址
@@ -373,27 +432,31 @@ export function ConnectionDialog({
                   <label>
                     密码
                     <input
-                      type="password"
+                      type="text"
+                      spellCheck={false}
                       value={password}
                       disabled={clearPassword}
                       aria-describedby={
-                        profile.passwordSet ? passwordHelpId : undefined
+                        profile.passwordSet && !passwordLoaded
+                          ? passwordHelpId
+                          : undefined
                       }
                       onChange={(e) => {
+                        passwordTouched.current = true;
                         setPassword(e.target.value);
                         invalidate();
                       }}
-                      autoComplete="new-password"
+                      autoComplete="off"
                       placeholder={
                         clearPassword
                           ? '将使用空密码'
-                          : profile.passwordSet
+                          : profile.passwordSet && !passwordLoaded
                             ? '已保存，留空保持'
                             : '数据库密码'
                       }
                     />
                   </label>
-                  {profile.passwordSet && (
+                  {profile.passwordSet && !passwordLoaded && (
                     <div className="oc-db-password-help">
                       <span id={passwordHelpId}>
                         {clearPassword
@@ -539,34 +602,6 @@ export function ConnectionDialog({
               hidden={section !== 'options'}
               data-section="options"
             >
-              <div className="oc-db-form-grid">
-                <label>
-                  连接名称（可选）
-                  <input
-                    maxLength={100}
-                    value={draft.name}
-                    onChange={(e) => change('name', e.target.value)}
-                    placeholder={draft.port ? `${draft.host}:${draft.port}` : draft.host}
-                  />
-                </label>
-                <div className="oc-db-labeled-field">
-                  <div className="oc-db-field-label">
-                    <label htmlFor={environmentInputId}>连接标记（可选）</label>
-                    <ConnectionHelp
-                      id={environmentHelpId}
-                      label="连接标记说明"
-                      text="显示在连接名称旁，仅作识别，不影响连接或权限。"
-                    />
-                  </div>
-                  <input
-                    id={environmentInputId}
-                    value={draft.environment}
-                    aria-describedby={environmentHelpId}
-                    onChange={(e) => change('environment', e.target.value)}
-                    placeholder="例如：生产、测试"
-                  />
-                </div>
-              </div>
               <label>
                 连接分组（可选）
                 <input

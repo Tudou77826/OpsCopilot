@@ -21,6 +21,8 @@ export function DatabaseDialog({
   busy = false,
   visible = true,
   compact = false,
+  className = '',
+  closeOnBackdrop = false,
   formRef,
   noValidate = false,
 }: {
@@ -35,6 +37,8 @@ export function DatabaseDialog({
   busy?: boolean;
   visible?: boolean;
   compact?: boolean;
+  className?: string;
+  closeOnBackdrop?: boolean;
   formRef?: RefObject<HTMLFormElement>;
   noValidate?: boolean;
 }) {
@@ -72,8 +76,11 @@ export function DatabaseDialog({
     <dialog
       ref={dialog}
       hidden={!visible}
-      className={`oc-db-dialog oc-db-modal${compact ? ' oc-db-modal-compact' : ''}`}
+      className={`oc-db-dialog oc-db-modal${compact ? ' oc-db-modal-compact' : ''}${className ? ` ${className}` : ''}`}
       aria-labelledby={titleId}
+      onClick={(e) => {
+        if (closeOnBackdrop && !busy && e.target === dialog.current) onClose();
+      }}
       onFocusCapture={(e) => {
         if (e.target instanceof HTMLElement) lastFocused.current = e.target;
       }}
