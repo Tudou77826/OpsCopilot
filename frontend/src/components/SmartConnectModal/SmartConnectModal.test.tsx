@@ -40,11 +40,11 @@ describe('SmartConnectModal', () => {
         expect(getConnectInput()).toHaveValue(
             [
                 '跳板机：<BastionIp>',
-                'sopuser / changeme_123',
+                'sopuser / Changeme_123',
                 '',
                 '目标：<TargetIp1~4>',
-                'sopuser / changeme_123',
-                'root / changeme_123'
+                'sopuser / Changeme_123',
+                'root / Changeme_123'
             ].join('\n')
         );
     });
