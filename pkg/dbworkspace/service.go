@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -335,7 +336,11 @@ func (s *Service) SchemasContext(parent context.Context, id string) ([]string, e
 	ctx, cancel := context.WithTimeout(base, 15*time.Second)
 	defer cancel()
 	defer s.retireInterruptedSession(ctx, id, v)
-	return v.connector.Schemas(ctx, v.conn)
+	schemas, err := v.connector.Schemas(ctx, v.conn)
+	if isConnectionLostError(err) {
+		s.discardSession(id, v)
+	}
+	return schemas, err
 }
 func (s *Service) Tables(id, schema string) ([]Table, error) {
 	return s.TablesContext(context.Background(), id, schema)
@@ -351,7 +356,11 @@ func (s *Service) TablesContext(parent context.Context, id, schema string) ([]Ta
 	ctx, cancel := context.WithTimeout(base, 15*time.Second)
 	defer cancel()
 	defer s.retireInterruptedSession(ctx, id, v)
-	return v.connector.Tables(ctx, v.conn, schema)
+	tables, err := v.connector.Tables(ctx, v.conn, schema)
+	if isConnectionLostError(err) {
+		s.discardSession(id, v)
+	}
+	return tables, err
 }
 func (s *Service) Structure(req TableRequest) (Structure, error) {
 	return s.StructureContext(context.Background(), req)
@@ -367,7 +376,11 @@ func (s *Service) StructureContext(parent context.Context, req TableRequest) (St
 	ctx, cancel := context.WithTimeout(base, 15*time.Second)
 	defer cancel()
 	defer s.retireInterruptedSession(ctx, req.SessionID, v)
-	return v.connector.Structure(ctx, v.conn, req.Database, req.Table)
+	structure, err := v.connector.Structure(ctx, v.conn, req.Database, req.Table)
+	if isConnectionLostError(err) {
+		s.discardSession(req.SessionID, v)
+	}
+	return structure, err
 }
 
 func (s *Service) GenerateSQL(req SQLTemplateRequest) (string, error) {
@@ -483,13 +496,16 @@ func (s *Service) RunContext(parent context.Context, req QueryRequest) (out Quer
 			out.Error = "已停止查询并关闭连接；已提交的写入不会撤销，请重连后核实结果"
 			out.Disconnected = true
 		}
-		if errors.Is(err, sql.ErrConnDone) || errors.Is(err, driver.ErrBadConn) {
+		if isConnectionLostError(err) {
 			out.Disconnected = true
 		}
 		if health, ok := v.connector.(interface{ Disconnected(*sql.Conn) bool }); ok && health.Disconnected(v.conn) {
 			out.Disconnected = true
 		}
 		if out.Disconnected {
+			if !out.Cancelled && out.Error != "" && !strings.HasPrefix(out.Error, "数据库连接已断开") {
+				out.Error = "数据库连接已断开（空闲超时或网络中断），请重新连接。\n" + out.Error
+			}
 			s.discardSession(req.SessionID, v)
 		}
 		out.DurationMS = time.Since(start).Milliseconds()
@@ -562,4 +578,31 @@ func connectorVersion(ctx context.Context, adapter Connector, c *sql.Conn) (stri
 	var version string
 	err := c.QueryRowContext(ctx, "SELECT VERSION()").Scan(&version)
 	return version, err
+}
+
+func isConnectionLostError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, sql.ErrConnDone) || errors.Is(err, driver.ErrBadConn) {
+		return true
+	}
+	lower := strings.ToLower(err.Error())
+	for _, token := range []string{
+		"sqlstate 08",
+		"no operations allowed after connection closed",
+		"communications link failure",
+		"connection is closed",
+		"connection has been closed",
+		"broken pipe",
+		"connection reset by peer",
+		"wsarecv:",
+		"wsasend:",
+		"软件中止了一个已建立的连接",
+	} {
+		if strings.Contains(lower, token) {
+			return true
+		}
+	}
+	return false
 }

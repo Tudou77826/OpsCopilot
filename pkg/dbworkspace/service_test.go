@@ -2,7 +2,9 @@ package dbworkspace
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -329,5 +331,29 @@ func TestMySQLIntegration(t *testing.T) {
 	remaining := run(info.ID, "SELECT COUNT(*) FROM information_schema.PROCESSLIST WHERE ID="+cancelledServerID+" AND COMMAND='Query'", 1)
 	if *remaining.Sets[0].Rows[0][0] != "0" {
 		t.Fatal("server query remained active after cancellation")
+	}
+}
+
+func TestIsConnectionLostError(t *testing.T) {
+	lostCases := []error{
+		sql.ErrConnDone,
+		errors.New("JDBC 操作失败 · 处理请求（SQLState 08003，代码 0）\nSQLNonTransientConnectionException: No operations allowed after connection closed."),
+		errors.New("CJCommunicationsException: Communications link failure"),
+		errors.New("SocketException: 你的主机中的软件中止了一个已建立的连接。"),
+	}
+	for _, err := range lostCases {
+		if !isConnectionLostError(err) {
+			t.Errorf("expected connection lost for %q", err)
+		}
+	}
+	normalCases := []error{
+		nil,
+		errors.New("You have an error in your SQL syntax"),
+		errors.New("JDBC 操作失败 · 执行 SQL（SQLState 28000，代码 1045）"),
+	}
+	for _, err := range normalCases {
+		if isConnectionLostError(err) {
+			t.Errorf("did not expect connection lost for %v", err)
+		}
 	}
 }

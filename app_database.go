@@ -185,6 +185,11 @@ func (a *App) openDatabaseGateway(ctx context.Context, id, mode string) (dbworks
 		client.Close()
 		return nil, nil, err
 	}
+	stopKeepAlive := client.StartKeepAlive(30 * time.Second)
+	closeGateway := func() error {
+		stopKeepAlive()
+		return client.Close()
+	}
 	return func(dialCtx context.Context, addr string) (net.Conn, error) {
 		started := time.Now()
 		if mode == dbworkspace.GatewayModeCommand {
@@ -199,7 +204,7 @@ func (a *App) openDatabaseGateway(ctx context.Context, id, mode string) (dbworks
 			return conn, err
 		}
 		return client.DialDatabaseContext(connectiondiag.WithTrace(dialCtx, connectiondiag.From(ctx)), addr)
-	}, client.Close, nil
+	}, closeGateway, nil
 }
 
 func (a *App) shutdownDatabase(context.Context) {

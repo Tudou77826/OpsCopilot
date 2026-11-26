@@ -65,6 +65,43 @@ func (c *Client) SSHClient() *ssh.Client {
 	return c.client
 }
 
+// StartKeepAlive periodically sends SSH keepalive requests on this client and
+// any parent bastion so idle tunnels survive intermediate NAT/firewall timeouts.
+func (c *Client) StartKeepAlive(interval time.Duration) func() {
+	if c == nil || interval <= 0 {
+		return func() {}
+	}
+	var stops []func()
+	for node := c; node != nil; node = node.bastion {
+		raw := node.client
+		if raw == nil {
+			continue
+		}
+		done := make(chan struct{})
+		var once sync.Once
+		stops = append(stops, func() { once.Do(func() { close(done) }) })
+		go func(sc *ssh.Client, stopCh <-chan struct{}) {
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-stopCh:
+					return
+				case <-ticker.C:
+					if _, _, err := sc.SendRequest("keepalive@openssh.com", true, nil); err != nil {
+						return
+					}
+				}
+			}
+		}(raw, done)
+	}
+	return func() {
+		for _, stop := range stops {
+			stop()
+		}
+	}
+}
+
 func NewClient(config *ConnectConfig) (*Client, error) {
 	return NewClientWithTrace(context.Background(), config)
 }

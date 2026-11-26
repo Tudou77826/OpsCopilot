@@ -46,6 +46,7 @@ final class JdbcErrors {
         else if (lower.contains("connectexception") || lower.contains("connection refused")) hint = "数据库端口拒绝连接，请检查地址、端口、服务和 SSH 通道。";
         else if (lower.contains("sockettimeoutexception") || lower.contains("connect timed out")) hint = "连接或握手超时，请检查内网可达性、防火墙及数据库服务状态。";
         else if (lower.contains("sslhandshakeexception") || lower.contains("certificateexception") || lower.contains("pkix")) hint = "TLS 握手或证书验证失败，请检查服务端 TLS 配置及 Java 信任库。";
+        else if (state.startsWith("08") || lower.contains("connection closed") || lower.contains("communications link failure")) hint = "数据库连接已断开（空闲超时、网络波动或 SSH 隧道中断），请重新连接。";
         else if (state.startsWith("28") || lower.contains("authentication failed") || lower.contains("invalid username") || lower.contains("access denied")) hint = "数据库拒绝身份验证，请核对账号、密码及账号登录权限。";
         else hint = "请根据以下驱动详情排查；驱动导入成功不代表数据库连接成功。";
         String context = "JDBC 操作失败 · " + phase;
@@ -70,6 +71,7 @@ final class JdbcErrors {
         if (text.contains("unknownhostexception")) return "network.dns";
         if (text.contains("sockettimeoutexception") || text.contains("connect timed out")) return "network.timeout";
         if (text.contains("connectexception") || text.contains("connection refused")) return "network.refused";
+        if (text.contains("connection closed") || text.contains("communications link failure") || chain.stream().anyMatch(cause -> cause instanceof SQLException sql && sql.getSQLState() != null && sql.getSQLState().startsWith("08"))) return "network.closed";
         if (chain.stream().anyMatch(cause -> cause instanceof SQLException sql && sql.getSQLState() != null && sql.getSQLState().startsWith("28"))) return "authentication";
         return "driver.other";
     }
