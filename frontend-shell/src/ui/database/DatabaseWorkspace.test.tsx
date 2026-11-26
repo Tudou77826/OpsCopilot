@@ -831,4 +831,50 @@ describe('database workbench', () => {
     expect(screen.getByLabelText('查询结果').textContent).toContain('9007199254740993');
     page.unmount();expect(host.disconnect).not.toHaveBeenCalled();
   });
+  it('loads tables automatically when switching the current database selector for SQL completion', async () => {
+    const host = runtime();
+    host.schemas = vi.fn(async () => ['orders', 'analytics']);
+    host.tables = vi.fn(async (_sessionId, database) =>
+      database === 'analytics'
+        ? [{ name: 'daily_metrics', type: 'BASE TABLE', comment: '' }]
+        : [{ name: 'events', type: 'BASE TABLE', comment: '' }],
+    );
+    await open(host);
+    expect(host.tables).toHaveBeenCalledWith('s1', 'orders');
+    expect(host.tables).not.toHaveBeenCalledWith('s1', 'analytics');
+    fireEvent.change(screen.getByLabelText('当前数据库'), {
+      target: { value: 'analytics' },
+    });
+    await waitFor(() =>
+      expect(host.tables).toHaveBeenCalledWith('s1', 'analytics'),
+    );
+  });
+  it('renders connection failure tabs with a close button and context menu matching query tabs', async () => {
+    const host = runtime();
+    host.connect = vi.fn(async () => {
+      throw new Error('数据库拒绝身份验证');
+    });
+    render(<DatabaseWorkspace runtime={host} />);
+    fireEvent.doubleClick(await screen.findByText('订单库'));
+    const failureTabBtn = await screen.findByRole('button', {
+      name: '连接失败 · 订单库',
+    });
+    const closeBtn = screen.getByRole('button', {
+      name: '关闭连接失败 · 订单库',
+    });
+    expect(closeBtn).toBeTruthy();
+
+    fireEvent.contextMenu(failureTabBtn.parentElement!);
+    expect(screen.getByRole('menuitem', { name: '重新连接' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: '编辑连接…' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: '关闭当前' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: '关闭全部' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('menuitem', { name: '关闭当前' }));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: '连接失败 · 订单库' }),
+      ).toBeNull(),
+    );
+  });
 });

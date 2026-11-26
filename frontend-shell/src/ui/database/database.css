@@ -446,31 +446,33 @@
   display: inline-flex;
   align-items: center;
 }
-.oc-db-select-wrap select {
+.oc-db-workspace .oc-db-select-wrap select {
   appearance: none;
   -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: none;
   height: 26px;
   padding: 0 24px 0 8px;
   border: 1px solid var(--border);
   border-radius: 5px;
-  background: var(--bg-secondary);
+  background-color: var(--bg-secondary);
   color: var(--text-primary);
   font-size: 11px;
   cursor: pointer;
 }
-.oc-db-select-wrap select:hover:not(:disabled) {
+.oc-db-workspace .oc-db-select-wrap select:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-  background: var(--bg-hover);
+  background-color: var(--bg-hover);
 }
-.oc-db-select-wrap select:focus {
+.oc-db-workspace .oc-db-select-wrap select:focus {
   outline: none;
   border-color: var(--accent);
 }
-.oc-db-select-wrap select:disabled {
+.oc-db-workspace .oc-db-select-wrap select:disabled {
   opacity: 0.55;
   cursor: default;
 }
-.oc-db-schema-select select {
+.oc-db-workspace .oc-db-schema-select select {
   min-width: 116px;
   max-width: 190px;
   padding-left: 26px;

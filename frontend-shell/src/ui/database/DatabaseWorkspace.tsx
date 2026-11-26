@@ -79,12 +79,23 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
   const [limit, setLimit] = useState(1000);
   const [timeout, setTimeoutValue] = useState(30);
   const [editorPercent, setEditorPercent] = useState(42);
-  const [tabMenu, setTabMenu] = useState<{
-    id: string;
-    x: number;
-    y: number;
-    trigger: HTMLElement;
-  } | null>(null);
+  const [tabMenu, setTabMenu] = useState<
+    | {
+        kind: 'query';
+        id: string;
+        x: number;
+        y: number;
+        trigger: HTMLElement;
+      }
+    | {
+        kind: 'failure';
+        profileId: string;
+        x: number;
+        y: number;
+        trigger: HTMLElement;
+      }
+    | null
+  >(null);
   const [renaming, setRenaming] = useState<QueryTab | null>(null);
   const [resultFilter, setResultFilter] = useState('');
   const [filteredCount, setFilteredCount] = useState<number | null>(null);
@@ -97,7 +108,15 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
   const [sqlCopied, setSqlCopied] = useState(false);
   const [updateBusy, setUpdateBusy] = useState(false);
   const [updateError, setUpdateError] = useState('');
-  const menuTab = tabs.find((t) => t.id === tabMenu?.id);
+  const failureProfiles = profiles.filter((p) => model.connectionFailures[p.id]);
+  const menuTab =
+    tabMenu?.kind === 'query'
+      ? tabs.find((t) => t.id === tabMenu.id)
+      : undefined;
+  const menuFailureProfile =
+    tabMenu?.kind === 'failure'
+      ? failureProfiles.find((p) => p.id === tabMenu.profileId)
+      : undefined;
   const dismissTabMenu = () => {
     tabMenu?.trigger.focus();
     setTabMenu(null);
@@ -110,6 +129,7 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
     event.stopPropagation();
     const rect = event.currentTarget.getBoundingClientRect();
     setTabMenu({
+      kind: 'query',
       id: target.id,
       x: ('clientX' in event && event.clientX) || rect.left + 12,
       y: ('clientY' in event && event.clientY) || rect.bottom,
@@ -118,6 +138,67 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
         event.currentTarget,
     });
   };
+  const openFailureTabMenu = (
+    event: React.MouseEvent<HTMLElement> | React.KeyboardEvent<HTMLElement>,
+    target: DatabaseProfile,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    setTabMenu({
+      kind: 'failure',
+      profileId: target.id,
+      x: ('clientX' in event && event.clientX) || rect.left + 12,
+      y: ('clientY' in event && event.clientY) || rect.bottom,
+      trigger:
+        event.currentTarget.querySelector<HTMLButtonElement>('button') ??
+        event.currentTarget,
+    });
+  };
+  const closeFailureTab = (targetProfileId: string) => {
+    const idx = failureProfiles.findIndex((p) => p.id === targetProfileId);
+    const remainingFailures = failureProfiles.filter(
+      (p) => p.id !== targetProfileId,
+    );
+    model.clearConnectionFailure(targetProfileId);
+    if (!tab && profileId === targetProfileId) {
+      const nextFailure =
+        remainingFailures[Math.min(idx, remainingFailures.length - 1)];
+      if (nextFailure) {
+        model.setSelectedProfile(nextFailure.id);
+      } else if (tabs.length > 0) {
+        setActiveTab(tabs[tabs.length - 1].id);
+      } else {
+        model.setSelectedProfile('');
+      }
+    }
+  };
+  const attemptedCompletionSchemas = useRef(new Set<string>());
+  useEffect(() => {
+    if (
+      !tab ||
+      tab.table ||
+      !tab.schema ||
+      !connection ||
+      connection.tables[tab.schema] ||
+      profileRunning ||
+      metadataBusy
+    ) {
+      return;
+    }
+    const key = `${connection.session.id}:${tab.schema}`;
+    if (attemptedCompletionSchemas.current.has(key)) return;
+    attemptedCompletionSchemas.current.add(key);
+    void model.loadTables(tab.profileId, tab.schema, false, true);
+  }, [
+    tab?.id,
+    tab?.table,
+    tab?.profileId,
+    tab?.schema,
+    connection,
+    profileRunning,
+    metadataBusy,
+  ]);
   const editor = useRef<SQLEditorRef>(null);
   const revealed = useRef('');
   useEffect(() => {
@@ -431,25 +512,35 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
           </div>
         )}
         <nav ref={tabStrip} className="oc-db-tabs" aria-label="数据库查询标签">
-          {profiles
-            .filter((p) => model.connectionFailures[p.id])
-            .map((p) => (
-              <div
-                key={`failure-${p.id}`}
-                className={!tab && profileId === p.id ? 'is-selected' : ''}
+          {failureProfiles.map((p) => (
+            <div
+              key={`failure-${p.id}`}
+              className={!tab && profileId === p.id ? 'is-selected' : ''}
+              onContextMenu={(e) => openFailureTabMenu(e, p)}
+              onKeyDown={(e) => {
+                if ((e.shiftKey && e.key === 'F10') || e.key === 'ContextMenu')
+                  openFailureTabMenu(e, p);
+              }}
+            >
+              <button
+                aria-label={`连接失败 · ${p.name}`}
+                title={`连接失败 · ${p.name}`}
+                onClick={() => {
+                  model.setSelectedProfile(p.id);
+                  setActiveTab('');
+                }}
               >
-                <button
-                  aria-label={`连接失败 · ${p.name}`}
-                  onClick={() => {
-                    model.setSelectedProfile(p.id);
-                    setActiveTab('');
-                  }}
-                >
-                  <TbAlertCircle size={14} />
-                  连接失败<small>{p.name}</small>
-                </button>
-              </div>
-            ))}
+                <TbAlertCircle size={14} />
+                连接失败<small>{p.name}</small>
+              </button>
+              <button
+                aria-label={`关闭连接失败 · ${p.name}`}
+                onClick={() => closeFailureTab(p.id)}
+              >
+                <TbX size={12} />
+              </button>
+            </div>
+          ))}
           {tabs.map((t) => (
             <div
               key={t.id}
@@ -545,7 +636,15 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
                       aria-label="当前数据库"
                       value={tab.schema}
                       disabled={profileRunning || !!metadataBusy || !!tab.table}
-                      onChange={(e) => update(tab.id, { schema: e.target.value })}
+                      onChange={(e) => {
+                        const nextSchema = e.target.value;
+                        if (nextSchema && connection) {
+                          attemptedCompletionSchemas.current.delete(
+                            `${connection.session.id}:${nextSchema}`,
+                          );
+                        }
+                        update(tab.id, { schema: nextSchema });
+                      }}
                     >
                       <option value="">选择数据库</option>
                       {(connection?.schemas??managed?.workspace.schemas??[]).map((s) => (
@@ -966,20 +1065,82 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
               disabled: !!menuTab.pending,
               action: () => closeTab(menuTab),
             },
-            ...(
-              [
-                ['关闭其他', tabs.filter((t) => t.id !== menuTab.id)],
-                [
-                  '关闭右侧',
-                  tabs.slice(tabs.findIndex((t) => t.id === menuTab.id) + 1),
-                ],
-                ['关闭全部', tabs],
-              ] as const
-            ).map(([label, targets]) => ({
-              label,
-              disabled: !targets.some((t) => !t.pending),
-              action: () => model.closeTabs(targets.map((t) => t.id)),
-            })),
+            {
+              label: '关闭其他',
+              disabled:
+                !tabs.some((t) => t.id !== menuTab.id && !t.pending) &&
+                failureProfiles.length === 0,
+              action: () => {
+                model.closeTabs(
+                  tabs.filter((t) => t.id !== menuTab.id).map((t) => t.id),
+                );
+                model.clearAllConnectionFailures();
+              },
+            },
+            {
+              label: '关闭右侧',
+              disabled: !tabs
+                .slice(tabs.findIndex((t) => t.id === menuTab.id) + 1)
+                .some((t) => !t.pending),
+              action: () =>
+                model.closeTabs(
+                  tabs
+                    .slice(tabs.findIndex((t) => t.id === menuTab.id) + 1)
+                    .map((t) => t.id),
+                ),
+            },
+            {
+              label: '关闭全部',
+              disabled:
+                !tabs.some((t) => !t.pending) && failureProfiles.length === 0,
+              action: () => {
+                model.closeTabs(tabs.map((t) => t.id));
+                model.clearAllConnectionFailures();
+              },
+            },
+          ]}
+        />
+      )}
+      {tabMenu && menuFailureProfile && (
+        <DatabaseMenu
+          x={tabMenu.x}
+          y={tabMenu.y}
+          label="连接失败页签操作"
+          onClose={dismissTabMenu}
+          items={[
+            {
+              label: '重新连接',
+              disabled: !!model.connecting[menuFailureProfile.id],
+              action: () => void connect(menuFailureProfile),
+            },
+            {
+              label: '编辑连接…',
+              action: () => setEditing(menuFailureProfile),
+            },
+            {
+              label: '关闭当前',
+              separator: true,
+              action: () => closeFailureTab(menuFailureProfile.id),
+            },
+            {
+              label: '关闭其他',
+              disabled:
+                !tabs.some((t) => !t.pending) && failureProfiles.length <= 1,
+              action: () => {
+                model.closeTabs(tabs.map((t) => t.id));
+                model.clearAllConnectionFailures(menuFailureProfile.id);
+              },
+            },
+            {
+              label: '关闭全部',
+              action: () => {
+                model.closeTabs(tabs.map((t) => t.id));
+                model.clearAllConnectionFailures();
+                if (!tab && profileId === menuFailureProfile.id) {
+                  model.setSelectedProfile('');
+                }
+              },
+            },
           ]}
         />
       )}

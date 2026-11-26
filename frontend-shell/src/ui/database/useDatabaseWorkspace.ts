@@ -44,9 +44,16 @@ export function useDatabaseWorkspace(runtime: DatabaseRuntime,managed?: ManagedD
   }
   function clearConnectionFailure(id: string) {
     setConnectionFailures((all) => {
+      if (!all[id]) return all;
       const next = { ...all };
       delete next[id];
       return next;
+    });
+  }
+  function clearAllConnectionFailures(exceptId?: string) {
+    setConnectionFailures((all) => {
+      if (exceptId && all[exceptId]) return { [exceptId]: all[exceptId] };
+      return Object.keys(all).length ? {} : all;
     });
   }
   const [connecting, setConnecting] = useState<Record<string, boolean>>({});
@@ -297,7 +304,12 @@ export function useDatabaseWorkspace(runtime: DatabaseRuntime,managed?: ManagedD
       }
     }
   }
-  async function loadTables(pid: string, database: string, force = false) {
+  async function loadTables(
+    pid: string,
+    database: string,
+    force = false,
+    silent = false,
+  ) {
     if (!force && current.current.connections[pid]?.tables[database]) return;
     try {
       await withMetadata(pid, async (c) => {
@@ -315,7 +327,7 @@ export function useDatabaseWorkspace(runtime: DatabaseRuntime,managed?: ManagedD
         });
       });
     } catch (e) {
-      setError(errorText(e));
+      if (!silent) setError(errorText(e));
     }
   }
   async function refreshConnection(pid: string) {
@@ -579,6 +591,8 @@ export function useDatabaseWorkspace(runtime: DatabaseRuntime,managed?: ManagedD
     setSelectedProfile,
     connecting,
     connectionFailures,
+    clearConnectionFailure,
+    clearAllConnectionFailures,
     metadataBusy,
     error,
     setError,
