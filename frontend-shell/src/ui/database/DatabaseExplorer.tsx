@@ -10,11 +10,9 @@ import {
   TbChevronRight,
   TbCode,
   TbCurrentLocation,
-  TbDatabase,
   TbDots,
   TbFolder,
   TbPlus,
-  TbPackage,
   TbRefresh,
   TbSearch,
   TbTable,
@@ -286,6 +284,11 @@ export function DatabaseExplorer({
               ),
             ),
         },
+        {
+          label: '驱动管理…',
+          separator: true,
+          action: () => setManagingDrivers(true),
+        },
       ];
     const p = m.profiles.find((p) => p.id === n.profileId);
     if (!p) return [];
@@ -496,10 +499,6 @@ export function DatabaseExplorer({
   return (
     <aside className="oc-db-explorer">
       <header>
-        <strong>
-          <TbDatabase size={16} />
-          数据库
-        </strong>
         <div className="oc-db-explorer-actions">
           <button
             title="添加数据库连接"
@@ -507,14 +506,6 @@ export function DatabaseExplorer({
             onClick={() => setEditing(emptyProfile())}
           >
             <TbPlus size={17} />
-          </button>
-          <button
-            type="button"
-            title="驱动管理 · 查看、导入和移除 JDBC 驱动"
-            aria-label="驱动管理"
-            onClick={() => setManagingDrivers(true)}
-          >
-            <TbPackage size={17} />
           </button>
           <button
             aria-label="刷新连接列表"

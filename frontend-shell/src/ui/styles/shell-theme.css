@@ -7,6 +7,9 @@
    暖灰分区与低饱和琥珀交互色），语义对齐。
    ===================================================================== */
 :root {
+  /* —— 字体族（全站唯一真相源；表单控件统一继承，代码/SQL/终端显式用 --font-mono）—— */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', Roboto, 'Helvetica Neue', sans-serif;
+  --font-mono: 'JetBrains Mono', Consolas, 'Cascadia Mono', monospace;
   --companion-scene-shade: var(--bg-elevated);
   --companion-scene-ink: var(--text-primary);
   /* —— 背景层级（由深到浅）—— */
@@ -742,4 +745,12 @@
   --app-scrollbar-track: transparent;
   --app-scrollbar-thumb: #4d4d4d;
   --app-scrollbar-thumb-hover: #6b6b6b;
+}
+
+/* 表单控件统一继承 UI 无衬线字体，避免浏览器默认把 textarea 回退成宋体/等宽 */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }

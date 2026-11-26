@@ -198,7 +198,8 @@ describe('database workbench', () => {
     fireEvent.change(screen.getByLabelText('SQL 编辑器'), {
       target: { value: 'SELECT retained_sql' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '新建 SQL 查询' }));
+    fireEvent.contextMenu(within(screen.getByLabelText('数据库连接与对象')).getByText('订单库'));
+    fireEvent.click(screen.getByRole('menuitem', { name: '新建查询' }));
     fireEvent.contextMenu(
       screen.getByRole('button', { name: '查询 1 · 订单库' }),
     );
@@ -245,8 +246,10 @@ describe('database workbench', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: '执行 SQL' }));
     await waitFor(() => expect(host.query).toHaveBeenCalledOnce());
-    fireEvent.click(screen.getByRole('button', { name: '新建 SQL 查询' }));
-    fireEvent.click(screen.getByRole('button', { name: '新建 SQL 查询' }));
+    fireEvent.contextMenu(within(screen.getByLabelText('数据库连接与对象')).getByText('订单库'));
+    fireEvent.click(screen.getByRole('menuitem', { name: '新建查询' }));
+    fireEvent.contextMenu(within(screen.getByLabelText('数据库连接与对象')).getByText('订单库'));
+    fireEvent.click(screen.getByRole('menuitem', { name: '新建查询' }));
     fireEvent.contextMenu(
       screen.getByRole('button', { name: '查询 2 · 订单库' }),
     );
@@ -439,7 +442,8 @@ describe('database workbench', () => {
         limit: 1000,
       }),
     );
-    fireEvent.click(screen.getByRole('button', { name: '新建 SQL 查询' }));
+    fireEvent.contextMenu(within(screen.getByLabelText('数据库连接与对象')).getByText('订单库'));
+    fireEvent.click(screen.getByRole('menuitem', { name: '新建查询' }));
     fireEvent.change(screen.getByLabelText('SQL 编辑器'), {
       target: { value: 'SELECT 2' },
     });

@@ -226,7 +226,9 @@
 
 .oc-db-explorer-splitter {
   flex: 0 0 5px;
+  margin: 0 -2px 0 -3px;
   position: relative;
+  z-index: 2;
   cursor: col-resize;
   touch-action: none;
   user-select: none;

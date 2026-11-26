@@ -61,11 +61,12 @@
 .ai-chat-panel .is-conversation .ai-composer-shell textarea { display:block; min-height:54px; padding:0; line-height:1.7; }
 .ai-chat-panel .ai-composer-toolbar { display:flex; align-items:center; gap:4px; padding:6px 8px 8px; }
 .ai-chat-panel .ai-composer-actions { display:flex; align-items:center; gap:2px; flex:none; }
-.ai-chat-panel .ai-composer-targets { flex:1; min-width:0; color:var(--text-muted); font-size:11px; }
-.ai-chat-panel .ai-composer-targets > span { display:flex; align-items:center; gap:6px; min-width:0; }
+.ai-chat-panel .ai-composer-spacer { flex:1; min-width:4px; }
+.ai-chat-panel .ai-composer-targets { display:flex; align-items:center; gap:6px; padding:7px 12px 0; min-width:0; color:var(--text-muted); font-size:11px; }
+.ai-chat-panel .ai-composer-targets > span { display:inline-flex; align-items:center; gap:5px; min-width:0; max-width:100%; }
 .ai-chat-panel .ai-composer-targets svg { flex-shrink:0; opacity:.8; }
 .ai-chat-panel .ai-composer-targets span span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.ai-chat-panel .is-conversation .ai-composer-send { width:32px; height:32px; padding:0; margin-left:auto; border-radius:8px; }
+.ai-chat-panel .is-conversation .ai-composer-send { width:32px; height:32px; padding:0; flex-shrink:0; border-radius:8px; }
 .ai-chat-panel .is-conversation .ai-composer-send:disabled { background:var(--bg-hover); color:var(--text-disabled); }
 .ai-composer-accessible-hint { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 .ai-chat-queue { padding:9px 12px 7px; border-bottom:1px solid var(--border); background:color-mix(in srgb,var(--bg-primary) 22%,transparent); font-size:12px; }

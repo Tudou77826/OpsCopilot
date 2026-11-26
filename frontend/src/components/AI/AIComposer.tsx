@@ -89,6 +89,13 @@ const AIComposer: React.FC<AIComposerProps> = ({
             )}
             <div className={conversation ? 'ai-composer-surface' : undefined}>
             {header}
+            {conversation && contexts.length > 0 && (
+                <div className="ai-composer-targets">
+                    {contexts.map(context => <span key={context.id} title={context.label} aria-label={context.label}>
+                        {context.kind === 'workspace' ? <TbLayout size={13}/> : <TbTerminal2 size={13}/>}<span>{context.label}</span>
+                    </span>)}
+                </div>
+            )}
             <div className={`ai-composer-shell${onAttach ? ' has-attachment' : ''}${busy && queueWhileBusy ? ' has-queue' : ''}`}>
                 {onAttach && <button className="ai-composer-attach" type="button" onClick={onAttach} title="添加上下文" disabled={disabled}>
                     {TbPaperclip({ size: 15 })}
@@ -122,9 +129,7 @@ const AIComposer: React.FC<AIComposerProps> = ({
             </div>
             {conversation && <div className="ai-composer-toolbar">
                 {toolbarLeading}
-                <div className="ai-composer-targets">{contexts.length ? contexts.map(context => <span key={context.id} title={context.label} aria-label={context.label}>
-                    {context.kind === 'workspace' ? <TbLayout size={14}/> : <TbTerminal2 size={14}/>}<span>{context.label}</span>
-                </span>) : !toolbarTrailing && <span className="ai-composer-shortcut" aria-hidden="true">Shift + Enter 换行</span>}</div>
+                <div className="ai-composer-spacer">{!toolbarTrailing && !contexts.length && <span className="ai-composer-shortcut" aria-hidden="true">Shift + Enter 换行</span>}</div>
                 {toolbarTrailing}
                 {sendButton}
             </div>}

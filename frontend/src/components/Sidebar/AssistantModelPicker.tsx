@@ -7,6 +7,11 @@ import { usePortalRoot } from '../../../../frontend-shell/src/ui/Surface';
 import './assistantModelPicker.css';
 
 function modelLabel(model: AssistantModelOption) { return model.name.trim() || model.modelId; }
+function shortModelLabel(model: AssistantModelOption) {
+    const full = modelLabel(model);
+    const slash = full.lastIndexOf('/');
+    return slash >= 0 && slash < full.length - 1 ? full.slice(slash + 1) : full;
+}
 
 export function AssistantModelPicker({runtime, busy, revision, onChanging, onError}: {
     runtime: AssistantRuntime; busy: boolean; revision: number; onChanging: (value: boolean) => void; onError: (value: string) => void;
@@ -142,7 +147,7 @@ export function AssistantModelPicker({runtime, busy, revision, onChanging, onErr
     const label = changing ? '正在切换模型…' : loading ? '正在读取模型…' : current ? `当前模型：${modelLabel(current)}${modelLabel(current) !== current.modelId ? ` · ${current.modelId}` : ''}` : '选择当前 Agent 的模型';
     return <div className="ai-model-picker">
         <button ref={trigger} type="button" role="combobox" className="ai-model-select" aria-label="助手模型" aria-haspopup="listbox" aria-expanded={open && !disabled} aria-controls={open && !disabled ? menuId : undefined} aria-activedescendant={open && !disabled ? `${menuId}-${active}` : undefined} disabled={disabled} title={busy ? `${label}；助手空闲后可切换` : label} onKeyDown={onKeyDown} onClick={() => open ? setOpen(false) : showMenu()}>
-            <span>{changing ? '切换模型…' : current ? modelLabel(current) : loading ? '读取模型…' : '选择模型'}</span>
+            <span>{changing ? '切换模型…' : current ? shortModelLabel(current) : loading ? '读取模型…' : '选择模型'}</span>
             <TbChevronUp size={12} aria-hidden="true"/>
         </button>
         {open && !disabled && createPortal(<div ref={menu} id={menuId} className="ai-model-menu" role="listbox" aria-label="助手模型" style={position}>

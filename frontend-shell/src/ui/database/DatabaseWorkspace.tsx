@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   TbDatabase,
-  TbPlus,
   TbRefresh,
   TbPlayerPlay,
   TbPlayerStop,
@@ -572,14 +571,6 @@ export function DatabaseWorkspace({ runtime,managed }: { runtime: DatabaseRuntim
               </button>
             </div>
           ))}
-          <button
-            aria-label="新建 SQL 查询"
-            title="新建查询"
-            disabled={!profile}
-            onClick={() => newQuery()}
-          >
-            <TbPlus size={16} />
-          </button>
         </nav>
         {!connection && profile && failure ? (
           <ConnectionFailurePanel
